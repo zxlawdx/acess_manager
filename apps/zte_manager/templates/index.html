@@ -1205,7 +1205,10 @@
                             <label class="field"><span>HOST</span><input id="managementTerminalHost" type="text" value="1.1.1.1"></label>
                             <label class="field"><span>INTERFACE / IPERF</span><input id="managementTerminalExtra" type="text" placeholder="eth0 ou servidor iperf"></label>
                         </div>
-                        <button id="managementTerminalRun" class="button primary" type="button">Executar</button>
+                        <div class="management-action-row">
+                            <button id="managementTerminalRun" class="button primary" type="button">Executar</button>
+                            <button id="managementBufferbloatRun" class="button ghost" type="button">Teste de bufferbloat</button>
+                        </div>
                         <pre id="managementTerminalOutput" class="management-terminal">Aguardando comando.</pre>
                     </article>
                 </div>
