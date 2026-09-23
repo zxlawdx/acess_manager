@@ -98,6 +98,28 @@ COMMON_FEATURES: dict[str, FeatureSpec] = {
         "Mapeamentos UPnP",
         (_endpoint("upnp", "upnp_portmap_lua.lua", "OBJ_UPNPPORTMAP_ID"),),
     ),
+    "service_control_ipv4": FeatureSpec(
+        "service_control_ipv4",
+        "Controle de serviços IPv4",
+        (_endpoint(
+            "localServiceCtrl",
+            "firewall_ipv4service_lua.lua",
+            "OBJ_FWSC_ID",
+        ),),
+        dangerous=True,
+        notes="Somente leitura; alterar serviços pode remover o acesso de gerenciamento.",
+    ),
+    "service_control_ipv6": FeatureSpec(
+        "service_control_ipv6",
+        "Controle de serviços IPv6",
+        (_endpoint(
+            "localServiceCtrl",
+            "firewall_ipv6service_lua.lua",
+            "OBJ_FWSCv6_ID",
+        ),),
+        dangerous=True,
+        notes="Somente leitura; alterar serviços pode remover o acesso de gerenciamento.",
+    ),
     "firewall": FeatureSpec(
         "firewall",
         "Firewall",
@@ -175,6 +197,36 @@ COMMON_FEATURES: dict[str, FeatureSpec] = {
         "syslog",
         "Logs do equipamento",
         (_endpoint("logMgr", "log_syslogmgr_lua.lua", "OBJ_LOG_ID"),),
+    ),
+    "firmware_management": FeatureSpec(
+        "firmware_management",
+        "Gerenciamento de firmware",
+        (_endpoint(
+            "firmwareUpgr",
+            "upgrade_firmware_query_lua.lua",
+        ),),
+        dangerous=True,
+        notes="Somente leitura/probe; upload de firmware não é automatizado.",
+    ),
+    "restore_config": FeatureSpec(
+        "restore_config",
+        "Restauração de configuração",
+        (_endpoint(
+            "usrCfgMgr",
+            "db_usrcfg_upgrade_query_lua.lua",
+        ),),
+        dangerous=True,
+        notes="Somente leitura/probe; importação automática foi bloqueada por segurança.",
+    ),
+    "factory_reset": FeatureSpec(
+        "factory_reset",
+        "Factory Reset",
+        (_endpoint(
+            "rebootAndReset",
+            "db_resetmgr_lua.lua",
+        ),),
+        dangerous=True,
+        notes="Somente probe; o POST Reset não é exposto pela aplicação.",
     ),
     "backup_config": FeatureSpec(
         "backup_config",
