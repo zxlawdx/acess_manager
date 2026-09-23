@@ -1,0 +1,2281 @@
+// =========================================================
+// ZTE AUTOMATIC • CPE MANAGEMENT PLATFORM
+// =========================================================
+
+pageInfo.management = {
+    title: "Gerenciamento",
+    subtitle: "Frota, acesso remoto, rede, monitoramento e provisionamento."
+};
+
+
+const managementState = {
+    devices: [],
+    agents: [],
+    profiles: [],
+    incidents: [],
+    backups: [],
+    firmware: [],
+    selectedDeviceId: null,
+    monitorId: null
+};
+
+
+function managementEscape(value) {
+    const node = document.createElement("div");
+    node.textContent = value === undefined || value === null
+        ? ""
+        : String(value);
+
+    return node.innerHTML;
+}
+
+
+function managementJson(value) {
+    return JSON.stringify(
+        value,
+        null,
+        2
+    );
+}
+
+
+function managementParseJson(id) {
+    const raw = document.getElementById(id)?.value.trim() || "{}";
+
+    try {
+        return JSON.parse(raw);
+    } catch (error) {
+        throw new Error(
+            "JSON inválido: " + error.message
+        );
+    }
+}
+
+
+function managementOutput(id, value) {
+    const element = document.getElementById(id);
+
+    if (!element) {
+        return;
+    }
+
+    element.textContent = typeof value === "string"
+        ? value
+        : managementJson(value);
+}
+
+
+function selectedManagementDevice() {
+    return managementState.devices.find(
+        item => Number(item.id) === Number(
+            managementState.selectedDeviceId
+        )
+    ) || null;
+}
+
+
+function checkedManagementDevices() {
+    return [
+        ...document.querySelectorAll(
+            ".management-device-check:checked"
+        )
+    ].map(
+        input => Number(
+            input.value
+        )
+    );
+}
+
+
+function managementSelectedProfileId(selectId) {
+    const value = document.getElementById(
+        selectId
+    )?.value;
+
+    return value
+        ? Number(value)
+        : null;
+}
+
+
+function managementTags() {
+    return (
+        document.getElementById(
+            "managementTags"
+        )?.value || ""
+    )
+        .split(",")
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
+
+async function managementRequest(
+    path,
+    {
+        method = "GET",
+        body = null
+    } = {}
+) {
+    return apiRequest(
+        path,
+        {
+            method,
+            ...(body !== null
+                ? {
+                    body: JSON.stringify(body)
+                }
+                : {})
+        }
+    );
+}
+
+
+function switchManagementTab(name) {
+    document.querySelectorAll(
+        ".management-tab"
+    ).forEach(
+        item => item.classList.toggle(
+            "active",
+            item.dataset.managementTab === name
+        )
+    );
+
+    document.querySelectorAll(
+        ".management-pane"
+    ).forEach(
+        item => item.classList.toggle(
+            "active",
+            item.dataset.managementPane === name
+        )
+    );
+}
+
+
+async function refreshManagement() {
+    if (!ontConnected) {
+        return;
+    }
+
+    setBusy(
+        true,
+        "Atualizando plataforma de gerenciamento..."
+    );
+
+    try {
+        const [
+            inventory,
+            profiles,
+            agents,
+            incidents,
+            backups,
+            firmware,
+            acs
+        ] = await Promise.all([
+            managementRequest("/management/inventory"),
+            managementRequest("/management/profiles"),
+            managementRequest("/management/agents"),
+            managementRequest("/management/incidents"),
+            managementRequest("/management/backups"),
+            managementRequest("/management/firmware"),
+            managementRequest("/management/acs")
+        ]);
+
+        managementState.devices = inventory.devices || [];
+        managementState.profiles = profiles.profiles || [];
+        managementState.agents = agents.agents || [];
+        managementState.incidents = incidents.incidents || [];
+        managementState.backups = backups.backups || [];
+        managementState.firmware = firmware.firmware || [];
+
+        renderManagementInventory();
+        renderManagementProfiles();
+        renderManagementAgents();
+        renderManagementIncidents();
+        renderManagementBackups();
+        renderManagementFirmware();
+        renderManagementACS(acs);
+        renderManagementCounters();
+
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(
+            false
+        );
+    }
+}
+
+
+function renderManagementCounters() {
+    document.getElementById(
+        "managementDeviceCount"
+    ).textContent = managementState.devices.length;
+
+    document.getElementById(
+        "managementOnlineCount"
+    ).textContent = managementState.devices.filter(
+        item => item.status === "online"
+    ).length;
+
+    document.getElementById(
+        "managementIncidentCount"
+    ).textContent = managementState.incidents.filter(
+        item => item.status === "open"
+    ).length;
+
+    document.getElementById(
+        "managementAgentCount"
+    ).textContent = managementState.agents.filter(
+        item => item.enabled
+    ).length;
+}
+
+
+function relativeManagementTime(value) {
+    if (!value) {
+        return "-";
+    }
+
+    const date = new Date(value);
+    const seconds = Math.max(
+        0,
+        Math.floor(
+            (
+                Date.now()
+                - date.getTime()
+            ) / 1000
+        )
+    );
+
+    if (seconds < 60) {
+        return seconds + "s";
+    }
+
+    if (seconds < 3600) {
+        return Math.floor(
+            seconds / 60
+        ) + " min";
+    }
+
+    if (seconds < 86400) {
+        return Math.floor(
+            seconds / 3600
+        ) + " h";
+    }
+
+    return Math.floor(
+        seconds / 86400
+    ) + " d";
+}
+
+
+function renderManagementInventory() {
+    const body = document.getElementById(
+        "managementInventoryBody"
+    );
+
+    if (!body) {
+        return;
+    }
+
+    const search = (
+        document.getElementById(
+            "managementInventorySearch"
+        )?.value || ""
+    ).trim().toLowerCase();
+
+    const visible = managementState.devices.filter(
+        item => {
+            if (!search) {
+                return true;
+            }
+
+            return [
+                item.customer_name,
+                item.host,
+                item.model,
+                item.serial,
+                item.mac,
+                item.olt,
+                item.cto,
+                item.pop
+            ].some(
+                value => String(
+                    value || ""
+                ).toLowerCase().includes(
+                    search
+                )
+            );
+        }
+    );
+
+    body.innerHTML = visible.length
+        ? visible.map(
+            item => {
+                const selected = Number(item.id) === Number(
+                    managementState.selectedDeviceId
+                );
+
+                const topology = [
+                    item.pop,
+                    item.olt,
+                    item.cto
+                ].filter(Boolean).join(" / ") || "-";
+
+                return `
+                    <tr
+                        data-device-id="${item.id}"
+                        class="${selected ? "selected" : ""}"
+                    >
+                        <td>
+                            <input
+                                class="management-device-check"
+                                type="checkbox"
+                                value="${item.id}"
+                                aria-label="Selecionar equipamento"
+                            >
+                        </td>
+                        <td>
+                            <strong>${managementEscape(item.model || "ZTE")}</strong>
+                            <small>${managementEscape(item.serial || item.mac || item.key || "-")}</small>
+                        </td>
+                        <td>${managementEscape(item.customer_name || "-")}</td>
+                        <td class="mono">${managementEscape(item.host || "-")}</td>
+                        <td>${item.rx_power !== null && item.rx_power !== undefined ? managementEscape(item.rx_power + " dBm") : "-"}</td>
+                        <td>${managementEscape(topology)}</td>
+                        <td><span class="badge ${item.status === "online" ? "ok" : item.status === "offline" ? "critical" : ""}">${managementEscape(item.status || "unknown")}</span></td>
+                        <td>há ${managementEscape(relativeManagementTime(item.last_seen))}</td>
+                    </tr>
+                `;
+            }
+        ).join("")
+        : `
+            <tr>
+                <td colspan="8" class="muted">
+                    Nenhuma ONT no inventário.
+                </td>
+            </tr>
+        `;
+
+    body.querySelectorAll(
+        "tr[data-device-id]"
+    ).forEach(
+        row => {
+            row.addEventListener(
+                "click",
+                event => {
+                    if (
+                        event.target.matches(
+                            "input"
+                        )
+                    ) {
+                        return;
+                    }
+
+                    managementState.selectedDeviceId = Number(
+                        row.dataset.deviceId
+                    );
+
+                    renderManagementInventory();
+                    showToast(
+                        "ONT selecionada para gerenciamento."
+                    );
+                }
+            );
+        }
+    );
+}
+
+
+function renderManagementProfiles() {
+    const selects = [
+        "managementDriftProfile",
+        "managementZeroTouchProfile"
+    ];
+
+    const options = managementState.profiles.map(
+        item => `
+            <option value="${item.id}">
+                ${managementEscape(item.name)}
+                ${item.is_default ? " • padrão" : ""}
+            </option>
+        `
+    ).join("");
+
+    selects.forEach(
+        id => {
+            const select = document.getElementById(id);
+
+            if (!select) {
+                return;
+            }
+
+            const previous = select.value;
+            select.innerHTML = options || '<option value="">Nenhum perfil</option>';
+
+            if (
+                previous
+                && [
+                    ...select.options
+                ].some(
+                    option => option.value === previous
+                )
+            ) {
+                select.value = previous;
+            }
+        }
+    );
+}
+
+
+function renderManagementAgents() {
+    const list = document.getElementById(
+        "managementAgentList"
+    );
+
+    const select = document.getElementById(
+        "managementTerminalAgent"
+    );
+
+    if (select) {
+        const previous = select.value;
+        select.innerHTML = managementState.agents.map(
+            item => `
+                <option value="${item.id}">
+                    ${managementEscape(item.name)} • ${managementEscape(item.host)}
+                </option>
+            `
+        ).join("") || '<option value="">Nenhum Agent</option>';
+
+        if (
+            previous
+            && [
+                ...select.options
+            ].some(
+                item => item.value === previous
+            )
+        ) {
+            select.value = previous;
+        }
+    }
+
+    if (!list) {
+        return;
+    }
+
+    list.innerHTML = managementState.agents.length
+        ? managementState.agents.map(
+            item => `
+                <div class="management-list-item">
+                    <div>
+                        <strong>${managementEscape(item.name)}</strong>
+                        <span>${managementEscape(item.ssh_user)}@${managementEscape(item.host)}:${managementEscape(item.ssh_port)}</span>
+                        <small>${managementEscape(item.vpn_driver || "none")} • última leitura ${managementEscape(relativeManagementTime(item.last_seen))}</small>
+                    </div>
+                    <button class="button ghost compact" data-agent-test="${item.id}" type="button">Testar</button>
+                </div>
+            `
+        ).join("")
+        : '<div class="support-empty">Nenhum Agent cadastrado.</div>';
+
+    list.querySelectorAll(
+        "[data-agent-test]"
+    ).forEach(
+        button => button.addEventListener(
+            "click",
+            async () => {
+                setBusy(
+                    true,
+                    "Testando Agent..."
+                );
+
+                try {
+                    const result = await managementRequest(
+                        "/management/agents/test",
+                        {
+                            method: "POST",
+                            body: {
+                                id: Number(
+                                    button.dataset.agentTest
+                                )
+                            }
+                        }
+                    );
+
+                    showToast(
+                        result.success
+                            ? "Agent acessível."
+                            : "Agent respondeu com falha."
+                    );
+
+                    await refreshManagement();
+                } catch (error) {
+                    showToast(
+                        error.message
+                    );
+                } finally {
+                    setBusy(false);
+                }
+            }
+        )
+    );
+}
+
+
+function renderManagementIncidents() {
+    const list = document.getElementById(
+        "managementIncidentList"
+    );
+
+    if (!list) {
+        return;
+    }
+
+    list.innerHTML = managementState.incidents.length
+        ? managementState.incidents.map(
+            item => `
+                <div class="management-list-item incident ${managementEscape(item.severity)}">
+                    <div>
+                        <strong>${managementEscape(item.title)}</strong>
+                        <span>${managementEscape(item.scope?.type || "")}: ${managementEscape(item.scope?.value || "")}</span>
+                        <small>${managementEscape(item.device_ids?.length || 0)} equipamento(s) • ${managementEscape(item.status)}</small>
+                    </div>
+                    <span class="badge ${item.severity === "critical" ? "critical" : "warning"}">${managementEscape(item.severity)}</span>
+                </div>
+            `
+        ).join("")
+        : '<div class="support-empty">Nenhum incidente correlacionado.</div>';
+}
+
+
+function renderManagementBackups() {
+    const list = document.getElementById(
+        "managementBackupList"
+    );
+
+    if (!list) {
+        return;
+    }
+
+    const selected = Number(
+        managementState.selectedDeviceId
+    );
+
+    const items = managementState.backups.filter(
+        item => (
+            !selected
+            || !item.device_id
+            || Number(item.device_id) === selected
+        )
+    );
+
+    list.innerHTML = items.length
+        ? items.slice(0, 30).map(
+            item => `
+                <div class="management-list-item">
+                    <div>
+                        <strong>#${item.id} • ${managementEscape(item.reason || "backup")}</strong>
+                        <span class="mono">${managementEscape(item.path)}</span>
+                        <small>${managementEscape(item.created_at)}</small>
+                    </div>
+                    <button class="button danger compact" data-backup-restore="${item.id}" type="button">Restaurar</button>
+                </div>
+            `
+        ).join("")
+        : '<div class="support-empty">Nenhum backup registrado.</div>';
+
+    list.querySelectorAll(
+        "[data-backup-restore]"
+    ).forEach(
+        button => button.addEventListener(
+            "click",
+            async () => {
+                if (!window.confirm(
+                    "Restaurar este backup? A ONT pode reiniciar e a sessão será perdida."
+                )) {
+                    return;
+                }
+
+                setBusy(
+                    true,
+                    "Enviando backup para a ONT..."
+                );
+
+                try {
+                    const result = await managementRequest(
+                        "/management/backups/restore",
+                        {
+                            method: "POST",
+                            body: {
+                                backup_id: Number(
+                                    button.dataset.backupRestore
+                                ),
+                                confirm: true
+                            }
+                        }
+                    );
+
+                    showToast(
+                        result.message || "Restore enviado."
+                    );
+                } catch (error) {
+                    showToast(
+                        error.message
+                    );
+                } finally {
+                    setBusy(false);
+                }
+            }
+        )
+    );
+}
+
+
+function renderManagementFirmware() {
+    const list = document.getElementById(
+        "managementFirmwareList"
+    );
+
+    if (!list) {
+        return;
+    }
+
+    const device = selectedManagementDevice();
+
+    list.innerHTML = managementState.firmware.length
+        ? managementState.firmware.map(
+            item => {
+                const compatible = !device
+                    || !device.model
+                    || item.model === device.model;
+
+                return `
+                    <div class="management-list-item">
+                        <div>
+                            <strong>${managementEscape(item.model)} • ${managementEscape(item.version)}</strong>
+                            <span class="mono">${managementEscape(item.file_path)}</span>
+                            <small>${item.approved ? "APROVADO" : "não aprovado"} • SHA ${managementEscape((item.sha256 || "").slice(0, 12))}</small>
+                        </div>
+                        <button
+                            class="button danger compact"
+                            data-firmware-upgrade="${item.id}"
+                            type="button"
+                            ${compatible && item.approved && device ? "" : "disabled"}
+                        >
+                            Atualizar
+                        </button>
+                    </div>
+                `;
+            }
+        ).join("")
+        : '<div class="support-empty">Nenhum firmware cadastrado.</div>';
+
+    list.querySelectorAll(
+        "[data-firmware-upgrade]"
+    ).forEach(
+        button => button.addEventListener(
+            "click",
+            async () => {
+                const deviceId = managementState.selectedDeviceId;
+
+                if (!deviceId) {
+                    showToast(
+                        "Selecione uma ONT no inventário."
+                    );
+
+                    return;
+                }
+
+                if (!window.confirm(
+                    "Confirmar upgrade? O sistema criará backup antes do upload e a ONT poderá reiniciar."
+                )) {
+                    return;
+                }
+
+                setBusy(
+                    true,
+                    "Validando e enviando firmware..."
+                );
+
+                try {
+                    const result = await managementRequest(
+                        "/management/firmware/upgrade",
+                        {
+                            method: "POST",
+                            body: {
+                                device_id: Number(deviceId),
+                                firmware_id: Number(
+                                    button.dataset.firmwareUpgrade
+                                ),
+                                confirm: true
+                            }
+                        }
+                    );
+
+                    showToast(
+                        result.message || "Firmware enviado."
+                    );
+
+                    await refreshManagement();
+                } catch (error) {
+                    showToast(
+                        error.message
+                    );
+                } finally {
+                    setBusy(false);
+                }
+            }
+        )
+    );
+}
+
+
+function renderManagementACS(status) {
+    const config = status?.config || {};
+
+    if (
+        config.provider
+        && document.getElementById(
+            "managementAcsProvider"
+        )
+    ) {
+        document.getElementById(
+            "managementAcsProvider"
+        ).value = config.provider;
+    }
+
+    if (
+        config.base_url
+        && document.getElementById(
+            "managementAcsUrl"
+        )
+    ) {
+        document.getElementById(
+            "managementAcsUrl"
+        ).value = config.base_url;
+    }
+
+    managementOutput(
+        "managementAcsOutput",
+        status
+    );
+}
+
+
+function renderManagementTopology(result) {
+    const root = document.getElementById(
+        "managementTopology"
+    );
+
+    if (!root) {
+        return;
+    }
+
+    const nodes = new Map(
+        (result.nodes || []).map(
+            node => [
+                node.id,
+                node
+            ]
+        )
+    );
+
+    const order = [];
+    const clientNodes = (
+        result.nodes || []
+    ).filter(
+        node => node.kind.startsWith(
+            "client_"
+        )
+    );
+
+    if (clientNodes.length) {
+        order.push({
+            label: clientNodes.map(
+                item => item.label
+            ).join(", "),
+            kind: "clients",
+            status: clientNodes.some(
+                item => item.status === "critical"
+            )
+                ? "critical"
+                : clientNodes.some(
+                    item => item.status === "warning"
+                )
+                    ? "warning"
+                    : "ok"
+        });
+    }
+
+    [
+        "ont",
+        "cto",
+        "olt",
+        "pop",
+        "internet"
+    ].forEach(
+        id => {
+            if (nodes.has(id)) {
+                order.push(
+                    nodes.get(id)
+                );
+            }
+        }
+    );
+
+    root.innerHTML = order.length
+        ? order.map(
+            (node, index) => `
+                ${index ? '<span class="topology-arrow">→</span>' : ""}
+                <div class="topology-node ${managementEscape(node.status || "unknown")}">
+                    <span>${managementEscape(node.kind)}</span>
+                    <strong>${managementEscape(node.label)}</strong>
+                </div>
+            `
+        ).join("")
+        : '<div class="support-empty">Sem dados de topologia.</div>';
+}
+
+
+async function syncManagementInventory() {
+    setBusy(
+        true,
+        "Sincronizando inventário da ONT..."
+    );
+
+    try {
+        const agentRaw = document.getElementById(
+            "managementAgentId"
+        )?.value;
+
+        const result = await managementRequest(
+            "/management/inventory/sync",
+            {
+                method: "POST",
+                body: {
+                    customer_name: document.getElementById(
+                        "managementCustomer"
+                    )?.value.trim() || null,
+                    pop: document.getElementById(
+                        "managementPop"
+                    )?.value.trim() || null,
+                    olt: document.getElementById(
+                        "managementOlt"
+                    )?.value.trim() || null,
+                    cto: document.getElementById(
+                        "managementCto"
+                    )?.value.trim() || null,
+                    agent_id: agentRaw
+                        ? Number(agentRaw)
+                        : null,
+                    tags: managementTags()
+                }
+            }
+        );
+
+        managementState.selectedDeviceId = result.device?.id || null;
+
+        showToast(
+            "Inventário atualizado."
+        );
+
+        await refreshManagement();
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+async function saveManagementProfile() {
+    try {
+        const config = managementParseJson(
+            "managementProfileJson"
+        );
+
+        await managementRequest(
+            "/management/profiles/save",
+            {
+                method: "POST",
+                body: {
+                    name: document.getElementById(
+                        "managementProfileName"
+                    ).value.trim(),
+                    config,
+                    is_default: document.getElementById(
+                        "managementProfileDefault"
+                    ).checked
+                }
+            }
+        );
+
+        showToast(
+            "Perfil corporativo salvo."
+        );
+
+        await refreshManagement();
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function checkManagementDrift(fix = false) {
+    const profileId = managementSelectedProfileId(
+        "managementDriftProfile"
+    );
+
+    if (!profileId) {
+        showToast(
+            "Cadastre/selecione um perfil."
+        );
+
+        return;
+    }
+
+    if (
+        fix
+        && !window.confirm(
+            "Corrigir as divergências da ONT atual? Um backup será criado antes."
+        )
+    ) {
+        return;
+    }
+
+    setBusy(
+        true,
+        fix
+            ? "Corrigindo Config Drift..."
+            : "Comparando perfil com a ONT..."
+    );
+
+    try {
+        const result = await managementRequest(
+            fix
+                ? "/management/drift/remediate"
+                : "/management/drift",
+            {
+                method: "POST",
+                body: {
+                    profile_id: profileId,
+                    confirm: fix
+                }
+            }
+        );
+
+        const assessment = result.after || result;
+
+        managementOutput(
+            "managementDriftOutput",
+            result
+        );
+
+        const badge = document.getElementById(
+            "managementDriftBadge"
+        );
+
+        badge.className = "badge " + (
+            assessment.compliant
+                ? "ok"
+                : "warning"
+        );
+
+        badge.textContent = assessment.compliant
+            ? "Conforme"
+            : (
+                assessment.count
+                + " divergência(s)"
+            );
+
+        showToast(
+            fix
+                ? "Correção de drift concluída."
+                : "Comparação concluída."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+async function runManagementBatch() {
+    const deviceIds = checkedManagementDevices();
+
+    if (!deviceIds.length) {
+        showToast(
+            "Marque pelo menos uma ONT no inventário."
+        );
+
+        return;
+    }
+
+    try {
+        let payload = managementParseJson(
+            "managementBatchPayload"
+        );
+
+        const operation = document.getElementById(
+            "managementBatchOperation"
+        ).value;
+
+        if (
+            operation === "profile_remediate"
+            && !payload.profile_id
+        ) {
+            payload = {
+                ...payload,
+                profile_id: managementSelectedProfileId(
+                    "managementDriftProfile"
+                )
+            };
+        }
+
+        const result = await managementRequest(
+            "/management/batch",
+            {
+                method: "POST",
+                body: {
+                    operation,
+                    device_ids: deviceIds,
+                    payload
+                }
+            }
+        );
+
+        managementOutput(
+            "managementBatchOutput",
+            result
+        );
+
+        showToast(
+            "Job em lote iniciado."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function refreshManagementBatch() {
+    try {
+        const result = await managementRequest(
+            "/management/batch"
+        );
+
+        managementOutput(
+            "managementBatchOutput",
+            result
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function saveManagementAgent() {
+    try {
+        const result = await managementRequest(
+            "/management/agents/save",
+            {
+                method: "POST",
+                body: {
+                    name: document.getElementById(
+                        "managementAgentName"
+                    ).value.trim(),
+                    host: document.getElementById(
+                        "managementAgentHost"
+                    ).value.trim(),
+                    ssh_user: document.getElementById(
+                        "managementAgentUser"
+                    ).value.trim(),
+                    ssh_port: Number(
+                        document.getElementById(
+                            "managementAgentPort"
+                        ).value || 22
+                    ),
+                    ssh_key_path: document.getElementById(
+                        "managementAgentKey"
+                    ).value.trim() || null,
+                    vpn_driver: document.getElementById(
+                        "managementAgentVpn"
+                    ).value,
+                    enabled: true,
+                    vpn_config: {}
+                }
+            }
+        );
+
+        showToast(
+            "Agent salvo."
+        );
+
+        if (result.id) {
+            document.getElementById(
+                "managementAgentId"
+            ).value = result.id;
+        }
+
+        await refreshManagement();
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function openManagementRemote() {
+    const device = selectedManagementDevice();
+
+    if (!device) {
+        showToast(
+            "Selecione uma ONT no inventário."
+        );
+
+        return;
+    }
+
+    setBusy(
+        true,
+        "Abrindo túnel remoto temporário..."
+    );
+
+    try {
+        const result = await managementRequest(
+            "/management/remote/open",
+            {
+                method: "POST",
+                body: {
+                    device_id: device.id,
+                    ttl_minutes: Number(
+                        document.getElementById(
+                            "managementRemoteTtl"
+                        ).value || 30
+                    ),
+                    remote_port: Number(
+                        document.getElementById(
+                            "managementRemotePort"
+                        ).value || 80
+                    )
+                }
+            }
+        );
+
+        managementOutput(
+            "managementRemoteOutput",
+            result
+        );
+
+        showToast(
+            "Acesso remoto aberto em " + result.access_url
+        );
+    } catch (error) {
+        managementOutput(
+            "managementRemoteOutput",
+            {
+                error: error.message
+            }
+        );
+
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+async function refreshRemoteSessions() {
+    try {
+        const result = await managementRequest(
+            "/management/remote/sessions"
+        );
+
+        managementOutput(
+            "managementRemoteOutput",
+            result
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function runManagementTerminal() {
+    const agentId = Number(
+        document.getElementById(
+            "managementTerminalAgent"
+        )?.value || 0
+    );
+
+    if (!agentId) {
+        showToast(
+            "Cadastre/selecione um Agent."
+        );
+
+        return;
+    }
+
+    const command = document.getElementById(
+        "managementTerminalCommand"
+    ).value;
+
+    const host = document.getElementById(
+        "managementTerminalHost"
+    ).value.trim();
+
+    const extra = document.getElementById(
+        "managementTerminalExtra"
+    ).value.trim();
+
+    const params = {};
+
+    if (
+        [
+            "ping",
+            "traceroute",
+            "dns"
+        ].includes(command)
+    ) {
+        params.host = host;
+    }
+
+    if (command === "iperf3") {
+        params.host = extra || host;
+        params.duration = 10;
+        params.streams = 4;
+    }
+
+    if (command === "capture") {
+        params.interface = extra || "eth0";
+        params.host = host || null;
+        params.duration = 10;
+        params.count = 100;
+    }
+
+    setBusy(
+        true,
+        "Executando no gateway..."
+    );
+
+    try {
+        const result = await managementRequest(
+            "/management/gateway/command",
+            {
+                method: "POST",
+                body: {
+                    agent_id: agentId,
+                    command,
+                    params
+                }
+            }
+        );
+
+        managementOutput(
+            "managementTerminalOutput",
+            result
+        );
+    } catch (error) {
+        managementOutput(
+            "managementTerminalOutput",
+            {
+                error: error.message
+            }
+        );
+
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+async function startManagementMonitor() {
+    setBusy(
+        true,
+        "Iniciando monitor temporal..."
+    );
+
+    try {
+        const result = await managementRequest(
+            "/management/monitor/start",
+            {
+                method: "POST",
+                body: {
+                    device_id: managementState.selectedDeviceId,
+                    duration_seconds: Number(
+                        document.getElementById(
+                            "managementMonitorDuration"
+                        ).value || 300
+                    ),
+                    interval_seconds: Number(
+                        document.getElementById(
+                            "managementMonitorInterval"
+                        ).value || 10
+                    ),
+                    ping_host: document.getElementById(
+                        "managementMonitorPing"
+                    ).value.trim() || "1.1.1.1"
+                }
+            }
+        );
+
+        managementState.monitorId = result.id;
+
+        managementOutput(
+            "managementMonitorOutput",
+            result
+        );
+
+        showToast(
+            "Monitor iniciado."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+async function refreshManagementMonitor() {
+    if (!managementState.monitorId) {
+        showToast(
+            "Nenhum monitor iniciado nesta tela."
+        );
+
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/monitor/status?id="
+            + encodeURIComponent(
+                managementState.monitorId
+            )
+        );
+
+        managementOutput(
+            "managementMonitorOutput",
+            result
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function stopManagementMonitor() {
+    if (!managementState.monitorId) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/monitor/stop",
+            {
+                method: "POST",
+                body: {
+                    id: managementState.monitorId
+                }
+            }
+        );
+
+        managementOutput(
+            "managementMonitorOutput",
+            result
+        );
+
+        showToast(
+            "Monitor encerrado."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function correlateManagementIncidents() {
+    try {
+        await managementRequest(
+            "/management/incidents/correlate",
+            {
+                method: "POST",
+                body: {
+                    minimum_devices: 5
+                }
+            }
+        );
+
+        const result = await managementRequest(
+            "/management/incidents"
+        );
+
+        managementState.incidents = result.incidents || [];
+
+        renderManagementIncidents();
+        renderManagementCounters();
+
+        showToast(
+            "Correlação atualizada."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function loadManagementTopology() {
+    const device = selectedManagementDevice();
+
+    if (!device) {
+        showToast(
+            "Selecione uma ONT no inventário."
+        );
+
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/topology?device_id="
+            + encodeURIComponent(
+                device.id
+            )
+        );
+
+        renderManagementTopology(
+            result
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function refreshManagementNetwork() {
+    setBusy(
+        true,
+        "Lendo controles de rede da ONT..."
+    );
+
+    try {
+        const result = await managementRequest(
+            "/management/network"
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+    } catch (error) {
+        managementOutput(
+            "managementNetworkOutput",
+            {
+                error: error.message
+            }
+        );
+
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+async function saveManagementQos() {
+    if (!window.confirm(
+        "Aplicar esta configuração QoS na ONT atual?"
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/qos/save",
+            {
+                method: "POST",
+                body: {
+                    kind: document.getElementById(
+                        "managementQosKind"
+                    ).value,
+                    config: managementParseJson(
+                        "managementQosJson"
+                    ),
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "QoS atualizado."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function saveManagementFirewall() {
+    if (!window.confirm(
+        "Alterar o firewall da ONT atual?"
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/firewall/update",
+            {
+                method: "POST",
+                body: {
+                    config: {
+                        enabled: document.getElementById(
+                            "managementFirewallEnabled"
+                        ).checked,
+                        level: document.getElementById(
+                            "managementFirewallLevel"
+                        ).value
+                    },
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "Firewall atualizado."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function saveManagementSntp() {
+    try {
+        const result = await managementRequest(
+            "/management/sntp/update",
+            {
+                method: "POST",
+                body: {
+                    config: managementParseJson(
+                        "managementSntpJson"
+                    )
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "SNTP atualizado."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function saveManagementTr069() {
+    if (!window.confirm(
+        "Alterar os parâmetros TR-069/ACS da ONT?"
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/tr069/update",
+            {
+                method: "POST",
+                body: {
+                    config: managementParseJson(
+                        "managementTr069Json"
+                    ),
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "TR-069 atualizado."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function updateManagementWan() {
+    if (!window.confirm(
+        "Aplicar alteração WAN/VLAN/PPPoE? Um backup será criado antes."
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/wan/update",
+            {
+                method: "POST",
+                body: {
+                    id: document.getElementById(
+                        "managementWanId"
+                    ).value.trim(),
+                    config: managementParseJson(
+                        "managementWanJson"
+                    ),
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "WAN atualizada."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function runManagementWanAction() {
+    try {
+        const result = await managementRequest(
+            "/management/wan/action",
+            {
+                method: "POST",
+                body: {
+                    id: document.getElementById(
+                        "managementWanId"
+                    ).value.trim(),
+                    action: document.getElementById(
+                        "managementWanAction"
+                    ).value
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function runManagementBridge() {
+    if (!window.confirm(
+        "ATENÇÃO: colocar a WAN em bridge pode derrubar o acesso atual. Criar backup e continuar?"
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/bridge",
+            {
+                method: "POST",
+                body: {
+                    id: document.getElementById(
+                        "managementWanId"
+                    ).value.trim(),
+                    config: managementParseJson(
+                        "managementWanJson"
+                    ),
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "Bridge Mode processado."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function createManagementBackup() {
+    try {
+        const result = await managementRequest(
+            "/management/backups/create",
+            {
+                method: "POST",
+                body: {
+                    device_id: managementState.selectedDeviceId,
+                    reason: document.getElementById(
+                        "managementBackupReason"
+                    ).value.trim() || "manual"
+                }
+            }
+        );
+
+        showToast(
+            "Backup criado: " + result.filename
+        );
+
+        await refreshManagement();
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function registerManagementFirmware() {
+    try {
+        const result = await managementRequest(
+            "/management/firmware/register",
+            {
+                method: "POST",
+                body: {
+                    model: document.getElementById(
+                        "managementFirmwareModel"
+                    ).value.trim(),
+                    version: document.getElementById(
+                        "managementFirmwareVersion"
+                    ).value.trim(),
+                    file_path: document.getElementById(
+                        "managementFirmwarePath"
+                    ).value.trim(),
+                    approved: document.getElementById(
+                        "managementFirmwareApproved"
+                    ).checked
+                }
+            }
+        );
+
+        showToast(
+            "Firmware cadastrado: " + result.version
+        );
+
+        await refreshManagement();
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function saveManagementACS() {
+    try {
+        const result = await managementRequest(
+            "/management/acs/configure",
+            {
+                method: "POST",
+                body: {
+                    provider: document.getElementById(
+                        "managementAcsProvider"
+                    ).value,
+                    base_url: document.getElementById(
+                        "managementAcsUrl"
+                    ).value.trim(),
+                    timeout: 20
+                }
+            }
+        );
+
+        renderManagementACS(
+            result
+        );
+
+        showToast(
+            "Integração ACS/USP salva."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function discoverManagementACS() {
+    const device = selectedManagementDevice();
+
+    if (!device) {
+        showToast(
+            "Selecione uma ONT no inventário."
+        );
+
+        return;
+    }
+
+    setBusy(
+        true,
+        "Consultando ACS/USP..."
+    );
+
+    try {
+        const result = await managementRequest(
+            "/management/acs/discover?device_id="
+            + encodeURIComponent(
+                device.id
+            )
+        );
+
+        managementOutput(
+            "managementAcsOutput",
+            result
+        );
+    } catch (error) {
+        managementOutput(
+            "managementAcsOutput",
+            {
+                error: error.message
+            }
+        );
+
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+async function runManagementZeroTouch() {
+    const profileId = managementSelectedProfileId(
+        "managementZeroTouchProfile"
+    );
+
+    if (!profileId) {
+        showToast(
+            "Selecione um perfil."
+        );
+
+        return;
+    }
+
+    if (!window.confirm(
+        "Executar Zero Touch na ONT atual? Será criado backup antes das alterações."
+    )) {
+        return;
+    }
+
+    setBusy(
+        true,
+        "Executando pipeline de provisionamento..."
+    );
+
+    try {
+        const agentRaw = document.getElementById(
+            "managementAgentId"
+        )?.value;
+
+        const result = await managementRequest(
+            "/management/zero-touch",
+            {
+                method: "POST",
+                body: {
+                    profile_id: profileId,
+                    customer_name: document.getElementById(
+                        "managementCustomer"
+                    )?.value.trim() || null,
+                    pop: document.getElementById(
+                        "managementPop"
+                    )?.value.trim() || null,
+                    olt: document.getElementById(
+                        "managementOlt"
+                    )?.value.trim() || null,
+                    cto: document.getElementById(
+                        "managementCto"
+                    )?.value.trim() || null,
+                    agent_id: agentRaw
+                        ? Number(agentRaw)
+                        : null,
+                    tags: managementTags(),
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementZeroTouchOutput",
+            result
+        );
+
+        showToast(
+            result.success
+                ? "Provisionamento concluído."
+                : "Provisionamento concluído com falhas parciais."
+        );
+
+        await refreshManagement();
+    } catch (error) {
+        managementOutput(
+            "managementZeroTouchOutput",
+            {
+                error: error.message
+            }
+        );
+
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+// =========================================================
+// BINDINGS
+// =========================================================
+
+document.querySelectorAll(
+    ".management-tab"
+).forEach(
+    button => button.addEventListener(
+        "click",
+        () => switchManagementTab(
+            button.dataset.managementTab
+        )
+    )
+);
+
+
+document.querySelector(
+    '[data-page="management"]'
+)?.addEventListener(
+    "click",
+    refreshManagement
+);
+
+
+document.getElementById(
+    "managementRefreshButton"
+)?.addEventListener(
+    "click",
+    refreshManagement
+);
+
+
+document.getElementById(
+    "managementInventorySearch"
+)?.addEventListener(
+    "input",
+    renderManagementInventory
+);
+
+
+document.getElementById(
+    "managementInventorySync"
+)?.addEventListener(
+    "click",
+    syncManagementInventory
+);
+
+
+document.getElementById(
+    "managementProfileSave"
+)?.addEventListener(
+    "click",
+    saveManagementProfile
+);
+
+
+document.getElementById(
+    "managementDriftCheck"
+)?.addEventListener(
+    "click",
+    () => checkManagementDrift(false)
+);
+
+
+document.getElementById(
+    "managementDriftFix"
+)?.addEventListener(
+    "click",
+    () => checkManagementDrift(true)
+);
+
+
+document.getElementById(
+    "managementBatchRun"
+)?.addEventListener(
+    "click",
+    runManagementBatch
+);
+
+
+document.getElementById(
+    "managementBatchRefresh"
+)?.addEventListener(
+    "click",
+    refreshManagementBatch
+);
+
+
+document.getElementById(
+    "managementAgentSave"
+)?.addEventListener(
+    "click",
+    saveManagementAgent
+);
+
+
+document.getElementById(
+    "managementRemoteOpen"
+)?.addEventListener(
+    "click",
+    openManagementRemote
+);
+
+
+document.getElementById(
+    "managementRemoteRefresh"
+)?.addEventListener(
+    "click",
+    refreshRemoteSessions
+);
+
+
+document.getElementById(
+    "managementTerminalRun"
+)?.addEventListener(
+    "click",
+    runManagementTerminal
+);
+
+
+document.getElementById(
+    "managementMonitorStart"
+)?.addEventListener(
+    "click",
+    startManagementMonitor
+);
+
+
+document.getElementById(
+    "managementMonitorRefresh"
+)?.addEventListener(
+    "click",
+    refreshManagementMonitor
+);
+
+
+document.getElementById(
+    "managementMonitorStop"
+)?.addEventListener(
+    "click",
+    stopManagementMonitor
+);
+
+
+document.getElementById(
+    "managementIncidentCorrelate"
+)?.addEventListener(
+    "click",
+    correlateManagementIncidents
+);
+
+
+document.getElementById(
+    "managementIncidentRefresh"
+)?.addEventListener(
+    "click",
+    refreshManagement
+);
+
+
+document.getElementById(
+    "managementTopologyLoad"
+)?.addEventListener(
+    "click",
+    loadManagementTopology
+);
+
+
+document.getElementById(
+    "managementNetworkRefresh"
+)?.addEventListener(
+    "click",
+    refreshManagementNetwork
+);
+
+
+document.getElementById(
+    "managementQosSave"
+)?.addEventListener(
+    "click",
+    saveManagementQos
+);
+
+
+document.getElementById(
+    "managementFirewallSave"
+)?.addEventListener(
+    "click",
+    saveManagementFirewall
+);
+
+
+document.getElementById(
+    "managementSntpSave"
+)?.addEventListener(
+    "click",
+    saveManagementSntp
+);
+
+
+document.getElementById(
+    "managementTr069Save"
+)?.addEventListener(
+    "click",
+    saveManagementTr069
+);
+
+
+document.getElementById(
+    "managementWanUpdate"
+)?.addEventListener(
+    "click",
+    updateManagementWan
+);
+
+
+document.getElementById(
+    "managementWanActionRun"
+)?.addEventListener(
+    "click",
+    runManagementWanAction
+);
+
+
+document.getElementById(
+    "managementBridgeRun"
+)?.addEventListener(
+    "click",
+    runManagementBridge
+);
+
+
+document.getElementById(
+    "managementBackupCreate"
+)?.addEventListener(
+    "click",
+    createManagementBackup
+);
+
+
+document.getElementById(
+    "managementBackupRefresh"
+)?.addEventListener(
+    "click",
+    refreshManagement
+);
+
+
+document.getElementById(
+    "managementFirmwareRegister"
+)?.addEventListener(
+    "click",
+    registerManagementFirmware
+);
+
+
+document.getElementById(
+    "managementAcsSave"
+)?.addEventListener(
+    "click",
+    saveManagementACS
+);
+
+
+document.getElementById(
+    "managementAcsDiscover"
+)?.addEventListener(
+    "click",
+    discoverManagementACS
+);
+
+
+document.getElementById(
+    "managementZeroTouchRun"
+)?.addEventListener(
+    "click",
+    runManagementZeroTouch
+);
