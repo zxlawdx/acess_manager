@@ -314,3 +314,10 @@
         flex-direction: column;
     }
 }
+
+
+.management-separator {
+    height: 1px;
+    margin: 14px 0;
+    background: var(--border, rgba(148, 163, 184, .14));
+}
