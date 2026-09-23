@@ -117,6 +117,18 @@ A UI é uma SPA dentro de uma única rota Vela (`/`), então Dashboard/Wi-Fi/WAN
 
 Mais detalhes: `docs/VELA_FRAMEWORK_NOTES.md`.
 
+## Interface desktop e zoom
+
+O bundle Windows usa **PyQt6 + QtWebEngine**. A UI usa fontes de texto do próprio sistema para manter aparência consistente mesmo sem acesso ao Google Fonts.
+
+Atalhos de zoom:
+
+- `Ctrl + +` aumenta a interface;
+- `Ctrl + -` diminui;
+- `Ctrl + 0` retorna para 100%.
+
+O nível escolhido fica salvo localmente no WebView.
+
 ## API interna do app
 
 O `ApiRouter` atual do Vela suporta `GET`, `POST`, `PUT` e `DELETE`, mas não `PATCH`, e o wrapper atual não injeta parâmetros dinâmicos de rota no handler. Para manter o projeto compatível **sem exigir um fork do framework**, os comandos de alteração usam `POST` com o identificador no JSON.
