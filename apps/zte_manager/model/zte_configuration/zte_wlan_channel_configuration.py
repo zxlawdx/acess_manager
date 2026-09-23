@@ -356,12 +356,32 @@ def _apply_advanced(
     novo,
     config
 ):
-    if "sgi" in config:
-        novo["SGIEnabled"] = (
-            "1"
-            if config["sgi"]
-            else "0"
-        )
+    """
+    Aplica somente overrides recebidos.
+
+    Campos ausentes permanecem exatamente como vieram da ONT. Esse padrão é
+    importante entre F6600P/F670L porque nem todo firmware expõe todos os
+    controles de 802.11ax.
+    """
+    boolean_fields = {
+        "sgi": "SGIEnabled",
+        "mu_mimo": "MUMIMOEnable",
+        "uplink_mu_mimo": "UPLinkMUMIMO",
+        "downlink_mu_mimo": "DownLinkMUMIMO",
+        "uplink_ofdma": "UPLinkOFDMA",
+        "downlink_ofdma": "DownLinkOFDMA",
+        "twt": "TWTSupport",
+        "spatial_reuse": "SpatialReuse",
+        "ssid_isolation": "SSIDIsolationEnable",
+    }
+
+    for source, target in boolean_fields.items():
+        if source in config:
+            novo[target] = (
+                "1"
+                if config[source]
+                else "0"
+            )
 
     if config.get("beacon_interval") is not None:
         beacon = int(
@@ -377,10 +397,48 @@ def _apply_advanced(
             beacon
         )
 
-    if config.get("tx_power"):
-        novo["TxPower"] = config[
-            "tx_power"
-        ]
+    if config.get("rts_cts") is not None:
+        rts_cts = int(
+            config["rts_cts"]
+        )
+
+        if not 0 <= rts_cts <= 2347:
+            raise ValueError(
+                "RTS/CTS deve ficar entre 0 e 2347."
+            )
+
+        novo["RtsCts"] = str(
+            rts_cts
+        )
+
+    if config.get("dtim") is not None:
+        dtim = int(
+            config["dtim"]
+        )
+
+        if not 1 <= dtim <= 5:
+            raise ValueError(
+                "DTIM deve ficar entre 1 e 5."
+            )
+
+        novo["DTIM"] = str(
+            dtim
+        )
+
+    direct_fields = {
+        "tx_power": "TxPower",
+        "qos_type": "QosType",
+        "work_mode": "WorkMode",
+        "preamble_type": "PreambleType",
+    }
+
+    for source, target in direct_fields.items():
+        value = config.get(source)
+
+        if value is not None and value != "":
+            novo[target] = str(
+                value
+            )
 
 
 def _validate_channel(
