@@ -30,6 +30,38 @@ def _number(value: Any) -> float | None:
     )
 
 
+def _rate_mbps(value: Any) -> float | None:
+    """Normaliza Mbps/Kbps/bps e os valores numéricos usados pelos firmwares."""
+    number = _number(
+        value
+    )
+
+    if number is None:
+        return None
+
+    text = str(
+        value
+    ).lower()
+
+    if "gb" in text:
+        return number * 1000
+
+    if "mb" in text:
+        return number
+
+    if "kb" in text:
+        return number / 1000
+
+    if "bps" in text:
+        return number / 1_000_000
+
+    # Em vários builds ZTE o RxRate/TxRate vem em Kbps sem unidade.
+    if number >= 1000:
+        return number / 1000
+
+    return number
+
+
 def _valid_ipish(value: Any) -> bool:
     text = str(
         value or ""
@@ -467,6 +499,23 @@ class DnsHealthRule(DiagnosticRule):
                 )
             ]
 
+        if data.get(
+            "lookup"
+        ) is None:
+            return [
+                self.finding(
+                    self.code,
+                    "info",
+                    (
+                        "O firmware não permitiu confirmar DNS via NsLookup e "
+                        "não expôs servidores efetivos na WAN; resultado inconclusivo."
+                    ),
+                    error=data.get(
+                        "lookup_error"
+                    ),
+                )
+            ]
+
         return [
             self.finding(
                 self.code,
@@ -550,10 +599,10 @@ class ClientPathRule(DiagnosticRule):
         )
 
         rates = [
-            _number(
+            _rate_mbps(
                 client.get("rx_rate")
             ),
-            _number(
+            _rate_mbps(
                 client.get("tx_rate")
             ),
         ]
@@ -724,6 +773,221 @@ class ClientPathRule(DiagnosticRule):
             return "5GHz"
 
         return None
+
+
+class BandSteeringHealthRule(DiagnosticRule):
+    code = "band_steering_health"
+
+    def __init__(
+        self,
+        options: SupportDiagnosticOptions,
+    ):
+        self.options = options
+
+    def evaluate(
+        self,
+        context: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        if self.options.mode != "low_speed":
+            return []
+
+        client = context.get(
+            "affected_client"
+        ) or {}
+
+        if client.get(
+            "kind"
+        ) != "wifi":
+            return []
+
+        band = ClientPathRule._band(
+            client
+        )
+
+        if band != "2.4GHz":
+            return []
+
+        steering = (
+            context.get(
+                "sections",
+                {}
+            ).get(
+                "band_steering"
+            )
+            or {}
+        )
+
+        if not steering.get(
+            "available"
+        ):
+            return [
+                self.finding(
+                    self.code,
+                    "info",
+                    "Band Steering não ficou disponível para validar este cliente.",
+                )
+            ]
+
+        if steering.get(
+            "enabled"
+        ):
+            return [
+                self.finding(
+                    self.code,
+                    "warning",
+                    (
+                        "Band Steering está ativo, mas o dispositivo afetado permaneceu "
+                        "em 2.4 GHz; alcance, compatibilidade ou thresholds podem estar impedindo a migração."
+                    ),
+                    parameters=steering.get(
+                        "parameters"
+                    ),
+                )
+            ]
+
+        return [
+            self.finding(
+                self.code,
+                "info",
+                "Band Steering está desativado e o dispositivo afetado está em 2.4 GHz.",
+                recommendation={
+                    "title": "Revisar Band Steering",
+                    "action": {
+                        "type": "inspect_band_steering",
+                    },
+                    "safe": True,
+                },
+            )
+        ]
+
+
+class LanErrorsRule(DiagnosticRule):
+    code = "lan_errors"
+
+    def evaluate(
+        self,
+        context: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        findings = []
+
+        for port in (
+            context.get(
+                "sections",
+                {}
+            ).get(
+                "lan_ports"
+            )
+            or []
+        ):
+            counters = {
+                "rx_errors": _number(
+                    port.get("rx_errors")
+                ) or 0,
+                "tx_errors": _number(
+                    port.get("tx_errors")
+                ) or 0,
+                "rx_discard": _number(
+                    port.get("rx_discard")
+                ) or 0,
+                "tx_discard": _number(
+                    port.get("tx_discard")
+                ) or 0,
+            }
+
+            total = sum(
+                counters.values()
+            )
+
+            if total <= 0:
+                continue
+
+            findings.append(
+                self.finding(
+                    self.code,
+                    "warning",
+                    (
+                        f"LAN {port.get('port', '?')} possui {int(total)} "
+                        "erro(s)/descarte(s) nos contadores da interface."
+                    ),
+                    port=port,
+                    counters=counters,
+                )
+            )
+
+        return findings
+
+
+class DeviceResourcesRule(DiagnosticRule):
+    code = "device_resources"
+
+    def evaluate(
+        self,
+        context: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        device = (
+            context.get(
+                "sections",
+                {}
+            ).get(
+                "device"
+            )
+            or {}
+        )
+
+        findings = []
+
+        memory = _number(
+            device.get(
+                "memoria_percent"
+            )
+        )
+
+        if (
+            memory is not None
+            and memory >= 90
+        ):
+            findings.append(
+                self.finding(
+                    "device_memory",
+                    "warning",
+                    f"Memória da ONT em {memory:.0f}%.",
+                    memory_percent=memory,
+                )
+            )
+
+        cpu_values = []
+
+        for value in (
+            device.get("cpu")
+            or {}
+        ).values():
+            parsed = _number(
+                value
+            )
+
+            if parsed is not None:
+                cpu_values.append(
+                    parsed
+                )
+
+        if cpu_values:
+            average = sum(
+                cpu_values
+            ) / len(
+                cpu_values
+            )
+
+            if average >= 90:
+                findings.append(
+                    self.finding(
+                        "device_cpu",
+                        "warning",
+                        f"CPU média da ONT em {average:.0f}%.",
+                        cpu_percent=average,
+                    )
+                )
+
+        return findings
 
 
 class ChannelRule(DiagnosticRule):
@@ -1374,6 +1638,11 @@ class SupportDiagnosticService:
             ClientPathRule(
                 options
             ),
+            BandSteeringHealthRule(
+                options
+            ),
+            LanErrorsRule(),
+            DeviceResourcesRule(),
             ChannelRule(),
             SpeedRule(
                 options
