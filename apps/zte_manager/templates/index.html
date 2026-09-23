@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="{{ static('zte_manager/css/style.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/advanced.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/support_diagnostics.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/management.css') }}">
 
 <div class="app-shell">
 
@@ -82,6 +83,11 @@
             <button class="menu-item protected-page locked" data-page="advanced" type="button">
                 <span class="material-symbols-outlined">developer_board</span>
                 <span>Avançado</span>
+            </button>
+
+            <button class="menu-item protected-page locked" data-page="management" type="button">
+                <span class="material-symbols-outlined">hub</span>
+                <span>Gerenciamento</span>
             </button>
 
             <button class="menu-item protected-page locked" data-page="device" type="button">
@@ -988,6 +994,364 @@
                 </div>
             </section>
 
+            <!-- ==================================================
+                 CPE MANAGEMENT PLATFORM
+            =================================================== -->
+            <section id="page-management" class="page">
+                <div class="section-intro management-intro">
+                    <div>
+                        <span class="section-kicker">CPE MANAGEMENT PLATFORM</span>
+                        <h2>Gerenciamento de frota e rede</h2>
+                        <p>
+                            Inventário, configuração em lote, acesso remoto, monitoramento,
+                            controle de rede, ciclo de firmware e provisionamento ACS/USP.
+                        </p>
+                    </div>
+                    <button id="managementRefreshButton" class="button ghost" type="button">
+                        <span class="material-symbols-outlined">refresh</span>
+                        Atualizar
+                    </button>
+                </div>
+
+                <div class="management-tabs" role="tablist">
+                    <button class="management-tab active" data-management-tab="fleet" type="button">Frota</button>
+                    <button class="management-tab" data-management-tab="remote" type="button">Remoto / VPN</button>
+                    <button class="management-tab" data-management-tab="monitor" type="button">Monitoramento</button>
+                    <button class="management-tab" data-management-tab="network" type="button">Rede</button>
+                    <button class="management-tab" data-management-tab="lifecycle" type="button">Backup / Firmware</button>
+                    <button class="management-tab" data-management-tab="provisioning" type="button">ACS / Zero-touch</button>
+                </div>
+
+                <div id="managementStatusStrip" class="management-status-strip">
+                    <div><span>FROTA</span><strong id="managementDeviceCount">0</strong></div>
+                    <div><span>ONLINE</span><strong id="managementOnlineCount">0</strong></div>
+                    <div><span>INCIDENTES</span><strong id="managementIncidentCount">0</strong></div>
+                    <div><span>AGENTS</span><strong id="managementAgentCount">0</strong></div>
+                </div>
+
+                <div class="management-pane active" data-management-pane="fleet">
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <span class="section-kicker">INVENTÁRIO</span>
+                                    <h3>ONT conectada</h3>
+                                </div>
+                                <button id="managementInventorySync" class="button primary compact" type="button">Sincronizar</button>
+                            </div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>CLIENTE</span><input id="managementCustomer" type="text" placeholder="Nome / contrato"></label>
+                                <label class="field"><span>POP</span><input id="managementPop" type="text" placeholder="POP Porto Velho"></label>
+                                <label class="field"><span>OLT</span><input id="managementOlt" type="text" placeholder="OLT-01"></label>
+                                <label class="field"><span>CTO</span><input id="managementCto" type="text" placeholder="CTO-123"></label>
+                                <label class="field"><span>AGENT ID</span><input id="managementAgentId" type="number" min="1" placeholder="Opcional"></label>
+                                <label class="field"><span>TAGS</span><input id="managementTags" type="text" placeholder="residencial, premium"></label>
+                            </div>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <span class="section-kicker">CONFIG DRIFT</span>
+                                    <h3>Perfil corporativo</h3>
+                                </div>
+                                <span id="managementDriftBadge" class="badge">Não verificado</span>
+                            </div>
+                            <div class="management-form-grid">
+                                <label class="field">
+                                    <span>PERFIL</span>
+                                    <select id="managementDriftProfile"></select>
+                                </label>
+                            </div>
+                            <div class="management-action-row">
+                                <button id="managementDriftCheck" class="button ghost" type="button">Comparar configuração</button>
+                                <button id="managementDriftFix" class="button primary" type="button">Corrigir divergências</button>
+                            </div>
+                            <pre id="managementDriftOutput" class="management-code-output">Nenhuma comparação executada.</pre>
+                        </article>
+                    </div>
+
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">FLEET INVENTORY</span>
+                                <h3>Equipamentos conhecidos</h3>
+                            </div>
+                            <input id="managementInventorySearch" class="management-search" type="search" placeholder="cliente, serial, MAC, OLT, CTO...">
+                        </div>
+                        <div class="management-table-wrap">
+                            <table class="management-table">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>Equipamento</th>
+                                        <th>Cliente</th>
+                                        <th>Host</th>
+                                        <th>RX</th>
+                                        <th>POP / OLT / CTO</th>
+                                        <th>Status</th>
+                                        <th>Última leitura</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="managementInventoryBody"></tbody>
+                            </table>
+                        </div>
+                    </article>
+
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">PROFILE BUILDER</span><h3>Salvar perfil corporativo</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>NOME</span><input id="managementProfileName" type="text" value="Brasil Digital padrão"></label>
+                                <label class="check-row"><input id="managementProfileDefault" type="checkbox"><span>Perfil padrão</span></label>
+                            </div>
+                            <label class="field">
+                                <span>CONFIGURAÇÃO JSON</span>
+                                <textarea id="managementProfileJson" class="management-json-editor" spellcheck="false">{
+  "wifi": {
+    "2.4GHz": {"auto_channel": true},
+    "5GHz": {"auto_channel": true}
+  },
+  "dns": {},
+  "band_steering": {"enabled": true}
+}</textarea>
+                            </label>
+                            <button id="managementProfileSave" class="button primary" type="button">Salvar perfil</button>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">BATCH JOB</span><h3>Gerenciamento em lote</h3></div></div>
+                            <label class="field">
+                                <span>OPERAÇÃO</span>
+                                <select id="managementBatchOperation">
+                                    <option value="profile_remediate">Corrigir perfil</option>
+                                    <option value="acs_parameters">Parâmetros via ACS/USP</option>
+                                    <option value="acs_reboot">Reiniciar via ACS/USP</option>
+                                    <option value="gateway_command">Comando diagnóstico via Agent</option>
+                                    <option value="sync_inventory">Sincronizar inventário local</option>
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span>PAYLOAD JSON</span>
+                                <textarea id="managementBatchPayload" class="management-json-editor" spellcheck="false">{}</textarea>
+                            </label>
+                            <div class="management-action-row">
+                                <button id="managementBatchRun" class="button primary" type="button">Executar nos selecionados</button>
+                                <button id="managementBatchRefresh" class="button ghost" type="button">Ver jobs</button>
+                            </div>
+                            <pre id="managementBatchOutput" class="management-code-output">Selecione ONTs na tabela.</pre>
+                        </article>
+                    </div>
+                </div>
+
+                <div class="management-pane" data-management-pane="remote">
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">GATEWAY AGENT</span><h3>Linux / SSH / VPN</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>NOME</span><input id="managementAgentName" type="text" placeholder="POP-PVH-01"></label>
+                                <label class="field"><span>HOST</span><input id="managementAgentHost" type="text" placeholder="172.30.0.201"></label>
+                                <label class="field"><span>USUÁRIO SSH</span><input id="managementAgentUser" type="text" value="law"></label>
+                                <label class="field"><span>PORTA SSH</span><input id="managementAgentPort" type="number" value="22"></label>
+                                <label class="field"><span>CHAVE SSH</span><input id="managementAgentKey" type="text" placeholder="~/.ssh/id_ed25519"></label>
+                                <label class="field">
+                                    <span>OVERLAY</span>
+                                    <select id="managementAgentVpn">
+                                        <option value="none">Rede direta</option>
+                                        <option value="zerotier">ZeroTier</option>
+                                        <option value="wireguard">WireGuard</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <button id="managementAgentSave" class="button primary" type="button">Salvar Agent</button>
+                            <div id="managementAgentList" class="management-list"></div>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">REMOTE SESSION</span><h3>Acesso temporário à ONT</h3></div></div>
+                            <p class="muted">Usa o Agent associado à ONT selecionada. O túnel é local e expira automaticamente.</p>
+                            <div class="management-form-grid">
+                                <label class="field"><span>TTL (MIN)</span><input id="managementRemoteTtl" type="number" value="30" min="5" max="240"></label>
+                                <label class="field"><span>PORTA DA ONT</span><input id="managementRemotePort" type="number" value="80" min="1" max="65535"></label>
+                            </div>
+                            <div class="management-action-row">
+                                <button id="managementRemoteOpen" class="button primary" type="button">Abrir gerenciamento remoto</button>
+                                <button id="managementRemoteRefresh" class="button ghost" type="button">Sessões</button>
+                            </div>
+                            <pre id="managementRemoteOutput" class="management-code-output">Selecione uma ONT no inventário.</pre>
+                        </article>
+                    </div>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">GATEWAY TERMINAL</span><h3>Diagnóstico remoto seguro</h3></div></div>
+                        <div class="management-form-grid">
+                            <label class="field"><span>AGENT</span><select id="managementTerminalAgent"></select></label>
+                            <label class="field">
+                                <span>COMANDO</span>
+                                <select id="managementTerminalCommand">
+                                    <option value="ping">Ping</option>
+                                    <option value="traceroute">Traceroute</option>
+                                    <option value="route">ip route</option>
+                                    <option value="address">ip -br address</option>
+                                    <option value="arp">ARP / ND</option>
+                                    <option value="dns">DNS Lookup</option>
+                                    <option value="iperf3">iperf3</option>
+                                    <option value="capture">Captura curta tcpdump</option>
+                                    <option value="zerotier_status">ZeroTier status</option>
+                                    <option value="wireguard_status">WireGuard status</option>
+                                </select>
+                            </label>
+                            <label class="field"><span>HOST</span><input id="managementTerminalHost" type="text" value="1.1.1.1"></label>
+                            <label class="field"><span>INTERFACE / IPERF</span><input id="managementTerminalExtra" type="text" placeholder="eth0 ou servidor iperf"></label>
+                        </div>
+                        <button id="managementTerminalRun" class="button primary" type="button">Executar</button>
+                        <pre id="managementTerminalOutput" class="management-terminal">Aguardando comando.</pre>
+                    </article>
+                </div>
+
+                <div class="management-pane" data-management-pane="monitor">
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">INTERMITÊNCIA</span><h3>Monitor temporal</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>DURAÇÃO (S)</span><input id="managementMonitorDuration" type="number" value="300" min="30" max="900"></label>
+                                <label class="field"><span>INTERVALO (S)</span><input id="managementMonitorInterval" type="number" value="10" min="5" max="60"></label>
+                                <label class="field"><span>PING</span><input id="managementMonitorPing" type="text" value="1.1.1.1"></label>
+                            </div>
+                            <div class="management-action-row">
+                                <button id="managementMonitorStart" class="button primary" type="button">Monitorar</button>
+                                <button id="managementMonitorRefresh" class="button ghost" type="button">Atualizar resultado</button>
+                                <button id="managementMonitorStop" class="button danger" type="button">Parar</button>
+                            </div>
+                            <pre id="managementMonitorOutput" class="management-code-output">Nenhum monitor em execução.</pre>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">INCIDENT CORRELATION</span><h3>POP / OLT / CTO</h3></div></div>
+                            <div class="management-action-row">
+                                <button id="managementIncidentCorrelate" class="button primary" type="button">Correlacionar agora</button>
+                                <button id="managementIncidentRefresh" class="button ghost" type="button">Atualizar</button>
+                            </div>
+                            <div id="managementIncidentList" class="management-list"></div>
+                        </article>
+                    </div>
+
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div><span class="section-kicker">TOPOLOGIA</span><h3>Cliente → ONT → CTO → OLT → POP → Internet</h3></div>
+                            <button id="managementTopologyLoad" class="button ghost compact" type="button">Carregar selecionado</button>
+                        </div>
+                        <div id="managementTopology" class="management-topology"></div>
+                    </article>
+                </div>
+
+                <div class="management-pane" data-management-pane="network">
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div><span class="section-kicker">NETWORK CONTROL</span><h3>Estado completo da ONT atual</h3></div>
+                            <button id="managementNetworkRefresh" class="button primary compact" type="button">Ler tudo</button>
+                        </div>
+                        <pre id="managementNetworkOutput" class="management-code-output large">Nenhuma leitura executada.</pre>
+                    </article>
+
+                    <div class="management-grid three">
+                        <article class="panel">
+                            <span class="section-kicker">QOS / SQM</span>
+                            <h3>Fila, shaper e policer</h3>
+                            <label class="field"><span>TIPO</span><select id="managementQosKind"><option value="queue">Queue</option><option value="shaper">Shaper</option><option value="policer">Policer</option></select></label>
+                            <label class="field"><span>CONFIG JSON</span><textarea id="managementQosJson" class="management-json-editor">{"Alias":"Suporte","Enable":true}</textarea></label>
+                            <button id="managementQosSave" class="button primary" type="button">Salvar QoS</button>
+                        </article>
+
+                        <article class="panel">
+                            <span class="section-kicker">FIREWALL</span>
+                            <h3>Nível de proteção</h3>
+                            <label class="field"><span>NÍVEL</span><select id="managementFirewallLevel"><option>Low</option><option selected>Middle</option><option>High</option></select></label>
+                            <label class="check-row"><input id="managementFirewallEnabled" type="checkbox" checked><span>Firewall habilitado</span></label>
+                            <button id="managementFirewallSave" class="button primary" type="button">Aplicar firewall</button>
+                        </article>
+
+                        <article class="panel">
+                            <span class="section-kicker">SNTP / TR-069</span>
+                            <h3>Gerenciamento remoto</h3>
+                            <label class="field"><span>SNTP JSON</span><textarea id="managementSntpJson" class="management-json-editor">{"enabled":true,"server1":"pool.ntp.org"}</textarea></label>
+                            <button id="managementSntpSave" class="button ghost" type="button">Aplicar SNTP</button>
+                            <label class="field"><span>TR-069 JSON</span><textarea id="managementTr069Json" class="management-json-editor">{"periodic_inform_enabled":true,"periodic_inform_interval":3600}</textarea></label>
+                            <button id="managementTr069Save" class="button primary" type="button">Aplicar TR-069</button>
+                        </article>
+                    </div>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">WAN / VLAN / PPPOE / BRIDGE</span><h3>WAN Manager</h3></div></div>
+                        <div class="management-form-grid">
+                            <label class="field"><span>WAN ID</span><input id="managementWanId" type="text" placeholder="IGD.WD1.WCD1.WCIP1"></label>
+                            <label class="field"><span>AÇÃO</span><select id="managementWanAction"><option value="connect">PPPoE Connect</option><option value="disconnect">PPPoE Disconnect</option><option value="dhcp_renew">DHCP Renew</option><option value="dhcp_release">DHCP Release</option></select></label>
+                        </div>
+                        <label class="field"><span>CONFIGURAÇÃO WAN JSON</span><textarea id="managementWanJson" class="management-json-editor">{"vlan_enabled":true,"vlan_id":"100","priority":"0","mtu":"1492"}</textarea></label>
+                        <div class="management-action-row">
+                            <button id="managementWanUpdate" class="button primary" type="button">Aplicar WAN</button>
+                            <button id="managementWanActionRun" class="button ghost" type="button">Executar ação</button>
+                            <button id="managementBridgeRun" class="button danger" type="button">Assistente Bridge</button>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="management-pane" data-management-pane="lifecycle">
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">CONFIG BACKUP</span><h3>Backup / restore</h3></div></div>
+                            <label class="field"><span>MOTIVO</span><input id="managementBackupReason" type="text" value="manual"></label>
+                            <div class="management-action-row">
+                                <button id="managementBackupCreate" class="button primary" type="button">Criar backup</button>
+                                <button id="managementBackupRefresh" class="button ghost" type="button">Atualizar lista</button>
+                            </div>
+                            <div id="managementBackupList" class="management-list"></div>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">FIRMWARE MANAGER</span><h3>Catálogo aprovado</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>MODELO</span><input id="managementFirmwareModel" type="text" placeholder="F670L"></label>
+                                <label class="field"><span>VERSÃO</span><input id="managementFirmwareVersion" type="text" placeholder="V9.x"></label>
+                            </div>
+                            <label class="field"><span>ARQUIVO LOCAL</span><input id="managementFirmwarePath" type="text" placeholder="C:\firmware\F670L.bin"></label>
+                            <label class="check-row"><input id="managementFirmwareApproved" type="checkbox"><span>Firmware homologado/aprovado</span></label>
+                            <button id="managementFirmwareRegister" class="button primary" type="button">Cadastrar firmware</button>
+                            <div id="managementFirmwareList" class="management-list"></div>
+                        </article>
+                    </div>
+                </div>
+
+                <div class="management-pane" data-management-pane="provisioning">
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">TR-069 / TR-369</span><h3>ACS / USP Controller</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>PROVIDER</span><select id="managementAcsProvider"><option value="genieacs">GenieACS</option><option value="usp_bridge">USP/TR-369 Bridge</option></select></label>
+                                <label class="field"><span>BASE URL</span><input id="managementAcsUrl" type="url" placeholder="http://acs.local:7557"></label>
+                            </div>
+                            <p class="muted">Credenciais ficam em variáveis de ambiente e não são gravadas no SQLite.</p>
+                            <div class="management-action-row">
+                                <button id="managementAcsSave" class="button primary" type="button">Salvar integração</button>
+                                <button id="managementAcsDiscover" class="button ghost" type="button">Localizar ONT selecionada</button>
+                            </div>
+                            <pre id="managementAcsOutput" class="management-code-output">ACS não consultado.</pre>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">ZERO TOUCH</span><h3>Provisionar ONT atual</h3></div></div>
+                            <label class="field"><span>PERFIL</span><select id="managementZeroTouchProfile"></select></label>
+                            <p class="muted">
+                                Fluxo: inventário → backup → corrigir drift → SNTP → TR-069 →
+                                WAN opcional → parâmetros ACS → validação.
+                            </p>
+                            <button id="managementZeroTouchRun" class="button danger" type="button">Executar zero-touch</button>
+                            <pre id="managementZeroTouchOutput" class="management-code-output">Aguardando provisionamento.</pre>
+                        </article>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 </div>
@@ -1004,3 +1368,4 @@
 <script src="{{ static('zte_manager/js/app.js') }}"></script>
 <script src="{{ static('zte_manager/js/advanced.js') }}"></script>
 <script src="{{ static('zte_manager/js/support_diagnostics.js') }}"></script>
+<script src="{{ static('zte_manager/js/management.js') }}"></script>
