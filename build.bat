@@ -71,6 +71,7 @@ python -m PyInstaller --noconfirm --clean --onedir --windowed ^
   --collect-all pydantic ^
   --collect-all pydantic_core ^
   --collect-all cryptography ^
+  --collect-all platformdirs ^
   --collect-all setuptools ^
   --collect-all jaraco.text ^
   --collect-all jaraco.functools ^
