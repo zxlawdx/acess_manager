@@ -151,7 +151,7 @@ POST /api/device/password
 POST /api/device/reboot
 ```
 
-A API é local e, por padrão, usa `127.0.0.1:8765`.
+A API é local. A porta preferencial é `127.0.0.1:8765`; se ela estiver ocupada, o Vela seleciona outra porta livre automaticamente.
 
 ## Executar no Windows
 
@@ -180,25 +180,32 @@ python manage.py runapp
 
 ## Releases automáticas por tag
 
-O repositório possui o workflow `.github/workflows/release.yml`.
+O workflow `.github/workflows/release.yml` segue o mesmo modelo validado no projeto **PIBIC LAB**:
 
-Ao publicar uma tag no formato `v*`, por exemplo:
+1. executa os testes;
+2. gera build **Linux x86_64**;
+3. gera build **Windows x86_64**;
+4. valida os assets do bundle;
+5. publica os dois pacotes na GitHub Release da tag;
+6. publica também os checksums SHA-256.
+
+Exemplo:
 
 ```bash
-git tag -a v0.4.2 -m "ZTE Automatic v0.4.2"
-git push origin v0.4.2
+git tag -a v0.4.4 -m "ZTE Automatic v0.4.4"
+git push origin v0.4.4
 ```
 
-o GitHub Actions:
+Arquivos esperados na Release:
 
-1. faz o build em `windows-latest`;
-2. executa os testes Python;
-3. valida a sintaxe do JavaScript;
-4. gera `ZTEAutomatic-Windows-<tag>.zip`;
-5. gera o SHA-256 do pacote;
-6. publica os dois arquivos na Release correspondente à tag.
+```text
+ZTEAutomatic-Linux-x86_64-v0.4.4.zip
+ZTEAutomatic-Linux-x86_64-v0.4.4.zip.sha256
+ZTEAutomatic-Windows-x86_64-v0.4.4.zip
+ZTEAutomatic-Windows-x86_64-v0.4.4.zip.sha256
+```
 
-Também é possível executar manualmente em **Actions → tagged-windows-release → Run workflow**, informando uma tag já existente.
+O workflow também pode ser executado manualmente em **Actions → build-release → Run workflow**, informando uma tag já existente.
 
 ## Build Windows
 
