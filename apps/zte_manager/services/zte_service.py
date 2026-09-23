@@ -355,8 +355,16 @@ class ZTEService:
         new_password
     ):
         with self._lock:
-            return self.get_client().change_admin_password(
-                new_password
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="admin_password",
+                target=self.current_host,
+                before_reader=zte.account_status,
+                action=lambda: zte.change_admin_password(
+                    new_password
+                ),
+                after_reader=zte.account_status,
             )
 
     def reboot(self):
@@ -438,9 +446,20 @@ class ZTEService:
         config
     ):
         with self._lock:
-            return self.get_client().set_ssid_config(
-                ssid_id,
-                config
+            zte = self.get_client()
+            reader = lambda: zte.wifi_networks(
+                reveal_password=False
+            )
+
+            return self._run_change(
+                operation="ssid_update",
+                target=ssid_id,
+                before_reader=reader,
+                action=lambda: zte.set_ssid_config(
+                    ssid_id,
+                    config
+                ),
+                after_reader=reader,
             )
 
     def wifi_radios(self):
@@ -466,9 +485,17 @@ class ZTEService:
         config
     ):
         with self._lock:
-            return self.get_client().set_radio_config(
-                band,
-                config
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="wifi_radio_update",
+                target=band,
+                before_reader=zte.channel_status,
+                action=lambda: zte.set_radio_config(
+                    band,
+                    config
+                ),
+                after_reader=zte.channel_status,
             )
 
     # =========================================================
@@ -485,9 +512,17 @@ class ZTEService:
         enabled
     ):
         with self._lock:
-            return self.get_client().set_radio_power(
-                band,
-                enabled
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="wifi_radio_power",
+                target=band,
+                before_reader=zte.radio_power_status,
+                action=lambda: zte.set_radio_power(
+                    band,
+                    enabled
+                ),
+                after_reader=zte.radio_power_status,
             )
 
     def wifi_schedule_status(self):
@@ -518,9 +553,17 @@ class ZTEService:
         mode
     ):
         with self._lock:
-            return self.get_client().set_wps(
-                band,
-                mode
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="wps_update",
+                target=band,
+                before_reader=zte.wps_status,
+                action=lambda: zte.set_wps(
+                    band,
+                    mode
+                ),
+                after_reader=zte.wps_status,
             )
 
     def upnp_status(self):
@@ -532,8 +575,16 @@ class ZTEService:
         config
     ):
         with self._lock:
-            return self.get_client().set_upnp(
-                config
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="upnp_update",
+                target="upnp",
+                before_reader=zte.upnp_status,
+                action=lambda: zte.set_upnp(
+                    config
+                ),
+                after_reader=zte.upnp_status,
             )
 
     def band_steering_status(self):
@@ -736,8 +787,16 @@ class ZTEService:
 
     def set_dns(self, config):
         with self._lock:
-            return self.get_client().set_dns(
-                config
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="dns_update",
+                target="dns",
+                before_reader=zte.dns_status,
+                action=lambda: zte.set_dns(
+                    config
+                ),
+                after_reader=zte.dns_status,
             )
 
     # =========================================================
@@ -922,9 +981,17 @@ class ZTEService:
                 or "default"
             )
 
-            return profile_service.apply_profile(
-                self.get_client(),
-                attendant
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="profile_apply",
+                target=attendant,
+                before_reader=zte.current_standard_configuration,
+                action=lambda: profile_service.apply_profile(
+                    zte,
+                    attendant
+                ),
+                after_reader=zte.current_standard_configuration,
             )
 
     # =========================================================
