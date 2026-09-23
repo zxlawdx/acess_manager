@@ -169,6 +169,51 @@ class ZTEService:
                 },
             )
 
+            # Registro leve imediato: a ONT já aparece no inventário ao
+            # conectar. A sincronização completa (óptico/config/capabilities)
+            # pode ser executada na área de gerenciamento.
+            try:
+                serial = (
+                    self._device_info.get("serial")
+                    or self._device_info.get("serial_number")
+                    or self._device_info.get("sn")
+                    or self._device_info.get("SerialNumber")
+                )
+
+                mac = (
+                    self._device_info.get("mac")
+                    or self._device_info.get("mac_address")
+                    or self._device_info.get("MACAddress")
+                )
+
+                management_repository.upsert_device({
+                    "key": (
+                        serial
+                        or mac
+                        or self.current_host
+                    ),
+                    "host": self.current_host,
+                    "model": (
+                        self._device_info.get("modelo")
+                        or self._device_info.get("model")
+                    ),
+                    "serial": serial,
+                    "mac": mac,
+                    "firmware": (
+                        self._device_info.get("firmware")
+                        or self._device_info.get("software")
+                    ),
+                    "status": "online",
+                    "metadata": {
+                        "device": self._device_info,
+                        "adapter": self._adapter.name,
+                        "attendant": self.current_attendant,
+                    },
+                })
+            except Exception:
+                # Inventário não pode impedir o atendimento/login.
+                pass
+
             return {
                 "success": True,
                 "attendant": self.current_attendant,
