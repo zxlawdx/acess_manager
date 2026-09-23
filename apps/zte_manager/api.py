@@ -15,6 +15,7 @@ from apps.zte_manager.schemas import (
     BackupCompareRequest,
     BatchManagementRequest,
     BridgeModeRequest,
+    BufferbloatRequest,
     CapabilityProbeRequest,
     ConnectRequest,
     DhcpBasicRequest,
@@ -1332,6 +1333,23 @@ def management_remote_close(context=None):
 
         return cpe_management_service.close_remote(
             data.id
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/gateway/bufferbloat")
+def management_gateway_bufferbloat(context=None):
+    def action():
+        data = _validated(
+            BufferbloatRequest,
+            context
+        )
+
+        return cpe_management_service.bufferbloat(
+            data.model_dump()
         )
 
     return _safe_call(
