@@ -1,6 +1,7 @@
 -r requirements.txt
 
-# Build reproduzível - mesmas versões/base usadas no PIBIC LAB.
+# Build reproduzível. Mantemos a base do pipeline do PIBIC LAB,
+# mas usamos Qt 6 neste app para um WebEngine mais moderno.
 pyinstaller==6.22.2
 pywebview==6.2.1
 
