@@ -3,12 +3,17 @@ from pydantic import ValidationError
 from vela.api import api
 
 from apps.zte_manager.schemas import (
+    ACSConfigRequest,
+    ACSParameterRequest,
     AdminPasswordRequest,
+    AgentRequest,
     AttendantRequest,
     AttendanceReportRequest,
     AutomaticDiagnosticRequest,
     BandSteeringConfigRequest,
     BandSteeringRequest,
+    BatchManagementRequest,
+    BridgeModeRequest,
     CapabilityProbeRequest,
     ConnectRequest,
     DhcpBasicRequest,
@@ -16,19 +21,41 @@ from apps.zte_manager.schemas import (
     DiagnosticRemediationRequest,
     DmzRequest,
     DnsRequest,
+    DriftRequest,
+    FirewallManagementRequest,
+    FirmwareRegisterRequest,
+    FirmwareUpgradeRequest,
+    GatewayCommandRequest,
+    InventorySyncRequest,
+    InventoryUpdateRequest,
+    ManagementBackupRequest,
+    ManagementProfileRequest,
+    MonitorStartRequest,
+    NumericIdRequest,
     PingRequest,
     PortForwardRequest,
     ProfileRequest,
+    QoSManagementRequest,
     RadioPowerRequest,
+    RemoteAccessRequest,
     ResourceIdRequest,
+    RestoreBackupRequest,
+    SNTPManagementRequest,
     SpeedTestRequest,
     SupportDiagnosticRequest,
+    TR069ManagementRequest,
     TracerouteRequest,
     UpnpRequest,
     WifiRadioRequest,
     WifiSSIDRequest,
     WifiScheduleRequest,
+    WANActionRequest,
+    WANManagementRequest,
     WpsRequest,
+    ZeroTouchRequest,
+)
+from apps.zte_manager.services.cpe_management_service import (
+    cpe_management_service,
 )
 from apps.zte_manager.services.zte_service import zte_service
 
@@ -1023,6 +1050,816 @@ def apply_profile(context=None):
 
         return zte_service.apply_profile(
             data.attendant
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+
+# =========================================================
+# CPE MANAGEMENT PLATFORM
+# =========================================================
+
+
+@api.get("/management/inventory")
+def management_inventory(context=None):
+    query = _query(
+        context
+    )
+
+    try:
+        limit = int(
+            query.get(
+                "limit"
+            )
+            or 500
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        limit = 500
+
+    return _safe_call(
+        cpe_management_service.devices,
+        query=query.get(
+            "q"
+        ),
+        status=query.get(
+            "status"
+        ),
+        limit=limit,
+    )
+
+
+@api.post("/management/inventory/sync")
+def management_inventory_sync(context=None):
+    def action():
+        data = _validated(
+            InventorySyncRequest,
+            context
+        )
+
+        return cpe_management_service.sync_inventory(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/inventory/update")
+def management_inventory_update(context=None):
+    def action():
+        data = _validated(
+            InventoryUpdateRequest,
+            context
+        )
+
+        values = data.model_dump(
+            exclude_none=True,
+            exclude={
+                "device_id",
+            },
+        )
+
+        return cpe_management_service.update_device(
+            data.device_id,
+            values,
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/profiles")
+def management_profiles(context=None):
+    return _safe_call(
+        cpe_management_service.profiles
+    )
+
+
+@api.post("/management/profiles/save")
+def management_profile_save(context=None):
+    def action():
+        data = _validated(
+            ManagementProfileRequest,
+            context
+        )
+
+        return cpe_management_service.save_profile(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/drift")
+def management_drift(context=None):
+    def action():
+        data = _validated(
+            DriftRequest,
+            context
+        )
+
+        return cpe_management_service.drift(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/drift/remediate")
+def management_drift_remediate(context=None):
+    def action():
+        data = _validated(
+            DriftRequest,
+            context
+        )
+
+        return cpe_management_service.remediate_drift(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/batch")
+def management_batch_create(context=None):
+    def action():
+        data = _validated(
+            BatchManagementRequest,
+            context
+        )
+
+        return cpe_management_service.create_batch(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/batch")
+def management_batch_jobs(context=None):
+    return _safe_call(
+        cpe_management_service.batch_jobs
+    )
+
+
+@api.get("/management/batch/job")
+def management_batch_job(context=None):
+    query = _query(
+        context
+    )
+
+    job_id = query.get(
+        "id"
+    )
+
+    if not job_id:
+        return {
+            "error": "Informe ?id= do job.",
+            "type": "validation",
+        }
+
+    return _safe_call(
+        cpe_management_service.batch_job,
+        int(
+            job_id
+        ),
+    )
+
+
+# =========================================================
+# AGENTS / VPN / TERMINAL / IPERF
+# =========================================================
+
+
+@api.get("/management/agents")
+def management_agents(context=None):
+    return _safe_call(
+        cpe_management_service.agents
+    )
+
+
+@api.post("/management/agents/save")
+def management_agent_save(context=None):
+    def action():
+        data = _validated(
+            AgentRequest,
+            context
+        )
+
+        return cpe_management_service.save_agent(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/agents/test")
+def management_agent_test(context=None):
+    def action():
+        data = _validated(
+            NumericIdRequest,
+            context
+        )
+
+        return cpe_management_service.test_agent(
+            data.id
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/remote/sessions")
+def management_remote_sessions(context=None):
+    return _safe_call(
+        cpe_management_service.remote_sessions
+    )
+
+
+@api.post("/management/remote/open")
+def management_remote_open(context=None):
+    def action():
+        data = _validated(
+            RemoteAccessRequest,
+            context
+        )
+
+        return cpe_management_service.open_remote(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/remote/close")
+def management_remote_close(context=None):
+    def action():
+        data = _validated(
+            NumericIdRequest,
+            context
+        )
+
+        return cpe_management_service.close_remote(
+            data.id
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/gateway/command")
+def management_gateway_command(context=None):
+    def action():
+        data = _validated(
+            GatewayCommandRequest,
+            context
+        )
+
+        return cpe_management_service.gateway_command(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+# =========================================================
+# MONITORAMENTO / TOPOLOGIA / INCIDENTES
+# =========================================================
+
+
+@api.post("/management/monitor/start")
+def management_monitor_start(context=None):
+    def action():
+        data = _validated(
+            MonitorStartRequest,
+            context
+        )
+
+        return cpe_management_service.start_monitor(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/monitor/status")
+def management_monitor_status(context=None):
+    query = _query(
+        context
+    )
+
+    run_id = query.get(
+        "id"
+    )
+
+    if not run_id:
+        return {
+            "error": "Informe ?id= do monitor.",
+            "type": "validation",
+        }
+
+    return _safe_call(
+        cpe_management_service.monitor_status,
+        int(
+            run_id
+        ),
+    )
+
+
+@api.post("/management/monitor/stop")
+def management_monitor_stop(context=None):
+    def action():
+        data = _validated(
+            NumericIdRequest,
+            context
+        )
+
+        return cpe_management_service.stop_monitor(
+            data.id
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/topology")
+def management_topology(context=None):
+    query = _query(
+        context
+    )
+
+    device_id = query.get(
+        "device_id"
+    )
+
+    if not device_id:
+        return {
+            "error": "Informe ?device_id=.",
+            "type": "validation",
+        }
+
+    return _safe_call(
+        cpe_management_service.topology,
+        zte_service,
+        int(
+            device_id
+        ),
+    )
+
+
+@api.get("/management/incidents")
+def management_incidents(context=None):
+    return _safe_call(
+        cpe_management_service.incidents,
+        _query(
+            context
+        ).get(
+            "status"
+        ),
+    )
+
+
+@api.post("/management/incidents/correlate")
+def management_incidents_correlate(context=None):
+    data = _json(
+        context
+    )
+
+    return _safe_call(
+        cpe_management_service.correlate_incidents,
+        data.get(
+            "minimum_devices"
+        )
+        or 5,
+    )
+
+
+# =========================================================
+# NETWORK CONTROL
+# =========================================================
+
+
+@api.get("/management/network")
+def management_network_overview(context=None):
+    return _safe_call(
+        cpe_management_service.network_overview,
+        zte_service,
+    )
+
+
+@api.get("/management/qos")
+def management_qos(context=None):
+    return _safe_call(
+        zte_service.qos_management_status
+    )
+
+
+@api.post("/management/qos/save")
+def management_qos_save(context=None):
+    def action():
+        data = _validated(
+            QoSManagementRequest,
+            context
+        )
+
+        return cpe_management_service.qos_save(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/qos/delete")
+def management_qos_delete(context=None):
+    def action():
+        data = _validated(
+            QoSManagementRequest,
+            context
+        )
+
+        if not data.id:
+            raise ValueError(
+                "Informe o id da regra QoS."
+            )
+
+        return cpe_management_service.qos_delete(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/firewall")
+def management_firewall(context=None):
+    return _safe_call(
+        zte_service.firewall_management_status
+    )
+
+
+@api.post("/management/firewall/update")
+def management_firewall_update(context=None):
+    def action():
+        data = _validated(
+            FirewallManagementRequest,
+            context
+        )
+
+        return cpe_management_service.firewall_set(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/sntp")
+def management_sntp(context=None):
+    return _safe_call(
+        zte_service.sntp_management_status
+    )
+
+
+@api.post("/management/sntp/update")
+def management_sntp_update(context=None):
+    def action():
+        data = _validated(
+            SNTPManagementRequest,
+            context
+        )
+
+        return cpe_management_service.sntp_set(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/tr069")
+def management_tr069(context=None):
+    return _safe_call(
+        zte_service.tr069_management_status
+    )
+
+
+@api.post("/management/tr069/update")
+def management_tr069_update(context=None):
+    def action():
+        data = _validated(
+            TR069ManagementRequest,
+            context
+        )
+
+        return cpe_management_service.tr069_set(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/wan")
+def management_wan(context=None):
+    return _safe_call(
+        zte_service.wan_configurations
+    )
+
+
+@api.post("/management/wan/update")
+def management_wan_update(context=None):
+    def action():
+        data = _validated(
+            WANManagementRequest,
+            context
+        )
+
+        return cpe_management_service.wan_update(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/wan/action")
+def management_wan_action(context=None):
+    def action():
+        data = _validated(
+            WANActionRequest,
+            context
+        )
+
+        return cpe_management_service.wan_action(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/bridge")
+def management_bridge(context=None):
+    def action():
+        data = _validated(
+            BridgeModeRequest,
+            context
+        )
+
+        return cpe_management_service.bridge(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+# =========================================================
+# BACKUP / FIRMWARE
+# =========================================================
+
+
+@api.get("/management/backups")
+def management_backups(context=None):
+    query = _query(
+        context
+    )
+
+    device_id = query.get(
+        "device_id"
+    )
+
+    return _safe_call(
+        cpe_management_service.backups,
+        (
+            int(device_id)
+            if device_id
+            else None
+        ),
+    )
+
+
+@api.post("/management/backups/create")
+def management_backup_create(context=None):
+    def action():
+        data = _validated(
+            ManagementBackupRequest,
+            context
+        )
+
+        return cpe_management_service.backup(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/backups/restore")
+def management_backup_restore(context=None):
+    def action():
+        data = _validated(
+            RestoreBackupRequest,
+            context
+        )
+
+        return cpe_management_service.restore(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/firmware")
+def management_firmware(context=None):
+    return _safe_call(
+        cpe_management_service.firmware_list,
+        _query(
+            context
+        ).get(
+            "model"
+        ),
+    )
+
+
+@api.post("/management/firmware/register")
+def management_firmware_register(context=None):
+    def action():
+        data = _validated(
+            FirmwareRegisterRequest,
+            context
+        )
+
+        return cpe_management_service.firmware_register(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/firmware/status")
+def management_firmware_status(context=None):
+    return _safe_call(
+        zte_service.firmware_management_status
+    )
+
+
+@api.post("/management/firmware/upgrade")
+def management_firmware_upgrade(context=None):
+    def action():
+        data = _validated(
+            FirmwareUpgradeRequest,
+            context
+        )
+
+        return cpe_management_service.firmware_upgrade(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+# =========================================================
+# ACS / USP / ZERO TOUCH
+# =========================================================
+
+
+@api.get("/management/acs")
+def management_acs_status(context=None):
+    return _safe_call(
+        cpe_management_service.acs_status
+    )
+
+
+@api.post("/management/acs/configure")
+def management_acs_configure(context=None):
+    def action():
+        data = _validated(
+            ACSConfigRequest,
+            context
+        )
+
+        return cpe_management_service.configure_acs(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/management/acs/discover")
+def management_acs_discover(context=None):
+    query = _query(
+        context
+    )
+
+    device_id = query.get(
+        "device_id"
+    )
+
+    if not device_id:
+        return {
+            "error": "Informe ?device_id=.",
+            "type": "validation",
+        }
+
+    return _safe_call(
+        cpe_management_service.acs_discover,
+        int(
+            device_id
+        ),
+    )
+
+
+@api.post("/management/acs/parameters")
+def management_acs_parameters(context=None):
+    def action():
+        data = _validated(
+            ACSParameterRequest,
+            context
+        )
+
+        return cpe_management_service.acs_parameters(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/zero-touch")
+def management_zero_touch(context=None):
+    def action():
+        data = _validated(
+            ZeroTouchRequest,
+            context
+        )
+
+        return cpe_management_service.zero_touch(
+            zte_service,
+            data.model_dump(),
         )
 
     return _safe_call(
