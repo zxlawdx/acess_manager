@@ -26,6 +26,53 @@ COMMON_FEATURES: dict[str, FeatureSpec] = {
         (_endpoint("wlanBasic", "wlan_wlanbasicadconf_lua.lua", "OBJ_WLANSETTING_ID"),),
         writable=True,
     ),
+    "wifi_neighbor_scan": FeatureSpec(
+        "wifi_neighbor_scan",
+        "Scan de redes Wi-Fi vizinhas",
+        (
+            _endpoint(
+                "wlanStaScanAP",
+                "tot_wlan_wlan_profile_lua.lua",
+                "OBJ_WLANGETNEBAP_ID",
+                query={"APGetFrom": "ScanAP"},
+            ),
+            _endpoint(
+                "wlanStaScanAP",
+                "wlan_sta_wlan_profile_lua.lua",
+                "OBJ_WLANGETNEBAP_ID",
+                query={"APGetFrom": "ScanAP"},
+            ),
+        ),
+        notes="Leitura de SSID/BSSID, sinal, ruído e canal quando o firmware expõe o scan.",
+    ),
+    "wifi_interference_schedule": FeatureSpec(
+        "wifi_interference_schedule",
+        "Gerenciador de interferência Wi-Fi",
+        (_endpoint(
+            "wlan_interference",
+            "wlan_interference_lua.lua",
+            "OBJ_WLAN_INTERFERENCE_ID",
+        ),),
+        notes="O menu controla o scan automático do firmware; a console usa o scan de vizinhança para pontuar canais.",
+    ),
+    "native_speedtest": FeatureSpec(
+        "native_speedtest",
+        "Speed Test nativo da ONT",
+        (_endpoint(
+            "homePage",
+            "home_ais_lua.lua",
+        ),),
+        notes="Quando disponível, mede a partir da própria ONT. O servidor é descoberto pelo firmware.",
+    ),
+    "dns_lookup": FeatureSpec(
+        "dns_lookup",
+        "DNS Lookup nativo",
+        (_endpoint(
+            "networkDiag",
+            "DiagnosisNsLookupReq_lua.lua",
+        ),),
+        notes="Usado para diferenciar DNS estático vazio de falha real de resolução.",
+    ),
     "wifi_schedule": FeatureSpec(
         "wifi_schedule",
         "Agendamento Wi-Fi",
