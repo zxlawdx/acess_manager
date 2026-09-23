@@ -3,6 +3,9 @@ import unittest
 from apps.zte_manager.services.attendance_report_service import (
     AttendanceReportService,
 )
+from apps.zte_manager.services.speed_test_service import (
+    HttpWorkstationSpeedTestStrategy,
+)
 from apps.zte_manager.services.support_diagnostic_service import (
     ChannelAnalyzer,
     ClientPathRule,
@@ -144,6 +147,18 @@ class SupportDiagnosticRuleTests(unittest.TestCase):
         self.assertIn(
             "wifi_phy_rate",
             codes,
+        )
+
+
+class SpeedTestServerTests(unittest.TestCase):
+    def test_custom_base_url_is_normalized(self):
+        strategy = HttpWorkstationSpeedTestStrategy(
+            base_url="https://speedtest.example.net/"
+        )
+
+        self.assertEqual(
+            strategy.base_url,
+            "https://speedtest.example.net",
         )
 
 
