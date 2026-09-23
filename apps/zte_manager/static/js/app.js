@@ -215,6 +215,51 @@ function setConnectionStatus(connected) {
         "offline"
     );
 
+    const consoleDot = document.getElementById(
+        "consoleSessionDot"
+    );
+
+    const consoleState = document.getElementById(
+        "consoleSessionState"
+    );
+
+    const consoleHost = document.getElementById(
+        "consoleHostText"
+    );
+
+    if (consoleDot) {
+        consoleDot.classList.remove(
+            "online",
+            "offline"
+        );
+
+        consoleDot.classList.add(
+            connected
+                ? "online"
+                : "offline"
+        );
+    }
+
+    if (consoleState) {
+        consoleState.textContent = connected
+            ? "SESSION ACTIVE"
+            : "SESSION OFFLINE";
+    }
+
+    if (consoleHost) {
+        consoleHost.textContent = connected
+            ? (
+                currentHost
+                || "TARGET CONNECTED"
+            )
+            : "NO TARGET";
+    }
+
+    document.body.classList.toggle(
+        "ont-connected",
+        connected
+    );
+
     if (connected) {
         dot.classList.add(
             "online"
