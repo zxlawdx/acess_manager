@@ -1342,6 +1342,8 @@ async function loadBandSteering() {
                     <span>Util. 2.4G <strong>${escapeHtml(params.bandwidth_util_24g ?? "-")}%</strong></span>
                     <span>Util. 5G <strong>${escapeHtml(params.bandwidth_util_5g ?? "-")}%</strong></span>
                 </div>
+
+                ${renderBandSteeringAdvanced(params)}
             </article>
         `;
 
@@ -1350,6 +1352,10 @@ async function loadBandSteering() {
         ).addEventListener(
             "change",
             applyBandSteering
+        );
+
+        bindBandSteeringAdvanced(
+            params
         );
     } catch (error) {
         console.warn(
@@ -1746,6 +1752,44 @@ async function renderWifiRadios(radios) {
 }
 
 
+// Hooks de extensão: advanced.js adiciona controles sem duplicar o renderer
+// base nem o fluxo de submit do console principal.
+function renderRadioAdvancedFields(radio) {
+    return "";
+}
+
+
+function collectRadioFormPayload(
+    form,
+    channelValue
+) {
+    return {
+        auto_channel: channelValue === "Auto",
+        channel: channelValue === "Auto"
+            ? null
+            : Number(channelValue),
+        bandwidth: form.querySelector('[data-field="bandwidth"]').value,
+        standard: form.querySelector('[data-field="standard"]').value,
+        country: form.querySelector('[data-field="country"]').value.trim(),
+        tx_power: form.querySelector('[data-field="tx_power"]').value,
+        beacon_interval: Number(
+            form.querySelector('[data-field="beacon_interval"]').value
+        ),
+        sgi: form.querySelector('[data-field="sgi"]').checked
+    };
+}
+
+
+function renderBandSteeringAdvanced(params) {
+    return "";
+}
+
+
+function bindBandSteeringAdvanced(params) {
+    return undefined;
+}
+
+
 function renderRadioEditor(radio) {
     const key = bandKey(
         radio.banda
@@ -1833,6 +1877,8 @@ function renderRadioEditor(radio) {
                     <span>SGI habilitado</span>
                 </label>
 
+                ${renderRadioAdvancedFields(radio)}
+
                 <div class="radio-form-footer">
                     <span class="radio-id">
                         ${escapeHtml(radio.sideband ?? "-")} • TX ${escapeHtml(radio.potencia ?? "-")}
@@ -1901,20 +1947,10 @@ async function applyRadioForm(event) {
         '[data-field="channel"]'
     ).value;
 
-    const payload = {
-        auto_channel: channelValue === "Auto",
-        channel: channelValue === "Auto"
-            ? null
-            : Number(channelValue),
-        bandwidth: form.querySelector('[data-field="bandwidth"]').value,
-        standard: form.querySelector('[data-field="standard"]').value,
-        country: form.querySelector('[data-field="country"]').value.trim(),
-        tx_power: form.querySelector('[data-field="tx_power"]').value,
-        beacon_interval: Number(
-            form.querySelector('[data-field="beacon_interval"]').value
-        ),
-        sgi: form.querySelector('[data-field="sgi"]').checked
-    };
+    const payload = collectRadioFormPayload(
+        form,
+        channelValue
+    );
 
     setBusy(
         true,
