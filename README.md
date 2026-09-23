@@ -44,6 +44,11 @@ A versão web/FastAPI foi convertida para a arquitetura do Vela sem alterar a l�
 - Agendamento global de Wi-Fi pelo timer nativo da ONT.
 - Band Steering avançado com thresholds de RSSI, utilização e idle-rate.
 - Diagnóstico automático composto (PON + WAN + PPPoE + LAN + Wi-Fi + ping + traceroute opcional).
+- **Automatic Support Diagnostics** com modos de queixa, dispositivo afetado, DNS Lookup, scan RF, análise de canal, Band Steering, Speed Test e revalidação.
+- Scan de APs vizinhos 2.4/5 GHz quando o firmware expõe `OBJ_WLANGETNEBAP_ID`; o score pondera sinal, ruído e sobreposição de canais.
+- Otimização automática opcional de canal Wi-Fi, sempre registrada no audit trail antes da validação final.
+- Speed Test nativo da ONT em firmwares AIS/ThinkLua compatíveis; fallback HTTP pelo computador fica explicitamente identificado para não confundir os dois caminhos.
+- Botão **Gerar atendimento** produz texto de OS usando o diagnóstico e todas as alterações da sessão.
 - Histórico local SQLite com sessões, snapshots, diagnósticos e alterações antes/depois.
 - DHCP IPv4: pool, DNS, lease, leases ativos e reservas por MAC.
 - NAT: port forwarding e DMZ com confirmação explícita.
@@ -83,7 +88,17 @@ ZTE Facade
     +--> WAN / PPPoE
     +--> DNS
     +--> PON / LAN / UPnP
-    +--> Ping / Traceroute
+    +--> Ping / Traceroute / NsLookup
+    +--> Wi-Fi neighbor scan
+    +--> Native Speed Test
+    |
+    +--> SupportDiagnosticService
+    |       +--> Collectors
+    |       +--> DiagnosticRules
+    |       +--> ChannelAnalyzer
+    |       +--> SpeedTest Strategy
+    |
+    +--> AttendanceReportService
 ```
 
 Padrões usados: **Facade**, **Service Layer**, **Repository**, **Command/Composite**, **Strategy**, **Adapter**, **Template Method** e builder por estado atual.
@@ -199,6 +214,10 @@ POST /api/wifi/schedule/update
 POST /api/wifi/band-steering/configure
 
 POST /api/diagnostics/automatic
+POST /api/diagnostics/support
+POST /api/diagnostics/remediate
+POST /api/diagnostics/speedtest
+POST /api/diagnostics/attendance
 GET  /api/history
 POST /api/history/snapshot
 
@@ -314,7 +333,7 @@ Os testes de protocolo e regras de domínio não dependem de uma ONT conectada:
 python -m unittest discover -s tests -v
 ```
 
-A suíte cobre protocolo, segurança, builders WLAN, Vela, adapters, histórico SQLite, diagnóstico automático e contrato entre a UI avançada e a API. O GitHub Actions também executa `compileall` e valida a sintaxe de `app.js` e `advanced.js`.
+A suíte cobre protocolo, segurança, builders WLAN, Vela, adapters, histórico SQLite, diagnóstico automático, regras de suporte/OS e contrato entre UI/API. O GitHub Actions também executa `compileall` e valida a sintaxe de `app.js`, `advanced.js` e `support_diagnostics.js`.
 
 ## Persistência dos perfis
 
