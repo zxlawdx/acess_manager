@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from typing import Any, Iterable
 
 from apps.zte_manager.model.device_adapters import DeviceAdapter
@@ -88,6 +89,13 @@ class ThinkLuaCapabilityGateway:
                         for key in endpoint.object_keys
                     }
 
+                meta = self._scalar_meta(
+                    xml
+                )
+
+                if meta:
+                    objects["__meta__"] = meta
+
                 return {
                     "feature": feature_key,
                     "label": spec.label,
@@ -111,6 +119,53 @@ class ThinkLuaCapabilityGateway:
         raise RuntimeError(
             f"{spec.label} não está disponível para este login/firmware. "
             + " | ".join(errors)
+        )
+
+    @staticmethod
+    def _scalar_meta(
+        xml_text: str,
+    ) -> dict[str, Any]:
+        """
+        Preserva campos simples fora de OBJ_*/ID_*.
+
+        Alguns menus, como syslog, retornam o conteúdo principal em tags como
+        <logStr>. O parser de instâncias propositalmente ignora esses campos.
+        """
+        try:
+            root = ET.fromstring(
+                xml_text
+            )
+        except ET.ParseError:
+            return {}
+
+        result = {}
+
+        for child in root:
+            if list(child):
+                continue
+
+            if child.tag.startswith(
+                "IF_"
+            ):
+                continue
+
+            if child.tag in {
+                "encode",
+                "_sessionTOKEN",
+            }:
+                continue
+
+            value = (
+                child.text or ""
+            ).strip()
+
+            if value:
+                result[
+                    child.tag
+                ] = value
+
+        return _mask_secrets(
+            result
         )
 
     def probe(self, feature_key: str) -> dict[str, Any]:
