@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -392,17 +393,28 @@ class AutomaticDiagnosticService:
         except (TypeError, ValueError):
             return None
 
-    @classmethod
+    @staticmethod
     def _speed_mbps(
-        cls,
         value: Any,
     ) -> int | None:
-        number = cls._float(value)
-
-        if number is None:
+        if value in (None, ""):
             return None
 
-        text = str(value or "").lower()
+        text = str(
+            value
+        ).strip().lower()
+
+        match = re.search(
+            r"-?\\d+(?:[.,]\\d+)?",
+            text,
+        )
+
+        if not match:
+            return None
+
+        number = float(
+            match.group(0).replace(",", ".")
+        )
 
         if "gb" in text:
             number *= 1000
