@@ -63,5 +63,8 @@ exit /b 0
 :error
 echo.
 echo ERRO durante o build.
-pause
+
+rem Em CI nao pode pausar aguardando teclado, senao o job fica preso.
+if /I not "%CI%"=="true" pause
+
 exit /b 1

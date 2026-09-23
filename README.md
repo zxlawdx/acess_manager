@@ -178,6 +178,28 @@ python manage.py collectstatic --no-tailwind
 python manage.py runapp
 ```
 
+## Releases automáticas por tag
+
+O repositório possui o workflow `.github/workflows/release.yml`.
+
+Ao publicar uma tag no formato `v*`, por exemplo:
+
+```bash
+git tag -a v0.4.2 -m "ZTE Automatic v0.4.2"
+git push origin v0.4.2
+```
+
+o GitHub Actions:
+
+1. faz o build em `windows-latest`;
+2. executa os testes Python;
+3. valida a sintaxe do JavaScript;
+4. gera `ZTEAutomatic-Windows-<tag>.zip`;
+5. gera o SHA-256 do pacote;
+6. publica os dois arquivos na Release correspondente à tag.
+
+Também é possível executar manualmente em **Actions → tagged-windows-release → Run workflow**, informando uma tag já existente.
+
 ## Build Windows
 
 ```bat
