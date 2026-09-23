@@ -5,6 +5,9 @@ from typing import Any
 from apps.zte_manager.repositories.management_repository import (
     management_repository,
 )
+from apps.zte_manager.services.backup_service import (
+    backup_compare_service,
+)
 from apps.zte_manager.services.fleet_service import (
     batch_management_service,
     drift_service,
@@ -690,6 +693,68 @@ class CPEManagementService:
             ),
         )
 
+    def firewall_rules(
+        self,
+        zte_service,
+    ):
+        return zte_service.firewall_rules()
+
+    def firewall_rule_save(
+        self,
+        zte_service,
+        data,
+    ):
+        return (
+            zte_service
+            .save_management_firewall_rule(
+                data["kind"],
+                data.get("config")
+                or {},
+                confirm=bool(
+                    data.get("confirm")
+                ),
+            )
+        )
+
+    def firewall_rule_delete(
+        self,
+        zte_service,
+        data,
+    ):
+        if not data.get(
+            "id"
+        ):
+            raise ValueError(
+                "Informe o id do filtro."
+            )
+
+        return (
+            zte_service
+            .delete_management_firewall_rule(
+                data["kind"],
+                data["id"],
+                confirm=bool(
+                    data.get("confirm")
+                ),
+            )
+        )
+
+    def filter_global_set(
+        self,
+        zte_service,
+        data,
+    ):
+        return (
+            zte_service
+            .set_management_filter_global(
+                data.get("config")
+                or {},
+                confirm=bool(
+                    data.get("confirm")
+                ),
+            )
+        )
+
     def sntp_set(
         self,
         zte_service,
@@ -717,6 +782,23 @@ class CPEManagementService:
                     "confirm"
                 )
             ),
+        )
+
+    def wan_create(
+        self,
+        zte_service,
+        data,
+    ):
+        return (
+            zte_service
+            .create_management_wan(
+                data.get("config")
+                or {},
+                confirm=bool(
+                    data.get("confirm")
+                ),
+                backup=True,
+            )
         )
 
     def wan_update(
@@ -819,6 +901,19 @@ class CPEManagementService:
                 data.get(
                     "confirm"
                 )
+            ),
+        )
+
+    def compare_backups(
+        self,
+        data,
+    ):
+        return backup_compare_service.compare(
+            int(
+                data["left_id"]
+            ),
+            int(
+                data["right_id"]
             ),
         )
 
