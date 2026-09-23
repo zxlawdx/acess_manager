@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import random
+import string
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +62,57 @@ QOS_POLICER_SPEC = CrudSpec(
         "ConformingAction",
         "PartialConformingAction",
         "NonConformingAction",
+    ),
+)
+
+IP_FILTER_SPEC = CrudSpec(
+    view="filterCriteria",
+    tag="firewall_ipfilter_lua.lua",
+    object_key="OBJ_FWIP_ID",
+    fields=(
+        "ViewName",
+        "Enable",
+        "Protocol",
+        "Name",
+        "INCViewName",
+        "OUTCViewName",
+        "IPVersion",
+        "SourceIP",
+        "SourceIPMask",
+        "DestIP",
+        "DestIPMask",
+        "MinSrcPort",
+        "MaxSrcPort",
+        "MinDstPort",
+        "MaxDstPort",
+        "FilterTarget",
+        "FilterIndex",
+        "DSCP",
+    ),
+)
+
+MAC_FILTER_SPEC = CrudSpec(
+    view="filterCriteria",
+    tag="firewall_macfilterv3_lua.lua",
+    object_key="OBJ_MACFILTER_ID",
+    fields=(
+        "Name",
+        "Type",
+        "Protocol",
+        "SrcMacAddr",
+        "DstMacAddr",
+    ),
+)
+
+FILTER_GLOBAL_SPEC = CrudSpec(
+    view="filterCriteria",
+    tag="firewall_filterglobal_lua.lua",
+    object_key="OBJ_FWBASE_ID",
+    fields=(
+        "MacFilterTarget",
+        "MacFilterEnable",
+        "UrlFilterTarget",
+        "UrlFilterEnable",
     ),
 )
 
@@ -260,6 +313,138 @@ def firewall_status(zte) -> dict[str, Any]:
             "spi": spi,
         },
     }
+
+
+def firewall_rules(zte) -> dict[str, Any]:
+    gateway = ThinkLuaCrudGateway(
+        zte
+    )
+
+    result = {}
+
+    for name, spec in (
+        ("ip", IP_FILTER_SPEC),
+        ("mac", MAC_FILTER_SPEC),
+        ("global", FILTER_GLOBAL_SPEC),
+    ):
+        try:
+            result[name] = gateway.read(
+                spec
+            )
+        except Exception as error:
+            result[name] = {
+                "error": str(error),
+                "items": [],
+            }
+
+    return result
+
+
+def save_firewall_rule(
+    zte,
+    kind: str,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    specs = {
+        "ip": IP_FILTER_SPEC,
+        "mac": MAC_FILTER_SPEC,
+    }
+
+    spec = specs.get(
+        str(kind).lower()
+    )
+
+    if spec is None:
+        raise ValueError(
+            "Filtro deve ser ip ou mac."
+        )
+
+    values = {}
+
+    for field in spec.fields:
+        if field in config:
+            values[field] = _wire_bool(
+                config[field]
+            )
+
+    return ThinkLuaCrudGateway(
+        zte
+    ).save(
+        spec,
+        values=values,
+        instance_id=config.get(
+            "id"
+        ),
+    )
+
+
+def delete_firewall_rule(
+    zte,
+    kind: str,
+    instance_id: str,
+) -> dict[str, Any]:
+    specs = {
+        "ip": IP_FILTER_SPEC,
+        "mac": MAC_FILTER_SPEC,
+    }
+
+    spec = specs.get(
+        str(kind).lower()
+    )
+
+    if spec is None:
+        raise ValueError(
+            "Filtro deve ser ip ou mac."
+        )
+
+    return ThinkLuaCrudGateway(
+        zte
+    ).delete(
+        spec,
+        instance_id,
+    )
+
+
+def set_filter_global(
+    zte,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    current = ThinkLuaCrudGateway(
+        zte
+    ).read(
+        FILTER_GLOBAL_SPEC
+    )
+
+    instance = (
+        current[0]
+        if current
+        else {}
+    )
+
+    mapping = {
+        "mac_enabled": "MacFilterEnable",
+        "mac_target": "MacFilterTarget",
+        "url_enabled": "UrlFilterEnable",
+        "url_target": "UrlFilterTarget",
+    }
+
+    values = {}
+
+    for source, target in mapping.items():
+        if source in config:
+            values[target] = _wire_bool(
+                config[source]
+            )
+
+    return ThinkLuaCrudGateway(
+        zte
+    ).save(
+        FILTER_GLOBAL_SPEC,
+        values=values,
+        instance_id=instance.get(
+            "_InstID"
+        ),
+    )
 
 
 def set_firewall(
@@ -506,49 +691,157 @@ def set_tr069(
 
     for source, target in mapping.items():
         if source in config:
-            current[
-                target
-            ] = _wire_bool(
-                config[
-                    source
-                ]
+            current[target] = _wire_bool(
+                config[source]
             )
 
-    token = getattr(
-        zte,
-        "session_tmp_token",
-        None,
-    )
+    secret_changes = {
+        "UserPassword": config.get(
+            "password"
+        ),
+        "ConnectionRequestPassword": config.get(
+            "connection_request_password"
+        ),
+    }
 
-    if not token:
-        raise RuntimeError(
-            "Token temporário não carregado para atualizar TR-069."
+    changed_secret_names = [
+        name
+        for name, value in secret_changes.items()
+        if value is not None
+    ]
+
+    crypto_key = None
+    crypto_iv = None
+    encode = None
+
+    if changed_secret_names:
+        crypto_key = "".join(
+            random.choices(
+                string.digits,
+                k=16,
+            )
+        )
+        crypto_iv = "".join(
+            random.choices(
+                string.digits,
+                k=16,
+            )
         )
 
-    if config.get(
-        "password"
-    ) is not None:
-        user_password = zte_security.aes_encrypt_value(
-            config.get("password"),
-            token,
-            token[::-1],
-        )
-    else:
-        # O Lua trata seis TABs como "não alterar senha".
-        user_password = "\t" * 6
-
-    if config.get(
-        "connection_request_password"
-    ) is not None:
-        request_password = zte_security.aes_encrypt_value(
-            config.get(
-                "connection_request_password"
+        encode = zte_security.rsa_encrypt_text(
+            f"{crypto_key}+{crypto_iv}",
+            getattr(
+                zte,
+                "public_key_pem",
+                None,
             ),
-            token,
-            token[::-1],
         )
-    else:
-        request_password = "\t" * 6
+
+    def secret_value(name):
+        value = secret_changes[
+            name
+        ]
+
+        if value is None:
+            # Sentinel usado pela interface para preservar a senha atual.
+            return "\t" * 6
+
+        return zte_security.aes_encrypt_value(
+            value,
+            crypto_key,
+            crypto_iv,
+        )
+
+    fields = [
+        ("IF_ACTION", "Apply"),
+        ("_InstID", ""),
+        ("URL", current.get("URL") or ""),
+        ("UserName", current.get("UserName") or ""),
+        ("UserPassword", secret_value("UserPassword")),
+        (
+            "PeriodicInformEnable",
+            current.get("PeriodicInformEnable")
+            or "1",
+        ),
+        (
+            "PeriodicInformInterval",
+            current.get("PeriodicInformInterval")
+            or "3600",
+        ),
+        (
+            "ConnectionRequestURL",
+            current.get("ConnectionRequestURL")
+            or "",
+        ),
+        (
+            "ConnectionRequestUsername",
+            current.get("ConnectionRequestUsername")
+            or "",
+        ),
+        (
+            "ConnectionRequestPassword",
+            secret_value(
+                "ConnectionRequestPassword"
+            ),
+        ),
+        (
+            "DefaultWan",
+            current.get("DefaultWan")
+            or "",
+        ),
+        (
+            "SupportCertAuth",
+            current.get("SupportCertAuth")
+            or "0",
+        ),
+        (
+            "CertID",
+            current.get("CertID")
+            or "",
+        ),
+        (
+            "CertList",
+            current.get("CertList")
+            or "",
+        ),
+        (
+            "RemoteUpgradeCertAuth",
+            current.get("RemoteUpgradeCertAuth")
+            or "0",
+        ),
+        (
+            "DSCPRemark",
+            (
+                before.get(
+                    "queue",
+                    {},
+                ).get(
+                    "DSCPRemark"
+                )
+                or ""
+            ),
+        ),
+        (
+            "VLanPrioRemark",
+            (
+                before.get(
+                    "queue",
+                    {},
+                ).get(
+                    "VLanPrioRemark"
+                )
+                or ""
+            ),
+        ),
+        ("Btn_cancel_TR069BasicConf", ""),
+        ("Btn_apply_TR069BasicConf", ""),
+    ]
+
+    if encode:
+        fields.append((
+            "encode",
+            encode,
+        ))
 
     zte.get_view(
         "remoteMgr",
@@ -558,115 +851,7 @@ def set_tr069(
     response = post_menu(
         zte,
         "tr069_remotemgr_lua.lua",
-        [
-            ("IF_ACTION", "Apply"),
-            ("_InstID", ""),
-            (
-                "URL",
-                current.get("URL") or "",
-            ),
-            (
-                "UserName",
-                current.get("UserName") or "",
-            ),
-            (
-                "UserPassword",
-                user_password,
-            ),
-            (
-                "PeriodicInformEnable",
-                current.get(
-                    "PeriodicInformEnable"
-                )
-                or "1",
-            ),
-            (
-                "PeriodicInformInterval",
-                current.get(
-                    "PeriodicInformInterval"
-                )
-                or "3600",
-            ),
-            (
-                "ConnectionRequestURL",
-                current.get(
-                    "ConnectionRequestURL"
-                )
-                or "",
-            ),
-            (
-                "ConnectionRequestUsername",
-                current.get(
-                    "ConnectionRequestUsername"
-                )
-                or "",
-            ),
-            (
-                "ConnectionRequestPassword",
-                request_password,
-            ),
-            (
-                "DefaultWan",
-                current.get(
-                    "DefaultWan"
-                )
-                or "",
-            ),
-            (
-                "SupportCertAuth",
-                current.get(
-                    "SupportCertAuth"
-                )
-                or "0",
-            ),
-            (
-                "CertID",
-                current.get(
-                    "CertID"
-                )
-                or "",
-            ),
-            (
-                "CertList",
-                current.get(
-                    "CertList"
-                )
-                or "",
-            ),
-            (
-                "RemoteUpgradeCertAuth",
-                current.get(
-                    "RemoteUpgradeCertAuth"
-                )
-                or "0",
-            ),
-            (
-                "DSCPRemark",
-                (
-                    before.get(
-                        "queue",
-                        {},
-                    ).get(
-                        "DSCPRemark"
-                    )
-                    or ""
-                ),
-            ),
-            (
-                "VLanPrioRemark",
-                (
-                    before.get(
-                        "queue",
-                        {},
-                    ).get(
-                        "VLanPrioRemark"
-                    )
-                    or ""
-                ),
-            ),
-            ("Btn_cancel_TR069BasicConf", ""),
-            ("Btn_apply_TR069BasicConf", ""),
-        ],
+        fields,
     )
 
     zte._validar_resposta(
