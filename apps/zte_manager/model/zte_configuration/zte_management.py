@@ -983,35 +983,135 @@ _WAN_API_MAP = {
     "auth_type": "AuthType",
     "trigger": "ConnTrigger",
     "pppoe_service_name": "PPPoeServiceName",
+    "ip_address": "IPAddress",
+    "subnet_mask": "SubnetMask",
+    "gateway": "GateWay",
+    "dns1": "DNS1",
+    "dns2": "DNS2",
+    "dns3": "DNS3",
+    "mru": "MRU",
+    "transport_type": "TransType",
+    "idle_time": "IdleTime",
+    "dscp": "DSCP",
+    "pass_through": "EnablePassThrough",
+    "ipv6_acquire_mode": "IPv6AcquireMode",
+    "ipv6_dns_source": "DnsSrc",
+    "ipv6_dns1": "Dns1v6",
+    "ipv6_dns2": "Dns2v6",
+    "ipv6_dns3": "Dns3v6",
+    "ipv6_gateway_source": "Gateway6Src",
+    "ipv6_gateway": "Gateway6",
+    "prefix_delegation": "IsPd",
+    "slaac": "IsSLAAC",
+    "gua": "IsGUA",
+    "pd": "IsPD",
 }
 
 
-def update_wan(
+def _decrypt_wan_secrets(
     zte,
-    instance_id: str,
-    config: dict[str, Any],
+    values: dict[str, Any],
+    encode_fields: set[str],
 ) -> dict[str, Any]:
-    instances, encode_fields = (
-        _wan_instances(
-            zte
+    plain = dict(
+        values
+    )
+
+    token = getattr(
+        zte,
+        "session_tmp_token",
+        None,
+    )
+
+    if not token:
+        return plain
+
+    for name in (
+        "UserName",
+        "Password",
+    ):
+        if (
+            name in encode_fields
+            and plain.get(name)
+        ):
+            plain[name] = (
+                zte_security.aes_decrypt_value(
+                    plain[name],
+                    token,
+                    token[::-1],
+                )
+            )
+
+    return plain
+
+
+def _encrypt_wan_post_secrets(
+    zte,
+    values: dict[str, Any],
+    encode_fields: set[str],
+) -> tuple[
+    dict[str, Any],
+    str | None,
+]:
+    payload = dict(
+        values
+    )
+
+    names = [
+        name
+        for name in (
+            "UserName",
+            "Password",
+        )
+        if (
+            name in encode_fields
+            and payload.get(name)
+        )
+    ]
+
+    if not names:
+        return payload, None
+
+    crypto_key = "".join(
+        random.choices(
+            string.digits,
+            k=16,
+        )
+    )
+    crypto_iv = "".join(
+        random.choices(
+            string.digits,
+            k=16,
         )
     )
 
-    target = next((
-        item
-        for item in instances
-        if item.get(
-            "_InstID"
-        ) == instance_id
-    ), None)
-
-    if target is None:
-        raise ValueError(
-            "WAN não encontrada."
+    for name in names:
+        payload[name] = (
+            zte_security.aes_encrypt_value(
+                payload[name],
+                crypto_key,
+                crypto_iv,
+            )
         )
 
-    merged = dict(
-        target
+    encode = zte_security.rsa_encrypt_text(
+        f"{crypto_key}+{crypto_iv}",
+        getattr(
+            zte,
+            "public_key_pem",
+            None,
+        ),
+    )
+
+    return payload, encode
+
+
+def _apply_wan_overrides(
+    values: dict[str, Any],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    result = dict(
+        values
     )
 
     for source, target_name in (
@@ -1020,94 +1120,64 @@ def update_wan(
         if source not in config:
             continue
 
-        value = _wire_bool(
+        result[target_name] = _wire_bool(
             config[source]
         )
 
-        merged[
-            target_name
-        ] = value
+    return result
 
-    token = getattr(
-        zte,
-        "session_tmp_token",
-        None,
-    )
 
-    if "username" in config:
-        if (
-            "UserName" in encode_fields
-            and token
-        ):
-            merged[
-                "UserName"
-            ] = zte_security.aes_encrypt_value(
-                config.get(
-                    "username"
-                ),
-                token,
-                token[::-1],
-            )
-
-    if "password" in config:
-        if (
-            "Password" in encode_fields
-            and token
-        ):
-            merged[
-                "Password"
-            ] = zte_security.aes_encrypt_value(
-                config.get(
-                    "password"
-                ),
-                token,
-                token[::-1],
-            )
-
+def _build_wan_fields(
+    instance_id: str,
+    values: dict[str, Any],
+    *,
+    encode: str | None = None,
+) -> list[tuple[str, Any]]:
     mode = str(
-        merged.get(
+        values.get(
             "mode"
         )
         or "route"
     )
 
     link_mode = str(
-        merged.get(
+        values.get(
             "linkMode"
         )
         or (
             "PPP"
             if str(
-                merged.get(
+                values.get(
                     "wantype"
                 )
-            ).lower() == "pppoe"
+                or values.get(
+                    "TransType"
+                )
+                or ""
+            ).lower() in {
+                "ppp",
+                "pppoe",
+            }
             else "IP"
         )
     )
 
     fields = [
         ("IF_ACTION", "Apply"),
-        (
-            "_InstID",
-            instance_id,
-        ),
+        ("_InstID", instance_id),
         (
             "xdslMode",
-            merged.get(
+            values.get(
                 "xdslMode"
             )
-            or merged.get(
+            or values.get(
                 "XMODE"
             )
             or "NULL",
         ),
         ("TypeFlag", "0"),
         ("mode", mode),
-        (
-            "linkMode",
-            link_mode,
-        ),
+        ("linkMode", link_mode),
     ]
 
     ordered = (
@@ -1157,14 +1227,280 @@ def update_wan(
     )
 
     for name in ordered:
-        if name in merged:
+        if name in values:
             fields.append((
                 name,
-                merged.get(
-                    name
-                )
-                or "",
+                (
+                    values.get(name)
+                    if values.get(name)
+                    is not None
+                    else ""
+                ),
             ))
+
+    if encode:
+        fields.append((
+            "encode",
+            encode,
+        ))
+
+    return fields
+
+
+def update_wan(
+    zte,
+    instance_id: str,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    instances, encode_fields = (
+        _wan_instances(
+            zte
+        )
+    )
+
+    target = next((
+        item
+        for item in instances
+        if item.get(
+            "_InstID"
+        ) == instance_id
+    ), None)
+
+    if target is None:
+        raise ValueError(
+            "WAN não encontrada."
+        )
+
+    # O XML traz UserName/Password criptografados com sessionTmpToken.
+    # Descriptografamos primeiro, aplicamos os overrides e só então geramos
+    # uma nova chave/IV para o POST, exatamente como o browser da ZTE.
+    plain = _decrypt_wan_secrets(
+        zte,
+        target,
+        encode_fields,
+    )
+
+    merged = _apply_wan_overrides(
+        plain,
+        config,
+    )
+
+    prepared, encode = (
+        _encrypt_wan_post_secrets(
+            zte,
+            merged,
+            encode_fields,
+        )
+    )
+
+    fields = _build_wan_fields(
+        instance_id,
+        prepared,
+        encode=encode,
+    )
+
+    zte.get_view(
+        "ethWanConfig",
+        Menu3Location=0,
+    )
+
+    response = post_menu(
+        zte,
+        "wan_internet_lua.lua",
+        fields,
+        TypeUplink=2,
+        pageType=0,
+    )
+
+    zte._validar_resposta(
+        response
+    )
+
+    items = wan_configurations(
+        zte
+    )
+
+    return {
+        "success": True,
+        "before": {
+            **target,
+            "Password": (
+                "••••••••"
+                if target.get(
+                    "Password"
+                )
+                else ""
+            ),
+        },
+        "after": next((
+            item
+            for item in items
+            if item.get(
+                "_InstID"
+            ) == instance_id
+        ), None),
+        "items": items,
+    }
+
+
+def create_wan(
+    zte,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    _, encode_fields = _wan_instances(
+        zte
+    )
+
+    mode = str(
+        config.get(
+            "mode"
+        )
+        or "route"
+    ).lower()
+
+    link_mode = str(
+        config.get(
+            "link_mode"
+        )
+        or (
+            "PPP"
+            if config.get(
+                "username"
+            )
+            else "IP"
+        )
+    )
+
+    values = {
+        "Enable": "1",
+        "WANCName": (
+            config.get(
+                "name"
+            )
+            or "Internet"
+        ),
+        "mode": mode,
+        "linkMode": link_mode,
+        "LANDViewName": (
+            config.get(
+                "lan_binding"
+            )
+            or ""
+        ),
+        "StrServList": (
+            config.get(
+                "service_list"
+            )
+            or "INTERNET"
+        ),
+        "ServList": (
+            config.get(
+                "service_code"
+            )
+            or "INTERNET"
+        ),
+        "IsNAT": (
+            "0"
+            if mode == "bridge"
+            else "1"
+        ),
+        "IsDefGW": (
+            "0"
+            if mode == "bridge"
+            else "1"
+        ),
+        "IsForward": "1",
+        "VLANID": (
+            config.get(
+                "vlan_id"
+            )
+            or ""
+        ),
+        "Priority": str(
+            config.get(
+                "priority"
+            )
+            or "0"
+        ),
+        "VlanEnable": (
+            "1"
+            if config.get(
+                "vlan_enabled"
+            )
+            else "0"
+        ),
+        "MTU": str(
+            config.get(
+                "mtu"
+            )
+            or (
+                "1492"
+                if link_mode.upper() == "PPP"
+                else "1500"
+            )
+        ),
+        "IpMode": str(
+            config.get(
+                "ip_mode"
+            )
+            or "1"
+        ),
+        "ConnTrigger": (
+            config.get(
+                "trigger"
+            )
+            or "AlwaysOn"
+        ),
+        "TransType": (
+            config.get(
+                "transport_type"
+            )
+            or link_mode
+        ),
+        "AuthType": (
+            config.get(
+                "auth_type"
+            )
+            or "Auto"
+        ),
+        "UserName": (
+            config.get(
+                "username"
+            )
+            or ""
+        ),
+        "Password": (
+            config.get(
+                "password"
+            )
+            or ""
+        ),
+        "PPPoeServiceName": (
+            config.get(
+                "pppoe_service_name"
+            )
+            or ""
+        ),
+    }
+
+    values = _apply_wan_overrides(
+        values,
+        config,
+    )
+
+    prepared, encode = (
+        _encrypt_wan_post_secrets(
+            zte,
+            values,
+            encode_fields,
+        )
+    )
+
+    fields = _build_wan_fields(
+        "-1",
+        prepared,
+        encode=encode,
+    )
 
     zte.get_view(
         "ethWanConfig",
@@ -1185,7 +1521,6 @@ def update_wan(
 
     return {
         "success": True,
-        "before": target,
         "items": wan_configurations(
             zte
         ),
