@@ -1,4 +1,7 @@
-git+https://github.com/zxlawdx/Vela-framework.git
+# Framework fixado no commit que inclui fallback automático de porta.
+# Mantém os builds de release reproduzíveis.
+git+https://github.com/zxlawdx/Vela-framework.git@3ff06cb7800e2b4d3ef1d766f779206da5f003df
+
 requests>=2.31
 urllib3>=2.0
 cryptography>=42
