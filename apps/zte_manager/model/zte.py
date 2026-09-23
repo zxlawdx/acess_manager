@@ -723,6 +723,42 @@ class ZTE:
             self
         )
 
+    def firewall_rules(self):
+        return zte_management.firewall_rules(
+            self
+        )
+
+    def save_firewall_rule(
+        self,
+        kind,
+        config
+    ):
+        return zte_management.save_firewall_rule(
+            self,
+            kind,
+            config
+        )
+
+    def delete_firewall_rule(
+        self,
+        kind,
+        instance_id
+    ):
+        return zte_management.delete_firewall_rule(
+            self,
+            kind,
+            instance_id
+        )
+
+    def set_filter_global(
+        self,
+        config
+    ):
+        return zte_management.set_filter_global(
+            self,
+            config
+        )
+
     def set_firewall_management(
         self,
         config
@@ -763,6 +799,15 @@ class ZTE:
     def wan_configurations(self):
         return zte_management.wan_configurations(
             self
+        )
+
+    def create_wan(
+        self,
+        config
+    ):
+        return zte_management.create_wan(
+            self,
+            config
         )
 
     def update_wan(
