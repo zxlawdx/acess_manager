@@ -522,10 +522,14 @@
                                 </label>
 
                                 <label class="field">
-                                    <span>SERVIDOR DO SPEED TEST</span>
+                                    <span>PROVEDOR DO SPEED TEST</span>
                                     <select id="supportSpeedtestPreset">
-                                        <option value="https://speed.cloudflare.com">Cloudflare</option>
-                                        <option value="custom">Personalizado</option>
+                                        <option value="native_auto">ONT nativo → Cloudflare (fallback)</option>
+                                        <option value="cloudflare">Cloudflare</option>
+                                        <option value="fast">FAST.com / Netflix</option>
+                                        <option value="speedtest_net">Speedtest.net</option>
+                                        <option value="auto">Detectar pela URL</option>
+                                        <option value="librespeed">LibreSpeed / servidor próprio</option>
                                     </select>
                                 </label>
 
@@ -534,11 +538,12 @@
                                     <input
                                         id="supportSpeedtestBaseUrl"
                                         type="url"
-                                        placeholder="https://speedtest.seudominio.com"
+                                        placeholder="https://fast.com ou https://speedtest.seudominio.com"
                                         autocomplete="off"
                                     >
-                                    <small>
-                                        O fallback pelo PC espera endpoints compatíveis com /__down e /__up.
+                                    <small id="supportSpeedtestHelp">
+                                        FAST.com, Speedtest.net e Cloudflare são detectados pela URL.
+                                        Outras URLs são testadas como LibreSpeed.
                                     </small>
                                 </label>
                             </div>
