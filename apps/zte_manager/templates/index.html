@@ -1,7 +1,10 @@
 <!-- ZTE Automatic dentro do shell Vela (layout blank). -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..600,0..1,-25..0&display=swap" rel="stylesheet">
+<!--
+    Fontes de texto usam apenas stacks locais para o app ficar consistente
+    e não depender da internet. Mantemos Material Symbols somente para ícones;
+    caso a rede externa esteja indisponível, o layout continua funcional.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..600,0..1,-25..0&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ static('zte_manager/css/style.css') }}">
 
 <div class="app-shell">
@@ -104,6 +107,12 @@
             </div>
 
             <div class="topbar-actions">
+                <div class="zoom-control" title="Zoom da interface: Ctrl + / Ctrl - / Ctrl 0">
+                    <button id="zoomOutButton" class="zoom-button" type="button" aria-label="Diminuir interface">A−</button>
+                    <span id="zoomLevel" class="zoom-level">100%</span>
+                    <button id="zoomInButton" class="zoom-button" type="button" aria-label="Aumentar interface">A+</button>
+                </div>
+
                 <div id="topDeviceChip" class="device-chip hidden">
                     <span class="material-symbols-outlined">router</span>
                     <div>
@@ -112,8 +121,8 @@
                     </div>
                 </div>
 
-                <button id="refreshButton" class="icon-button hidden" type="button" title="Atualizar dados">
-                    <span class="material-symbols-outlined">sync</span>
+                <button id="refreshButton" class="icon-button hidden" type="button" title="Atualizar dados" aria-label="Atualizar dados">
+                    <span class="refresh-glyph" aria-hidden="true">↻</span>
                 </button>
             </div>
         </header>
@@ -423,7 +432,7 @@
 
                 <div class="diagnostic-grid">
                     <article class="panel diagnostic-card">
-                        <div class="panel-header"><div><span class="material-symbols-outlined panel-icon">network_ping</span><h3>Ping</h3></div></div>
+                        <div class="panel-header"><div class="panel-title-inline"><span class="material-symbols-outlined panel-icon">network_ping</span><h3>Ping</h3></div></div>
                         <form id="pingForm" class="form-stack">
                             <label class="field"><span>HOST / IP</span><input id="pingHost" type="text" value="8.8.8.8" required></label>
                             <div class="field-grid two">
@@ -436,7 +445,7 @@
                     </article>
 
                     <article class="panel diagnostic-card">
-                        <div class="panel-header"><div><span class="material-symbols-outlined panel-icon">route</span><h3>Traceroute</h3></div></div>
+                        <div class="panel-header"><div class="panel-title-inline"><span class="material-symbols-outlined panel-icon">route</span><h3>Traceroute</h3></div></div>
                         <form id="tracerouteForm" class="form-stack">
                             <label class="field"><span>HOST / IP</span><input id="traceHost" type="text" value="8.8.8.8" required></label>
                             <div class="field-grid two">
