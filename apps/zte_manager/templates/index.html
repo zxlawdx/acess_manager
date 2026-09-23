@@ -6,6 +6,7 @@
 -->
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..600,0..1,-25..0&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ static('zte_manager/css/style.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/advanced.css') }}">
 
 <div class="app-shell">
 
@@ -72,6 +73,11 @@
                 <span>Config. padrão</span>
             </button>
 
+            <button class="menu-item protected-page locked" data-page="advanced" type="button">
+                <span class="material-symbols-outlined">developer_board</span>
+                <span>Avançado</span>
+            </button>
+
             <button class="menu-item protected-page locked" data-page="device" type="button">
                 <span class="material-symbols-outlined">settings_suggest</span>
                 <span>Equipamento</span>
@@ -101,7 +107,7 @@
     <div class="workspace">
         <header class="topbar">
             <div class="topbar-title">
-                <div class="eyebrow">F6600P • OPERATIONS</div>
+                <div class="eyebrow">ZTE THINKLUA • OPERATIONS</div>
                 <h1 id="pageTitle">Conexão</h1>
                 <p id="pageSubtitle">Entre na ONT para iniciar o atendimento.</p>
             </div>
@@ -322,6 +328,14 @@
                 <div id="wifiRadios" class="radio-grid"></div>
 
                 <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">schedule</span><h3>Agendamento Wi-Fi</h3></div>
+                    <span>Timer global do firmware; o estado manual dos rádios é preservado ao desativar.</span>
+                </div>
+                <div id="wifiScheduleControl" class="feature-grid">
+                    <div class="loading">Carregando agendamento...</div>
+                </div>
+
+                <div class="subsection-title with-top-space">
                     <div><span class="material-symbols-outlined">lock_reset</span><h3>WPS</h3></div>
                     <span>Desative ou inicie PBC quando o firmware permitir.</span>
                 </div>
@@ -514,6 +528,220 @@
 
 
             <!-- ==================================================
+                 ADVANCED OPERATIONS
+            =================================================== -->
+            <section id="page-advanced" class="page">
+                <div class="section-intro">
+                    <div>
+                        <span class="section-kicker">MULTI-FIRMWARE OPERATIONS</span>
+                        <h2>Diagnóstico, LAN, NAT e inspeção ThinkLua</h2>
+                        <p>Console orientada por capabilities para F6600P, F670L e outros firmwares compatíveis.</p>
+                    </div>
+                    <div class="advanced-actions">
+                        <button id="probeCapabilitiesButton" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">radar</span>
+                            Detectar recursos
+                        </button>
+                        <button id="captureSnapshotButton" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">photo_camera</span>
+                            Snapshot
+                        </button>
+                        <button id="backupConfigurationButton" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">archive</span>
+                            Backup
+                        </button>
+                    </div>
+                </div>
+
+                <article class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <span class="section-kicker">DEVICE CAPABILITIES</span>
+                            <h3>Recursos detectados</h3>
+                        </div>
+                        <span id="adapterBadge" class="badge">Não detectado</span>
+                    </div>
+                    <div id="capabilityGrid" class="capability-grid">
+                        <div class="loading">Abra a detecção para validar os menus disponíveis neste firmware.</div>
+                    </div>
+                </article>
+
+                <div class="advanced-grid with-top-space">
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">AUTOMATIC DIAGNOSTIC</span>
+                                <h3>Diagnosticar cliente</h3>
+                            </div>
+                            <span id="automaticDiagnosticBadge" class="badge">Pronto</span>
+                        </div>
+
+                        <form id="automaticDiagnosticForm" class="operations-form">
+                            <div class="operations-form-grid">
+                                <label class="field">
+                                    <span>HOST DE TESTE</span>
+                                    <input id="autoDiagHost" type="text" value="8.8.8.8">
+                                </label>
+                                <label class="field">
+                                    <span>RX ÓPTICO MÍN.</span>
+                                    <input id="autoDiagOpticalMin" type="number" step="0.1" value="-27">
+                                </label>
+                                <label class="field">
+                                    <span>RX ÓPTICO MÁX.</span>
+                                    <input id="autoDiagOpticalMax" type="number" step="0.1" value="-8">
+                                </label>
+                                <label class="field">
+                                    <span>RSSI ALERTA</span>
+                                    <input id="autoDiagRssiWarn" type="number" value="-70">
+                                </label>
+                                <label class="field">
+                                    <span>RSSI CRÍTICO</span>
+                                    <input id="autoDiagRssiBad" type="number" value="-80">
+                                </label>
+                                <label class="field">
+                                    <span>LAN ESPERADA Mbps</span>
+                                    <input id="autoDiagLanMbps" type="number" value="1000">
+                                </label>
+                            </div>
+
+                            <label class="check-row with-top-space">
+                                <input id="autoDiagTraceroute" type="checkbox">
+                                <span>Executar traceroute também (mais demorado)</span>
+                            </label>
+
+                            <button class="button primary with-top-space" type="submit">
+                                <span class="material-symbols-outlined">troubleshoot</span>
+                                Executar diagnóstico automático
+                            </button>
+                        </form>
+
+                        <div id="automaticDiagnosticResult" class="operations-output with-top-space">
+                            <span class="muted">Nenhum diagnóstico automático executado.</span>
+                        </div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">AUDIT TRAIL</span>
+                                <h3>Histórico recente</h3>
+                            </div>
+                            <button id="refreshHistoryButton" class="text-action" type="button">Atualizar</button>
+                        </div>
+                        <div id="historyOutput" class="operations-output">
+                            <span class="muted">Carregando histórico local...</span>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">lan</span><h3>DHCP / LAN</h3></div>
+                    <span>Pool, DNS, leases e reservas por MAC.</span>
+                </div>
+
+                <div class="advanced-grid">
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">DHCP SERVER</span><h3>Pool IPv4</h3></div></div>
+                        <form id="dhcpBasicForm" class="operations-form">
+                            <label class="check-row">
+                                <input id="dhcpEnabled" type="checkbox">
+                                <span>Servidor DHCP ativo</span>
+                            </label>
+                            <div class="operations-form-grid with-top-space">
+                                <label class="field"><span>INÍCIO</span><input id="dhcpMinAddress" type="text"></label>
+                                <label class="field"><span>FIM</span><input id="dhcpMaxAddress" type="text"></label>
+                                <label class="field"><span>DNS 1</span><input id="dhcpDns1" type="text"></label>
+                                <label class="field"><span>DNS 2</span><input id="dhcpDns2" type="text"></label>
+                                <label class="field"><span>LEASE (s)</span><input id="dhcpLeaseTime" type="number" min="60"></label>
+                            </div>
+                            <button class="button primary with-top-space" type="submit">Aplicar DHCP</button>
+                        </form>
+                        <div id="dhcpLeaseList" class="operations-output with-top-space"></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">STATIC LEASE</span><h3>Reserva DHCP</h3></div></div>
+                        <form id="dhcpReservationForm" class="operations-form">
+                            <input id="dhcpReservationId" type="hidden">
+                            <div class="operations-form-grid">
+                                <label class="field"><span>NOME</span><input id="dhcpReservationName" type="text" required></label>
+                                <label class="field"><span>IP</span><input id="dhcpReservationIp" type="text" required></label>
+                                <label class="field"><span>MAC</span><input id="dhcpReservationMac" type="text" required></label>
+                            </div>
+                            <button class="button primary with-top-space" type="submit">Salvar reserva</button>
+                        </form>
+                        <div id="dhcpReservationList" class="operations-output with-top-space"></div>
+                    </article>
+                </div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">hub</span><h3>NAT e exposição</h3></div>
+                    <span>Port forwarding e DMZ exigem confirmação explícita.</span>
+                </div>
+
+                <div class="advanced-grid">
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">NAT RULES</span><h3>Port Forwarding</h3></div></div>
+                        <form id="portForwardForm" class="operations-form">
+                            <input id="portForwardId" type="hidden">
+                            <div class="operations-form-grid">
+                                <label class="field"><span>NOME</span><input id="portForwardName" type="text"></label>
+                                <label class="field"><span>PROTOCOLO</span>
+                                    <select id="portForwardProtocol"><option>TCP</option><option>UDP</option><option>TCP/UDP</option></select>
+                                </label>
+                                <label class="field"><span>PORTA EXTERNA</span><input id="portForwardExternal" type="number" min="1" max="65535" required></label>
+                                <label class="field"><span>IP INTERNO</span><input id="portForwardClient" type="text" required></label>
+                                <label class="field"><span>PORTA INTERNA</span><input id="portForwardInternal" type="number" min="1" max="65535" required></label>
+                            </div>
+                            <label class="check-row with-top-space"><input id="portForwardConfirm" type="checkbox"><span>Confirmo a alteração de NAT</span></label>
+                            <button class="button primary with-top-space" type="submit">Salvar regra</button>
+                        </form>
+                        <div id="portForwardList" class="operations-output with-top-space"></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">DMZ HOST</span><h3>DMZ</h3></div></div>
+                        <form id="dmzForm" class="operations-form">
+                            <input id="dmzId" type="hidden">
+                            <label class="check-row"><input id="dmzEnabled" type="checkbox"><span>Ativar DMZ</span></label>
+                            <label class="field with-top-space"><span>IP INTERNO</span><input id="dmzClient" type="text"></label>
+                            <label class="field with-top-space"><span>WAN / VIEW NAME</span><input id="dmzWan" type="text"></label>
+                            <label class="check-row with-top-space"><input id="dmzConfirm" type="checkbox"><span>Confirmo a alteração da DMZ</span></label>
+                            <button class="button danger with-top-space" type="submit">Aplicar DMZ</button>
+                        </form>
+                        <div id="dmzStatus" class="operations-output with-top-space"></div>
+                    </article>
+                </div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">manage_search</span><h3>Inspeção do firmware</h3></div>
+                    <span>Leitura segura; TR-069 e campos secretos são mascarados.</span>
+                </div>
+
+                <article class="panel">
+                    <div id="featureInspectorButtons" class="feature-inspector-actions">
+                        <button class="button ghost" data-feature-read="firewall" type="button">Firewall</button>
+                        <button class="button ghost" data-feature-read="firewall_filters" type="button">Filtros</button>
+                        <button class="button ghost" data-feature-read="ip_filter" type="button">Filtro IP</button>
+                        <button class="button ghost" data-feature-read="mac_filter" type="button">Filtro MAC</button>
+                        <button class="button ghost" data-feature-read="parental_control" type="button">Controle parental</button>
+                        <button class="button ghost" data-feature-read="upnp_port_map" type="button">UPnP PortMap</button>
+                        <button class="button ghost" data-feature-read="ddns" type="button">DDNS</button>
+                        <button class="button ghost" data-feature-read="sntp" type="button">SNTP</button>
+                        <button class="button ghost" data-feature-read="tr069" type="button">TR-069</button>
+                        <button class="button ghost" data-feature-read="route_table" type="button">Rotas</button>
+                        <button class="button ghost" data-feature-read="qos_queue" type="button">QoS filas</button>
+                        <button class="button ghost" data-feature-read="qos_speed" type="button">QoS policer</button>
+                        <button class="button ghost" data-feature-read="qos_shaper" type="button">QoS shaper</button>
+                        <button class="button ghost" data-feature-read="syslog" type="button">Logs</button>
+                    </div>
+                    <pre id="featureInspectorOutput" class="firmware-json">Selecione um recurso para ler o menu ThinkLua correspondente.</pre>
+                    <div id="backupResult" class="operations-output"></div>
+                </article>
+            </section>
+
+
+            <!-- ==================================================
                  DEVICE
             =================================================== -->
             <section id="page-device" class="page">
@@ -570,3 +798,4 @@
 </div>
 
 <script src="{{ static('zte_manager/js/app.js') }}"></script>
+<script src="{{ static('zte_manager/js/advanced.js') }}"></script>
