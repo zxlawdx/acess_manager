@@ -197,6 +197,60 @@ class AutomaticDiagnosticRequest(BaseModel):
     ping_warning_ms: float = Field(default=80.0, ge=1)
 
 
+class SupportDiagnosticRequest(BaseModel):
+    mode: str = "general"
+    affected_mac: str | None = None
+    affected_ip: str | None = None
+    ping_host: str = "1.1.1.1"
+    dns_host: str = "cloudflare.com"
+    include_traceroute: bool = False
+    include_speedtest: bool = True
+    allow_speedtest_fallback: bool = True
+    auto_optimize_wifi: bool = False
+    expected_download_mbps: float | None = Field(
+        default=None,
+        ge=0
+    )
+    expected_upload_mbps: float | None = Field(
+        default=None,
+        ge=0
+    )
+    optical_rx_min: float = -27.0
+    optical_rx_max: float = -8.0
+    wifi_rssi_warning: int = -70
+    wifi_rssi_bad: int = -80
+    expected_lan_mbps: int = Field(
+        default=1000,
+        ge=10
+    )
+    ping_warning_ms: float = Field(
+        default=80.0,
+        ge=1
+    )
+
+
+class DiagnosticRemediationRequest(BaseModel):
+    action: str
+    band: str | None = None
+    channel: int | None = Field(
+        default=None,
+        ge=1,
+        le=196
+    )
+
+
+class SpeedTestRequest(BaseModel):
+    allow_fallback: bool = True
+    server_url: str | None = None
+
+
+class AttendanceReportRequest(BaseModel):
+    diagnostic_id: int | None = Field(
+        default=None,
+        ge=1
+    )
+
+
 class DhcpBasicRequest(BaseModel):
     enabled: bool | None = None
     min_address: str | None = None
