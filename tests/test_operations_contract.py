@@ -25,6 +25,14 @@ SUPPORT_JS = (
     / "js"
     / "support_diagnostics.js"
 ).read_text(encoding="utf-8")
+MANAGEMENT_JS = (
+    ROOT
+    / "apps"
+    / "zte_manager"
+    / "static"
+    / "js"
+    / "management.js"
+).read_text(encoding="utf-8")
 INDEX = (
     ROOT
     / "apps"
@@ -105,6 +113,72 @@ class OperationsContractTests(unittest.TestCase):
         )
         self.assertIn(
             'id="supportGenerateAttendance"',
+            INDEX,
+        )
+
+    def test_management_ui_routes_exist_in_api(self):
+        endpoints = (
+            "/management/inventory",
+            "/management/profiles",
+            "/management/drift",
+            "/management/batch",
+            "/management/agents",
+            "/management/remote/open",
+            "/management/gateway/command",
+            "/management/gateway/bufferbloat",
+            "/management/monitor/start",
+            "/management/topology",
+            "/management/incidents",
+            "/management/network",
+            "/management/qos/save",
+            "/management/firewall/update",
+            "/management/firewall/rules/save",
+            "/management/sntp/update",
+            "/management/tr069/update",
+            "/management/wan/create",
+            "/management/wan/update",
+            "/management/wan/delete",
+            "/management/bridge",
+            "/management/backups/create",
+            "/management/backups/compare",
+            "/management/firmware/register",
+            "/management/firmware/upgrade",
+            "/management/acs/configure",
+            "/management/acs/discover",
+            "/management/zero-touch",
+        )
+
+        for endpoint in endpoints:
+            self.assertIn(
+                endpoint,
+                MANAGEMENT_JS,
+                msg=f"Gerenciamento não usa a rota: {endpoint}",
+            )
+            self.assertIn(
+                endpoint,
+                API,
+                msg=f"Rota de gerenciamento não registrada: {endpoint}",
+            )
+
+    def test_management_bundle_and_page_are_loaded(self):
+        self.assertIn(
+            "zte_manager/js/management.js",
+            INDEX,
+        )
+        self.assertIn(
+            "zte_manager/css/management.css",
+            INDEX,
+        )
+        self.assertIn(
+            'data-page="management"',
+            INDEX,
+        )
+        self.assertIn(
+            'id="managementInventoryBody"',
+            INDEX,
+        )
+        self.assertIn(
+            'id="managementZeroTouchRun"',
             INDEX,
         )
 

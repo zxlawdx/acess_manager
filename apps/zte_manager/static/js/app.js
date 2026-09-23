@@ -323,7 +323,10 @@ const pageInfo = {
 
 function openPage(pageName) {
     if (
-        pageName !== "connection"
+        ![
+            "connection",
+            "management"
+        ].includes(pageName)
         && !ontConnected
     ) {
         showToast(

@@ -31,3 +31,4 @@ jobs:
           node --check apps/zte_manager/static/js/app.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/support_diagnostics.js
+          node --check apps/zte_manager/static/js/management.js
