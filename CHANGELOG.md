@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 — Selectable Speed Test Server
+
+- Adiciona seletor de servidor do Speed Test na aba de diagnóstico.
+- Mantém Cloudflare como padrão e permite URL personalizada para o fallback executado pelo computador do atendente.
+- Propaga a URL escolhida pela UI → API → `SupportDiagnosticService` → `SpeedTestService`.
+- O teste nativo da ONT continua usando os servidores descobertos pelo próprio firmware.
+
 ## 0.6.0 — Automatic Support Diagnostics
 
 - Adiciona a aba **Diagnóstico automático** e triagem de saúde no Dashboard.
