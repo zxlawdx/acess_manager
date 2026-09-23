@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.2 — Speed Test Providers
+
+- Corrige URLs como `https://fast.com` que antes eram tratadas incorretamente como endpoints Cloudflare `/__down` e `/__up`.
+- Adiciona Factory/Strategy por provedor: ONT nativa, Cloudflare, FAST.com/Netflix, Speedtest.net e LibreSpeed.
+- Adiciona modo **Detectar pela URL**: FAST.com, Speedtest.net e Cloudflare são reconhecidos automaticamente; outras URLs são verificadas como LibreSpeed.
+- FAST.com passa a descobrir o token atual e os alvos CDN da Netflix antes de medir download, upload, latência e jitter.
+- Speedtest.net passa a usar `speedtest-cli` empacotado com a aplicação.
+- LibreSpeed descobre automaticamente `backend/garbage.php`/`backend/empty.php` ou `garbage.php`/`empty.php`.
+- A seleção do provedor é compartilhada entre **Testar velocidade** e o Speed Test do **Diagnóstico completo**.
+- A UI e o relatório da OS registram qual provedor realmente executou a medição.
+- Minha Conexão não é tratado como Cloudflare/LibreSpeed: sem API pública estável, o sistema informa explicitamente que não há automação direta suportada.
+
 ## 0.6.1 — Selectable Speed Test Server
 
 - Adiciona seletor de servidor do Speed Test na aba de diagnóstico.
