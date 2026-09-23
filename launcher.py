@@ -108,6 +108,35 @@ if sys.platform == "win32":
 
 
 # ---------------------------------------------------------
+# Smoke test do bundle
+# ---------------------------------------------------------
+#
+# O GitHub Actions executa o binário com --self-test depois do
+# PyInstaller. Isso detecta dependências ausentes no bundle antes
+# de publicar a Release, sem abrir a interface gráfica.
+
+def _bundle_self_test():
+    import platformdirs  # noqa: F401
+    import pydantic  # noqa: F401
+    import pydantic_core  # noqa: F401
+    import cryptography  # noqa: F401
+    import vela  # noqa: F401
+    import apps.zte_manager.api  # noqa: F401
+
+    print(
+        "ZTEAutomatic bundle self-test: OK"
+    )
+
+
+if (
+    __name__ == "__main__"
+    and "--self-test" in sys.argv
+):
+    _bundle_self_test()
+    raise SystemExit(0)
+
+
+# ---------------------------------------------------------
 # Imports explícitos
 # ---------------------------------------------------------
 #
