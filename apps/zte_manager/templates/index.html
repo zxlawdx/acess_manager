@@ -1,12 +1,10 @@
 <!-- ZTE Automatic dentro do shell Vela (layout blank). -->
 <!--
-    O console usa Inter + JetBrains Mono quando disponíveis e mantém fallbacks
-    locais para continuar legível quando o ambiente de atendimento está offline.
+    O console prioriza Inter + JetBrains Mono quando já estão disponíveis no
+    sistema e mantém stacks locais equivalentes para funcionar offline.
     Tailwind não é necessário: o design system é CSS nativo do projeto.
+    Material Symbols permanece como no frontend original.
 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..600,0..1,-25..0&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ static('zte_manager/css/style.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/advanced.css') }}">
