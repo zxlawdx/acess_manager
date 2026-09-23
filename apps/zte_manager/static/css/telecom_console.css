@@ -539,6 +539,64 @@ th,
     gap: 7px;
 }
 
+.topbar-quick-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.console-action {
+    min-height: 31px;
+    padding: 0 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid var(--border-soft);
+    border-radius: 5px;
+    color: #c7c9ce;
+    background: #18191e;
+    cursor: pointer;
+    font: 500 9px var(--font-mono);
+    transition:
+        color .12s ease,
+        border-color .12s ease,
+        background .12s ease,
+        box-shadow .12s ease;
+}
+
+.console-action .material-symbols-outlined {
+    color: #6f747e;
+    font-size: 15px;
+}
+
+.console-action:hover {
+    color: var(--text);
+    border-color: rgba(255, 255, 255, .14);
+    background: #22242b;
+}
+
+.console-action:hover .material-symbols-outlined {
+    color: var(--secondary);
+}
+
+.console-action.primary {
+    color: #002112;
+    border-color: rgba(0, 229, 153, .65);
+    background: var(--primary);
+    box-shadow: 0 0 13px rgba(0, 229, 153, .12);
+}
+
+.console-action.primary .material-symbols-outlined {
+    color: #003822;
+}
+
+.console-action.primary:hover {
+    color: #001b0e;
+    border-color: var(--primary-strong);
+    background: var(--primary-strong);
+}
+
 .device-chip {
     width: min(248px, 30vw);
     max-width: 248px;
@@ -1596,6 +1654,12 @@ input[type="radio"] {
 /* =========================================================
    RESPONSIVE
 ========================================================= */
+
+@media (max-width: 1340px) {
+    .topbar-quick-actions {
+        display: none;
+    }
+}
 
 @media (max-width: 1220px) {
     :root {
