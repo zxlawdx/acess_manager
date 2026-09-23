@@ -45,6 +45,9 @@
     --radius: 12px;
     --radius-lg: 16px;
     --shadow: 0 18px 55px rgba(0, 0, 0, .24);
+
+    --font-sans: "Segoe UI Variable", "Segoe UI", Arial, Helvetica, sans-serif;
+    --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace;
 }
 
 #vela-page {
@@ -65,7 +68,7 @@ body {
         radial-gradient(circle at 80% -20%, rgba(6, 182, 212, .09), transparent 34%),
         radial-gradient(circle at 35% 110%, rgba(120, 119, 198, .07), transparent 30%),
         var(--bg);
-    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--font-sans);
     font-size: 14px;
     overflow-x: hidden;
 }
@@ -95,7 +98,7 @@ th,
 .target-head,
 .connection-state small,
 .kpi-head span:first-child {
-    font-family: "JetBrains Mono", monospace;
+    font-family: var(--font-mono);
 }
 
 .hidden {
@@ -197,7 +200,7 @@ th,
 .brand-copy span {
     margin-top: 2px;
     color: var(--muted);
-    font: 600 9px/1.2 "JetBrains Mono", monospace;
+    font: 600 9px/1.2 var(--font-mono);
     letter-spacing: .13em;
 }
 
@@ -405,13 +408,17 @@ th,
 }
 
 .topbar-actions {
+    min-width: 0;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 9px;
 }
 
 .device-chip {
-    min-width: 220px;
+    min-width: 0;
+    width: min(220px, 26vw);
+    max-width: 220px;
     padding: 7px 10px;
     display: flex;
     align-items: center;
@@ -447,8 +454,11 @@ th,
 .icon-button {
     width: 38px;
     height: 38px;
+    min-width: 38px;
+    flex: 0 0 38px;
     display: grid;
     place-items: center;
+    overflow: hidden;
     border: 1px solid var(--border-soft);
     border-radius: 10px;
     color: var(--primary);
@@ -458,6 +468,57 @@ th,
 
 .icon-button:hover {
     background: var(--surface-high);
+}
+
+.refresh-glyph {
+    display: block;
+    font: 600 22px/1 var(--font-sans);
+    transform-origin: 50% 50%;
+}
+
+.icon-button.is-loading .refresh-glyph {
+    animation: refreshSpin .8s linear infinite;
+}
+
+@keyframes refreshSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* Zoom fica no próprio frontend e funciona igual em WebView/desktop. */
+.zoom-control {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--border-soft);
+    border-radius: 9px;
+    overflow: hidden;
+    background: var(--surface-low);
+}
+
+.zoom-button {
+    width: 34px;
+    height: 32px;
+    border: 0;
+    color: var(--text-soft);
+    background: transparent;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.zoom-button:hover {
+    color: var(--primary);
+    background: var(--surface-high);
+}
+
+.zoom-level {
+    min-width: 46px;
+    padding: 0 6px;
+    color: var(--muted);
+    text-align: center;
+    font: 600 9px/1 var(--font-mono);
+    border-left: 1px solid var(--border-soft);
+    border-right: 1px solid var(--border-soft);
 }
 
 /* =========================================================
@@ -498,14 +559,14 @@ th,
 }
 
 .panel-header > div {
-    display: flex;
-    align-items: center;
-    gap: 9px;
+    display: block;
     min-width: 0;
 }
 
-.panel-header > div:not(:has(.panel-icon)) {
-    display: block;
+.panel-title-inline {
+    display: flex !important;
+    align-items: center;
+    gap: 9px;
 }
 
 .panel-header h3 {
@@ -698,7 +759,7 @@ th,
     border-radius: 999px;
     color: var(--primary);
     background: var(--primary-soft);
-    font: 600 9px/1 "JetBrains Mono", monospace;
+    font: 600 9px/1 var(--font-mono);
     letter-spacing: .09em;
 }
 
@@ -711,9 +772,20 @@ th,
     font-size: clamp(34px, 5vw, 64px);
     line-height: 1.02;
     letter-spacing: -.055em;
-    background: linear-gradient(120deg, #f6fbff 5%, #a9d9e6 48%, #7f91ad 100%);
-    background-clip: text;
-    color: transparent;
+    color: #eaf6ff;
+}
+
+/*
+   QtWebEngine antigo ignorava background-clip:text sem prefixo e mostrava
+   o gradiente como um retângulo. Só ativamos o efeito quando suportado.
+*/
+@supports (-webkit-background-clip: text) {
+    .login-hero h2 {
+        background: linear-gradient(120deg, #f6fbff 5%, #a9d9e6 48%, #7f91ad 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
 }
 
 .login-hero > p {
@@ -740,7 +812,7 @@ th,
 
 .hero-flow span {
     color: var(--primary);
-    font: 600 10px "JetBrains Mono", monospace;
+    font: 600 10px var(--font-mono);
 }
 
 .hero-flow strong {
@@ -1098,7 +1170,7 @@ select option {
     border-radius: 5px;
     color: var(--primary);
     background: var(--primary-soft);
-    font: 600 8px "JetBrains Mono", monospace;
+    font: 600 8px var(--font-mono);
     white-space: nowrap;
 }
 
@@ -1159,7 +1231,7 @@ select option {
     align-items: center;
     gap: 4px;
     border-radius: 999px;
-    font: 600 8px/1 "JetBrains Mono", monospace;
+    font: 600 8px/1 var(--font-mono);
     white-space: nowrap;
 }
 
@@ -1208,7 +1280,7 @@ select option {
 .info-value {
     max-width: 68%;
     color: var(--text);
-    font: 500 9px/1.4 "JetBrains Mono", monospace;
+    font: 500 9px/1.4 var(--font-mono);
     text-align: right;
     overflow-wrap: anywhere;
 }
@@ -1290,7 +1362,7 @@ select option {
     display: block;
     margin-top: 2px;
     color: var(--muted);
-    font: 8px "JetBrains Mono", monospace;
+    font: 8px var(--font-mono);
 }
 
 .ssid-form,
@@ -1311,7 +1383,7 @@ select option {
     border-radius: 6px;
     color: var(--muted);
     background: var(--bg-deep);
-    font: 8px "JetBrains Mono", monospace;
+    font: 8px var(--font-mono);
 }
 
 .switch-row {
@@ -1392,7 +1464,7 @@ select option {
 
 .radio-id {
     color: var(--muted);
-    font: 8px "JetBrains Mono", monospace;
+    font: 8px var(--font-mono);
 }
 
 /* =========================================================
@@ -1414,7 +1486,7 @@ select option {
 .wan-card-head p {
     margin-top: 2px;
     color: var(--muted);
-    font: 8px "JetBrains Mono", monospace;
+    font: 8px var(--font-mono);
 }
 
 .pppoe-box + .pppoe-box {
@@ -1445,7 +1517,7 @@ select option {
 }
 
 .port-card-head strong {
-    font: 600 10px "JetBrains Mono", monospace;
+    font: 600 10px var(--font-mono);
 }
 
 .port-metrics {
@@ -1466,7 +1538,7 @@ select option {
 }
 
 .port-metrics strong {
-    font: 500 9px "JetBrains Mono", monospace;
+    font: 500 9px var(--font-mono);
 }
 
 /* =========================================================
@@ -1497,7 +1569,7 @@ select option {
 
 .client-counter-row strong {
     color: var(--primary);
-    font: 600 16px "JetBrains Mono", monospace;
+    font: 600 16px var(--font-mono);
 }
 
 .table-panel + .table-panel {
@@ -1652,7 +1724,7 @@ tbody tr:hover td {
 
 .optical-hero strong {
     color: var(--success);
-    font: 600 22px "JetBrains Mono", monospace;
+    font: 600 22px var(--font-mono);
 }
 
 .optical-hero strong.tx {
@@ -1678,7 +1750,7 @@ tbody tr:hover td {
 }
 
 .account-item strong {
-    font: 500 9px "JetBrains Mono", monospace;
+    font: 500 9px var(--font-mono);
 }
 
 .account-item span {
@@ -1818,7 +1890,7 @@ tbody tr:hover td {
 
 .mini-label {
     color: var(--muted);
-    font: 600 8px "JetBrains Mono", monospace;
+    font: 600 8px var(--font-mono);
     text-transform: uppercase;
     letter-spacing: .07em;
 }
@@ -2152,7 +2224,7 @@ tbody tr:hover td {
 .network-overview-copy small {
     margin-top: 3px;
     color: var(--muted);
-    font: 8px "JetBrains Mono", monospace;
+    font: 8px var(--font-mono);
 }
 
 .ssid-online {
@@ -2177,7 +2249,7 @@ tbody tr:hover td {
     right: 8px;
     transform: translateY(-50%);
     color: var(--muted);
-    font: 600 7px "JetBrains Mono", monospace;
+    font: 600 7px var(--font-mono);
     text-transform: uppercase;
     pointer-events: none;
 }
@@ -2222,7 +2294,7 @@ tbody tr:hover td {
 .radio-card-hero p {
     margin-top: 4px;
     color: var(--muted);
-    font: 8px "JetBrains Mono", monospace;
+    font: 8px var(--font-mono);
 }
 
 .radio-card-hero p strong {
@@ -2240,7 +2312,7 @@ tbody tr:hover td {
     border-radius: 9px;
     background: var(--bg-deep);
     color: var(--muted);
-    font: 600 8px "JetBrains Mono", monospace;
+    font: 600 8px var(--font-mono);
 }
 
 .radio-capabilities {
@@ -2259,7 +2331,7 @@ tbody tr:hover td {
     border-radius: 999px;
     color: var(--muted);
     background: var(--bg-deep);
-    font: 600 7px "JetBrains Mono", monospace;
+    font: 600 7px var(--font-mono);
 }
 
 .capability-pill i {
@@ -2407,13 +2479,13 @@ tbody tr:hover td {
 
 .port-number {
     color: var(--muted);
-    font: 600 8px "JetBrains Mono", monospace;
+    font: 600 8px var(--font-mono);
 }
 
 .port-card > strong {
     display: block;
     color: var(--text);
-    font: 600 13px "JetBrains Mono", monospace;
+    font: 600 13px var(--font-mono);
 }
 
 .port-card > small {
@@ -2483,7 +2555,7 @@ tbody tr:hover td {
 .detail-tile strong {
     margin-top: 2px;
     color: var(--text-soft);
-    font: 500 9px "JetBrains Mono", monospace;
+    font: 500 9px var(--font-mono);
 }
 
 .optical-gauge {
@@ -2501,7 +2573,7 @@ tbody tr:hover td {
 }
 
 .optical-gauge small {
-    font: 600 8px "JetBrains Mono", monospace;
+    font: 600 8px var(--font-mono);
 }
 
 .optical-copy {
@@ -2514,7 +2586,7 @@ tbody tr:hover td {
 
 .optical-copy p {
     color: var(--muted);
-    font: 8px "JetBrains Mono", monospace;
+    font: 8px var(--font-mono);
 }
 
 .account-row {
@@ -2552,7 +2624,7 @@ tbody tr:hover td {
 }
 
 .account-row strong {
-    font: 500 9px "JetBrains Mono", monospace;
+    font: 500 9px var(--font-mono);
 }
 
 .account-row small {
@@ -2647,7 +2719,7 @@ tbody tr:hover td {
 
 .wan-address > span {
     color: var(--muted);
-    font: 600 8px "JetBrains Mono", monospace;
+    font: 600 8px var(--font-mono);
 }
 
 .wan-address > strong {
@@ -2659,7 +2731,7 @@ tbody tr:hover td {
 
 .wan-address > small {
     color: var(--muted);
-    font: 8px "JetBrains Mono", monospace;
+    font: 8px var(--font-mono);
     white-space: nowrap;
 }
 
@@ -2707,7 +2779,7 @@ tbody tr:hover td {
 .credential-head strong {
     display: block;
     margin-top: 3px;
-    font: 600 10px "JetBrains Mono", monospace;
+    font: 600 10px var(--font-mono);
 }
 
 .credential-head > .material-symbols-outlined {
@@ -2728,7 +2800,7 @@ tbody tr:hover td {
 
 .secret-line > span {
     color: var(--muted);
-    font: 600 7px "JetBrains Mono", monospace;
+    font: 600 7px var(--font-mono);
 }
 
 .secret-line > strong {
@@ -2750,7 +2822,7 @@ tbody tr:hover td {
     border: 1px solid var(--border-soft);
     border-radius: 6px;
     color: var(--muted);
-    font: 7px "JetBrains Mono", monospace;
+    font: 7px var(--font-mono);
 }
 
 .credential-meta strong {
@@ -2837,7 +2909,7 @@ tbody tr:hover td {
     border-radius: 8px;
     color: var(--muted);
     background: var(--bg-deep);
-    font: 8px/1.35 "JetBrains Mono", monospace;
+    font: 8px/1.35 var(--font-mono);
 }
 
 .band-steering-metrics strong {
@@ -2862,5 +2934,34 @@ tbody tr:hover td {
 @media (max-width: 520px) {
     .band-steering-metrics {
         grid-template-columns: 1fr;
+    }
+}
+
+
+/* =========================================================
+   QT / WEBVIEW COMPATIBILITY & RESPONSIVE POLISH
+========================================================= */
+
+@media (max-width: 1120px) {
+    .zoom-control {
+        display: none;
+    }
+
+    .device-chip {
+        width: min(190px, 28vw);
+    }
+}
+
+@media (max-width: 860px) {
+    .topbar {
+        padding-inline: 16px;
+    }
+
+    .topbar-title p {
+        display: none;
+    }
+
+    .device-chip {
+        max-width: 155px;
     }
 }

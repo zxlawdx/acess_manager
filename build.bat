@@ -76,13 +76,12 @@ python -m PyInstaller --noconfirm --clean --onedir --windowed ^
   --collect-all jaraco.functools ^
   --collect-all jaraco.context ^
   --collect-all more_itertools ^
-  --collect-all PyQt5 ^
-  --collect-all PyQtWebEngine ^
+  --collect-all PyQt6 ^
   --collect-all qtpy ^
   --hidden-import=webview.platforms.qt ^
-  --hidden-import=PyQt5.QtWebEngineWidgets ^
-  --hidden-import=PyQt5.QtWebEngineCore ^
-  --hidden-import=PyQt5.QtWebChannel ^
+  --hidden-import=PyQt6.QtWebEngineWidgets ^
+  --hidden-import=PyQt6.QtWebEngineCore ^
+  --hidden-import=PyQt6.QtWebChannel ^
   --exclude-module=webview.platforms.winforms ^
   --exclude-module=clr ^
   --exclude-module=pythonnet ^
