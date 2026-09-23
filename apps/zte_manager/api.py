@@ -626,6 +626,13 @@ def traceroute(context=None):
 # =========================================================
 
 
+@api.post("/system/backup")
+def export_configuration_backup(context=None):
+    return _safe_call(
+        zte_service.export_user_configuration
+    )
+
+
 @api.get("/device/capabilities")
 def capability_catalog(context=None):
     return _safe_call(
