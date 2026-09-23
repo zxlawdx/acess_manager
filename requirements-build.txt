@@ -5,9 +5,11 @@ pyinstaller==6.22.2
 pywebview==6.2.1
 
 # Backend Windows do pywebview.
-PyQt5
-PyQtWebEngine
-qtpy
+# Qt 6 traz um QtWebEngine/Chromium mais novo, evitando diferenças de
+# compatibilidade de CSS/JS observadas no bundle com Qt 5.
+PyQt6>=6.7,<7
+PyQt6-WebEngine>=6.7,<7
+qtpy>=2.4,<3
 
 # Dependências auxiliares que o PyInstaller/setuptools pode carregar
 # dinamicamente durante a análise do bundle.
