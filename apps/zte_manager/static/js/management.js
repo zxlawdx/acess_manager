@@ -1307,6 +1307,140 @@ async function runManagementTerminal() {
 }
 
 
+function renderManagementMonitor(result) {
+    managementOutput(
+        "managementMonitorOutput",
+        result
+    );
+
+    const chart = document.getElementById(
+        "managementMonitorChart"
+    );
+
+    const events = document.getElementById(
+        "managementMonitorEvents"
+    );
+
+    const samples = result?.samples || [];
+
+    const points = samples.map(
+        item => ({
+            at: item.captured_at,
+            value: Number(
+                item.payload?.optical?.rx_power_dbm
+            )
+        })
+    ).filter(
+        item => Number.isFinite(
+            item.value
+        )
+    );
+
+    if (chart) {
+        if (points.length < 2) {
+            chart.innerHTML = '<div class="support-empty">Aguardando pelo menos duas leituras ópticas.</div>';
+        } else {
+            const width = 800;
+            const height = 165;
+            const padX = 46;
+            const padY = 18;
+            const values = points.map(
+                item => item.value
+            );
+            const min = Math.min(
+                -8,
+                ...values
+            );
+            const max = Math.max(
+                -27,
+                ...values
+            );
+            const range = Math.max(
+                1,
+                max - min
+            );
+
+            const coords = points.map(
+                (item, index) => {
+                    const x = padX + (
+                        index
+                        / Math.max(
+                            1,
+                            points.length - 1
+                        )
+                    ) * (
+                        width
+                        - padX
+                        - 12
+                    );
+
+                    const y = padY + (
+                        (
+                            max
+                            - item.value
+                        )
+                        / range
+                    ) * (
+                        height
+                        - padY * 2
+                    );
+
+                    return {
+                        x,
+                        y,
+                        ...item
+                    };
+                }
+            );
+
+            const polyline = coords.map(
+                item => (
+                    item.x.toFixed(1)
+                    + ","
+                    + item.y.toFixed(1)
+                )
+            ).join(" ");
+
+            chart.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Variação da potência óptica">
+                    <line class="grid-line" x1="${padX}" y1="20" x2="${width - 10}" y2="20"></line>
+                    <line class="grid-line" x1="${padX}" y1="${height / 2}" x2="${width - 10}" y2="${height / 2}"></line>
+                    <line class="grid-line" x1="${padX}" y1="${height - 20}" x2="${width - 10}" y2="${height - 20}"></line>
+                    <text class="axis-label" x="2" y="23">${managementEscape(max.toFixed(1))} dBm</text>
+                    <text class="axis-label" x="2" y="${height - 17}">${managementEscape(min.toFixed(1))} dBm</text>
+                    <polyline class="rx-line" points="${polyline}"></polyline>
+                    ${coords.map(
+                        point => `
+                            <circle class="rx-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="2.8">
+                                <title>${managementEscape(point.at)} • ${managementEscape(point.value.toFixed(1))} dBm</title>
+                            </circle>
+                        `
+                    ).join("")}
+                </svg>
+            `;
+        }
+    }
+
+    if (events) {
+        const items = result?.events || [];
+
+        events.innerHTML = items.length
+            ? items.slice().reverse().map(
+                item => `
+                    <div class="management-list-item incident ${managementEscape(item.severity)}">
+                        <div>
+                            <strong>${managementEscape(item.message)}</strong>
+                            <span class="mono">${managementEscape(item.code)}</span>
+                            <small>${managementEscape(item.at)}</small>
+                        </div>
+                    </div>
+                `
+            ).join("")
+            : '<div class="support-empty">Nenhum evento de intermitência detectado.</div>';
+    }
+}
+
+
 async function startManagementMonitor() {
     setBusy(
         true,
@@ -1339,8 +1473,7 @@ async function startManagementMonitor() {
 
         managementState.monitorId = result.id;
 
-        managementOutput(
-            "managementMonitorOutput",
+        renderManagementMonitor(
             result
         );
 
@@ -1374,8 +1507,7 @@ async function refreshManagementMonitor() {
             )
         );
 
-        managementOutput(
-            "managementMonitorOutput",
+        renderManagementMonitor(
             result
         );
     } catch (error) {
@@ -1402,8 +1534,7 @@ async function stopManagementMonitor() {
             }
         );
 
-        managementOutput(
-            "managementMonitorOutput",
+        renderManagementMonitor(
             result
         );
 
