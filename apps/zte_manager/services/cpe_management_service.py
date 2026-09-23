@@ -70,12 +70,84 @@ class CPEManagementService:
         status=None,
         limit=500,
     ):
-        return {
-            "devices": inventory_service.list(
-                query=query,
-                status=status,
-                limit=limit,
+        devices = inventory_service.list(
+            query=query,
+            status=status,
+            limit=limit,
+        )
+
+        firmware_by_model = {}
+
+        for device in devices:
+            model = device.get(
+                "model"
             )
+
+            if not model:
+                device[
+                    "firmware_compliant"
+                ] = None
+                device[
+                    "approved_firmware_versions"
+                ] = []
+                continue
+
+            if model not in firmware_by_model:
+                approved = [
+                    item
+                    for item in (
+                        management_repository
+                        .list_firmware(
+                            model
+                        )
+                    )
+                    if item.get(
+                        "approved"
+                    )
+                ]
+
+                firmware_by_model[
+                    model
+                ] = approved
+
+            approved = (
+                firmware_by_model[
+                    model
+                ]
+            )
+
+            versions = [
+                str(
+                    item.get(
+                        "version"
+                    )
+                    or ""
+                )
+                for item in approved
+                if item.get(
+                    "version"
+                )
+            ]
+
+            device[
+                "approved_firmware_versions"
+            ] = versions
+
+            device[
+                "firmware_compliant"
+            ] = (
+                None
+                if not versions
+                else str(
+                    device.get(
+                        "firmware"
+                    )
+                    or ""
+                ) in versions
+            )
+
+        return {
+            "devices": devices
         }
 
     def update_device(
@@ -176,6 +248,7 @@ class CPEManagementService:
 
         allowed = {
             "profile_remediate",
+            "profile_acs",
             "acs_parameters",
             "acs_reboot",
             "gateway_command",
@@ -247,6 +320,57 @@ class CPEManagementService:
         operation,
         payload,
     ):
+        if operation == "profile_acs":
+            profile_id = payload.get(
+                "profile_id"
+            )
+
+            profile_name = payload.get(
+                "profile_name"
+            )
+
+            profile = (
+                management_repository
+                .get_profile(
+                    int(profile_id)
+                )
+                if profile_id
+                else management_repository
+                .get_profile(
+                    name=profile_name
+                )
+                if profile_name
+                else management_repository
+                .get_profile(
+                    default=True
+                )
+            )
+
+            if profile is None:
+                raise ValueError(
+                    "Perfil corporativo não encontrado."
+                )
+
+            parameters = (
+                profile.get(
+                    "config",
+                    {}
+                ).get(
+                    "acs_parameters"
+                )
+                or {}
+            )
+
+            if not parameters:
+                raise RuntimeError(
+                    "O perfil não contém acs_parameters para provisionamento remoto."
+                )
+
+            return acs_service.set_parameters(
+                device["id"],
+                parameters,
+            )
+
         if operation == "acs_parameters":
             parameters = (
                 payload.get(
