@@ -321,3 +321,42 @@
     margin: 14px 0;
     background: var(--border, rgba(148, 163, 184, .14));
 }
+
+
+.management-monitor-chart {
+    margin-top: 12px;
+    min-height: 185px;
+    border: 1px solid var(--border, rgba(148, 163, 184, .14));
+    border-radius: 13px;
+    padding: 10px;
+    overflow: hidden;
+    background: rgba(2, 8, 18, .48);
+}
+
+.management-monitor-chart svg {
+    width: 100%;
+    height: 165px;
+    display: block;
+}
+
+.management-monitor-chart .grid-line {
+    stroke: rgba(148, 163, 184, .12);
+    stroke-width: 1;
+}
+
+.management-monitor-chart .rx-line {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.management-monitor-chart .rx-point {
+    fill: currentColor;
+}
+
+.management-monitor-chart .axis-label {
+    fill: #8fa0b8;
+    font-size: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
