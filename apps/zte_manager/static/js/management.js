@@ -1147,6 +1147,84 @@ async function saveManagementAgent() {
 }
 
 
+async function runManagementBufferbloat() {
+    const agentId = Number(
+        document.getElementById(
+            "managementTerminalAgent"
+        )?.value || 0
+    );
+
+    const iperfHost = document.getElementById(
+        "managementTerminalExtra"
+    )?.value.trim();
+
+    const pingHost = document.getElementById(
+        "managementTerminalHost"
+    )?.value.trim() || "1.1.1.1";
+
+    if (!agentId) {
+        showToast(
+            "Cadastre/selecione um Agent."
+        );
+        return;
+    }
+
+    if (!iperfHost) {
+        showToast(
+            "Informe o servidor iperf3 no campo Interface / IPERF."
+        );
+        return;
+    }
+
+    setBusy(
+        true,
+        "Medindo latência em repouso e durante carga..."
+    );
+
+    try {
+        const result = await managementRequest(
+            "/management/gateway/bufferbloat",
+            {
+                method: "POST",
+                body: {
+                    agent_id: agentId,
+                    ping_host: pingHost,
+                    iperf_host: iperfHost,
+                    direction: "download",
+                    duration: 10,
+                    streams: 4
+                }
+            }
+        );
+
+        managementOutput(
+            "managementTerminalOutput",
+            result
+        );
+
+        const delta = result.latency_delta_ms;
+
+        showToast(
+            delta === null || delta === undefined
+                ? "Teste concluído sem delta de latência."
+                : "Bufferbloat: +" + Number(delta).toFixed(1) + " ms sob carga."
+        );
+    } catch (error) {
+        managementOutput(
+            "managementTerminalOutput",
+            {
+                error: error.message
+            }
+        );
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(false);
+    }
+}
+
+
 async function openManagementRemote() {
     const device = selectedManagementDevice();
 
@@ -2008,6 +2086,52 @@ async function updateManagementWan() {
 }
 
 
+async function deleteManagementWan() {
+    const id = document.getElementById(
+        "managementWanId"
+    ).value.trim();
+
+    if (!id) {
+        showToast(
+            "Informe o ID da WAN."
+        );
+        return;
+    }
+
+    if (!window.confirm(
+        "Excluir esta WAN? Um backup será criado antes e a conexão pode cair."
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/wan/delete",
+            {
+                method: "POST",
+                body: {
+                    id,
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "WAN removida."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
 async function runManagementWanAction() {
     try {
         const result = await managementRequest(
@@ -2470,6 +2594,14 @@ document.getElementById(
 
 
 document.getElementById(
+    "managementBufferbloatRun"
+)?.addEventListener(
+    "click",
+    runManagementBufferbloat
+);
+
+
+document.getElementById(
     "managementMonitorStart"
 )?.addEventListener(
     "click",
@@ -2602,6 +2734,14 @@ document.getElementById(
 )?.addEventListener(
     "click",
     runManagementWanAction
+);
+
+
+document.getElementById(
+    "managementWanDelete"
+)?.addEventListener(
+    "click",
+    deleteManagementWan
 );
 
 
