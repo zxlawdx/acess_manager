@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0 — Automatic Support Diagnostics
+
+- Adiciona a aba **Diagnóstico automático** e triagem de saúde no Dashboard.
+- Adiciona seleção de cenário: geral, banda baixa, quedas, sem Internet e Wi-Fi.
+- Correlaciona dispositivo afetado com banda 2.4/5 GHz, RSSI, taxa PHY, Band Steering e porta Ethernet quando o firmware fornece a interface.
+- Adiciona scan ThinkLua de APs vizinhos em 2.4/5 GHz, com sinal, ruído e canal.
+- Adiciona `ChannelAnalyzer` que pontua interferência pelo peso do sinal/ruído e sobreposição, em vez de apenas contar SSIDs.
+- Adiciona recomendação de canal manual ou Auto; a otimização automática opcional passa por auditoria `before -> action -> after` e revalidação.
+- Adiciona DNS Lookup nativo e evita tratar DNS estático `0.0.0.0` como falha quando a resolução efetiva funciona via WAN/PPPoE.
+- Adiciona Speed Test nativo do dashboard AIS/ThinkLua quando disponível, com fallback HTTP identificado como teste executado pelo computador do atendente.
+- Adiciona análise de erros/descartes LAN, CPU/memória e normalização dos enums de velocidade Ethernet ZTE.
+- Adiciona gerador de atendimento/OS usando diagnóstico final + todas as alterações auditadas da sessão.
+- Adiciona capabilities para scan Wi-Fi, gerenciador de interferência, DNS Lookup e Speed Test nativo.
+- Adiciona bundle `support_diagnostics.js/css`, testes das regras e validação JS no CI.
+
 ## 0.5.0 — Operations Suite / F670L
 
 - Adiciona adapters para **F6600P**, **F670L** e fallback genérico ThinkLua.
