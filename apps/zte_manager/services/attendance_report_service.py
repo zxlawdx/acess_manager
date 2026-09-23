@@ -250,12 +250,24 @@ class AttendanceReportService:
     def _speed_source(
         speed,
     ):
+        if speed.get(
+            "source"
+        ) == "ont_native":
+            return "teste nativo executado pela ONT"
+
+        provider = {
+            "cloudflare": "Cloudflare",
+            "fast.com": "FAST.com / Netflix",
+            "speedtest.net": "Speedtest.net",
+            "librespeed": "LibreSpeed",
+        }.get(
+            speed.get("provider"),
+            speed.get("provider") or "HTTP",
+        )
+
         return (
-            "teste nativo executado pela ONT"
-            if speed.get(
-                "source"
-            ) == "ont_native"
-            else "teste HTTP executado pelo computador do atendente"
+            "teste executado pelo computador do atendente "
+            f"via {provider}"
         )
 
     @staticmethod
