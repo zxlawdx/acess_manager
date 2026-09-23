@@ -1,0 +1,1236 @@
+// =========================================================
+// ZTE AUTOMATIC • DIAGNÓSTICO DE ATENDIMENTO
+// Motor visual separado do app.js/advanced.js para não duplicar renderers.
+// =========================================================
+
+const supportDiagnosticState = {
+    lastDiagnostic: null,
+    dashboardDiagnostic: null,
+    running: false,
+    lastConfig: null
+};
+
+
+pageInfo.supportDiagnostic = {
+    title: "Diagnóstico automático",
+    subtitle: "Localize gargalos, analise Wi-Fi e gere o atendimento sem digitação manual."
+};
+
+
+function supportEscape(value) {
+    const node = document.createElement(
+        "div"
+    );
+
+    node.textContent = (
+        value === undefined
+        || value === null
+    )
+        ? ""
+        : String(value);
+
+    return node.innerHTML;
+}
+
+
+function supportSeverityLabel(severity) {
+    return {
+        critical: "Crítico",
+        warning: "Atenção",
+        ok: "Normal",
+        info: "Informação"
+    }[severity] || severity || "Info";
+}
+
+
+function supportStatusClass(status) {
+    return [
+        "ok",
+        "warning",
+        "critical",
+        "info"
+    ].includes(status)
+        ? status
+        : "info";
+}
+
+
+function diagnosticPayload({
+    full = true
+} = {}) {
+    const mode = document.getElementById(
+        "supportDiagnosticMode"
+    )?.value || "general";
+
+    const selectedClient = document.getElementById(
+        "supportAffectedClient"
+    )?.value || "";
+
+    const [
+        affectedType,
+        affectedValue
+    ] = selectedClient.split(
+        "|",
+        2
+    );
+
+    const expectedDownload = Number(
+        document.getElementById(
+            "supportExpectedDownload"
+        )?.value || 0
+    );
+
+    const expectedUpload = Number(
+        document.getElementById(
+            "supportExpectedUpload"
+        )?.value || 0
+    );
+
+    return {
+        mode,
+        affected_mac: (
+            affectedType === "mac"
+                ? affectedValue
+                : null
+        ),
+        affected_ip: (
+            affectedType === "ip"
+                ? affectedValue
+                : null
+        ),
+        ping_host: (
+            document.getElementById(
+                "supportPingHost"
+            )?.value.trim()
+            || "1.1.1.1"
+        ),
+        dns_host: (
+            document.getElementById(
+                "supportDnsHost"
+            )?.value.trim()
+            || "cloudflare.com"
+        ),
+        include_traceroute: (
+            full
+            && Boolean(
+                document.getElementById(
+                    "supportIncludeTraceroute"
+                )?.checked
+            )
+        ),
+        include_speedtest: (
+            full
+            && Boolean(
+                document.getElementById(
+                    "supportIncludeSpeedtest"
+                )?.checked
+            )
+        ),
+        allow_speedtest_fallback: Boolean(
+            document.getElementById(
+                "supportAllowSpeedFallback"
+            )?.checked ?? true
+        ),
+        auto_optimize_wifi: (
+            full
+            && Boolean(
+                document.getElementById(
+                    "supportAutoOptimizeWifi"
+                )?.checked
+            )
+        ),
+        expected_download_mbps: (
+            expectedDownload > 0
+                ? expectedDownload
+                : null
+        ),
+        expected_upload_mbps: (
+            expectedUpload > 0
+                ? expectedUpload
+                : null
+        ),
+        expected_lan_mbps: 1000,
+        optical_rx_min: -27,
+        optical_rx_max: -8,
+        wifi_rssi_warning: -70,
+        wifi_rssi_bad: -80,
+        ping_warning_ms: 80
+    };
+}
+
+
+async function runSupportDiagnostic({
+    full = true,
+    dashboard = false
+} = {}) {
+    if (
+        !ontConnected
+        || supportDiagnosticState.running
+    ) {
+        return;
+    }
+
+    supportDiagnosticState.running = true;
+
+    const payload = dashboard
+        ? {
+            mode: "general",
+            ping_host: "1.1.1.1",
+            dns_host: "cloudflare.com",
+            include_traceroute: false,
+            include_speedtest: false,
+            allow_speedtest_fallback: false,
+            auto_optimize_wifi: false,
+            expected_lan_mbps: 1000,
+            optical_rx_min: -27,
+            optical_rx_max: -8,
+            wifi_rssi_warning: -70,
+            wifi_rssi_bad: -80,
+            ping_warning_ms: 80
+        }
+        : diagnosticPayload({
+            full
+        });
+
+    if (!dashboard) {
+        supportDiagnosticState.lastConfig = {
+            ...payload
+        };
+
+        setBusy(
+            true,
+            payload.include_speedtest
+                ? "Executando diagnóstico completo e Speed Test..."
+                : "Executando diagnóstico completo..."
+        );
+
+        const badge = document.getElementById(
+            "supportDiagnosticBadge"
+        );
+
+        if (badge) {
+            badge.className = "badge";
+            badge.textContent = "Executando";
+        }
+    }
+
+    try {
+        const result = await apiRequest(
+            "/diagnostics/support",
+            {
+                method: "POST",
+                body: JSON.stringify(
+                    payload
+                )
+            }
+        );
+
+        if (dashboard) {
+            supportDiagnosticState.dashboardDiagnostic = result;
+            renderDashboardHealth(
+                result
+            );
+
+            seedAffectedClients(
+                result
+            );
+        } else {
+            supportDiagnosticState.lastDiagnostic = result;
+
+            renderSupportDiagnostic(
+                result
+            );
+
+            seedAffectedClients(
+                result
+            );
+
+            const badge = document.getElementById(
+                "supportDiagnosticBadge"
+            );
+
+            if (badge) {
+                badge.className = (
+                    "badge "
+                    + supportStatusClass(
+                        finalDiagnosticResult(
+                            result
+                        ).status
+                    )
+                );
+
+                badge.textContent = supportSeverityLabel(
+                    finalDiagnosticResult(
+                        result
+                    ).status
+                );
+            }
+
+            showToast(
+                "Diagnóstico automático concluído."
+            );
+        }
+
+        return result;
+
+    } catch (error) {
+        if (dashboard) {
+            renderDashboardHealthError(
+                error
+            );
+        } else {
+            showToast(
+                error.message
+            );
+
+            const output = document.getElementById(
+                "supportDiagnosticOutput"
+            );
+
+            if (output) {
+                output.innerHTML = `
+                    <div class="support-empty critical">
+                        <strong>Falha no diagnóstico</strong>
+                        <span>${supportEscape(error.message)}</span>
+                    </div>
+                `;
+            }
+        }
+    } finally {
+        supportDiagnosticState.running = false;
+
+        if (!dashboard) {
+            setBusy(
+                false
+            );
+        }
+    }
+}
+
+
+function finalDiagnosticResult(result) {
+    return (
+        result?.post_validation
+        || result
+        || {}
+    );
+}
+
+
+function renderDashboardHealth(result) {
+    const container = document.getElementById(
+        "dashboardHealthResult"
+    );
+
+    const badge = document.getElementById(
+        "dashboardHealthBadge"
+    );
+
+    if (
+        !container
+        || !badge
+    ) {
+        return;
+    }
+
+    const finalResult = finalDiagnosticResult(
+        result
+    );
+
+    const status = finalResult.status || "info";
+
+    badge.className = (
+        "badge "
+        + supportStatusClass(
+            status
+        )
+    );
+
+    badge.textContent = supportSeverityLabel(
+        status
+    );
+
+    const findings = (
+        finalResult.findings
+        || []
+    );
+
+    const relevant = [
+        ...findings.filter(
+            item => [
+                "critical",
+                "warning"
+            ].includes(
+                item.severity
+            )
+        ),
+        ...findings.filter(
+            item => item.severity === "ok"
+        )
+    ].slice(
+        0,
+        5
+    );
+
+    container.innerHTML = relevant.length
+        ? relevant.map(
+            finding => `
+                <div class="dashboard-health-line ${supportStatusClass(finding.severity)}">
+                    <span class="health-dot"></span>
+                    <span>${supportEscape(finding.message)}</span>
+                </div>
+            `
+        ).join("")
+        : `
+            <div class="dashboard-health-line info">
+                <span class="health-dot"></span>
+                <span>Triagem concluída sem resultado resumível.</span>
+            </div>
+        `;
+}
+
+
+function renderDashboardHealthError(error) {
+    const container = document.getElementById(
+        "dashboardHealthResult"
+    );
+
+    const badge = document.getElementById(
+        "dashboardHealthBadge"
+    );
+
+    if (badge) {
+        badge.className = "badge warning";
+        badge.textContent = "Parcial";
+    }
+
+    if (container) {
+        container.innerHTML = `
+            <div class="dashboard-health-line warning">
+                <span class="health-dot"></span>
+                <span>Triagem automática parcial: ${supportEscape(error.message)}</span>
+            </div>
+        `;
+    }
+}
+
+
+function seedAffectedClients(result) {
+    const select = document.getElementById(
+        "supportAffectedClient"
+    );
+
+    if (!select) {
+        return;
+    }
+
+    const previous = select.value;
+
+    const finalResult = finalDiagnosticResult(
+        result
+    );
+
+    const sections = (
+        finalResult.sections
+        || {}
+    );
+
+    const clients = [
+        ...(
+            sections.wifi_clients
+            || []
+        ).map(
+            item => ({
+                ...item,
+                type: "Wi-Fi"
+            })
+        ),
+        ...(
+            sections.lan_clients
+            || []
+        ).map(
+            item => ({
+                ...item,
+                type: "Ethernet"
+            })
+        )
+    ];
+
+    select.innerHTML = `
+        <option value="">
+            Todos / detectar automaticamente
+        </option>
+        ${clients.map(
+            client => {
+                const key = client.mac
+                    ? `mac|${client.mac}`
+                    : `ip|${client.ip || ""}`;
+
+                const title = [
+                    client.hostname || "Dispositivo",
+                    client.type,
+                    client.ip,
+                    client.ssid,
+                    client.rssi
+                        ? `${client.rssi} dBm`
+                        : null
+                ].filter(Boolean).join(" • ");
+
+                return `
+                    <option value="${supportEscape(key)}">
+                        ${supportEscape(title)}
+                    </option>
+                `;
+            }
+        ).join("")}
+    `;
+
+    if (
+        previous
+        && [
+            ...select.options
+        ].some(
+            option => option.value === previous
+        )
+    ) {
+        select.value = previous;
+    }
+}
+
+
+function renderSupportDiagnostic(result) {
+    const output = document.getElementById(
+        "supportDiagnosticOutput"
+    );
+
+    if (!output) {
+        return;
+    }
+
+    const finalResult = finalDiagnosticResult(
+        result
+    );
+
+    output.innerHTML = `
+        ${renderDiagnosticSummary(result, finalResult)}
+        ${renderAffectedClient(finalResult)}
+        ${renderFindings(finalResult)}
+        ${renderWifiEnvironment(finalResult)}
+        ${renderSpeedTest(finalResult)}
+        ${renderDiagnosticErrors(finalResult)}
+    `;
+
+    bindRecommendationActions(
+        output
+    );
+
+    const reportActions = document.getElementById(
+        "supportReportActions"
+    );
+
+    if (reportActions) {
+        reportActions.classList.remove(
+            "hidden"
+        );
+    }
+}
+
+
+function renderDiagnosticSummary(original, result) {
+    const remediations = (
+        original.remediations
+        || []
+    );
+
+    return `
+        <article class="support-result-card support-summary ${supportStatusClass(result.status)}">
+            <div>
+                <span class="section-kicker">RESULTADO FINAL</span>
+                <h3>${supportEscape(supportSeverityLabel(result.status))}</h3>
+                <p>${supportEscape(result.summary || "Diagnóstico concluído.")}</p>
+            </div>
+            <div class="support-summary-metrics">
+                <div>
+                    <strong>${(result.findings || []).length}</strong>
+                    <span>conclusões</span>
+                </div>
+                <div>
+                    <strong>${(result.recommendations || []).length}</strong>
+                    <span>recomendações</span>
+                </div>
+                <div>
+                    <strong>${remediations.length}</strong>
+                    <span>ajustes auto</span>
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+
+function renderAffectedClient(result) {
+    const client = result.affected_client;
+
+    if (!client) {
+        return "";
+    }
+
+    const band = inferClientBand(
+        client
+    );
+
+    return `
+        <article class="support-result-card">
+            <div class="support-card-head">
+                <div>
+                    <span class="section-kicker">DISPOSITIVO AFETADO</span>
+                    <h3>${supportEscape(client.hostname || client.mac || "Cliente")}</h3>
+                </div>
+                <span class="badge">${supportEscape(client.kind || "cliente")}</span>
+            </div>
+            <div class="support-metric-grid">
+                ${metric("IP", client.ip)}
+                ${metric("MAC", client.mac)}
+                ${metric("SSID", client.ssid)}
+                ${metric("Banda", band)}
+                ${metric("RSSI", client.rssi ? `${client.rssi} dBm` : null)}
+                ${metric("RX PHY", client.rx_rate)}
+                ${metric("TX PHY", client.tx_rate)}
+                ${metric("Modo", client.modo)}
+            </div>
+        </article>
+    `;
+}
+
+
+function inferClientBand(client) {
+    const ap = String(
+        client.ap
+        || client.interface
+        || ""
+    ).toUpperCase();
+
+    if (
+        ap.includes("AP1")
+        || ap.includes("RD1")
+        || ap.includes("2.4")
+    ) {
+        return "2.4 GHz";
+    }
+
+    if (
+        ap.includes("AP5")
+        || ap.includes("RD2")
+        || ap.includes("5G")
+    ) {
+        return "5 GHz";
+    }
+
+    return "-";
+}
+
+
+function metric(label, value) {
+    return `
+        <div class="support-metric">
+            <span>${supportEscape(label)}</span>
+            <strong>${supportEscape(value ?? "-")}</strong>
+        </div>
+    `;
+}
+
+
+function renderFindings(result) {
+    const findings = result.findings || [];
+
+    if (!findings.length) {
+        return "";
+    }
+
+    return `
+        <article class="support-result-card">
+            <div class="support-card-head">
+                <div>
+                    <span class="section-kicker">DIAGNÓSTICO</span>
+                    <h3>Conclusões e ações</h3>
+                </div>
+            </div>
+            <div class="finding-list">
+                ${findings.map(
+                    (finding, index) => {
+                        const recommendation = finding.recommendation;
+                        const action = recommendation?.action;
+
+                        let actionButton = "";
+
+                        if (
+                            action?.type === "wifi_channel"
+                            || action?.type === "wifi_auto_channel"
+                        ) {
+                            actionButton = `
+                                <button
+                                    class="button ghost compact"
+                                    type="button"
+                                    data-support-action="${supportEscape(action.type)}"
+                                    data-band="${supportEscape(action.band || "")}"
+                                    data-channel="${supportEscape(action.channel ?? "")}"
+                                >
+                                    Aplicar recomendado
+                                </button>
+                            `;
+                        } else if (
+                            action?.type === "inspect_band_steering"
+                        ) {
+                            actionButton = `
+                                <button class="button ghost compact" type="button" data-jump="wifi">
+                                    Ver Band Steering
+                                </button>
+                            `;
+                        }
+
+                        return `
+                            <div class="finding-item ${supportStatusClass(finding.severity)}">
+                                <span class="finding-index">${String(index + 1).padStart(2, "0")}</span>
+                                <div class="finding-copy">
+                                    <div class="finding-title-row">
+                                        <strong>${supportEscape(supportSeverityLabel(finding.severity))}</strong>
+                                        <span class="mono">${supportEscape(finding.code)}</span>
+                                    </div>
+                                    <p>${supportEscape(finding.message)}</p>
+                                    ${recommendation?.title
+                                        ? `<small>Recomendação: ${supportEscape(recommendation.title)}</small>`
+                                        : ""}
+                                </div>
+                                ${actionButton}
+                            </div>
+                        `;
+                    }
+                ).join("")}
+            </div>
+        </article>
+    `;
+}
+
+
+function renderWifiEnvironment(result) {
+    const environment = result.sections?.wifi_environment;
+    const bands = environment?.bands || {};
+
+    if (!Object.keys(bands).length) {
+        return "";
+    }
+
+    return `
+        <article class="support-result-card">
+            <div class="support-card-head">
+                <div>
+                    <span class="section-kicker">RF ENVIRONMENT</span>
+                    <h3>Interferência e canais vizinhos</h3>
+                </div>
+            </div>
+            <div class="wifi-environment-grid">
+                ${Object.entries(bands).map(
+                    ([band, data]) => renderWifiBandEnvironment(
+                        band,
+                        data
+                    )
+                ).join("")}
+            </div>
+        </article>
+    `;
+}
+
+
+function renderWifiBandEnvironment(band, data) {
+    const analysis = data.analysis || {};
+    const networks = data.networks || [];
+    const scoreEntries = Object.entries(
+        analysis.scores || {}
+    ).sort(
+        (a, b) => Number(a[0]) - Number(b[0])
+    );
+
+    return `
+        <div class="wifi-environment-band">
+            <div class="wifi-band-heading">
+                <div>
+                    <strong>${supportEscape(band)}</strong>
+                    <span>
+                        atual ${supportEscape(analysis.current_channel ?? (analysis.auto_channel ? "Auto" : "-"))}
+                        • melhor ${supportEscape(analysis.best_channel ?? "-")}
+                    </span>
+                </div>
+                <span class="badge">${networks.length} APs</span>
+            </div>
+
+            <div class="channel-score-strip">
+                ${scoreEntries.map(
+                    ([channel, score]) => `
+                        <div class="channel-score ${Number(channel) === Number(analysis.best_channel) ? "best" : ""}">
+                            <span>CH ${supportEscape(channel)}</span>
+                            <strong>${Number(score).toFixed(0)}</strong>
+                        </div>
+                    `
+                ).join("")}
+            </div>
+
+            ${data.error
+                ? `<p class="muted">Scan indisponível: ${supportEscape(data.error)}</p>`
+                : ""}
+
+            <div class="neighbor-table-wrap">
+                <table class="neighbor-table">
+                    <thead>
+                        <tr>
+                            <th>SSID</th>
+                            <th>Canal</th>
+                            <th>Sinal</th>
+                            <th>Ruído</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${networks.length
+                            ? networks.slice(0, 20).map(
+                                network => `
+                                    <tr>
+                                        <td>${supportEscape(network.ssid || "(oculto)")}</td>
+                                        <td>${supportEscape(network.channel ?? "-")}</td>
+                                        <td>${supportEscape(network.signal ?? network.signal_raw ?? "-")}</td>
+                                        <td>${supportEscape(network.noise ?? network.noise_raw ?? "-")}</td>
+                                    </tr>
+                                `
+                            ).join("")
+                            : `
+                                <tr>
+                                    <td colspan="4" class="muted">Nenhuma rede vizinha retornada.</td>
+                                </tr>
+                            `
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+
+function renderSpeedTest(result) {
+    const speed = result.sections?.speedtest;
+
+    if (!speed) {
+        return "";
+    }
+
+    const source = speed.source === "ont_native"
+        ? "Executado pela própria ONT"
+        : "Executado pelo computador do atendente";
+
+    return `
+        <article class="support-result-card speed-result-card">
+            <div class="support-card-head">
+                <div>
+                    <span class="section-kicker">THROUGHPUT</span>
+                    <h3>Teste de velocidade</h3>
+                </div>
+                <span class="badge ${speed.source === "ont_native" ? "ok" : "warning"}">
+                    ${supportEscape(speed.source || "speedtest")}
+                </span>
+            </div>
+
+            <div class="speed-hero-grid">
+                <div>
+                    <span>DOWNLOAD</span>
+                    <strong>${supportEscape(formatNumber(speed.download_mbps))}</strong>
+                    <small>Mbps</small>
+                </div>
+                <div>
+                    <span>UPLOAD</span>
+                    <strong>${supportEscape(formatNumber(speed.upload_mbps))}</strong>
+                    <small>Mbps</small>
+                </div>
+                <div>
+                    <span>LATÊNCIA</span>
+                    <strong>${supportEscape(formatNumber(speed.latency_ms))}</strong>
+                    <small>ms</small>
+                </div>
+                <div>
+                    <span>JITTER</span>
+                    <strong>${supportEscape(formatNumber(speed.jitter_ms))}</strong>
+                    <small>ms</small>
+                </div>
+            </div>
+
+            <p class="muted with-top-space">
+                ${supportEscape(source)}
+                ${speed.server?.name ? ` • ${supportEscape(speed.server.name)}` : ""}
+            </p>
+
+            ${(speed.attempts || []).length
+                ? `
+                    <details class="support-details">
+                        <summary>Fallbacks utilizados</summary>
+                        <pre>${supportEscape(JSON.stringify(speed.attempts, null, 2))}</pre>
+                    </details>
+                `
+                : ""}
+        </article>
+    `;
+}
+
+
+function formatNumber(value) {
+    const number = Number(
+        value
+    );
+
+    return Number.isFinite(
+        number
+    )
+        ? number.toFixed(1)
+        : "-";
+}
+
+
+function renderDiagnosticErrors(result) {
+    const entries = Object.entries(
+        result.errors || {}
+    );
+
+    if (!entries.length) {
+        return "";
+    }
+
+    return `
+        <details class="support-result-card support-details">
+            <summary>
+                ${entries.length} coleta(s) indisponível(is) neste firmware/login
+            </summary>
+            <div class="error-list">
+                ${entries.map(
+                    ([name, message]) => `
+                        <div>
+                            <strong>${supportEscape(name)}</strong>
+                            <span>${supportEscape(message)}</span>
+                        </div>
+                    `
+                ).join("")}
+            </div>
+        </details>
+    `;
+}
+
+
+function bindRecommendationActions(root) {
+    root.querySelectorAll(
+        "[data-support-action]"
+    ).forEach(
+        button => {
+            button.addEventListener(
+                "click",
+                () => applySupportRecommendation(
+                    button
+                )
+            );
+        }
+    );
+}
+
+
+async function applySupportRecommendation(button) {
+    const action = button.dataset.supportAction;
+    const band = button.dataset.band;
+    const channel = button.dataset.channel;
+
+    button.disabled = true;
+
+    setBusy(
+        true,
+        "Aplicando e auditando a recomendação..."
+    );
+
+    try {
+        await apiRequest(
+            "/diagnostics/remediate",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    action,
+                    band,
+                    channel: (
+                        channel
+                            ? Number(channel)
+                            : null
+                    )
+                })
+            }
+        );
+
+        showToast(
+            "Ajuste aplicado. Reexecutando a validação..."
+        );
+
+        const config = {
+            ...(
+                supportDiagnosticState.lastConfig
+                || diagnosticPayload()
+            ),
+            include_speedtest: false,
+            include_traceroute: false,
+            auto_optimize_wifi: false
+        };
+
+        const result = await apiRequest(
+            "/diagnostics/support",
+            {
+                method: "POST",
+                body: JSON.stringify(
+                    config
+                )
+            }
+        );
+
+        supportDiagnosticState.lastDiagnostic = result;
+        supportDiagnosticState.lastConfig = config;
+
+        renderSupportDiagnostic(
+            result
+        );
+
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(
+            false
+        );
+
+        button.disabled = false;
+    }
+}
+
+
+async function generateSupportAttendance() {
+    const diagnosticId = (
+        supportDiagnosticState.lastDiagnostic?.history_id
+        || null
+    );
+
+    if (!diagnosticId) {
+        showToast(
+            "Execute o diagnóstico completo primeiro."
+        );
+
+        return;
+    }
+
+    setBusy(
+        true,
+        "Gerando resumo do atendimento..."
+    );
+
+    try {
+        const report = await apiRequest(
+            "/diagnostics/attendance",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    diagnostic_id: diagnosticId
+                })
+            }
+        );
+
+        const textarea = document.getElementById(
+            "supportAttendanceText"
+        );
+
+        textarea.value = report.text || "";
+
+        document.getElementById(
+            "supportAttendancePanel"
+        )?.classList.remove(
+            "hidden"
+        );
+
+        textarea.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest"
+        });
+
+        showToast(
+            "Atendimento gerado com o histórico da sessão."
+        );
+
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(
+            false
+        );
+    }
+}
+
+
+async function copySupportAttendance() {
+    const textarea = document.getElementById(
+        "supportAttendanceText"
+    );
+
+    const text = textarea?.value || "";
+
+    if (!text) {
+        showToast(
+            "Gere o atendimento primeiro."
+        );
+
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(
+            text
+        );
+    } catch (error) {
+        textarea.focus();
+        textarea.select();
+        document.execCommand(
+            "copy"
+        );
+    }
+
+    showToast(
+        "Atendimento copiado."
+    );
+}
+
+
+async function runStandaloneSpeedTest() {
+    setBusy(
+        true,
+        "Executando Speed Test..."
+    );
+
+    try {
+        const result = await apiRequest(
+            "/diagnostics/speedtest",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    allow_fallback: Boolean(
+                        document.getElementById(
+                            "supportAllowSpeedFallback"
+                        )?.checked ?? true
+                    )
+                })
+            }
+        );
+
+        const output = document.getElementById(
+            "supportStandaloneSpeed"
+        );
+
+        if (output) {
+            output.innerHTML = renderSpeedTest({
+                sections: {
+                    speedtest: result
+                }
+            });
+        }
+
+        showToast(
+            "Speed Test concluído."
+        );
+
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(
+            false
+        );
+    }
+}
+
+
+window.loadDashboardSupportHealth = async function () {
+    const container = document.getElementById(
+        "dashboardHealthResult"
+    );
+
+    if (!container || !ontConnected) {
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="dashboard-health-line info">
+            <span class="health-dot"></span>
+            <span>Executando triagem de GPON, WAN, DNS, LAN e Wi-Fi...</span>
+        </div>
+    `;
+
+    await runSupportDiagnostic({
+        full: false,
+        dashboard: true
+    });
+};
+
+
+document.getElementById(
+    "supportDiagnosticForm"
+)?.addEventListener(
+    "submit",
+    async event => {
+        event.preventDefault();
+
+        await runSupportDiagnostic({
+            full: true
+        });
+    }
+);
+
+
+document.getElementById(
+    "supportGenerateAttendance"
+)?.addEventListener(
+    "click",
+    generateSupportAttendance
+);
+
+
+document.getElementById(
+    "supportCopyAttendance"
+)?.addEventListener(
+    "click",
+    copySupportAttendance
+);
+
+
+document.getElementById(
+    "supportStandaloneSpeedButton"
+)?.addEventListener(
+    "click",
+    runStandaloneSpeedTest
+);
+
+
+document.getElementById(
+    "dashboardFullDiagnosticButton"
+)?.addEventListener(
+    "click",
+    () => openPage(
+        "supportDiagnostic"
+    )
+);
+
+
+document.getElementById(
+    "supportRepeatDiagnostic"
+)?.addEventListener(
+    "click",
+    () => runSupportDiagnostic({
+        full: true
+    })
+);
