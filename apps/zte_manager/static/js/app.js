@@ -3364,7 +3364,7 @@ function defaultStandard(band) {
 
 function bandKey(band) {
     return String(band)
-        .replace(/\\./g, "_")
+        .replace(/\./g, "_")
         .replace(/ /g, "_");
 }
 
