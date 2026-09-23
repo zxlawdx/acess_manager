@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
@@ -67,8 +68,18 @@ class HistoryRepository:
 
         return connection
 
+    @contextmanager
+    def _connection(self):
+        connection = self._connect()
+
+        try:
+            yield connection
+            connection.commit()
+        finally:
+            connection.close()
+
     def _init_schema(self):
-        with self._lock, self._connect() as db:
+        with self._lock, self._connection() as db:
             db.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS attendant_session (
@@ -131,7 +142,7 @@ class HistoryRepository:
     ) -> int:
         device = device or {}
 
-        with self._lock, self._connect() as db:
+        with self._lock, self._connection() as db:
             cursor = db.execute(
                 """
                 INSERT INTO attendant_session (
@@ -163,7 +174,7 @@ class HistoryRepository:
         if not session_id:
             return
 
-        with self._lock, self._connect() as db:
+        with self._lock, self._connection() as db:
             db.execute(
                 """
                 UPDATE attendant_session
@@ -182,7 +193,7 @@ class HistoryRepository:
         reason: str,
         payload: Any,
     ) -> int:
-        with self._lock, self._connect() as db:
+        with self._lock, self._connection() as db:
             cursor = db.execute(
                 """
                 INSERT INTO device_snapshot (
@@ -208,7 +219,7 @@ class HistoryRepository:
         session_id: int | None,
         result: dict[str, Any],
     ) -> int:
-        with self._lock, self._connect() as db:
+        with self._lock, self._connection() as db:
             cursor = db.execute(
                 """
                 INSERT INTO diagnostic_run (
@@ -242,7 +253,7 @@ class HistoryRepository:
         success: bool,
         message: str | None = None,
     ) -> int:
-        with self._lock, self._connect() as db:
+        with self._lock, self._connection() as db:
             cursor = db.execute(
                 """
                 INSERT INTO configuration_change (
@@ -280,7 +291,7 @@ class HistoryRepository:
             min(int(limit), 200),
         )
 
-        with self._lock, self._connect() as db:
+        with self._lock, self._connection() as db:
             sessions = self._rows(
                 db.execute(
                     """
