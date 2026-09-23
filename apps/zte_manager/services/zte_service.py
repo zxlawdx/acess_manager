@@ -1781,6 +1781,74 @@ class ZTEService:
                 "backup": backup,
             }
 
+    def _assert_management_device_matches_current(
+        self,
+        device_id,
+    ):
+        if device_id is None:
+            return None
+
+        device = management_repository.get_device(
+            int(device_id)
+        )
+
+        if device is None:
+            raise ValueError(
+                "Equipamento do inventário não encontrado."
+            )
+
+        current_serial = (
+            self._device_info.get("serial")
+            or self._device_info.get("serial_number")
+            or self._device_info.get("sn")
+            or self._device_info.get("SerialNumber")
+        )
+
+        inventory_serial = device.get(
+            "serial"
+        )
+
+        if (
+            current_serial
+            and inventory_serial
+            and str(current_serial).strip()
+            != str(inventory_serial).strip()
+        ):
+            raise RuntimeError(
+                "A ONT conectada não corresponde ao equipamento selecionado no inventário."
+            )
+
+        current_host = str(
+            self.current_host
+            or ""
+        ).split(
+            ":",
+            1,
+        )[0]
+
+        inventory_host = str(
+            device.get("host")
+            or ""
+        ).split(
+            ":",
+            1,
+        )[0]
+
+        if (
+            not (
+                current_serial
+                and inventory_serial
+            )
+            and current_host
+            and inventory_host
+            and current_host != inventory_host
+        ):
+            raise RuntimeError(
+                "A ONT conectada não corresponde ao host do equipamento selecionado."
+            )
+
+        return device
+
     def management_backup(
         self,
         *,
@@ -1788,6 +1856,10 @@ class ZTEService:
         reason="manual"
     ):
         with self._lock:
+            self._assert_management_device_matches_current(
+                device_id
+            )
+
             result = self.export_user_configuration()
 
             record = management_repository.register_backup(
@@ -1856,6 +1928,12 @@ class ZTEService:
             )
 
         with self._lock:
+            self._assert_management_device_matches_current(
+                backup.get(
+                    "device_id"
+                )
+            )
+
             zte = self.get_client()
 
             result = zte.restore_configuration(
@@ -1905,6 +1983,10 @@ class ZTEService:
             )
 
         with self._lock:
+            self._assert_management_device_matches_current(
+                device_id
+            )
+
             backup = self.management_backup(
                 device_id=device_id,
                 reason="pre_firmware_upgrade",
