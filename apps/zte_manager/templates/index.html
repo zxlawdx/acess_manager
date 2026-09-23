@@ -520,6 +520,27 @@
                                     <span>UPLOAD ESPERADO (Mbps)</span>
                                     <input id="supportExpectedUpload" type="number" min="0" placeholder="Opcional">
                                 </label>
+
+                                <label class="field">
+                                    <span>SERVIDOR DO SPEED TEST</span>
+                                    <select id="supportSpeedtestPreset">
+                                        <option value="https://speed.cloudflare.com">Cloudflare</option>
+                                        <option value="custom">Personalizado</option>
+                                    </select>
+                                </label>
+
+                                <label id="supportSpeedtestCustomField" class="field hidden">
+                                    <span>URL DO SERVIDOR</span>
+                                    <input
+                                        id="supportSpeedtestBaseUrl"
+                                        type="url"
+                                        placeholder="https://speedtest.seudominio.com"
+                                        autocomplete="off"
+                                    >
+                                    <small>
+                                        O fallback pelo PC espera endpoints compatíveis com /__down e /__up.
+                                    </small>
+                                </label>
                             </div>
 
                             <div class="support-check-grid with-top-space">
