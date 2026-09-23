@@ -3364,8 +3364,8 @@ function defaultStandard(band) {
 
 function bandKey(band) {
     return String(band)
-        .replaceAll(".", "_")
-        .replaceAll(" ", "_");
+        .replace(/\\./g, "_")
+        .replace(/ /g, "_");
 }
 
 
@@ -3562,11 +3562,11 @@ function escapeHtml(value) {
     }
 
     return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 
