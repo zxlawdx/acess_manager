@@ -86,18 +86,23 @@ function diagnosticPayload({
         )?.value || 0
     );
 
-    const speedtestPreset = document.getElementById(
+    const speedtestProvider = document.getElementById(
         "supportSpeedtestPreset"
-    )?.value || "https://speed.cloudflare.com";
+    )?.value || "native_auto";
 
-    const speedtestBaseUrl = speedtestPreset === "custom"
+    const speedtestBaseUrl = [
+        "auto",
+        "librespeed"
+    ].includes(
+        speedtestProvider
+    )
         ? (
             document.getElementById(
                 "supportSpeedtestBaseUrl"
             )?.value.trim()
             || null
         )
-        : speedtestPreset;
+        : null;
 
     return {
         mode,
@@ -144,6 +149,7 @@ function diagnosticPayload({
                 "supportAllowSpeedFallback"
             )?.checked ?? true
         ),
+        speedtest_provider: speedtestProvider,
         speedtest_base_url: speedtestBaseUrl,
         auto_optimize_wifi: (
             full
@@ -1137,22 +1143,28 @@ async function runStandaloneSpeedTest() {
                             "supportAllowSpeedFallback"
                         )?.checked ?? true
                     ),
-                    fallback_base_url: (
+                    provider: (
                         document.getElementById(
                             "supportSpeedtestPreset"
-                        )?.value === "custom"
+                        )?.value
+                        || "native_auto"
+                    ),
+                    fallback_base_url: (
+                        [
+                            "auto",
+                            "librespeed"
+                        ].includes(
+                            document.getElementById(
+                                "supportSpeedtestPreset"
+                            )?.value
+                        )
                             ? (
                                 document.getElementById(
                                     "supportSpeedtestBaseUrl"
                                 )?.value.trim()
                                 || null
                             )
-                            : (
-                                document.getElementById(
-                                    "supportSpeedtestPreset"
-                                )?.value
-                                || "https://speed.cloudflare.com"
-                            )
+                            : null
                     )
                 })
             }
