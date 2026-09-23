@@ -1,14 +1,18 @@
 <!-- ZTE Automatic dentro do shell Vela (layout blank). -->
 <!--
-    Fontes de texto usam apenas stacks locais para o app ficar consistente
-    e não depender da internet. Mantemos Material Symbols somente para ícones;
-    caso a rede externa esteja indisponível, o layout continua funcional.
+    O console usa Inter + JetBrains Mono quando disponíveis e mantém fallbacks
+    locais para continuar legível quando o ambiente de atendimento está offline.
+    Tailwind não é necessário: o design system é CSS nativo do projeto.
 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..600,0..1,-25..0&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ static('zte_manager/css/style.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/advanced.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/support_diagnostics.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/management.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/telecom_console.css') }}">
 
 <div class="app-shell">
 
@@ -17,18 +21,23 @@
     ====================================================== -->
     <aside class="sidebar">
         <div class="brand-row">
-            <div class="brand-mark">
-                <span class="material-symbols-outlined">router</span>
+            <div class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 40 40" fill="none">
+                    <rect width="40" height="40" rx="8"></rect>
+                    <rect x="0.5" y="0.5" width="39" height="39" rx="7.5"></rect>
+                    <path d="M10 13H30L17 27H30"></path>
+                    <circle cx="10" cy="27" r="2.5"></circle>
+                </svg>
             </div>
             <div class="brand-copy">
                 <strong>ZTE Automatic</strong>
-                <span>ISP TECH CONSOLE</span>
+                <span>OPTICAL NETWORK TERMINAL SUITE</span>
             </div>
         </div>
 
         <div id="connectedDevice" class="target-card hidden">
             <div class="target-head">
-                <span>TARGET DEVICE</span>
+                <span>NODE / TARGET</span>
                 <span class="live-dot-wrap">
                     <i class="live-dot"></i>
                     ONLINE
@@ -37,6 +46,11 @@
             <strong id="connectedModel">ZTE</strong>
             <span id="connectedHost" class="mono">-</span>
             <span id="connectedAttendant" class="target-tech">-</span>
+        </div>
+
+        <div class="nav-caption">
+            <span>NAVIGATION RACK</span>
+            <span class="mono">v2.5</span>
         </div>
 
         <nav class="nav-menu">
@@ -117,6 +131,23 @@
          WORKSPACE
     ====================================================== -->
     <div class="workspace">
+        <div class="console-ribbon">
+            <div class="console-ribbon-left">
+                <span class="window-dot red"></span>
+                <span class="window-dot amber"></span>
+                <span class="window-dot green"></span>
+                <span class="console-signature">ZTE-AUTOMATIC // THINKLUA TELECOM CONSOLE</span>
+            </div>
+
+            <div class="console-ribbon-right">
+                <span class="console-session">
+                    <i id="consoleSessionDot"></i>
+                    <span id="consoleSessionState">SESSION OFFLINE</span>
+                </span>
+                <span id="consoleHostText" class="mono">NO TARGET</span>
+            </div>
+        </div>
+
         <header class="topbar">
             <div class="topbar-title">
                 <div class="eyebrow">ZTE THINKLUA • OPERATIONS</div>
