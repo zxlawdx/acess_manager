@@ -1265,10 +1265,22 @@
 
                         <article class="panel">
                             <span class="section-kicker">FIREWALL</span>
-                            <h3>Nível de proteção</h3>
+                            <h3>Firewall + filtros IP/MAC</h3>
                             <label class="field"><span>NÍVEL</span><select id="managementFirewallLevel"><option>Low</option><option selected>Middle</option><option>High</option></select></label>
                             <label class="check-row"><input id="managementFirewallEnabled" type="checkbox" checked><span>Firewall habilitado</span></label>
                             <button id="managementFirewallSave" class="button primary" type="button">Aplicar firewall</button>
+                            <div class="management-separator"></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>FILTRO</span><select id="managementFirewallRuleKind"><option value="ip">IP</option><option value="mac">MAC</option></select></label>
+                                <label class="field"><span>ID PARA EXCLUIR</span><input id="managementFirewallRuleId" type="text" placeholder="Opcional"></label>
+                            </div>
+                            <label class="field"><span>REGRA JSON</span><textarea id="managementFirewallRuleJson" class="management-json-editor">{"Name":"Suporte","Enable":true,"Protocol":"TCP"}</textarea></label>
+                            <div class="management-action-row">
+                                <button id="managementFirewallRuleSave" class="button ghost" type="button">Salvar filtro</button>
+                                <button id="managementFirewallRuleDelete" class="button danger" type="button">Excluir filtro</button>
+                            </div>
+                            <label class="field"><span>POLÍTICA GLOBAL JSON</span><textarea id="managementFirewallGlobalJson" class="management-json-editor">{"mac_enabled":false,"mac_target":"Discard"}</textarea></label>
+                            <button id="managementFirewallGlobalSave" class="button ghost" type="button">Aplicar política global</button>
                         </article>
 
                         <article class="panel">
@@ -1289,6 +1301,7 @@
                         </div>
                         <label class="field"><span>CONFIGURAÇÃO WAN JSON</span><textarea id="managementWanJson" class="management-json-editor">{"vlan_enabled":true,"vlan_id":"100","priority":"0","mtu":"1492"}</textarea></label>
                         <div class="management-action-row">
+                            <button id="managementWanCreate" class="button ghost" type="button">Criar nova WAN</button>
                             <button id="managementWanUpdate" class="button primary" type="button">Aplicar WAN</button>
                             <button id="managementWanActionRun" class="button ghost" type="button">Executar ação</button>
                             <button id="managementBridgeRun" class="button danger" type="button">Assistente Bridge</button>
@@ -1305,6 +1318,12 @@
                                 <button id="managementBackupCreate" class="button primary" type="button">Criar backup</button>
                                 <button id="managementBackupRefresh" class="button ghost" type="button">Atualizar lista</button>
                             </div>
+                            <div class="management-form-grid with-top-space">
+                                <label class="field"><span>BACKUP A</span><input id="managementBackupLeft" type="number" min="1" placeholder="ID"></label>
+                                <label class="field"><span>BACKUP B</span><input id="managementBackupRight" type="number" min="1" placeholder="ID"></label>
+                            </div>
+                            <button id="managementBackupCompare" class="button ghost" type="button">Comparar backups</button>
+                            <pre id="managementBackupCompareOutput" class="management-code-output">Selecione dois IDs para comparar.</pre>
                             <div id="managementBackupList" class="management-list"></div>
                         </article>
 
