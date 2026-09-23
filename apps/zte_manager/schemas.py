@@ -206,6 +206,7 @@ class SupportDiagnosticRequest(BaseModel):
     include_traceroute: bool = False
     include_speedtest: bool = True
     allow_speedtest_fallback: bool = True
+    speedtest_provider: str = "native_auto"
     speedtest_base_url: str | None = None
     auto_optimize_wifi: bool = False
     expected_download_mbps: float | None = Field(
@@ -243,6 +244,7 @@ class DiagnosticRemediationRequest(BaseModel):
 class SpeedTestRequest(BaseModel):
     allow_fallback: bool = True
     server_url: str | None = None
+    provider: str = "native_auto"
     fallback_base_url: str | None = None
 
 
