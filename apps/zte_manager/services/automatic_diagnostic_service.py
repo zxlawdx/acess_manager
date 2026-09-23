@@ -405,7 +405,7 @@ class AutomaticDiagnosticService:
         ).strip().lower()
 
         match = re.search(
-            r"-?\\d+(?:[.,]\\d+)?",
+            r"-?\d+(?:[.,]\d+)?",
             text,
         )
 
