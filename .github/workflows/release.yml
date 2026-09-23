@@ -179,7 +179,7 @@ jobs:
 
       - name: Verify Python packages inside build environment
         shell: pwsh
-        run: .\.venv\Scripts\python.exe -c "import pydantic, pydantic_core, cryptography; print('runtime deps OK')"
+        run: .\.venv\Scripts\python.exe -c "import pydantic, pydantic_core, cryptography, PyQt6; from PyQt6.QtWebEngineWidgets import QWebEngineView; print('runtime deps + PyQt6 OK')"
 
       - name: Package Windows build
         shell: pwsh
