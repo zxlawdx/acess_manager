@@ -5,6 +5,7 @@ from vela.api import api
 from apps.zte_manager.schemas import (
     AdminPasswordRequest,
     AttendantRequest,
+    AttendanceReportRequest,
     AutomaticDiagnosticRequest,
     BandSteeringConfigRequest,
     BandSteeringRequest,
@@ -12,6 +13,7 @@ from apps.zte_manager.schemas import (
     ConnectRequest,
     DhcpBasicRequest,
     DhcpReservationRequest,
+    DiagnosticRemediationRequest,
     DmzRequest,
     DnsRequest,
     PingRequest,
@@ -19,6 +21,8 @@ from apps.zte_manager.schemas import (
     ProfileRequest,
     RadioPowerRequest,
     ResourceIdRequest,
+    SpeedTestRequest,
+    SupportDiagnosticRequest,
     TracerouteRequest,
     UpnpRequest,
     WifiRadioRequest,
@@ -825,6 +829,74 @@ def automatic_diagnostic(context=None):
 
         return zte_service.automatic_diagnostic(
             data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/diagnostics/support")
+def support_diagnostic(context=None):
+    def action():
+        data = _validated(
+            SupportDiagnosticRequest,
+            context
+        )
+
+        return zte_service.support_diagnostic(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/diagnostics/remediate")
+def remediate_diagnostic(context=None):
+    def action():
+        data = _validated(
+            DiagnosticRemediationRequest,
+            context
+        )
+
+        return zte_service.remediate_diagnostic(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/diagnostics/speedtest")
+def speedtest(context=None):
+    def action():
+        data = _validated(
+            SpeedTestRequest,
+            context
+        )
+
+        return zte_service.speedtest(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/diagnostics/attendance")
+def generate_attendance(context=None):
+    def action():
+        data = _validated(
+            AttendanceReportRequest,
+            context
+        )
+
+        return zte_service.generate_attendance(
+            data.diagnostic_id
         )
 
     return _safe_call(

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from threading import RLock
 from typing import Optional
 
@@ -8,8 +9,16 @@ from apps.zte_manager.services.automatic_diagnostic_service import (
     AutomaticDiagnosticService,
     DiagnosticThresholds,
 )
+from apps.zte_manager.services.attendance_report_service import (
+    AttendanceReportService,
+)
 from apps.zte_manager.services.capability_service import CapabilityService
 from apps.zte_manager.services.profile_service import profile_service
+from apps.zte_manager.services.speed_test_service import SpeedTestService
+from apps.zte_manager.services.support_diagnostic_service import (
+    SupportDiagnosticOptions,
+    SupportDiagnosticService,
+)
 
 
 class ZTEService:
@@ -819,36 +828,87 @@ class ZTEService:
     # DIAGNÓSTICO AUTOMÁTICO / HISTÓRICO
     # =========================================================
 
+    @staticmethod
+    def _diagnostic_thresholds(
+        config
+    ):
+        return DiagnosticThresholds(
+            optical_rx_min=config.get(
+                "optical_rx_min",
+                -27.0
+            ),
+            optical_rx_max=config.get(
+                "optical_rx_max",
+                -8.0
+            ),
+            wifi_rssi_warning=config.get(
+                "wifi_rssi_warning",
+                -70
+            ),
+            wifi_rssi_bad=config.get(
+                "wifi_rssi_bad",
+                -80
+            ),
+            expected_lan_mbps=config.get(
+                "expected_lan_mbps",
+                1000
+            ),
+            ping_warning_ms=config.get(
+                "ping_warning_ms",
+                80.0
+            ),
+        )
+
+    @staticmethod
+    def _support_options(
+        config
+    ):
+        return SupportDiagnosticOptions(
+            mode=config.get(
+                "mode",
+                "general"
+            ),
+            affected_mac=config.get(
+                "affected_mac"
+            ),
+            affected_ip=config.get(
+                "affected_ip"
+            ),
+            ping_host=config.get(
+                "ping_host",
+                "1.1.1.1"
+            ),
+            dns_host=config.get(
+                "dns_host",
+                "cloudflare.com"
+            ),
+            include_traceroute=config.get(
+                "include_traceroute",
+                False
+            ),
+            include_speedtest=config.get(
+                "include_speedtest",
+                True
+            ),
+            allow_speedtest_fallback=config.get(
+                "allow_speedtest_fallback",
+                True
+            ),
+            expected_download_mbps=config.get(
+                "expected_download_mbps"
+            ),
+            expected_upload_mbps=config.get(
+                "expected_upload_mbps"
+            ),
+        )
+
     def automatic_diagnostic(
         self,
         config
     ):
         with self._lock:
-            thresholds = DiagnosticThresholds(
-                optical_rx_min=config.get(
-                    "optical_rx_min",
-                    -27.0
-                ),
-                optical_rx_max=config.get(
-                    "optical_rx_max",
-                    -8.0
-                ),
-                wifi_rssi_warning=config.get(
-                    "wifi_rssi_warning",
-                    -70
-                ),
-                wifi_rssi_bad=config.get(
-                    "wifi_rssi_bad",
-                    -80
-                ),
-                expected_lan_mbps=config.get(
-                    "expected_lan_mbps",
-                    1000
-                ),
-                ping_warning_ms=config.get(
-                    "ping_warning_ms",
-                    80.0
-                ),
+            thresholds = self._diagnostic_thresholds(
+                config
             )
 
             result = AutomaticDiagnosticService(
@@ -881,6 +941,338 @@ class ZTEService:
             return {
                 **result,
                 "history_id": diagnostic_id,
+            }
+
+    def support_diagnostic(
+        self,
+        config
+    ):
+        """
+        Diagnóstico completo do atendimento.
+
+        O engine só lê. Se auto_optimize_wifi estiver habilitado, a camada
+        Service aplica as recomendações seguras através de _run_change e roda
+        uma validação final. Assim diagnóstico e escrita nunca se misturam.
+        """
+        with self._lock:
+            zte = self.get_client()
+            thresholds = self._diagnostic_thresholds(
+                config
+            )
+            options = self._support_options(
+                config
+            )
+            engine = SupportDiagnosticService(
+                zte,
+                self._capabilities(),
+            )
+
+            result = engine.run(
+                options,
+                thresholds,
+            )
+
+            result["mode"] = options.mode
+            result["remediations"] = []
+
+            if config.get(
+                "auto_optimize_wifi",
+                False
+            ):
+                result[
+                    "remediations"
+                ] = self._apply_safe_wifi_recommendations(
+                    result
+                )
+
+                if result[
+                    "remediations"
+                ]:
+                    validation_options = replace(
+                        options,
+                        include_speedtest=False,
+                        include_traceroute=False,
+                    )
+
+                    validation = engine.run(
+                        validation_options,
+                        thresholds,
+                    )
+
+                    validation["mode"] = (
+                        options.mode
+                    )
+
+                    # Speed Test não é repetido após a mudança de canal para
+                    # evitar tráfego duplicado. Mantemos a medição inicial no
+                    # relatório final quando ela existiu.
+                    initial_speed = (
+                        result.get(
+                            "sections",
+                            {}
+                        ).get(
+                            "speedtest"
+                        )
+                    )
+
+                    if initial_speed:
+                        validation.setdefault(
+                            "sections",
+                            {},
+                        )[
+                            "speedtest"
+                        ] = initial_speed
+
+                    result[
+                        "post_validation"
+                    ] = validation
+
+            diagnostic_id = (
+                history_repository.save_diagnostic(
+                    self._history_session_id,
+                    result,
+                )
+            )
+
+            history_repository.save_snapshot(
+                self._history_session_id,
+                "support_diagnostic",
+                (
+                    result.get(
+                        "post_validation"
+                    )
+                    or result
+                ).get(
+                    "sections",
+                    {}
+                ),
+            )
+
+            return {
+                **result,
+                "history_id": diagnostic_id,
+            }
+
+    def _apply_safe_wifi_recommendations(
+        self,
+        diagnostic
+    ):
+        zte = self.get_client()
+        applied = []
+        seen_bands = set()
+
+        for recommendation in diagnostic.get(
+            "recommendations",
+            []
+        ):
+            if not recommendation.get(
+                "safe"
+            ):
+                continue
+
+            action = recommendation.get(
+                "action"
+            ) or {}
+
+            action_type = action.get(
+                "type"
+            )
+
+            if action_type not in {
+                "wifi_channel",
+                "wifi_auto_channel",
+            }:
+                continue
+
+            band = action.get(
+                "band"
+            )
+
+            if (
+                not band
+                or band in seen_bands
+            ):
+                continue
+
+            if action_type == "wifi_channel":
+                channel = action.get(
+                    "channel"
+                )
+
+                if channel is None:
+                    continue
+
+                config = {
+                    "auto_channel": False,
+                    "channel": int(
+                        channel
+                    ),
+                }
+            else:
+                config = {
+                    "auto_channel": True,
+                }
+
+            result = self._run_change(
+                operation="wifi_auto_optimization",
+                target=band,
+                before_reader=zte.channel_status,
+                action=lambda b=band, cfg=config: zte.set_radio_config(
+                    b,
+                    cfg
+                ),
+                after_reader=zte.channel_status,
+            )
+
+            applied.append({
+                "band": band,
+                "action": action,
+                "result": result,
+            })
+
+            seen_bands.add(
+                band
+            )
+
+        return applied
+
+    def remediate_diagnostic(
+        self,
+        config
+    ):
+        """Aplica uma recomendação escolhida manualmente na UI."""
+        with self._lock:
+            zte = self.get_client()
+            action = str(
+                config.get("action")
+                or ""
+            )
+
+            band = config.get(
+                "band"
+            )
+
+            if action == "wifi_channel":
+                channel = config.get(
+                    "channel"
+                )
+
+                if (
+                    not band
+                    or channel is None
+                ):
+                    raise ValueError(
+                        "Informe banda e canal para a otimização."
+                    )
+
+                radio_config = {
+                    "auto_channel": False,
+                    "channel": int(
+                        channel
+                    ),
+                }
+
+            elif action == "wifi_auto_channel":
+                if not band:
+                    raise ValueError(
+                        "Informe a banda para ativar o canal automático."
+                    )
+
+                radio_config = {
+                    "auto_channel": True,
+                }
+
+            else:
+                raise ValueError(
+                    "Ação de remediação não suportada."
+                )
+
+            result = self._run_change(
+                operation="wifi_auto_optimization",
+                target=band,
+                before_reader=zte.channel_status,
+                action=lambda: zte.set_radio_config(
+                    band,
+                    radio_config
+                ),
+                after_reader=zte.channel_status,
+            )
+
+            return {
+                "success": True,
+                "action": action,
+                "band": band,
+                "result": result,
+            }
+
+    def speedtest(
+        self,
+        config
+    ):
+        with self._lock:
+            result = SpeedTestService(
+                self.get_client()
+            ).run(
+                allow_fallback=config.get(
+                    "allow_fallback",
+                    True
+                ),
+                server_url=config.get(
+                    "server_url"
+                ),
+            )
+
+            history_repository.save_snapshot(
+                self._history_session_id,
+                "speedtest",
+                result,
+            )
+
+            return result
+
+    def generate_attendance(
+        self,
+        diagnostic_id=None
+    ):
+        with self._lock:
+            diagnostic = (
+                history_repository.diagnostic(
+                    diagnostic_id,
+                    session_id=(
+                        self._history_session_id
+                    ),
+                )
+            )
+
+            if not diagnostic:
+                raise ValueError(
+                    "Execute um diagnóstico antes de gerar o atendimento."
+                )
+
+            session_id = (
+                diagnostic.get(
+                    "session_id"
+                )
+                or self._history_session_id
+            )
+
+            timeline = (
+                history_repository.session_timeline(
+                    session_id
+                )
+            )
+
+            report = AttendanceReportService().build(
+                diagnostic=diagnostic,
+                timeline=timeline,
+            )
+
+            return {
+                **report,
+                "diagnostic_id": diagnostic.get(
+                    "history_id"
+                ),
+                "session_id": session_id,
             }
 
     def capture_snapshot(

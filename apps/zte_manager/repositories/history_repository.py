@@ -350,6 +350,146 @@ class HistoryRepository:
             "snapshots": snapshots,
         }
 
+    def session_timeline(
+        self,
+        session_id: int | None,
+    ) -> dict[str, Any]:
+        """
+        Retorna somente os eventos da sessão ativa.
+
+        O gerador de atendimento não usa recent() porque um técnico pode ter
+        atendido várias ONTs no mesmo processo. A OS precisa conter apenas o
+        que aconteceu com o cliente atual.
+        """
+        if not session_id:
+            return {
+                "session": None,
+                "diagnostics": [],
+                "changes": [],
+                "snapshots": [],
+            }
+
+        with self._lock, self._connection() as db:
+            session_cursor = db.execute(
+                """
+                SELECT *
+                FROM attendant_session
+                WHERE id = ?
+                """,
+                (session_id,),
+            )
+
+            sessions = self._rows(
+                session_cursor
+            )
+
+            diagnostics = self._rows(
+                db.execute(
+                    """
+                    SELECT id, session_id, created_at, status, summary, payload_json
+                    FROM diagnostic_run
+                    WHERE session_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (session_id,),
+                ),
+                json_fields=("payload_json",),
+            )
+
+            changes = self._rows(
+                db.execute(
+                    """
+                    SELECT *
+                    FROM configuration_change
+                    WHERE session_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (session_id,),
+                ),
+                json_fields=("before_json", "after_json"),
+            )
+
+            snapshots = self._rows(
+                db.execute(
+                    """
+                    SELECT *
+                    FROM device_snapshot
+                    WHERE session_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (session_id,),
+                ),
+                json_fields=("payload_json",),
+            )
+
+        return {
+            "session": (
+                sessions[0]
+                if sessions
+                else None
+            ),
+            "diagnostics": diagnostics,
+            "changes": changes,
+            "snapshots": snapshots,
+        }
+
+    def diagnostic(
+        self,
+        diagnostic_id: int | None = None,
+        *,
+        session_id: int | None = None,
+    ) -> dict[str, Any] | None:
+        """Busca um diagnóstico específico ou o último da sessão."""
+        with self._lock, self._connection() as db:
+            if diagnostic_id:
+                cursor = db.execute(
+                    """
+                    SELECT id, session_id, created_at, status, summary, payload_json
+                    FROM diagnostic_run
+                    WHERE id = ?
+                    """,
+                    (diagnostic_id,),
+                )
+            elif session_id:
+                cursor = db.execute(
+                    """
+                    SELECT id, session_id, created_at, status, summary, payload_json
+                    FROM diagnostic_run
+                    WHERE session_id = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (session_id,),
+                )
+            else:
+                return None
+
+            rows = self._rows(
+                cursor,
+                json_fields=("payload_json",),
+            )
+
+        if not rows:
+            return None
+
+        row = rows[0]
+        payload = row.get(
+            "payload_json"
+        )
+
+        if isinstance(
+            payload,
+            dict,
+        ):
+            return {
+                **payload,
+                "history_id": row.get("id"),
+                "session_id": row.get("session_id"),
+                "created_at": row.get("created_at"),
+            }
+
+        return row
+
     @staticmethod
     def _rows(
         cursor,

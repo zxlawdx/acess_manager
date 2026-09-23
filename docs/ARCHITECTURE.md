@@ -47,6 +47,16 @@ ZTE Facade
     |       +--> TracerouteDiagnostic
     |
     +--> AutomaticDiagnosticService (Composite)
+    |
+    +--> SupportDiagnosticService
+            +--> DiagnosticCollector Composite
+            +--> DiagnosticRule Specifications
+            +--> ChannelAnalyzer
+            +--> SpeedTestService
+                    +--> NativeOntSpeedTestStrategy
+                    +--> HttpWorkstationSpeedTestStrategy
+
+ZTEService ---------------------> AttendanceReportService
 ```
 
 ## Padrões usados
@@ -117,11 +127,39 @@ Port forwarding e DMZ exigem confirmação explícita na API. Restore, firmware 
 
 Os thresholds de potência óptica, RSSI, velocidade Ethernet e latência vêm da requisição/configuração, não são tratados como limites universais.
 
+## Diagnóstico de atendimento
+
+A versão completa usa um pipeline deliberadamente separado entre **coleta**, **conclusão** e **remediação**:
+
+```text
+AutomaticDiagnosticService
+    -> seções base
+    -> DiagnosticCollectors opcionais
+         -> RF neighbor scan
+         -> DNS health / NsLookup
+         -> DHCP / Band Steering / firmware health
+         -> Speed Test
+    -> DiagnosticRules
+         -> cliente afetado / PHY / banda
+         -> DNS
+         -> erros LAN
+         -> recursos da ONT
+         -> interferência/canal
+         -> velocidade
+    -> recommendations
+```
+
+`SupportDiagnosticService` é somente leitura. Escritas recomendadas voltam para `ZTEService`, passam por `_run_change()` e só depois são revalidadas. Isso evita que uma regra de diagnóstico altere a ONT por conta própria.
+
+`SpeedTestService` usa Chain of Responsibility: tenta o teste nativo da ONT e, se permitido, usa o teste HTTP pelo computador do atendente como fallback. A origem fica gravada no resultado.
+
+`AttendanceReportService` usa o último diagnóstico e `HistoryRepository.session_timeline()` para montar a OS somente com eventos da sessão atual e remove campos de segredo dos diffs.
+
 ## Integração com o Vela
 
 A interface usa uma única rota visual Vela em `layout="blank"`. A navegação interna continua sendo feita pelo JavaScript da SPA.
 
-`app.js` mantém o console principal. `advanced.js` usa hooks expostos pelo bundle base para adicionar controles WLAN e Operations Suite sem duplicar o renderer principal.
+`app.js` mantém o console principal. `advanced.js` usa hooks expostos pelo bundle base para adicionar controles WLAN e Operations Suite sem duplicar o renderer principal. `support_diagnostics.js` concentra a experiência de triagem/diagnóstico/OS e registra no bundle base apenas o hook sequencial de saúde do Dashboard.
 
 A API fica em `apps/zte_manager/api.py`, registrada via `@api.get` e `@api.post`.
 

@@ -16,6 +16,7 @@ from .zte_configuration import (
     zte_network_management,
     zte_save_content,
     zte_session,
+    zte_support_diagnostics,
     zte_wan_config,
     zte_wifi,
     zte_wlan_channel_configuration,
@@ -382,6 +383,11 @@ class ZTE:
                 ),
                 "ip": cliente.get("IPAddress"),
                 "mac": cliente.get("MACAddress"),
+                "interface": (
+                    cliente.get("Interface")
+                    or cliente.get("Layer2Interface")
+                    or cliente.get("InterfaceName")
+                ),
                 "raw": cliente,
             })
 
@@ -808,6 +814,40 @@ class ZTE:
         return diagnostico.run(
             self,
             config
+        )
+
+    def wifi_neighbor_scan(
+        self,
+        band
+    ):
+        return zte_support_diagnostics.wifi_neighbor_scan(
+            self,
+            band
+        )
+
+    def nslookup(
+        self,
+        hostname,
+        **options
+    ):
+        return zte_support_diagnostics.nslookup(
+            self,
+            hostname,
+            **options
+        )
+
+    def native_speedtest_servers(self):
+        return zte_support_diagnostics.native_speedtest_servers(
+            self
+        )
+
+    def native_speedtest(
+        self,
+        **options
+    ):
+        return zte_support_diagnostics.native_speedtest(
+            self,
+            **options
         )
 
     # =========================================================

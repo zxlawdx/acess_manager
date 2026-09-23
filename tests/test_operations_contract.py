@@ -17,6 +17,14 @@ ADVANCED_JS = (
     / "js"
     / "advanced.js"
 ).read_text(encoding="utf-8")
+SUPPORT_JS = (
+    ROOT
+    / "apps"
+    / "zte_manager"
+    / "static"
+    / "js"
+    / "support_diagnostics.js"
+).read_text(encoding="utf-8")
 INDEX = (
     ROOT
     / "apps"
@@ -61,6 +69,44 @@ class OperationsContractTests(unittest.TestCase):
                 API,
                 msg=f"Rota usada pela UI não registrada: {endpoint}",
             )
+
+    def test_support_diagnostic_ui_routes_exist_in_api(self):
+        endpoints = (
+            "/diagnostics/support",
+            "/diagnostics/remediate",
+            "/diagnostics/speedtest",
+            "/diagnostics/attendance",
+        )
+
+        for endpoint in endpoints:
+            self.assertIn(
+                endpoint,
+                SUPPORT_JS,
+                msg=f"Diagnóstico automático não usa a rota: {endpoint}",
+            )
+            self.assertIn(
+                endpoint,
+                API,
+                msg=f"Rota do diagnóstico automático não registrada: {endpoint}",
+            )
+
+    def test_support_diagnostic_bundle_and_page_are_loaded(self):
+        self.assertIn(
+            "zte_manager/js/support_diagnostics.js",
+            INDEX,
+        )
+        self.assertIn(
+            "zte_manager/css/support_diagnostics.css",
+            INDEX,
+        )
+        self.assertIn(
+            'data-page="supportDiagnostic"',
+            INDEX,
+        )
+        self.assertIn(
+            'id="supportGenerateAttendance"',
+            INDEX,
+        )
 
     def test_advanced_bundle_is_loaded(self):
         self.assertIn(
