@@ -1,15 +1,15 @@
-name: tagged-windows-release
+name: build-release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag existente para buildar/publicar (ex.: v0.4.1)"
+        description: "Tag existente para buildar/publicar (ex.: v0.4.4)"
         required: true
         type: string
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -18,73 +18,211 @@ concurrency:
   group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
-jobs:
-  build-windows:
-    name: Build Windows
-    runs-on: windows-latest
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
-    env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout da tag
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ env.CHECKOUT_REF }}
           fetch-depth: 0
 
-      - name: Configurar Python 3.13
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+
+      - name: Compile Python
+        run: python -m compileall -q apps config tests manage.py launcher.py
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check JavaScript syntax
+        run: node --check apps/zte_manager/static/js/app.js
+
+  build-linux:
+    name: Linux x86_64
+    needs: test
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
+          fetch-depth: 0
+
+      - name: Install Linux runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3 \
+            python3-venv \
+            python3-gi \
+            gir1.2-gtk-3.0 \
+            gir1.2-webkit2-4.1 \
+            libwebkit2gtk-4.1-0 \
+            zip
+
+      - name: Create Python environment
+        run: |
+          python3 -m venv .venv --system-site-packages
+          .venv/bin/python -m pip install --upgrade pip setuptools wheel "packaging>=24.2"
+          .venv/bin/python -m pip install -r requirements.txt
+          .venv/bin/python -m pip install \
+            pyinstaller==6.22.2 \
+            jaraco.text \
+            jaraco.functools \
+            jaraco.context \
+            more-itertools
+
+      - name: Prepare static files
+        run: |
+          rm -rf staticfiles
+          .venv/bin/python manage.py collectstatic --no-tailwind
+
+      - name: Run tests
+        run: .venv/bin/python -m unittest discover -s tests -v
+
+      - name: Build Linux application
+        run: |
+          rm -rf build dist
+          .venv/bin/python -m PyInstaller \
+            --noconfirm \
+            --clean \
+            --onedir \
+            --name "ZTEAutomatic" \
+            --hidden-import=config \
+            --hidden-import=config.settings \
+            --hidden-import=config.wsgi \
+            --collect-submodules config \
+            --collect-submodules apps \
+            --collect-all vela \
+            --collect-all webview \
+            --collect-all pydantic \
+            --collect-all pydantic_core \
+            --collect-all cryptography \
+            --collect-all setuptools \
+            --collect-all jaraco.text \
+            --collect-all jaraco.functools \
+            --collect-all jaraco.context \
+            --collect-all more_itertools \
+            --add-data "apps:apps" \
+            --add-data "config:config" \
+            --add-data "staticfiles:staticfiles" \
+            --add-data "data:data" \
+            --add-data "docs:docs" \
+            launcher.py
+
+      - name: Verify Linux bundle
+        run: |
+          test -f dist/ZTEAutomatic/ZTEAutomatic
+          test -f dist/ZTEAutomatic/_internal/apps/zte_manager/templates/index.html
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/app.js
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/style.css
+
+      - name: Package Linux build
+        run: |
+          cd dist
+          zip -r "ZTEAutomatic-Linux-x86_64-${RELEASE_TAG}.zip" ZTEAutomatic
+          sha256sum "ZTEAutomatic-Linux-x86_64-${RELEASE_TAG}.zip" > "ZTEAutomatic-Linux-x86_64-${RELEASE_TAG}.zip.sha256"
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZTEAutomatic-Linux-x86_64-${{ env.RELEASE_TAG }}
+          path: |
+            dist/ZTEAutomatic-Linux-x86_64-${{ env.RELEASE_TAG }}.zip
+            dist/ZTEAutomatic-Linux-x86_64-${{ env.RELEASE_TAG }}.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  build-windows:
+    name: Windows x86_64
+    needs: test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
           cache: "pip"
           cache-dependency-path: |
             requirements.txt
             requirements-build.txt
 
-      - name: Build do aplicativo
+      - name: Build Windows application
         shell: cmd
         run: build.bat
 
-      - name: Testes Python
+      - name: Verify Python packages inside build environment
         shell: pwsh
-        run: .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+        run: .\.venv\Scripts\python.exe -c "import pydantic, pydantic_core, cryptography; print('runtime deps OK')"
 
-      - name: Validar JavaScript
-        shell: pwsh
-        run: node --check apps/zte_manager/static/js/app.js
-
-      - name: Empacotar build
+      - name: Package Windows build
         shell: pwsh
         run: |
-          $zip = "ZTEAutomatic-Windows-$env:RELEASE_TAG.zip"
+          $zip = "dist\ZTEAutomatic-Windows-x86_64-$env:RELEASE_TAG.zip"
           if (-not (Test-Path "dist\ZTEAutomatic\ZTEAutomatic.exe")) { throw "Executavel nao encontrado em dist\ZTEAutomatic\ZTEAutomatic.exe" }
           Compress-Archive -Path "dist\ZTEAutomatic" -DestinationPath $zip -Force
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  $zip" | Set-Content "$zip.sha256"
-          "RELEASE_ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256"
 
-      - name: Publicar artifact do workflow
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZTEAutomatic-Windows-${{ env.RELEASE_TAG }}
+          name: ZTEAutomatic-Windows-x86_64-${{ env.RELEASE_TAG }}
           path: |
-            ${{ env.RELEASE_ZIP }}
-            ${{ env.RELEASE_ZIP }}.sha256
+            dist/ZTEAutomatic-Windows-x86_64-${{ env.RELEASE_TAG }}.zip
+            dist/ZTEAutomatic-Windows-x86_64-${{ env.RELEASE_TAG }}.zip.sha256
           if-no-files-found: error
           retention-days: 30
 
-      - name: Criar ou atualizar GitHub Release
-        shell: pwsh
+  release:
+    name: GitHub Release
+    needs:
+      - build-linux
+      - build-windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List release files
+        run: find artifacts -maxdepth 2 -type f -print
+
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$env:RELEASE_TAG" *> $null
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host "Release $env:RELEASE_TAG ja existe. Atualizando assets."
-              gh release upload "$env:RELEASE_TAG" "$env:RELEASE_ZIP" "$env:RELEASE_ZIP.sha256" --clobber
-          }
-          else {
-              Write-Host "Criando release $env:RELEASE_TAG."
-              gh release create "$env:RELEASE_TAG" "$env:RELEASE_ZIP" "$env:RELEASE_ZIP.sha256" --title "ZTE Automatic $env:RELEASE_TAG" --generate-notes
-          }
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" artifacts/*.zip artifacts/*.sha256 --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" artifacts/*.zip artifacts/*.sha256 --repo "$GITHUB_REPOSITORY" --title "ZTE Automatic $RELEASE_TAG" --generate-notes
+          fi
