@@ -1527,6 +1527,77 @@ def create_wan(
     }
 
 
+def delete_wan(
+    zte,
+    instance_id: str,
+) -> dict[str, Any]:
+    instances, _ = _wan_instances(
+        zte
+    )
+
+    target = next((
+        item
+        for item in instances
+        if item.get(
+            "_InstID"
+        ) == instance_id
+    ), None)
+
+    if target is None:
+        raise ValueError(
+            "WAN não encontrada."
+        )
+
+    zte.get_view(
+        "ethWanConfig",
+        Menu3Location=0,
+    )
+
+    response = post_menu(
+        zte,
+        "wan_internet_lua.lua",
+        [
+            ("IF_ACTION", "Delete"),
+            ("_InstID", instance_id),
+        ],
+        TypeUplink=2,
+        pageType=0,
+    )
+
+    zte._validar_resposta(
+        response
+    )
+
+    items = wan_configurations(
+        zte
+    )
+
+    if any(
+        item.get(
+            "_InstID"
+        ) == instance_id
+        for item in items
+    ):
+        raise RuntimeError(
+            "A ONT respondeu ao DELETE, mas a WAN continua presente."
+        )
+
+    return {
+        "success": True,
+        "before": {
+            **target,
+            "Password": (
+                "••••••••"
+                if target.get(
+                    "Password"
+                )
+                else ""
+            ),
+        },
+        "items": items,
+    }
+
+
 def wan_action(
     zte,
     instance_id: str,
