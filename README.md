@@ -47,7 +47,7 @@ A versão web/FastAPI foi convertida para a arquitetura do Vela sem alterar a l�
 - **Automatic Support Diagnostics** com modos de queixa, dispositivo afetado, DNS Lookup, scan RF, análise de canal, Band Steering, Speed Test e revalidação.
 - Scan de APs vizinhos 2.4/5 GHz quando o firmware expõe `OBJ_WLANGETNEBAP_ID`; o score pondera sinal, ruído e sobreposição de canais.
 - Otimização automática opcional de canal Wi-Fi, sempre registrada no audit trail antes da validação final.
-- Speed Test nativo da ONT em firmwares AIS/ThinkLua compatíveis; fallback HTTP pelo computador fica explicitamente identificado para não confundir os dois caminhos.
+- Speed Test nativo da ONT em firmwares AIS/ThinkLua compatíveis; fallback HTTP pelo computador fica explicitamente identificado para não confundir os dois caminhos. O atendente pode escolher o servidor do fallback na própria aba de diagnóstico (Cloudflare ou URL personalizada compatível com `/__down` e `/__up`).
 - Botão **Gerar atendimento** produz texto de OS usando o diagnóstico e todas as alterações da sessão.
 - Histórico local SQLite com sessões, snapshots, diagnósticos e alterações antes/depois.
 - DHCP IPv4: pool, DNS, lease, leases ativos e reservas por MAC.
