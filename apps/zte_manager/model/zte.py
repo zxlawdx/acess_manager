@@ -5,6 +5,7 @@ import urllib3
 
 from .zte_configuration import (
     zte_advanced,
+    zte_backup,
     zte_clients,
     zte_connection_status,
     zte_diagnostics,
@@ -12,6 +13,7 @@ from .zte_configuration import (
     zte_device_management,
     zte_get_menu,
     zte_lan,
+    zte_network_management,
     zte_save_content,
     zte_session,
     zte_wan_config,
@@ -436,6 +438,11 @@ class ZTE:
                 "downlink_ofdma": radio.get("DownLinkOFDMA") == "1",
                 "twt": radio.get("TWTSupport") == "1",
                 "spatial_reuse": radio.get("SpatialReuse") == "1",
+                "qos_type": radio.get("QosType"),
+                "work_mode": radio.get("WorkMode"),
+                "rts_cts": _int_or_value(radio.get("RtsCts")),
+                "dtim": _int_or_value(radio.get("DTIM")),
+                "preamble_type": radio.get("PreambleType"),
             })
 
         return resultado
@@ -533,6 +540,20 @@ class ZTE:
             enabled
         )
 
+    def wifi_schedule_status(self):
+        return zte_advanced.wifi_schedule_status(
+            self
+        )
+
+    def set_wifi_schedule(
+        self,
+        config
+    ):
+        return zte_advanced.set_wifi_schedule(
+            self,
+            config
+        )
+
     def wps_status(self):
         return zte_advanced.wps_status(
             self
@@ -577,6 +598,88 @@ class ZTE:
             enabled
         )
 
+    def configure_band_steering(
+        self,
+        config
+    ):
+        return zte_advanced.configure_band_steering(
+            self,
+            config
+        )
+
+    # =========================================================
+    # DHCP / NAT
+    # =========================================================
+
+    def dhcp_status(self):
+        return zte_network_management.dhcp_status(
+            self
+        )
+
+    def set_dhcp_basic(
+        self,
+        config
+    ):
+        return zte_network_management.set_dhcp_basic(
+            self,
+            config
+        )
+
+    def save_dhcp_reservation(
+        self,
+        config
+    ):
+        return zte_network_management.save_dhcp_reservation(
+            self,
+            config
+        )
+
+    def delete_dhcp_reservation(
+        self,
+        instance_id
+    ):
+        return zte_network_management.delete_dhcp_reservation(
+            self,
+            instance_id
+        )
+
+    def port_forwarding_status(self):
+        return zte_network_management.port_forwarding_status(
+            self
+        )
+
+    def save_port_forward(
+        self,
+        config
+    ):
+        return zte_network_management.save_port_forward(
+            self,
+            config
+        )
+
+    def delete_port_forward(
+        self,
+        instance_id
+    ):
+        return zte_network_management.delete_port_forward(
+            self,
+            instance_id
+        )
+
+    def dmz_status(self):
+        return zte_network_management.dmz_status(
+            self
+        )
+
+    def set_dmz(
+        self,
+        config
+    ):
+        return zte_network_management.set_dmz(
+            self,
+            config
+        )
+
     # =========================================================
     # DNS
     # =========================================================
@@ -618,6 +721,15 @@ class ZTE:
         return zte_device_management.change_admin_password(
             self,
             new_password
+        )
+
+    def export_user_configuration(
+        self,
+        device=None
+    ):
+        return zte_backup.export_user_configuration(
+            self,
+            device=device,
         )
 
     # =========================================================

@@ -26,6 +26,27 @@ class WifiRadioRequest(BaseModel):
     )
     tx_power: str | None = None
     sideband: str | None = None
+    mu_mimo: bool | None = None
+    uplink_mu_mimo: bool | None = None
+    downlink_mu_mimo: bool | None = None
+    uplink_ofdma: bool | None = None
+    downlink_ofdma: bool | None = None
+    twt: bool | None = None
+    spatial_reuse: bool | None = None
+    ssid_isolation: bool | None = None
+    qos_type: str | None = None
+    work_mode: str | None = None
+    rts_cts: int | None = Field(
+        default=None,
+        ge=0,
+        le=2347
+    )
+    dtim: int | None = Field(
+        default=None,
+        ge=1,
+        le=5
+    )
+    preamble_type: str | None = None
 
 
 class WifiSSIDRequest(BaseModel):
@@ -58,6 +79,36 @@ class RadioPowerRequest(BaseModel):
 
 class BandSteeringRequest(BaseModel):
     enabled: bool
+
+
+class BandSteeringConfigRequest(BaseModel):
+    rssi_limit_24g: int | None = Field(default=None, ge=-120, le=0)
+    rssi_limit_5g: int | None = Field(default=None, ge=-120, le=0)
+    vht_check_24g: int | None = Field(default=None, ge=0, le=1)
+    vht_check_5g: int | None = Field(default=None, ge=0, le=1)
+    active_sta_check_24g: int | None = Field(default=None, ge=0)
+    active_sta_check_5g: int | None = Field(default=None, ge=0)
+    idle_rate_limit_24g: int | None = Field(default=None, ge=0)
+    idle_rate_limit_5g: int | None = Field(default=None, ge=0)
+    bandwidth_util_24g: int | None = Field(default=None, ge=0, le=100)
+    bandwidth_util_5g: int | None = Field(default=None, ge=0, le=100)
+    accept_bandwidth_util_24g: int | None = Field(default=None, ge=0, le=100)
+    accept_bandwidth_util_5g: int | None = Field(default=None, ge=0, le=100)
+    accept_rssi_24g: int | None = Field(default=None, ge=-120, le=0)
+    accept_rssi_5g: int | None = Field(default=None, ge=-120, le=0)
+    accept_vht_check_24g: int | None = Field(default=None, ge=0, le=1)
+    accept_vht_check_5g: int | None = Field(default=None, ge=0, le=1)
+    bounce_detect_time: int | None = Field(default=None, ge=0)
+    bounce_count: int | None = Field(default=None, ge=0)
+    bounce_dwell_time: int | None = Field(default=None, ge=0)
+
+
+class WifiScheduleRequest(BaseModel):
+    enabled: bool
+    start_hour: int = Field(default=2, ge=0, le=23)
+    start_minute: int = Field(default=0, ge=0, le=59)
+    end_hour: int = Field(default=6, ge=0, le=23)
+    end_minute: int = Field(default=0, ge=0, le=59)
 
 
 class WpsRequest(BaseModel):
@@ -127,3 +178,69 @@ class ProfileRequest(BaseModel):
 
 class AttendantRequest(BaseModel):
     attendant: str
+
+
+class CapabilityProbeRequest(BaseModel):
+    features: list[str] = Field(
+        default_factory=list
+    )
+
+
+class AutomaticDiagnosticRequest(BaseModel):
+    ping_host: str = "8.8.8.8"
+    include_traceroute: bool = False
+    optical_rx_min: float = -27.0
+    optical_rx_max: float = -8.0
+    wifi_rssi_warning: int = -70
+    wifi_rssi_bad: int = -80
+    expected_lan_mbps: int = Field(default=1000, ge=10)
+    ping_warning_ms: float = Field(default=80.0, ge=1)
+
+
+class DhcpBasicRequest(BaseModel):
+    enabled: bool | None = None
+    min_address: str | None = None
+    max_address: str | None = None
+    dns_source: str | None = None
+    dns1: str | None = None
+    dns2: str | None = None
+    lease_time: int | None = Field(default=None, ge=60)
+    ipv4_dns_origin: str | None = None
+
+
+class DhcpReservationRequest(BaseModel):
+    id: str | None = None
+    name: str = Field(min_length=1, max_length=64)
+    ip: str = Field(min_length=7, max_length=45)
+    mac: str = Field(min_length=11, max_length=32)
+
+
+class ResourceIdRequest(BaseModel):
+    id: str = Field(min_length=1)
+    confirm: bool = False
+
+
+class PortForwardRequest(BaseModel):
+    id: str | None = None
+    name: str = Field(default="", max_length=64)
+    enabled: bool = True
+    protocol: str = "TCP"
+    interface: str | None = None
+    all_interfaces: bool = True
+    external_port: int = Field(ge=1, le=65535)
+    external_port_end: int | None = Field(default=None, ge=1, le=65535)
+    internal_client: str
+    internal_port: int = Field(ge=1, le=65535)
+    internal_port_end: int | None = Field(default=None, ge=1, le=65535)
+    remote_host: str | None = None
+    remote_host_end: str | None = None
+    description: str | None = Field(default=None, max_length=128)
+    confirm: bool = False
+
+
+class DmzRequest(BaseModel):
+    id: str | None = None
+    enabled: bool = False
+    internal_client: str = ""
+    wan: str | None = None
+    confirm: bool = False

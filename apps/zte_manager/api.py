@@ -5,16 +5,25 @@ from vela.api import api
 from apps.zte_manager.schemas import (
     AdminPasswordRequest,
     AttendantRequest,
+    AutomaticDiagnosticRequest,
+    BandSteeringConfigRequest,
     BandSteeringRequest,
+    CapabilityProbeRequest,
     ConnectRequest,
+    DhcpBasicRequest,
+    DhcpReservationRequest,
+    DmzRequest,
     DnsRequest,
     PingRequest,
+    PortForwardRequest,
     ProfileRequest,
     RadioPowerRequest,
+    ResourceIdRequest,
     TracerouteRequest,
     UpnpRequest,
     WifiRadioRequest,
     WifiSSIDRequest,
+    WifiScheduleRequest,
     WpsRequest,
 )
 from apps.zte_manager.services.zte_service import zte_service
@@ -424,6 +433,30 @@ def set_wifi_power(context=None):
     )
 
 
+@api.get("/wifi/schedule")
+def wifi_schedule_status(context=None):
+    return _safe_call(
+        zte_service.wifi_schedule_status
+    )
+
+
+@api.post("/wifi/schedule/update")
+def set_wifi_schedule(context=None):
+    def action():
+        data = _validated(
+            WifiScheduleRequest,
+            context
+        )
+
+        return zte_service.set_wifi_schedule(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
 @api.get("/wifi/wps")
 def wifi_wps_status(context=None):
     return _safe_call(
@@ -466,6 +499,25 @@ def set_band_steering(context=None):
 
         return zte_service.set_band_steering(
             data.enabled
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/wifi/band-steering/configure")
+def configure_band_steering(context=None):
+    def action():
+        data = _validated(
+            BandSteeringConfigRequest,
+            context
+        )
+
+        return zte_service.configure_band_steering(
+            data.model_dump(
+                exclude_none=True
+            )
         )
 
     return _safe_call(
@@ -566,6 +618,252 @@ def traceroute(context=None):
 
     return _safe_call(
         action
+    )
+
+
+# =========================================================
+# CAPABILITIES / MULTI-FIRMWARE
+# =========================================================
+
+
+@api.post("/system/backup")
+def export_configuration_backup(context=None):
+    return _safe_call(
+        zte_service.export_user_configuration
+    )
+
+
+@api.get("/device/capabilities")
+def capability_catalog(context=None):
+    return _safe_call(
+        zte_service.capability_catalog
+    )
+
+
+@api.post("/device/capabilities/probe")
+def capability_probe(context=None):
+    def action():
+        data = _validated(
+            CapabilityProbeRequest,
+            context
+        )
+
+        return zte_service.probe_capabilities(
+            data.features or None
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/features/read")
+def read_feature(context=None):
+    query = _query(
+        context
+    )
+
+    feature = str(
+        query.get("feature") or ""
+    ).strip()
+
+    if not feature:
+        return {
+            "error": "Informe a capability em ?feature=.",
+            "type": "validation",
+        }
+
+    return _safe_call(
+        zte_service.read_capability,
+        feature
+    )
+
+
+# =========================================================
+# DHCP / LAN / NAT
+# =========================================================
+
+
+@api.get("/network/dhcp")
+def dhcp_status(context=None):
+    return _safe_call(
+        zte_service.dhcp_status
+    )
+
+
+@api.post("/network/dhcp/update")
+def update_dhcp(context=None):
+    def action():
+        data = _validated(
+            DhcpBasicRequest,
+            context
+        )
+
+        return zte_service.set_dhcp_basic(
+            data.model_dump(
+                exclude_none=True
+            )
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/network/dhcp/reservation/save")
+def save_dhcp_reservation(context=None):
+    def action():
+        data = _validated(
+            DhcpReservationRequest,
+            context
+        )
+
+        return zte_service.save_dhcp_reservation(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/network/dhcp/reservation/delete")
+def delete_dhcp_reservation(context=None):
+    def action():
+        data = _validated(
+            ResourceIdRequest,
+            context
+        )
+
+        return zte_service.delete_dhcp_reservation(
+            data.id
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/network/port-forwarding")
+def port_forwarding_status(context=None):
+    return _safe_call(
+        zte_service.port_forwarding_status
+    )
+
+
+@api.post("/network/port-forwarding/save")
+def save_port_forward(context=None):
+    def action():
+        data = _validated(
+            PortForwardRequest,
+            context
+        )
+
+        return zte_service.save_port_forward(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/network/port-forwarding/delete")
+def delete_port_forward(context=None):
+    def action():
+        data = _validated(
+            ResourceIdRequest,
+            context
+        )
+
+        return zte_service.delete_port_forward(
+            data.id,
+            confirm=data.confirm,
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.get("/network/dmz")
+def dmz_status(context=None):
+    return _safe_call(
+        zte_service.dmz_status
+    )
+
+
+@api.post("/network/dmz/update")
+def update_dmz(context=None):
+    def action():
+        data = _validated(
+            DmzRequest,
+            context
+        )
+
+        return zte_service.set_dmz(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+# =========================================================
+# DIAGNÓSTICO AUTOMÁTICO / HISTÓRICO
+# =========================================================
+
+
+@api.post("/diagnostics/automatic")
+def automatic_diagnostic(context=None):
+    def action():
+        data = _validated(
+            AutomaticDiagnosticRequest,
+            context
+        )
+
+        return zte_service.automatic_diagnostic(
+            data.model_dump()
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/history/snapshot")
+def capture_snapshot(context=None):
+    reason = str(
+        _json(context).get("reason")
+        or "manual"
+    )[:120]
+
+    return _safe_call(
+        zte_service.capture_snapshot,
+        reason
+    )
+
+
+@api.get("/history")
+def history(context=None):
+    query = _query(
+        context
+    )
+
+    try:
+        limit = int(
+            query.get("limit") or 50
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        limit = 50
+
+    return _safe_call(
+        zte_service.history,
+        limit
     )
 
 

@@ -203,6 +203,170 @@ def set_radio_power(
 
 
 # =========================================================
+# AGENDAMENTO DO WI-FI
+# =========================================================
+
+
+def wifi_schedule_status(zte):
+    """Reaproveita a mesma página de power/timer sem duplicar parser."""
+    status = radio_power_status(
+        zte
+    )
+
+    return {
+        "available": True,
+        "enabled": status.get("timer_enabled", False),
+        "schedule": status.get("schedule", {}),
+        "radios": status.get("radios", []),
+    }
+
+
+def set_wifi_schedule(
+    zte,
+    config
+):
+    """
+    Configura o timer global exposto pelo ThinkLua.
+
+    Neste firmware o timer não é por banda: quando TimerEnable=1 o período
+    vale para o Wi-Fi como um todo. Ao desativar, reenviamos o estado atual dos
+    rádios para reproduzir o formulário oficial e não desligá-los por acidente.
+    """
+    current = radio_power_status(
+        zte
+    )
+
+    enabled = bool(
+        config.get("enabled", False)
+    )
+    schedule = current.get(
+        "schedule",
+        {}
+    )
+
+    values = {
+        "start_hour": int(
+            config.get(
+                "start_hour",
+                schedule.get("start_hour") or 0
+            )
+        ),
+        "start_minute": int(
+            config.get(
+                "start_minute",
+                schedule.get("start_minute") or 0
+            )
+        ),
+        "end_hour": int(
+            config.get(
+                "end_hour",
+                schedule.get("end_hour") or 0
+            )
+        ),
+        "end_minute": int(
+            config.get(
+                "end_minute",
+                schedule.get("end_minute") or 0
+            )
+        ),
+    }
+
+    if not 0 <= values["start_hour"] <= 23:
+        raise ValueError("Hora inicial deve ficar entre 0 e 23.")
+
+    if not 0 <= values["end_hour"] <= 23:
+        raise ValueError("Hora final deve ficar entre 0 e 23.")
+
+    if not 0 <= values["start_minute"] <= 59:
+        raise ValueError("Minuto inicial deve ficar entre 0 e 59.")
+
+    if not 0 <= values["end_minute"] <= 59:
+        raise ValueError("Minuto final deve ficar entre 0 e 59.")
+
+    fields = [
+        ("IF_ACTION", "Apply"),
+        (
+            "_InstID",
+            current.get("timer_id") or "IGD"
+        ),
+        (
+            "TimerEnable",
+            "1" if enabled else "0"
+        ),
+    ]
+
+    # Quando TimerEnable=0 o backend entra em setWlanRadio(). Esses campos
+    # garantem que a transição do modo agendado para manual preserve os rádios.
+    for index, radio in enumerate(
+        current.get("radios", [])
+    ):
+        fields.extend([
+            (
+                f"_InstID_{index}",
+                radio.get("id") or ""
+            ),
+            (
+                f"Band_{index}",
+                radio.get("band") or ""
+            ),
+            (
+                f"RadioStatus_{index}",
+                "1" if radio.get("enabled") else "0"
+            ),
+        ])
+
+    fields.extend([
+        (
+            "TimeStartHour",
+            str(values["start_hour"])
+        ),
+        (
+            "TimeStartMin",
+            str(values["start_minute"])
+        ),
+        (
+            "TimeEndHour",
+            str(values["end_hour"])
+        ),
+        (
+            "TimeEndMin",
+            str(values["end_minute"])
+        ),
+        ("Btn_cancel_WlanBasicAdConf", ""),
+        ("Btn_apply_WlanBasicAdConf", ""),
+    ])
+
+    zte.get_view(
+        "wlanBasic",
+        Menu3Location=0
+    )
+
+    response = post_menu(
+        zte,
+        "wlan_wlanbasiconoff_lua.lua",
+        fields
+    )
+
+    zte._validar_resposta(
+        response
+    )
+
+    verified = wifi_schedule_status(
+        zte
+    )
+
+    if verified.get("enabled") != enabled:
+        raise RuntimeError(
+            "A ONT respondeu SUCC, mas o estado do agendamento não foi confirmado."
+        )
+
+    return {
+        "success": True,
+        **verified,
+    }
+
+
+# =========================================================
 # WPS
 # =========================================================
 
@@ -557,15 +721,54 @@ def _int_or_value(
 # =========================================================
 
 
-def band_steering_status(zte):
-    """
-    Lê o recurso de Band Steering exposto pelo firmware ThinkLua.
+BAND_STEERING_FIELDS = (
+    "Enable",
+    "BsRssiLmt24G",
+    "BsRssiLmt5G",
+    "BsVhtChk24G",
+    "BsVhtChk5G",
+    "BsActiveStaChk24G",
+    "BsActiveStaChk5G",
+    "BsStaIdleRateLmt24G",
+    "BsStaIdleRateLmt5G",
+    "BsBwUtil24G",
+    "BsBwUtil5G",
+    "BsAcceptBwUtil24G",
+    "BsAcceptBwUtil5G",
+    "BsAcceptRssi24G",
+    "BsAcceptRssi5G",
+    "BsAcceptVhtCheck24G",
+    "BsAcceptVhtCheck5G",
+    "BsBounceDetectTimeLmt",
+    "BsBounceCountsLmt",
+    "BsBounceDwellTimeLmt",
+)
 
-    Em algumas variantes essa página só existe para perfis com direito 3.
-    Quando o menu não estiver disponível a camada de API devolve o erro do
-    próprio equipamento em vez de fingir suporte.
-    """
 
+BAND_STEERING_API_MAP = {
+    "rssi_limit_24g": "BsRssiLmt24G",
+    "rssi_limit_5g": "BsRssiLmt5G",
+    "vht_check_24g": "BsVhtChk24G",
+    "vht_check_5g": "BsVhtChk5G",
+    "active_sta_check_24g": "BsActiveStaChk24G",
+    "active_sta_check_5g": "BsActiveStaChk5G",
+    "idle_rate_limit_24g": "BsStaIdleRateLmt24G",
+    "idle_rate_limit_5g": "BsStaIdleRateLmt5G",
+    "bandwidth_util_24g": "BsBwUtil24G",
+    "bandwidth_util_5g": "BsBwUtil5G",
+    "accept_bandwidth_util_24g": "BsAcceptBwUtil24G",
+    "accept_bandwidth_util_5g": "BsAcceptBwUtil5G",
+    "accept_rssi_24g": "BsAcceptRssi24G",
+    "accept_rssi_5g": "BsAcceptRssi5G",
+    "accept_vht_check_24g": "BsAcceptVhtCheck24G",
+    "accept_vht_check_5g": "BsAcceptVhtCheck5G",
+    "bounce_detect_time": "BsBounceDetectTimeLmt",
+    "bounce_count": "BsBounceCountsLmt",
+    "bounce_dwell_time": "BsBounceDwellTimeLmt",
+}
+
+
+def _band_steering_read(zte):
     zte.get_view(
         "smBandSteer",
         Menu3Location=0
@@ -579,18 +782,25 @@ def band_steering_status(zte):
         xml
     )
 
-    dados = zte._parse_instances(
+    data = zte._parse_instances(
         xml
     )
 
-    enabled = _first(
-        dados,
-        "OBJ_BANDSTEER_ENABLE_ID"
+    return (
+        _first(
+            data,
+            "OBJ_BANDSTEER_ENABLE_ID"
+        ),
+        _first(
+            data,
+            "OBJ_MGTS_BANDSTEER_ID"
+        ),
     )
 
-    params = _first(
-        dados,
-        "OBJ_MGTS_BANDSTEER_ID"
+
+def band_steering_status(zte):
+    enabled, params = _band_steering_read(
+        zte
     )
 
     if not enabled and not params:
@@ -598,36 +808,24 @@ def band_steering_status(zte):
             "available": False,
         }
 
+    parameters = {}
+
+    for api_name, firmware_name in (
+        BAND_STEERING_API_MAP.items()
+    ):
+        parameters[api_name] = _int_or_value(
+            params.get(firmware_name)
+        )
+
     return {
         "available": True,
         "id": enabled.get("_InstID") or "IGD",
+        "parameter_id": (
+            params.get("_InstID")
+            or "IGD.WiFi.RD1.BS"
+        ),
         "enabled": enabled.get("EnBandSteer") == "1",
-        "parameters": {
-            "rssi_limit_24g": _int_or_value(
-                params.get("BsRssiLmt24G")
-            ),
-            "rssi_limit_5g": _int_or_value(
-                params.get("BsRssiLmt5G")
-            ),
-            "idle_rate_limit_24g": _int_or_value(
-                params.get("BsStaIdleRateLmt24G")
-            ),
-            "idle_rate_limit_5g": _int_or_value(
-                params.get("BsStaIdleRateLmt5G")
-            ),
-            "bandwidth_util_24g": _int_or_value(
-                params.get("BsBwUtil24G")
-            ),
-            "bandwidth_util_5g": _int_or_value(
-                params.get("BsBwUtil5G")
-            ),
-            "accept_rssi_24g": _int_or_value(
-                params.get("BsAcceptRssi24G")
-            ),
-            "accept_rssi_5g": _int_or_value(
-                params.get("BsAcceptRssi5G")
-            ),
-        },
+        "parameters": parameters,
     }
 
 
@@ -635,20 +833,12 @@ def set_band_steering(
     zte,
     enabled
 ):
-    """
-    Liga/desliga somente o seletor global EnBandSteer.
-
-    O JavaScript original usa IF_ACTION=SET_ENABLES para essa ação; os
-    parâmetros avançados de RSSI/airtime permanecem intocados.
-    """
-
-    atual = band_steering_status(
+    """Liga/desliga o seletor global sem tocar nos thresholds."""
+    current = band_steering_status(
         zte
     )
 
-    if not atual.get(
-        "available"
-    ):
+    if not current.get("available"):
         raise RuntimeError(
             "Band Steering não está disponível para esta conta/firmware."
         )
@@ -658,7 +848,7 @@ def set_band_steering(
         Menu3Location=0
     )
 
-    resposta = post_menu(
+    response = post_menu(
         zte,
         "mgts_bandsteer_lua.lua",
         [
@@ -669,25 +859,133 @@ def set_band_steering(
             ),
             (
                 "_InstID",
-                atual.get("id") or "IGD"
+                current.get("id") or "IGD"
             ),
         ]
     )
 
     zte._validar_resposta(
-        resposta
+        response
     )
 
-    verificado = band_steering_status(
+    verified = band_steering_status(
         zte
     )
 
-    if verificado.get("enabled") != bool(enabled):
+    if verified.get("enabled") != bool(enabled):
         raise RuntimeError(
             "A ONT respondeu SUCC, mas o Band Steering não foi confirmado."
         )
 
     return {
         "success": True,
-        "enabled": bool(enabled),
+        **verified,
+    }
+
+
+def configure_band_steering(
+    zte,
+    config
+):
+    """
+    Ajusta os thresholds preservando todos os parâmetros que a UI não enviou.
+
+    IF_ACTION=Apply afeta apenas OBJ_MGTS_BANDSTEER_ID; o enable global
+    continua sendo tratado por set_band_steering().
+    """
+    current = band_steering_status(
+        zte
+    )
+
+    if not current.get("available"):
+        raise RuntimeError(
+            "Band Steering não está disponível para esta conta/firmware."
+        )
+
+    _, raw = _band_steering_read(
+        zte
+    )
+
+    merged = dict(
+        raw
+    )
+
+    for api_name, firmware_name in (
+        BAND_STEERING_API_MAP.items()
+    ):
+        if api_name not in config:
+            continue
+
+        value = config[api_name]
+
+        if value is None:
+            continue
+
+        value = int(
+            value
+        )
+
+        if (
+            "Rssi" in firmware_name
+            and not -120 <= value <= 0
+        ):
+            raise ValueError(
+                f"{api_name} deve ficar entre -120 e 0 dBm."
+            )
+
+        if (
+            "BwUtil" in firmware_name
+            and not 0 <= value <= 100
+        ):
+            raise ValueError(
+                f"{api_name} deve ficar entre 0 e 100."
+            )
+
+        if value < -120:
+            raise ValueError(
+                f"{api_name} possui valor inválido."
+            )
+
+        merged[firmware_name] = str(
+            value
+        )
+
+    fields = [
+        ("IF_ACTION", "Apply"),
+        (
+            "_InstID",
+            current.get("parameter_id")
+            or "IGD.WiFi.RD1.BS"
+        ),
+    ]
+
+    for name in BAND_STEERING_FIELDS:
+        if name in merged:
+            fields.append((
+                name,
+                merged.get(name) or ""
+            ))
+
+    zte.get_view(
+        "smBandSteer",
+        Menu3Location=0
+    )
+
+    response = post_menu(
+        zte,
+        "mgts_bandsteer_lua.lua",
+        fields
+    )
+
+    zte._validar_resposta(
+        response
+    )
+
+    verified = band_steering_status(
+        zte
+    )
+
+    return {
+        "success": True,
+        **verified,
     }

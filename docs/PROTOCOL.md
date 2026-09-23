@@ -1,6 +1,6 @@
 # Mapa do protocolo ZTE usado pelo projeto
 
-Este arquivo separa o que foi observado diretamente no F6600P usado durante o desenvolvimento do que foi inferido a partir do framework ThinkLua público de modelos/firmwares aparentados.
+Este arquivo separa o que foi observado diretamente no F6600P usado durante o desenvolvimento do que foi inferido/confirmado em fontes ThinkLua públicas de equipamentos aparentados. O F670L usa o mesmo fluxo de login ThinkLua e a mesma família de páginas WAN em referências públicas; menus adicionais continuam sendo confirmados em runtime pelo sistema de capabilities.
 
 ## Fluxo de sessão
 
@@ -129,6 +129,160 @@ Nos fontes ThinkLua, o formulário de domínio e o formulário dos servidores us
 
 `dns_hostname_lua.lua` junta hosts manuais e entradas aprendidas via DHCP em `ALLDNSHOST`. O projeto filtra DHCP e trata os hosts do perfil como **upsert**: cria ou atualiza os nomes definidos pelo atendente e não apaga entradas extras existentes na ONT. Para uma nova entrada, a UI original usa `_InstID=-1`.
 
+## F670L e seleção de adapter
+
+Referências públicas do F670L confirmam o mesmo fluxo:
+
+```text
+login_entry -> login_token -> SHA256(password + token) -> login_entry
+ethWanStatus -> wan_internetstatus_lua.lua
+ethWanConfig -> wan_internet_lua.lua
+```
+
+Por isso o projeto mantém um protocolo ThinkLua comum e seleciona `F670LAdapter` apenas para catálogo/capabilities. O acesso real a cada menu ainda é testado após login.
+
+## Wi-Fi avançado
+
+`wlan_wlanbasicadconf_lua.lua` já retorna os campos avançados no mesmo objeto de rádio. O builder agora permite override opcional de:
+
+- `MUMIMOEnable`;
+- `UPLinkMUMIMO` / `DownLinkMUMIMO`;
+- `UPLinkOFDMA` / `DownLinkOFDMA`;
+- `TWTSupport`;
+- `SpatialReuse`;
+- `SSIDIsolationEnable`;
+- `RtsCts`;
+- `DTIM`;
+- `QosType`;
+- `WorkMode`;
+- `PreambleType`.
+
+Campos que o formulário/API não envia são preservados do estado atual.
+
+## Agendamento do Wi-Fi
+
+```text
+menuView: wlanBasic
+menuData: wlan_wlanbasiconoff_lua.lua
+```
+
+Objetos:
+
+- `OBJ_WLANTIMECFG_ID.TimerEnable`;
+- `OBJ_WLANTIME_ID.TimeStartHour/TimeStartMin/TimeEndHour/TimeEndMin`;
+- `OBJ_WLANSETTING_ID.RadioStatus/Band`.
+
+O timer exposto por esse firmware é global, não por banda. Ao desativá-lo, a aplicação reenviará o estado atual de cada rádio para evitar ligá-los/desligá-los acidentalmente.
+
+## Band Steering avançado
+
+```text
+menuView: smBandSteer
+menuData: mgts_bandsteer_lua.lua
+```
+
+O enable global usa `OBJ_BANDSTEER_ENABLE_ID.EnBandSteer` com `IF_ACTION=SET_ENABLES`.
+
+Os thresholds usam `OBJ_MGTS_BANDSTEER_ID` com `IF_ACTION=Apply`, incluindo RSSI, utilização de banda, idle-rate, verificações VHT e parâmetros de bounce.
+
+## DHCP IPv4
+
+Todos ficam sob `menuView: lanMgrIpv4`.
+
+```text
+Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua
+    OBJ_Br0AndDhcpsHosCfg_ID
+    OBJ_LANDNS_ID
+
+Localnet_LanMgrIpv4_DHCPHostInfo_lua.lua
+    OBJ_DHCPHOSTINFO_ID
+
+Localnet_LanMgrIpv4_DHCPStaticRule_lua.lua
+    OBJ_DHCPBIND_ID
+```
+
+A aplicação automatiza pool, DNS, lease e reservas. O IP/subnet LAN é preservado de propósito para não derrubar o caminho de gerenciamento durante uma sessão.
+
+## NAT
+
+Port forwarding:
+
+```text
+menuView: portForwarding
+menuData: firewall_portforwarding_lua.lua
+object: OBJ_FWPM_ID
+```
+
+DMZ:
+
+```text
+menuView: dmz
+menuData: firewall_dmz_lua.lua
+object: OBJ_FWDMZ_ID
+```
+
+As duas mutações exigem confirmação explícita.
+
+UPnP PortMap é leitura:
+
+```text
+menuView: upnp
+menuData: upnp_portmap_lua.lua
+object: OBJ_UPNPPORTMAP_ID
+```
+
+## Inspector ThinkLua somente leitura
+
+A Operations Suite pode fazer probe/leitura dos seguintes menus quando o firmware/login permitir:
+
+```text
+firewall            -> firewall_config_lua.lua
+filterCriteria      -> firewall_filterglobal_lua.lua
+filterCriteria      -> firewall_ipfilter_lua.lua
+filterCriteria      -> firewall_macfilterv3_lua.lua
+parentCtrl          -> firewall_parentctrl_lua.lua
+localServiceCtrl    -> firewall_ipv4service_lua.lua
+localServiceCtrl    -> firewall_ipv6service_lua
+ddns                -> ddns_lua.lua
+sntp                -> sntp_lua.lua
+remoteMgr           -> tr069_remotemgr_lua.lua
+routeIpv4           -> route_routetableipv4_lua.lua
+qosQueue            -> qos_queue_lua.lua
+qosSpeed            -> qos_speed_lua.lua
+qosShaper           -> qos_shaper_lua.lua
+logMgr              -> log_syslogmgr_lua.lua
+```
+
+O gateway mascara campos com nomes relacionados a password/passphrase/secret.
+
+## Firmware, restore e factory reset
+
+Esses recursos são detectáveis, mas não possuem ação destrutiva exposta:
+
+```text
+firmwareUpgr
+    upgrade_firmware_query_lua.lua
+    do_firmware_upgrade.lua      # NÃO exposto
+
+usrCfgMgr
+    db_usrcfg_upgrade_query_lua.lua
+    do_restore_usrcfg.lua        # NÃO exposto
+
+rebootAndReset
+    db_resetmgr_lua.lua
+    IF_ACTION=Reset              # NÃO exposto
+```
+
+O backup é a exceção: a exportação é segura e usa o fluxo oficial:
+
+```text
+menuView: usrCfgMgr
+updownload_prevent_ctl.lua
+do_download_usercfg.lua
+```
+
+O arquivo retornado é salvo localmente; restore automático não é feito.
+
 ## Ping
 
 ```text
@@ -152,6 +306,7 @@ Campos usados: `Host`, `Interface`, `MaxHopCount`, `Timeout`, `Protocol`, `IPVer
 ## Referências públicas consultadas
 
 - https://github.com/juacas/zte_tracker
+- https://github.com/langit7/zte-f670L
 - https://github.com/juacas/zte_tracker/issues/54
 - https://github.com/juacas/zte_tracker/issues/57
 - https://github.com/cmocan/HA_CustomComponents/blob/master/isp_routers/routers/zte_f660.py
@@ -168,4 +323,4 @@ Campos usados: `Host`, `Interface`, `MaxHopCount`, `Timeout`, `Protocol`, `IPVer
 - https://github.com/Blinko1987/F6107A-telnet-root-on-AIS-fiber/blob/main/home/httpd/webmodules/modules/networkdiag_ping_lua.lua
 - https://github.com/Blinko1987/F6107A-telnet-root-on-AIS-fiber/blob/main/home/httpd/webmodules/modules/networkdiag_traceroute_lua.lua
 
-Os fontes Blinko1987 são de outro equipamento/firmware e foram usados como referência do framework ThinkLua. Para escrita, o F6600P P6N34 continua sendo a autoridade final.
+Os fontes Blinko1987 são de outro equipamento/firmware e foram usados como referência do framework ThinkLua. Escritas continuam usando read-before-write, validação, releitura quando possível e capability probe; disponibilidade de cada função no F670L depende do firmware e do nível da conta usada no login.
