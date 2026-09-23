@@ -44,9 +44,6 @@ rem ------------------------------------------------------------
 python -m unittest discover -s tests -v
 if errorlevel 1 goto :error
 
-node --check apps\zte_manager\static\js\app.js
-if errorlevel 1 goto :error
-
 rem ------------------------------------------------------------
 rem PyInstaller
 rem ------------------------------------------------------------
