@@ -54,6 +54,7 @@ from apps.zte_manager.schemas import (
     WifiScheduleRequest,
     WANActionRequest,
     WANCreateRequest,
+    WANDeleteRequest,
     WANManagementRequest,
     WpsRequest,
     ZeroTouchRequest,
@@ -1703,6 +1704,24 @@ def management_wan_update(context=None):
         )
 
         return cpe_management_service.wan_update(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/wan/delete")
+def management_wan_delete(context=None):
+    def action():
+        data = _validated(
+            WANDeleteRequest,
+            context
+        )
+
+        return cpe_management_service.wan_delete(
             zte_service,
             data.model_dump(),
         )
