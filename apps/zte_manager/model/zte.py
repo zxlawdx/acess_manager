@@ -13,6 +13,7 @@ from .zte_configuration import (
     zte_device_management,
     zte_get_menu,
     zte_lan,
+    zte_management,
     zte_network_management,
     zte_save_content,
     zte_session,
@@ -684,6 +685,140 @@ class ZTE:
         return zte_network_management.set_dmz(
             self,
             config
+        )
+
+    # =========================================================
+    # CPE MANAGEMENT
+    # =========================================================
+
+    def qos_status(self):
+        return zte_management.qos_status(
+            self
+        )
+
+    def save_qos(
+        self,
+        kind,
+        config
+    ):
+        return zte_management.save_qos(
+            self,
+            kind,
+            config
+        )
+
+    def delete_qos(
+        self,
+        kind,
+        instance_id
+    ):
+        return zte_management.delete_qos(
+            self,
+            kind,
+            instance_id
+        )
+
+    def firewall_management_status(self):
+        return zte_management.firewall_status(
+            self
+        )
+
+    def set_firewall_management(
+        self,
+        config
+    ):
+        return zte_management.set_firewall(
+            self,
+            config
+        )
+
+    def sntp_management_status(self):
+        return zte_management.sntp_status(
+            self
+        )
+
+    def set_sntp_management(
+        self,
+        config
+    ):
+        return zte_management.set_sntp(
+            self,
+            config
+        )
+
+    def tr069_management_status(self):
+        return zte_management.tr069_status(
+            self
+        )
+
+    def set_tr069_management(
+        self,
+        config
+    ):
+        return zte_management.set_tr069(
+            self,
+            config
+        )
+
+    def wan_configurations(self):
+        return zte_management.wan_configurations(
+            self
+        )
+
+    def update_wan(
+        self,
+        instance_id,
+        config
+    ):
+        return zte_management.update_wan(
+            self,
+            instance_id,
+            config
+        )
+
+    def wan_action(
+        self,
+        instance_id,
+        action
+    ):
+        return zte_management.wan_action(
+            self,
+            instance_id,
+            action
+        )
+
+    def bridge_assistant(
+        self,
+        instance_id,
+        config
+    ):
+        return zte_management.bridge_assistant(
+            self,
+            instance_id,
+            config
+        )
+
+    def firmware_management_status(self):
+        return zte_management.firmware_status(
+            self
+        )
+
+    def upload_firmware(
+        self,
+        file_path
+    ):
+        return zte_management.upload_firmware(
+            self,
+            file_path
+        )
+
+    def restore_configuration(
+        self,
+        file_path
+    ):
+        return zte_management.restore_configuration(
+            self,
+            file_path
         )
 
     # =========================================================
