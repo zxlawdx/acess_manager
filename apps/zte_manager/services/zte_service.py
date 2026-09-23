@@ -5,6 +5,9 @@ from typing import Optional
 from apps.zte_manager.model.device_adapters import select_adapter
 from apps.zte_manager.model.zte import ZTE
 from apps.zte_manager.repositories.history_repository import history_repository
+from apps.zte_manager.repositories.management_repository import (
+    management_repository,
+)
 from apps.zte_manager.services.automatic_diagnostic_service import (
     AutomaticDiagnosticService,
     DiagnosticThresholds,
@@ -1316,6 +1319,469 @@ class ZTEService:
         return history_repository.recent(
             limit
         )
+
+    # =========================================================
+    # CPE MANAGEMENT / NETWORK CONTROL
+    # =========================================================
+
+    def management_overview(self):
+        with self._lock:
+            zte = self.get_client()
+
+            readers = {
+                "qos": zte.qos_status,
+                "firewall": zte.firewall_management_status,
+                "wan": zte.wan_configurations,
+                "sntp": zte.sntp_management_status,
+                "tr069": zte.tr069_management_status,
+                "firmware": zte.firmware_management_status,
+                "port_forwarding": zte.port_forwarding_status,
+                "dmz": zte.dmz_status,
+                "upnp": zte.upnp_status,
+            }
+
+            return {
+                name: self._safe_capture(
+                    reader
+                )
+                for name, reader in readers.items()
+            }
+
+    def qos_management_status(self):
+        with self._lock:
+            return self.get_client().qos_status()
+
+    def save_management_qos(
+        self,
+        kind,
+        config,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a alteração de QoS."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation=f"qos_{kind}_save",
+                target=(
+                    config.get("id")
+                    or config.get("Alias")
+                    or kind
+                ),
+                before_reader=zte.qos_status,
+                action=lambda: zte.save_qos(
+                    kind,
+                    config
+                ),
+                after_reader=zte.qos_status,
+            )
+
+    def delete_management_qos(
+        self,
+        kind,
+        instance_id,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a remoção da regra QoS."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation=f"qos_{kind}_delete",
+                target=instance_id,
+                before_reader=zte.qos_status,
+                action=lambda: zte.delete_qos(
+                    kind,
+                    instance_id
+                ),
+                after_reader=zte.qos_status,
+            )
+
+    def firewall_management_status(self):
+        with self._lock:
+            return (
+                self.get_client()
+                .firewall_management_status()
+            )
+
+    def set_management_firewall(
+        self,
+        config,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a alteração do firewall."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="firewall_update",
+                target="firewall",
+                before_reader=(
+                    zte.firewall_management_status
+                ),
+                action=lambda: (
+                    zte.set_firewall_management(
+                        config
+                    )
+                ),
+                after_reader=(
+                    zte.firewall_management_status
+                ),
+            )
+
+    def sntp_management_status(self):
+        with self._lock:
+            return (
+                self.get_client()
+                .sntp_management_status()
+            )
+
+    def set_management_sntp(
+        self,
+        config
+    ):
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="sntp_update",
+                target="sntp",
+                before_reader=(
+                    zte.sntp_management_status
+                ),
+                action=lambda: (
+                    zte.set_sntp_management(
+                        config
+                    )
+                ),
+                after_reader=(
+                    zte.sntp_management_status
+                ),
+            )
+
+    def tr069_management_status(self):
+        with self._lock:
+            return (
+                self.get_client()
+                .tr069_management_status()
+            )
+
+    def set_management_tr069(
+        self,
+        config,
+        *,
+        confirm=True
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a alteração do TR-069/ACS."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="tr069_update",
+                target="acs",
+                before_reader=(
+                    zte.tr069_management_status
+                ),
+                action=lambda: (
+                    zte.set_tr069_management(
+                        config
+                    )
+                ),
+                after_reader=(
+                    zte.tr069_management_status
+                ),
+            )
+
+    def wan_configurations(self):
+        with self._lock:
+            return (
+                self.get_client()
+                .wan_configurations()
+            )
+
+    def update_management_wan(
+        self,
+        instance_id,
+        config,
+        *,
+        confirm=True,
+        backup=True
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a alteração da WAN/VLAN/PPPoE."
+            )
+
+        with self._lock:
+            if backup:
+                self.management_backup(
+                    reason="pre_wan_change"
+                )
+
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="wan_update",
+                target=instance_id,
+                before_reader=(
+                    zte.wan_configurations
+                ),
+                action=lambda: zte.update_wan(
+                    instance_id,
+                    config
+                ),
+                after_reader=(
+                    zte.wan_configurations
+                ),
+            )
+
+    def management_wan_action(
+        self,
+        instance_id,
+        action
+    ):
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation=f"wan_{action}",
+                target=instance_id,
+                before_reader=(
+                    zte.wan_configurations
+                ),
+                action=lambda: zte.wan_action(
+                    instance_id,
+                    action
+                ),
+                after_reader=(
+                    zte.wan_configurations
+                ),
+            )
+
+    def bridge_mode_assistant(
+        self,
+        instance_id,
+        config,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Bridge Mode pode derrubar o gerenciamento. Confirme explicitamente."
+            )
+
+        with self._lock:
+            backup = self.management_backup(
+                reason="pre_bridge_mode"
+            )
+
+            zte = self.get_client()
+
+            result = self._run_change(
+                operation="bridge_mode",
+                target=instance_id,
+                before_reader=(
+                    zte.wan_configurations
+                ),
+                action=lambda: (
+                    zte.bridge_assistant(
+                        instance_id,
+                        config
+                    )
+                ),
+                after_reader=(
+                    zte.wan_configurations
+                ),
+            )
+
+            return {
+                **result,
+                "backup": backup,
+            }
+
+    def management_backup(
+        self,
+        *,
+        device_id=None,
+        reason="manual"
+    ):
+        with self._lock:
+            result = self.export_user_configuration()
+
+            record = management_repository.register_backup(
+                device_id=device_id,
+                path=result.get(
+                    "path"
+                ),
+                reason=reason,
+                metadata={
+                    "host": self.current_host,
+                    "attendant": (
+                        self.current_attendant
+                    ),
+                    "filename": result.get(
+                        "filename"
+                    ),
+                    "size": result.get(
+                        "size"
+                    ),
+                },
+            )
+
+            return {
+                **result,
+                "backup_id": record[
+                    "id"
+                ],
+                "reason": reason,
+            }
+
+    def management_backups(
+        self,
+        device_id=None
+    ):
+        return management_repository.list_backups(
+            device_id
+        )
+
+    def restore_management_backup(
+        self,
+        backup_id,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Restauração pode reiniciar e desconectar a ONT. Confirme explicitamente."
+            )
+
+        backups = management_repository.list_backups()
+
+        backup = next((
+            item
+            for item in backups
+            if int(
+                item.get("id")
+                or -1
+            ) == int(
+                backup_id
+            )
+        ), None)
+
+        if backup is None:
+            raise ValueError(
+                "Backup não encontrado."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            result = zte.restore_configuration(
+                backup[
+                    "path"
+                ]
+            )
+
+            history_repository.save_change(
+                self._history_session_id,
+                operation="restore_configuration",
+                target=backup[
+                    "path"
+                ],
+                before=None,
+                after={
+                    "backup_id": backup_id,
+                    "file": backup[
+                        "path"
+                    ],
+                },
+                success=True,
+                message=(
+                    "Restauração enviada; a ONT pode reiniciar."
+                ),
+            )
+
+            return result
+
+    def firmware_management_status(self):
+        with self._lock:
+            return (
+                self.get_client()
+                .firmware_management_status()
+            )
+
+    def upload_management_firmware(
+        self,
+        file_path,
+        *,
+        confirm=False,
+        device_id=None
+    ):
+        if not confirm:
+            raise ValueError(
+                "Upgrade de firmware pode reiniciar a ONT. Confirme explicitamente."
+            )
+
+        with self._lock:
+            backup = self.management_backup(
+                device_id=device_id,
+                reason="pre_firmware_upgrade",
+            )
+
+            result = (
+                self.get_client()
+                .upload_firmware(
+                    file_path
+                )
+            )
+
+            history_repository.save_change(
+                self._history_session_id,
+                operation="firmware_upgrade",
+                target=file_path,
+                before={
+                    "backup_id": backup.get(
+                        "backup_id"
+                    ),
+                    "device": self._device_info,
+                },
+                after={
+                    "sha256": result.get(
+                        "sha256"
+                    ),
+                    "size": result.get(
+                        "size"
+                    ),
+                },
+                success=True,
+                message=(
+                    "Firmware enviado; aguardando ciclo de upgrade/reboot."
+                ),
+            )
+
+            return {
+                **result,
+                "backup": backup,
+            }
 
     # =========================================================
     # PERFIL DO ATENDENTE
