@@ -6,6 +6,8 @@ import shutil
 import socket
 import subprocess
 import time
+import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -602,6 +604,169 @@ class RemoteAccessService:
             )
 
         return result
+
+    def bufferbloat_test(
+        self,
+        agent_id: int,
+        *,
+        ping_host: str,
+        iperf_host: str,
+        direction: str = "download",
+        duration: int = 10,
+        streams: int = 4,
+    ) -> dict[str, Any]:
+        """
+        Mede latência ociosa e sob carga no gateway.
+
+        O objetivo aqui não é atribuir uma nota comercial, mas mostrar o delta
+        de latência para o técnico decidir se QoS/shaping merece ajuste.
+        """
+        duration = max(
+            5,
+            min(
+                int(duration),
+                30,
+            ),
+        )
+        streams = max(
+            1,
+            min(
+                int(streams),
+                8,
+            ),
+        )
+
+        baseline = self.run_gateway_command(
+            agent_id,
+            "ping",
+            {
+                "host": ping_host,
+                "count": 5,
+            },
+        )
+
+        baseline_ms = self._parse_ping_average(
+            baseline.get(
+                "stdout"
+            )
+        )
+
+        with ThreadPoolExecutor(
+            max_workers=2
+        ) as pool:
+            ping_future = pool.submit(
+                self.run_gateway_command,
+                agent_id,
+                "ping",
+                {
+                    "host": ping_host,
+                    "count": max(
+                        10,
+                        duration,
+                    ),
+                },
+            )
+
+            iperf_future = pool.submit(
+                self.run_gateway_command,
+                agent_id,
+                "iperf3",
+                {
+                    "host": iperf_host,
+                    "duration": duration,
+                    "streams": streams,
+                    "reverse": (
+                        str(
+                            direction
+                        ).lower()
+                        == "download"
+                    ),
+                },
+            )
+
+            loaded_ping = (
+                ping_future.result()
+            )
+            iperf = (
+                iperf_future.result()
+            )
+
+        loaded_ms = self._parse_ping_average(
+            loaded_ping.get(
+                "stdout"
+            )
+        )
+
+        delta = (
+            round(
+                loaded_ms
+                - baseline_ms,
+                2,
+            )
+            if (
+                loaded_ms is not None
+                and baseline_ms is not None
+            )
+            else None
+        )
+
+        status = (
+            "unknown"
+            if delta is None
+            else "ok"
+            if delta < 20
+            else "warning"
+            if delta < 80
+            else "critical"
+        )
+
+        return {
+            "success": bool(
+                baseline.get(
+                    "success"
+                )
+                and loaded_ping.get(
+                    "success"
+                )
+                and iperf.get(
+                    "success"
+                )
+            ),
+            "status": status,
+            "direction": direction,
+            "baseline_latency_ms": baseline_ms,
+            "loaded_latency_ms": loaded_ms,
+            "latency_delta_ms": delta,
+            "throughput": iperf.get(
+                "iperf"
+            ),
+            "baseline_ping": baseline,
+            "loaded_ping": loaded_ping,
+            "iperf_raw": iperf,
+        }
+
+    @staticmethod
+    def _parse_ping_average(
+        output: str | None,
+    ) -> float | None:
+        if not output:
+            return None
+
+        match = re.search(
+            (
+                r"(?:rtt|round-trip) "
+                r"min/avg/max/(?:mdev|stddev) = "
+                r"[\d.]+/([\d.]+)/"
+            ),
+            output,
+        )
+
+        if not match:
+            return None
+
+        return float(
+            match.group(1)
+        )
 
     def open(
         self,
