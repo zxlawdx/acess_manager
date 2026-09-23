@@ -327,6 +327,29 @@ class ZTEService:
         with self._lock:
             return self.get_client().account_status()
 
+    def export_user_configuration(self):
+        with self._lock:
+            zte = self.get_client()
+
+            result = zte.export_user_configuration(
+                device=self._device_info
+            )
+
+            history_repository.save_change(
+                self._history_session_id,
+                operation="backup_configuration",
+                target=result.get("filename"),
+                before=None,
+                after={
+                    "path": result.get("path"),
+                    "size": result.get("size"),
+                },
+                success=True,
+                message="Backup local exportado.",
+            )
+
+            return result
+
     def change_admin_password(
         self,
         new_password
