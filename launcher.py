@@ -52,8 +52,8 @@ sys.path.insert(
 # ---------------------------------------------------------
 #
 # Windows:
-#   usa Qt/QtWebEngine, que já é o backend de build usado
-#   pelo Vela.
+#   usa PyQt6/QtWebEngine via qtpy. O engine mais novo oferece
+#   melhor compatibilidade com CSS/JavaScript moderno.
 #
 # Linux:
 #   deixa o pywebview selecionar GTK/WebKit, aproveitando as
@@ -64,6 +64,13 @@ if sys.platform == "win32":
     os.environ.setdefault(
         "PYWEBVIEW_GUI",
         "qt"
+    )
+
+    # qtpy/pywebview suportam Qt 6. Forçamos PyQt6 para evitar que
+    # uma instalação residual de PyQt5 seja escolhida por engano.
+    os.environ.setdefault(
+        "QT_API",
+        "pyqt6"
     )
 
     try:
