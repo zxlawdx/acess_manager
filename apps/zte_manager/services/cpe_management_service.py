@@ -946,6 +946,18 @@ class CPEManagementService:
             backup=True,
         )
 
+    def wan_delete(
+        self,
+        zte_service,
+        data,
+    ):
+        return zte_service.delete_management_wan(
+            data["id"],
+            confirm=bool(
+                data.get("confirm")
+            ),
+        )
+
     def wan_action(
         self,
         zte_service,
