@@ -337,6 +337,14 @@ function renderManagementInventory() {
                         <td>
                             <strong>${managementEscape(item.model || "ZTE")}</strong>
                             <small>${managementEscape(item.serial || item.mac || item.key || "-")}</small>
+                            <small>
+                                FW ${managementEscape(item.firmware || "-")}
+                                ${item.firmware_compliant === true
+                                    ? " • homologado"
+                                    : item.firmware_compliant === false
+                                        ? " • fora do padrão"
+                                        : ""}
+                            </small>
                         </td>
                         <td>${managementEscape(item.customer_name || "-")}</td>
                         <td class="mono">${managementEscape(item.host || "-")}</td>
@@ -1027,7 +1035,10 @@ async function runManagementBatch() {
         ).value;
 
         if (
-            operation === "profile_remediate"
+            [
+                "profile_remediate",
+                "profile_acs"
+            ].includes(operation)
             && !payload.profile_id
         ) {
             payload = {
