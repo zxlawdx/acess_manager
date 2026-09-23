@@ -1717,6 +1717,34 @@ class ZTEService:
                 ),
             )
 
+    def delete_management_wan(
+        self,
+        instance_id,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Excluir uma WAN pode derrubar o acesso. Confirme explicitamente."
+            )
+
+        with self._lock:
+            self.management_backup(
+                reason="pre_wan_delete"
+            )
+
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="wan_delete",
+                target=instance_id,
+                before_reader=zte.wan_configurations,
+                action=lambda: zte.delete_wan(
+                    instance_id
+                ),
+                after_reader=zte.wan_configurations,
+            )
+
     def management_wan_action(
         self,
         instance_id,
