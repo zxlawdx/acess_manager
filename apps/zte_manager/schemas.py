@@ -595,3 +595,21 @@ class BackupCompareRequest(BaseModel):
 class WANDeleteRequest(BaseModel):
     id: str
     confirm: bool = False
+
+
+
+class BufferbloatRequest(BaseModel):
+    agent_id: int = Field(ge=1)
+    ping_host: str = "1.1.1.1"
+    iperf_host: str
+    direction: str = "download"
+    duration: int = Field(
+        default=10,
+        ge=5,
+        le=30
+    )
+    streams: int = Field(
+        default=4,
+        ge=1,
+        le=8
+    )
