@@ -1,0 +1,311 @@
+/* =========================================================
+   OPERATIONS SUITE / MULTI-FIRMWARE
+   Complementa o design system principal sem sobrescrever a base.
+========================================================= */
+
+.advanced-actions,
+.feature-inspector-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.advanced-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.capability-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 9px;
+}
+
+.capability-card {
+    min-width: 0;
+    padding: 11px;
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    background: var(--bg-deep);
+}
+
+.capability-card .capability-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.capability-card strong {
+    display: block;
+    font-size: 10px;
+}
+
+.capability-card p {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 8px;
+    line-height: 1.45;
+}
+
+.capability-state {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    margin-top: 3px;
+    border-radius: 999px;
+    background: var(--muted);
+    box-shadow: 0 0 0 4px rgba(127, 144, 168, .08);
+}
+
+.capability-state.available {
+    background: var(--success);
+    box-shadow: 0 0 0 4px var(--success-soft);
+}
+
+.capability-state.unavailable {
+    background: var(--danger);
+    box-shadow: 0 0 0 4px var(--danger-soft);
+}
+
+.operations-form {
+    margin-top: 4px;
+}
+
+.operations-form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+}
+
+.operations-output {
+    min-width: 0;
+    max-height: 340px;
+    overflow: auto;
+}
+
+.operation-row {
+    padding: 9px 10px;
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    background: rgba(5, 11, 22, .72);
+}
+
+.operation-row + .operation-row {
+    margin-top: 7px;
+}
+
+.operation-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.operation-row strong {
+    font-size: 9px;
+}
+
+.operation-row small,
+.operation-row p {
+    color: var(--muted);
+    font-size: 8px;
+    line-height: 1.45;
+}
+
+.operation-meta {
+    margin-top: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.operation-meta span {
+    padding: 3px 5px;
+    border: 1px solid var(--border-soft);
+    border-radius: 5px;
+    color: var(--text-soft);
+    font: 7px var(--font-mono);
+}
+
+.finding {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: flex-start;
+    gap: 9px;
+    padding: 9px 10px;
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    background: var(--bg-deep);
+}
+
+.finding + .finding {
+    margin-top: 7px;
+}
+
+.finding-icon {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    font-size: 13px;
+}
+
+.finding.ok .finding-icon {
+    color: var(--success);
+    background: var(--success-soft);
+}
+
+.finding.warning .finding-icon {
+    color: var(--warning);
+    background: var(--warning-soft);
+}
+
+.finding.critical .finding-icon {
+    color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.finding strong {
+    display: block;
+    font-size: 9px;
+}
+
+.finding p {
+    margin-top: 3px;
+    color: var(--text-soft);
+    font-size: 8px;
+    line-height: 1.45;
+}
+
+.firmware-json {
+    width: 100%;
+    max-height: 500px;
+    margin-top: 12px;
+    padding: 12px;
+    overflow: auto;
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    color: var(--text-soft);
+    background: #050a13;
+    font: 8px/1.6 var(--font-mono);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.advanced-radio-fields {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-soft);
+}
+
+.advanced-radio-fields > .section-kicker {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.advanced-switch-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.advanced-switch {
+    padding: 7px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    color: var(--text-soft);
+    background: var(--bg-deep);
+    font: 8px var(--font-mono);
+}
+
+.band-steering-editor {
+    grid-column: 1 / -1;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-soft);
+}
+
+.band-steering-editor .operations-form-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.schedule-card {
+    grid-column: 1 / -1;
+}
+
+.schedule-layout {
+    display: grid;
+    grid-template-columns: minmax(180px, .7fr) minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+}
+
+.schedule-time-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(70px, 1fr));
+    gap: 8px;
+}
+
+.danger-note {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 141, 136, .16);
+    border-radius: 8px;
+    color: var(--danger);
+    background: var(--danger-soft);
+    font-size: 8px;
+    line-height: 1.5;
+}
+
+@media (max-width: 1180px) {
+    .capability-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .operations-form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .band-steering-editor .operations-form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 860px) {
+    .advanced-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .capability-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .schedule-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .schedule-time-grid,
+    .advanced-switch-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .capability-grid,
+    .operations-form-grid,
+    .band-steering-editor .operations-form-grid,
+    .schedule-time-grid,
+    .advanced-switch-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .advanced-actions .button {
+        width: 100%;
+    }
+}
