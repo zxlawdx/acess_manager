@@ -217,6 +217,7 @@ class DhcpReservationRequest(BaseModel):
 
 class ResourceIdRequest(BaseModel):
     id: str = Field(min_length=1)
+    confirm: bool = False
 
 
 class PortForwardRequest(BaseModel):
