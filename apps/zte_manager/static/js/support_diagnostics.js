@@ -1265,3 +1265,29 @@ document.getElementById(
         full: true
     })
 );
+
+
+
+function syncSpeedtestServerField() {
+    const preset = document.getElementById(
+        "supportSpeedtestPreset"
+    )?.value;
+
+    document.getElementById(
+        "supportSpeedtestCustomField"
+    )?.classList.toggle(
+        "hidden",
+        preset !== "custom"
+    );
+}
+
+
+document.getElementById(
+    "supportSpeedtestPreset"
+)?.addEventListener(
+    "change",
+    syncSpeedtestServerField
+);
+
+
+syncSpeedtestServerField();
