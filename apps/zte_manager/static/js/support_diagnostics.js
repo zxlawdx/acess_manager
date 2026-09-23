@@ -841,9 +841,23 @@ function renderSpeedTest(result) {
         return "";
     }
 
+    const providerLabels = {
+        zte_native: "ONT ZTE",
+        cloudflare: "Cloudflare",
+        "fast.com": "FAST.com / Netflix",
+        "speedtest.net": "Speedtest.net",
+        librespeed: "LibreSpeed"
+    };
+
     const source = speed.source === "ont_native"
         ? "Executado pela própria ONT"
         : "Executado pelo computador do atendente";
+
+    const providerLabel = (
+        providerLabels[speed.provider]
+        || speed.provider
+        || "Speed Test"
+    );
 
     return `
         <article class="support-result-card speed-result-card">
@@ -882,6 +896,7 @@ function renderSpeedTest(result) {
 
             <p class="muted with-top-space">
                 ${supportEscape(source)}
+                • ${supportEscape(providerLabel)}
                 ${speed.server?.name ? ` • ${supportEscape(speed.server.name)}` : ""}
             </p>
 
