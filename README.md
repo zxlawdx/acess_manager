@@ -1,6 +1,6 @@
 # ZTE Automatic — Vela Desktop
 
-Aplicação desktop para atendimento e provisionamento de ONTs ZTE F6600P/ThinkLua, construída sobre o **Vela Framework**.
+Aplicação desktop para atendimento, diagnóstico e provisionamento de ONTs ZTE **F6600P, F670L e firmwares ThinkLua compatíveis**, construída sobre o **Vela Framework**.
 
 A versão web/FastAPI foi convertida para a arquitetura do Vela sem alterar a lógica de protocolo que já estava funcionando no equipamento. A janela é nativa via `pywebview`, a UI continua em HTML/CSS/JS e a comunicação com o Python passa pelo servidor Bottle interno do Vela.
 
@@ -39,6 +39,16 @@ A versão web/FastAPI foi convertida para a arquitetura do Vela sem alterar a l�
 - Alteração da senha administrativa usada no login.
 - Reboot da ONT.
 - Perfil padrão por atendente e botão **Aplicar configuração padrão**.
+- Adapter/capability detection para F6600P, F670L e fallback ThinkLua.
+- Wi-Fi avançado: MU-MIMO, OFDMA, TWT, Spatial Reuse, DTIM, RTS/CTS, preâmbulo e isolamento quando expostos pelo firmware.
+- Agendamento global de Wi-Fi pelo timer nativo da ONT.
+- Band Steering avançado com thresholds de RSSI, utilização e idle-rate.
+- Diagnóstico automático composto (PON + WAN + PPPoE + LAN + Wi-Fi + ping + traceroute opcional).
+- Histórico local SQLite com sessões, snapshots, diagnósticos e alterações antes/depois.
+- DHCP IPv4: pool, DNS, lease, leases ativos e reservas por MAC.
+- NAT: port forwarding e DMZ com confirmação explícita.
+- Inspector ThinkLua em modo leitura para firewall, filtros IP/MAC, controle parental, DDNS, SNTP, TR-069, rotas, QoS, UPnP PortMap e syslog.
+- Backup local da configuração de usuário usando o fluxo oficial `usrCfgMgr`.
 
 ## Arquitetura Vela
 
@@ -62,6 +72,11 @@ ZTEService  --------------------> ProfileService
     v
 ZTE Facade
     |
+    +--> DeviceAdapter / CapabilityService
+    |       +--> F6600PAdapter
+    |       +--> F670LAdapter
+    |       +--> ThinkLua fallback
+    |
     +--> Login / sessão / Check / RSA
     +--> Wi-Fi / SSID
     +--> WLAN advanced
@@ -71,7 +86,20 @@ ZTE Facade
     +--> Ping / Traceroute
 ```
 
-Padrões usados: **Facade**, **Service Layer**, **Repository**, **Command/Composite**, **Strategy** e builder por estado atual.
+Padrões usados: **Facade**, **Service Layer**, **Repository**, **Command/Composite**, **Strategy**, **Adapter**, **Template Method** e builder por estado atual.
+
+## Operations Suite e F670L
+
+O app não assume que todo firmware ZTE possui os mesmos menus. Depois do login, o modelo/firmware seleciona um `DeviceAdapter`; o botão **Detectar recursos** faz probe real de cada `menuView/menuData` e a UI marca o que aquele login realmente consegue acessar.
+
+O F670L usa o mesmo fluxo ThinkLua de login e WAN encontrado no projeto atual (`login_entry/login_token`, `ethWanStatus` e `wan_internetstatus_lua.lua`). Recursos avançados continuam sendo validados por probe porque operadoras podem ocultar menus por firmware ou nível da conta.
+
+As operações foram separadas por risco:
+
+- **Escrita validada**: Wi-Fi avançado, timer Wi-Fi, Band Steering, DHCP/reservas, port forwarding e DMZ.
+- **Somente leitura**: firewall/filtros, controle parental, DDNS, SNTP, TR-069/ACS, rotas, QoS, UPnP PortMap e logs.
+- **Proteção extra**: port forwarding e DMZ exigem `confirm=true`; TR-069 nunca devolve senhas em claro.
+- **Backup**: exportação local é automatizada; restauração/factory reset permanecem manuais para não importar configuração incompatível ou derrubar provisionamento ACS.
 
 ## Estrutura
 
@@ -161,6 +189,31 @@ POST /api/profiles/capture
 POST /api/profiles/apply
 POST /api/device/password
 POST /api/device/reboot
+
+GET  /api/device/capabilities
+POST /api/device/capabilities/probe
+GET  /api/features/read?feature=tr069
+
+GET  /api/wifi/schedule
+POST /api/wifi/schedule/update
+POST /api/wifi/band-steering/configure
+
+POST /api/diagnostics/automatic
+GET  /api/history
+POST /api/history/snapshot
+
+GET  /api/network/dhcp
+POST /api/network/dhcp/update
+POST /api/network/dhcp/reservation/save
+POST /api/network/dhcp/reservation/delete
+
+GET  /api/network/port-forwarding
+POST /api/network/port-forwarding/save
+POST /api/network/port-forwarding/delete
+GET  /api/network/dmz
+POST /api/network/dmz/update
+
+POST /api/system/backup
 ```
 
 A API é local. A porta preferencial é `127.0.0.1:8765`; se ela estiver ocupada, o Vela seleciona outra porta livre automaticamente.
@@ -261,7 +314,7 @@ Os testes de protocolo e regras de domínio não dependem de uma ONT conectada:
 python -m unittest discover -s tests -v
 ```
 
-Na conversão para Vela foram mantidos os **21 testes** de domínio/protocolo e adicionados **3 testes** de contrato da conversão Vela (24 no total) da aplicação original.
+A suíte cobre protocolo, segurança, builders WLAN, Vela, adapters, histórico SQLite, diagnóstico automático e contrato entre a UI avançada e a API. O GitHub Actions também executa `compileall` e valida a sintaxe de `app.js` e `advanced.js`.
 
 ## Persistência dos perfis
 
@@ -272,6 +325,8 @@ Para forçar outro local:
 ```text
 ZTE_AUTOMATIC_DATA_DIR=C:\meu-diretorio
 ```
+
+Além dos perfis, a Operations Suite cria `operations.sqlite3` nesse diretório e usa `backups/` para exportações locais da configuração da ONT.
 
 ## Sessão da ZTE
 
@@ -299,6 +354,7 @@ A chave RSA não fica fixa no código.
 - `zxlawdx/Vela-framework` — runtime desktop desta versão.
 - `juacas/zte_tracker` — sessão/reboot/compatibilidade ZTE.
 - `cmocan/HA_CustomComponents` — implementação comunitária F660/F6600R.
-- `Blinko1987/F6107A-telnet-root-on-AIS-fiber` — fontes ThinkLua, WLAN, DNS, diagnóstico e fluxo `Check`.
+- `Blinko1987/F6107A-telnet-root-on-AIS-fiber` — fontes ThinkLua, WLAN, DNS, diagnóstico, DHCP, NAT, segurança e fluxo `Check`.
+- `langit7/zte-f670L` — confirmação pública do fluxo ThinkLua de login/WAN em variantes F670L.
 
 Os repositórios aparentados ajudam a reproduzir o protocolo, mas o F6600P e seu firmware continuam sendo a autoridade final. O código lê estado/tokens/chaves dinamicamente exatamente por isso.
