@@ -350,33 +350,111 @@ class ManagementRepository:
                 else now
             )
 
+            def previous(
+                key,
+                fallback=None,
+            ):
+                if (
+                    key in data
+                    and data.get(key) is not None
+                ):
+                    return data.get(
+                        key
+                    )
+
+                if existing is not None:
+                    return existing[
+                        key
+                    ]
+
+                return fallback
+
+            def previous_json(
+                key,
+                column,
+                fallback,
+            ):
+                if key in data:
+                    return self._dump(
+                        data.get(key)
+                        if data.get(key) is not None
+                        else fallback
+                    )
+
+                if existing is not None:
+                    return existing[
+                        column
+                    ]
+
+                return self._dump(
+                    fallback
+                )
+
             values = {
-                "customer_name": data.get("customer_name"),
-                "host": data.get("host"),
-                "model": data.get("model"),
-                "serial": data.get("serial"),
-                "mac": data.get("mac"),
-                "firmware": data.get("firmware"),
-                "status": data.get("status") or "unknown",
-                "rx_power": data.get("rx_power"),
-                "uptime": data.get("uptime"),
-                "olt": data.get("olt"),
-                "cto": data.get("cto"),
-                "pop": data.get("pop"),
-                "agent_id": data.get("agent_id"),
-                "tags_json": self._dump(
-                    data.get("tags") or []
+                "customer_name": previous(
+                    "customer_name"
                 ),
-                "capabilities_json": self._dump(
-                    data.get("capabilities") or {}
+                "host": previous(
+                    "host"
                 ),
-                "current_config_json": self._dump(
-                    data.get("current_config") or {}
+                "model": previous(
+                    "model"
                 ),
-                "metadata_json": self._dump(
-                    data.get("metadata") or {}
+                "serial": previous(
+                    "serial"
                 ),
-                "last_seen": data.get("last_seen") or now,
+                "mac": previous(
+                    "mac"
+                ),
+                "firmware": previous(
+                    "firmware"
+                ),
+                "status": previous(
+                    "status",
+                    "unknown"
+                ),
+                "rx_power": previous(
+                    "rx_power"
+                ),
+                "uptime": previous(
+                    "uptime"
+                ),
+                "olt": previous(
+                    "olt"
+                ),
+                "cto": previous(
+                    "cto"
+                ),
+                "pop": previous(
+                    "pop"
+                ),
+                "agent_id": previous(
+                    "agent_id"
+                ),
+                "tags_json": previous_json(
+                    "tags",
+                    "tags_json",
+                    [],
+                ),
+                "capabilities_json": previous_json(
+                    "capabilities",
+                    "capabilities_json",
+                    {},
+                ),
+                "current_config_json": previous_json(
+                    "current_config",
+                    "current_config_json",
+                    {},
+                ),
+                "metadata_json": previous_json(
+                    "metadata",
+                    "metadata_json",
+                    {},
+                ),
+                "last_seen": previous(
+                    "last_seen",
+                    now
+                ),
                 "created_at": created_at,
                 "updated_at": now,
             }
