@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..600,0..1,-25..0&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ static('zte_manager/css/style.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/advanced.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/support_diagnostics.css') }}">
 
 <div class="app-shell">
 
@@ -63,9 +64,14 @@
                 <span>Clientes</span>
             </button>
 
+            <button class="menu-item protected-page locked" data-page="supportDiagnostic" type="button">
+                <span class="material-symbols-outlined">health_and_safety</span>
+                <span>Diagnóstico automático</span>
+            </button>
+
             <button class="menu-item protected-page locked" data-page="diagnostics" type="button">
-                <span class="material-symbols-outlined">troubleshoot</span>
-                <span>Diagnóstico</span>
+                <span class="material-symbols-outlined">network_ping</span>
+                <span>Ping / Traceroute</span>
             </button>
 
             <button class="menu-item protected-page locked" data-page="profiles" type="button">
@@ -232,6 +238,31 @@
                         Aplicar configuração padrão
                     </button>
                 </div>
+
+                <article class="panel dashboard-health-panel">
+                    <div class="dashboard-health-layout">
+                        <div>
+                            <div class="panel-header">
+                                <div>
+                                    <span class="section-kicker">SAÚDE DA CONEXÃO</span>
+                                    <h3>Triagem automática</h3>
+                                </div>
+                                <span id="dashboardHealthBadge" class="badge">Aguardando</span>
+                            </div>
+                            <div id="dashboardHealthResult" class="dashboard-health-lines">
+                                <div class="dashboard-health-line info">
+                                    <span class="health-dot"></span>
+                                    <span>A triagem será executada após a conexão com a ONT.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button id="dashboardFullDiagnosticButton" class="button primary" type="button">
+                            <span class="material-symbols-outlined">troubleshoot</span>
+                            Diagnóstico completo
+                        </button>
+                    </div>
+                </article>
 
                 <div class="kpi-grid">
                     <article class="kpi-card cyan">
@@ -429,6 +460,148 @@
                         </table>
                     </div>
                 </article>
+            </section>
+
+
+            <!-- ==================================================
+                 AUTOMATIC SUPPORT DIAGNOSTICS
+            =================================================== -->
+            <section id="page-supportDiagnostic" class="page">
+                <div class="section-intro">
+                    <div>
+                        <span class="section-kicker">AUTOMATIC SUPPORT DIAGNOSTICS</span>
+                        <h2>Diagnóstico automático do atendimento</h2>
+                        <p>
+                            Cruza GPON, WAN, DNS, LAN, clientes, RF, canais vizinhos e throughput.
+                            Alterações automáticas são auditadas e revalidadas antes do resumo final.
+                        </p>
+                    </div>
+                    <span id="supportDiagnosticBadge" class="badge">Pronto</span>
+                </div>
+
+                <div class="support-diagnostic-shell">
+                    <article class="panel support-control-panel">
+                        <form id="supportDiagnosticForm" class="form-stack">
+                            <div class="support-form-grid">
+                                <label class="field">
+                                    <span>TIPO DE QUEIXA</span>
+                                    <select id="supportDiagnosticMode">
+                                        <option value="general">Diagnóstico geral</option>
+                                        <option value="low_speed">Banda baixa / 50–100 Mbps</option>
+                                        <option value="drops">Quedas / intermitência</option>
+                                        <option value="no_internet">Sem Internet</option>
+                                        <option value="wifi">Problema de Wi-Fi</option>
+                                    </select>
+                                </label>
+
+                                <label class="field">
+                                    <span>DISPOSITIVO AFETADO</span>
+                                    <select id="supportAffectedClient">
+                                        <option value="">Todos / detectar automaticamente</option>
+                                    </select>
+                                </label>
+
+                                <label class="field">
+                                    <span>HOST DE PING</span>
+                                    <input id="supportPingHost" type="text" value="1.1.1.1">
+                                </label>
+
+                                <label class="field">
+                                    <span>HOST PARA DNS LOOKUP</span>
+                                    <input id="supportDnsHost" type="text" value="cloudflare.com">
+                                </label>
+
+                                <label class="field">
+                                    <span>DOWNLOAD ESPERADO (Mbps)</span>
+                                    <input id="supportExpectedDownload" type="number" min="0" placeholder="Opcional">
+                                </label>
+
+                                <label class="field">
+                                    <span>UPLOAD ESPERADO (Mbps)</span>
+                                    <input id="supportExpectedUpload" type="number" min="0" placeholder="Opcional">
+                                </label>
+                            </div>
+
+                            <div class="support-check-grid with-top-space">
+                                <label class="check-row">
+                                    <input id="supportIncludeSpeedtest" type="checkbox" checked>
+                                    <span>Executar Speed Test</span>
+                                </label>
+
+                                <label class="check-row">
+                                    <input id="supportAllowSpeedFallback" type="checkbox" checked>
+                                    <span>Permitir fallback pelo PC</span>
+                                </label>
+
+                                <label class="check-row">
+                                    <input id="supportIncludeTraceroute" type="checkbox">
+                                    <span>Executar traceroute</span>
+                                </label>
+
+                                <label class="check-row">
+                                    <input id="supportAutoOptimizeWifi" type="checkbox">
+                                    <span>Otimizar canal Wi-Fi automaticamente</span>
+                                </label>
+                            </div>
+
+                            <div class="support-action-row with-top-space">
+                                <button class="button primary" type="submit">
+                                    <span class="material-symbols-outlined">play_arrow</span>
+                                    Iniciar diagnóstico completo
+                                </button>
+
+                                <button id="supportStandaloneSpeedButton" class="button ghost" type="button">
+                                    <span class="material-symbols-outlined">speed</span>
+                                    Testar velocidade
+                                </button>
+
+                                <button id="supportRepeatDiagnostic" class="button ghost" type="button">
+                                    <span class="material-symbols-outlined">refresh</span>
+                                    Repetir teste
+                                </button>
+                            </div>
+                        </form>
+                    </article>
+
+                    <div id="supportDiagnosticOutput" class="support-output">
+                        <div class="support-empty">
+                            <strong>Nenhum diagnóstico completo executado.</strong>
+                            <span>
+                                A triagem do Dashboard não altera configurações nem executa o Speed Test pesado.
+                                Use o botão acima para investigar o atendimento atual.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div id="supportStandaloneSpeed"></div>
+
+                    <div id="supportReportActions" class="support-action-row hidden">
+                        <button id="supportGenerateAttendance" class="button primary" type="button">
+                            <span class="material-symbols-outlined">description</span>
+                            Gerar atendimento
+                        </button>
+                    </div>
+
+                    <article id="supportAttendancePanel" class="panel hidden">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">ATENDIMENTO / OS</span>
+                                <h3>Resumo automático da sessão</h3>
+                            </div>
+                            <button id="supportCopyAttendance" class="button ghost compact" type="button">
+                                <span class="material-symbols-outlined">content_copy</span>
+                                Copiar
+                            </button>
+                        </div>
+
+                        <textarea
+                            id="supportAttendanceText"
+                            class="support-attendance-text"
+                            spellcheck="false"
+                            aria-label="Resumo automático do atendimento"
+                        ></textarea>
+                    </article>
+                </div>
             </section>
 
 
@@ -804,3 +977,4 @@
 
 <script src="{{ static('zte_manager/js/app.js') }}"></script>
 <script src="{{ static('zte_manager/js/advanced.js') }}"></script>
+<script src="{{ static('zte_manager/js/support_diagnostics.js') }}"></script>
