@@ -5,6 +5,7 @@ import urllib3
 
 from .zte_configuration import (
     zte_advanced,
+    zte_backup,
     zte_clients,
     zte_connection_status,
     zte_diagnostics,
@@ -720,6 +721,15 @@ class ZTE:
         return zte_device_management.change_admin_password(
             self,
             new_password
+        )
+
+    def export_user_configuration(
+        self,
+        device=None
+    ):
+        return zte_backup.export_user_configuration(
+            self,
+            device=device,
         )
 
     # =========================================================
