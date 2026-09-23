@@ -1540,12 +1540,6 @@ input[type="radio"] {
     background: #0e0e10 !important;
 }
 
-.support-mode-card:has(input:checked),
-.support-check-card:has(input:checked) {
-    border-color: rgba(0, 229, 153, .28) !important;
-    background: rgba(0, 229, 153, .045) !important;
-}
-
 .finding-item {
     background: #0e0e10 !important;
     box-shadow: none;
