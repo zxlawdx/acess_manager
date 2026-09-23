@@ -581,12 +581,85 @@ class ClientPathRule(DiagnosticRule):
         }
 
         if kind == "lan":
+            interface = str(
+                client.get("interface")
+                or ""
+            )
+
+            port_number = None
+            match = re.search(
+                r"(\d+)$",
+                interface,
+            )
+
+            if match:
+                port_number = int(
+                    match.group(1)
+                )
+
+                if interface.lower().startswith(
+                    "eth"
+                ):
+                    port_number += 1
+
+            port = next((
+                item
+                for item in (
+                    sections.get(
+                        "lan_ports"
+                    )
+                    or []
+                )
+                if (
+                    port_number is not None
+                    and int(
+                        item.get("port")
+                        or -1
+                    ) == port_number
+                )
+            ), None)
+
+            speed = _rate_mbps(
+                (
+                    port
+                    or {}
+                ).get(
+                    "speed"
+                )
+            )
+
+            if (
+                speed is not None
+                and speed <= 100
+            ):
+                return [
+                    self.finding(
+                        "affected_lan_negotiation",
+                        "warning",
+                        (
+                            f"Dispositivo afetado está na LAN {port_number} "
+                            f"negociando {speed:.0f} Mbps."
+                        ),
+                        client=client,
+                        port=port,
+                    )
+                ]
+
             return [
                 self.finding(
                     self.code,
                     "ok",
-                    "Dispositivo afetado identificado como cliente Ethernet.",
+                    (
+                        f"Dispositivo afetado identificado como cliente Ethernet"
+                        + (
+                            f" na LAN {port_number}"
+                            if port_number is not None
+                            else ""
+                        )
+                        + "."
+                    ),
                     client=client,
+                    port=port,
                 )
             ]
 
