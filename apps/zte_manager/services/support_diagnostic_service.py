@@ -1104,6 +1104,18 @@ class ChannelRule(DiagnosticRule):
             )
 
             if (
+                analysis.get("auto_channel")
+                and (
+                    action
+                    or {}
+                ).get("type") == "wifi_auto_channel"
+            ):
+                # Não gravamos uma mutação sem efeito só porque o rádio já
+                # está em Auto. O histórico deve representar mudanças reais.
+                recommendation = {}
+                action = None
+
+            if (
                 not data.get("available")
                 or not data.get("networks")
             ):
@@ -1111,15 +1123,26 @@ class ChannelRule(DiagnosticRule):
                     self.finding(
                         f"wifi_environment_{band}",
                         "info",
-                        f"Scan de vizinhança {band} indisponível/sem resultados; manter canal automático é a opção mais segura.",
-                        recommendation={
-                            "title": f"Usar Auto em {band}",
-                            "action": {
-                                "type": "wifi_auto_channel",
-                                "band": band,
-                            },
-                            "safe": True,
-                        },
+                        (
+                            f"Scan de vizinhança {band} indisponível/sem resultados; "
+                            + (
+                                "o rádio já está em Auto."
+                                if analysis.get("auto_channel")
+                                else "canal automático é a opção mais segura."
+                            )
+                        ),
+                        recommendation=(
+                            None
+                            if analysis.get("auto_channel")
+                            else {
+                                "title": f"Usar Auto em {band}",
+                                "action": {
+                                    "type": "wifi_auto_channel",
+                                    "band": band,
+                                },
+                                "safe": True,
+                            }
+                        ),
                     )
                 )
                 continue
