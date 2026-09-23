@@ -117,6 +117,7 @@ jobs:
             --collect-all pydantic \
             --collect-all pydantic_core \
             --collect-all cryptography \
+            --collect-all platformdirs \
             --collect-all setuptools \
             --collect-all jaraco.text \
             --collect-all jaraco.functools \
@@ -128,6 +129,9 @@ jobs:
             --add-data "data:data" \
             --add-data "docs:docs" \
             launcher.py
+
+      - name: Smoke test Linux executable
+        run: ./dist/ZTEAutomatic/ZTEAutomatic --self-test
 
       - name: Verify Linux bundle
         run: |
@@ -179,7 +183,11 @@ jobs:
 
       - name: Verify Python packages inside build environment
         shell: pwsh
-        run: .\.venv\Scripts\python.exe -c "import pydantic, pydantic_core, cryptography, PyQt6; from PyQt6.QtWebEngineWidgets import QWebEngineView; print('runtime deps + PyQt6 OK')"
+        run: .\.venv\Scripts\python.exe -c "import pydantic, pydantic_core, cryptography, platformdirs, PyQt6; from PyQt6.QtWebEngineWidgets import QWebEngineView; print('runtime deps + PyQt6 OK')"
+
+      - name: Smoke test Windows executable
+        shell: pwsh
+        run: .\dist\ZTEAutomatic\ZTEAutomatic.exe --self-test
 
       - name: Package Windows build
         shell: pwsh
