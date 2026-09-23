@@ -3780,6 +3780,22 @@ async function loadAll() {
             }
         }
 
+        // Extensões carregadas depois do app.js podem registrar uma triagem
+        // adicional sem duplicar o fluxo principal nem disputar a sessão
+        // ThinkLua em paralelo.
+        if (
+            typeof window.loadDashboardSupportHealth === "function"
+        ) {
+            try {
+                await window.loadDashboardSupportHealth();
+            } catch (error) {
+                console.warn(
+                    "Triagem automática do Dashboard indisponível:",
+                    error
+                );
+            }
+        }
+
         if (!failed.length) {
             showToast(
                 "Dados atualizados."
