@@ -4,7 +4,9 @@ from apps.zte_manager.services.attendance_report_service import (
     AttendanceReportService,
 )
 from apps.zte_manager.services.speed_test_service import (
+    FastComSpeedTestStrategy,
     HttpWorkstationSpeedTestStrategy,
+    SpeedTestProviderFactory,
 )
 from apps.zte_manager.services.support_diagnostic_service import (
     ChannelAnalyzer,
@@ -153,12 +155,83 @@ class SupportDiagnosticRuleTests(unittest.TestCase):
 class SpeedTestServerTests(unittest.TestCase):
     def test_custom_base_url_is_normalized(self):
         strategy = HttpWorkstationSpeedTestStrategy(
-            base_url="https://speedtest.example.net/"
+            base_url="https://speed.cloudflare.com/"
         )
 
         self.assertEqual(
             strategy.base_url,
-            "https://speedtest.example.net",
+            "https://speed.cloudflare.com",
+        )
+
+    def test_provider_factory_detects_fast_com(self):
+        self.assertEqual(
+            SpeedTestProviderFactory.detect(
+                "auto",
+                "https://fast.com",
+            ),
+            "fast",
+        )
+
+    def test_provider_factory_detects_speedtest_net(self):
+        self.assertEqual(
+            SpeedTestProviderFactory.detect(
+                "auto",
+                "https://www.speedtest.net/pt",
+            ),
+            "speedtest_net",
+        )
+
+    def test_provider_factory_detects_cloudflare(self):
+        self.assertEqual(
+            SpeedTestProviderFactory.detect(
+                "auto",
+                "https://speed.cloudflare.com",
+            ),
+            "cloudflare",
+        )
+
+    def test_unknown_custom_url_is_treated_as_librespeed(self):
+        self.assertEqual(
+            SpeedTestProviderFactory.detect(
+                "auto",
+                "https://speedtest.example.net",
+            ),
+            "librespeed",
+        )
+
+    def test_native_auto_is_preserved(self):
+        self.assertEqual(
+            SpeedTestProviderFactory.detect(
+                "native_auto",
+                None,
+            ),
+            "native_auto",
+        )
+
+    def test_minha_conexao_is_not_misidentified_as_cloudflare(self):
+        with self.assertRaises(
+            RuntimeError
+        ):
+            SpeedTestProviderFactory.detect(
+                "auto",
+                "https://www.minhaconexao.com.br",
+            )
+
+    def test_fast_range_url_preserves_query_string(self):
+        url = (
+            "https://ipv4.example.nflxvideo.net/"
+            "speedtest?c=br&n=123"
+        )
+
+        ranged = FastComSpeedTestStrategy._range_url(
+            url,
+            0,
+            999,
+        )
+
+        self.assertIn(
+            "/speedtest/range/0-999?",
+            ranged,
         )
 
 

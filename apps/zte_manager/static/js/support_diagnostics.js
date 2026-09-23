@@ -86,18 +86,23 @@ function diagnosticPayload({
         )?.value || 0
     );
 
-    const speedtestPreset = document.getElementById(
+    const speedtestProvider = document.getElementById(
         "supportSpeedtestPreset"
-    )?.value || "https://speed.cloudflare.com";
+    )?.value || "native_auto";
 
-    const speedtestBaseUrl = speedtestPreset === "custom"
+    const speedtestBaseUrl = [
+        "auto",
+        "librespeed"
+    ].includes(
+        speedtestProvider
+    )
         ? (
             document.getElementById(
                 "supportSpeedtestBaseUrl"
             )?.value.trim()
             || null
         )
-        : speedtestPreset;
+        : null;
 
     return {
         mode,
@@ -144,6 +149,7 @@ function diagnosticPayload({
                 "supportAllowSpeedFallback"
             )?.checked ?? true
         ),
+        speedtest_provider: speedtestProvider,
         speedtest_base_url: speedtestBaseUrl,
         auto_optimize_wifi: (
             full
@@ -835,9 +841,23 @@ function renderSpeedTest(result) {
         return "";
     }
 
+    const providerLabels = {
+        zte_native: "ONT ZTE",
+        cloudflare: "Cloudflare",
+        "fast.com": "FAST.com / Netflix",
+        "speedtest.net": "Speedtest.net",
+        librespeed: "LibreSpeed"
+    };
+
     const source = speed.source === "ont_native"
         ? "Executado pela própria ONT"
         : "Executado pelo computador do atendente";
+
+    const providerLabel = (
+        providerLabels[speed.provider]
+        || speed.provider
+        || "Speed Test"
+    );
 
     return `
         <article class="support-result-card speed-result-card">
@@ -876,6 +896,7 @@ function renderSpeedTest(result) {
 
             <p class="muted with-top-space">
                 ${supportEscape(source)}
+                • ${supportEscape(providerLabel)}
                 ${speed.server?.name ? ` • ${supportEscape(speed.server.name)}` : ""}
             </p>
 
@@ -1137,22 +1158,28 @@ async function runStandaloneSpeedTest() {
                             "supportAllowSpeedFallback"
                         )?.checked ?? true
                     ),
-                    fallback_base_url: (
+                    provider: (
                         document.getElementById(
                             "supportSpeedtestPreset"
-                        )?.value === "custom"
+                        )?.value
+                        || "native_auto"
+                    ),
+                    fallback_base_url: (
+                        [
+                            "auto",
+                            "librespeed"
+                        ].includes(
+                            document.getElementById(
+                                "supportSpeedtestPreset"
+                            )?.value
+                        )
                             ? (
                                 document.getElementById(
                                     "supportSpeedtestBaseUrl"
                                 )?.value.trim()
                                 || null
                             )
-                            : (
-                                document.getElementById(
-                                    "supportSpeedtestPreset"
-                                )?.value
-                                || "https://speed.cloudflare.com"
-                            )
+                            : null
                     )
                 })
             }
@@ -1268,17 +1295,109 @@ document.getElementById(
 
 
 
+const SPEEDTEST_PROVIDER_STORAGE_KEY = "zteAutomatic.speedtestProvider";
+const SPEEDTEST_URL_STORAGE_KEY = "zteAutomatic.speedtestUrl";
+
+
 function syncSpeedtestServerField() {
     const preset = document.getElementById(
         "supportSpeedtestPreset"
     )?.value;
 
+    const needsUrl = [
+        "auto",
+        "librespeed"
+    ].includes(
+        preset
+    );
+
     document.getElementById(
         "supportSpeedtestCustomField"
     )?.classList.toggle(
         "hidden",
-        preset !== "custom"
+        !needsUrl
     );
+
+    const help = document.getElementById(
+        "supportSpeedtestHelp"
+    );
+
+    if (help) {
+        help.textContent = preset === "librespeed"
+            ? "Informe a URL raiz do LibreSpeed; o app descobre garbage.php e empty.php automaticamente."
+            : "FAST.com, Speedtest.net e Cloudflare são detectados pela URL. Outras URLs são testadas como LibreSpeed.";
+    }
+}
+
+
+function saveSpeedtestPreference() {
+    try {
+        localStorage.setItem(
+            SPEEDTEST_PROVIDER_STORAGE_KEY,
+            document.getElementById(
+                "supportSpeedtestPreset"
+            )?.value || "native_auto"
+        );
+
+        localStorage.setItem(
+            SPEEDTEST_URL_STORAGE_KEY,
+            document.getElementById(
+                "supportSpeedtestBaseUrl"
+            )?.value.trim() || ""
+        );
+    } catch (error) {
+        console.warn(
+            "Não foi possível salvar a preferência do Speed Test:",
+            error
+        );
+    }
+}
+
+
+function loadSpeedtestPreference() {
+    try {
+        const provider = localStorage.getItem(
+            SPEEDTEST_PROVIDER_STORAGE_KEY
+        );
+
+        const url = localStorage.getItem(
+            SPEEDTEST_URL_STORAGE_KEY
+        );
+
+        const select = document.getElementById(
+            "supportSpeedtestPreset"
+        );
+
+        if (
+            provider
+            && select
+            && [
+                ...select.options
+            ].some(
+                option => option.value === provider
+            )
+        ) {
+            select.value = provider;
+        }
+
+        const input = document.getElementById(
+            "supportSpeedtestBaseUrl"
+        );
+
+        if (
+            input
+            && url
+        ) {
+            input.value = url;
+        }
+    } catch (error) {
+        console.warn(
+            "Não foi possível restaurar a preferência do Speed Test:",
+            error
+        );
+    }
+
+    syncSpeedtestServerField();
 }
 
 
@@ -1286,8 +1405,19 @@ document.getElementById(
     "supportSpeedtestPreset"
 )?.addEventListener(
     "change",
-    syncSpeedtestServerField
+    () => {
+        syncSpeedtestServerField();
+        saveSpeedtestPreference();
+    }
 );
 
 
-syncSpeedtestServerField();
+document.getElementById(
+    "supportSpeedtestBaseUrl"
+)?.addEventListener(
+    "change",
+    saveSpeedtestPreference
+);
+
+
+loadSpeedtestPreference();

@@ -86,6 +86,7 @@ class SupportDiagnosticOptions:
     include_traceroute: bool = False
     include_speedtest: bool = True
     allow_speedtest_fallback: bool = True
+    speedtest_provider: str = "native_auto"
     speedtest_base_url: str | None = None
     expected_download_mbps: float | None = None
     expected_upload_mbps: float | None = None
@@ -350,12 +351,14 @@ class SpeedTestCollector(DiagnosticCollector):
         zte,
         *,
         allow_fallback: bool,
+        provider: str = "native_auto",
         fallback_base_url: str | None = None,
     ):
         self.zte = zte
         self.allow_fallback = (
             allow_fallback
         )
+        self.provider = provider
         self.fallback_base_url = (
             fallback_base_url
         )
@@ -373,6 +376,7 @@ class SpeedTestCollector(DiagnosticCollector):
             fallback_base_url=(
                 self.fallback_base_url
             ),
+            provider=self.provider,
         )
 
 
@@ -1717,6 +1721,9 @@ class SupportDiagnosticService:
                     self.zte,
                     allow_fallback=(
                         options.allow_speedtest_fallback
+                    ),
+                    provider=(
+                        options.speedtest_provider
                     ),
                     fallback_base_url=(
                         options.speedtest_base_url
