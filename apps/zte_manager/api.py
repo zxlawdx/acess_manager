@@ -12,6 +12,7 @@ from apps.zte_manager.schemas import (
     AutomaticDiagnosticRequest,
     BandSteeringConfigRequest,
     BandSteeringRequest,
+    BackupCompareRequest,
     BatchManagementRequest,
     BridgeModeRequest,
     CapabilityProbeRequest,
@@ -22,7 +23,9 @@ from apps.zte_manager.schemas import (
     DmzRequest,
     DnsRequest,
     DriftRequest,
+    FilterGlobalManagementRequest,
     FirewallManagementRequest,
+    FirewallRuleManagementRequest,
     FirmwareRegisterRequest,
     FirmwareUpgradeRequest,
     GatewayCommandRequest,
@@ -50,6 +53,7 @@ from apps.zte_manager.schemas import (
     WifiSSIDRequest,
     WifiScheduleRequest,
     WANActionRequest,
+    WANCreateRequest,
     WANManagementRequest,
     WpsRequest,
     ZeroTouchRequest,
@@ -1553,6 +1557,68 @@ def management_firewall_update(context=None):
     )
 
 
+@api.get("/management/firewall/rules")
+def management_firewall_rules(context=None):
+    return _safe_call(
+        cpe_management_service.firewall_rules,
+        zte_service,
+    )
+
+
+@api.post("/management/firewall/rules/save")
+def management_firewall_rule_save(context=None):
+    def action():
+        data = _validated(
+            FirewallRuleManagementRequest,
+            context
+        )
+
+        return cpe_management_service.firewall_rule_save(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/firewall/rules/delete")
+def management_firewall_rule_delete(context=None):
+    def action():
+        data = _validated(
+            FirewallRuleManagementRequest,
+            context
+        )
+
+        return cpe_management_service.firewall_rule_delete(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/firewall/filter-global")
+def management_filter_global(context=None):
+    def action():
+        data = _validated(
+            FilterGlobalManagementRequest,
+            context
+        )
+
+        return cpe_management_service.filter_global_set(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
 @api.get("/management/sntp")
 def management_sntp(context=None):
     return _safe_call(
@@ -1607,6 +1673,24 @@ def management_tr069_update(context=None):
 def management_wan(context=None):
     return _safe_call(
         zte_service.wan_configurations
+    )
+
+
+@api.post("/management/wan/create")
+def management_wan_create(context=None):
+    def action():
+        data = _validated(
+            WANCreateRequest,
+            context
+        )
+
+        return cpe_management_service.wan_create(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
     )
 
 
@@ -1700,6 +1784,23 @@ def management_backup_create(context=None):
         return cpe_management_service.backup(
             zte_service,
             data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/backups/compare")
+def management_backup_compare(context=None):
+    def action():
+        data = _validated(
+            BackupCompareRequest,
+            context
+        )
+
+        return cpe_management_service.compare_backups(
+            data.model_dump()
         )
 
     return _safe_call(
