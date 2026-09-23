@@ -147,7 +147,7 @@ COMMON_FEATURES: dict[str, FeatureSpec] = {
     "tr069": FeatureSpec(
         "tr069",
         "TR-069 / ACS",
-        (_endpoint("tr069", "tr069_remotemgr_lua.lua", "OBJ_MANAGESERVER_ID"),),
+        (_endpoint("remoteMgr", "tr069_remotemgr_lua.lua", "OBJ_MANAGESERVER_ID"),),
         dangerous=True,
         notes="Somente leitura; senhas são sempre mascaradas.",
     ),
