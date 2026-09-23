@@ -153,10 +153,6 @@ function switchManagementTab(name) {
 
 
 async function refreshManagement() {
-    if (!ontConnected) {
-        return;
-    }
-
     setBusy(
         true,
         "Atualizando plataforma de gerenciamento..."
