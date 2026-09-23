@@ -821,6 +821,15 @@ class ZTE:
             config
         )
 
+    def delete_wan(
+        self,
+        instance_id
+    ):
+        return zte_management.delete_wan(
+            self,
+            instance_id
+        )
+
     def wan_action(
         self,
         instance_id,
