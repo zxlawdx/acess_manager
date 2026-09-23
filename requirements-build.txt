@@ -1,0 +1,6 @@
+-r requirements.txt
+pyinstaller>=6.11
+pywebview
+PyQt5
+PyQtWebEngine
+qtpy

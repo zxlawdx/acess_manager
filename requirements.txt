@@ -1,0 +1,5 @@
+git+https://github.com/zxlawdx/Vela-framework.git
+requests>=2.31
+urllib3>=2.0
+cryptography>=42
+pydantic>=2.7

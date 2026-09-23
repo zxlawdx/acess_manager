@@ -1,0 +1,563 @@
+<!-- ZTE Automatic dentro do shell Vela (layout blank). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..600,0..1,-25..0&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ static('zte_manager/css/style.css') }}">
+
+<div class="app-shell">
+
+    <!-- =====================================================
+         SIDEBAR
+    ====================================================== -->
+    <aside class="sidebar">
+        <div class="brand-row">
+            <div class="brand-mark">
+                <span class="material-symbols-outlined">router</span>
+            </div>
+            <div class="brand-copy">
+                <strong>ZTE Automatic</strong>
+                <span>ISP TECH CONSOLE</span>
+            </div>
+        </div>
+
+        <div id="connectedDevice" class="target-card hidden">
+            <div class="target-head">
+                <span>TARGET DEVICE</span>
+                <span class="live-dot-wrap">
+                    <i class="live-dot"></i>
+                    ONLINE
+                </span>
+            </div>
+            <strong id="connectedModel">ZTE</strong>
+            <span id="connectedHost" class="mono">-</span>
+            <span id="connectedAttendant" class="target-tech">-</span>
+        </div>
+
+        <nav class="nav-menu">
+            <button class="menu-item active" data-page="connection" type="button">
+                <span class="material-symbols-outlined">login</span>
+                <span>Conexão</span>
+            </button>
+
+            <button class="menu-item protected-page locked" data-page="dashboard" type="button">
+                <span class="material-symbols-outlined">space_dashboard</span>
+                <span>Visão geral</span>
+            </button>
+
+            <button class="menu-item protected-page locked" data-page="wifi" type="button">
+                <span class="material-symbols-outlined">wifi</span>
+                <span>Wi-Fi & SSIDs</span>
+            </button>
+
+            <button class="menu-item protected-page locked" data-page="wan" type="button">
+                <span class="material-symbols-outlined">lan</span>
+                <span>WAN / LAN</span>
+            </button>
+
+            <button class="menu-item protected-page locked" data-page="clients" type="button">
+                <span class="material-symbols-outlined">devices</span>
+                <span>Clientes</span>
+            </button>
+
+            <button class="menu-item protected-page locked" data-page="diagnostics" type="button">
+                <span class="material-symbols-outlined">troubleshoot</span>
+                <span>Diagnóstico</span>
+            </button>
+
+            <button class="menu-item protected-page locked" data-page="profiles" type="button">
+                <span class="material-symbols-outlined">tune</span>
+                <span>Config. padrão</span>
+            </button>
+
+            <button class="menu-item protected-page locked" data-page="device" type="button">
+                <span class="material-symbols-outlined">settings_suggest</span>
+                <span>Equipamento</span>
+            </button>
+        </nav>
+
+        <div class="sidebar-bottom">
+            <div class="connection-state">
+                <span id="connectionDot" class="status-dot offline"></span>
+                <div>
+                    <small>SESSÃO</small>
+                    <strong id="connectionStatus">Desconectado</strong>
+                </div>
+            </div>
+
+            <button id="disconnectButton" class="sidebar-action danger hidden" type="button">
+                <span class="material-symbols-outlined">logout</span>
+                Fechar console
+            </button>
+        </div>
+    </aside>
+
+
+    <!-- =====================================================
+         WORKSPACE
+    ====================================================== -->
+    <div class="workspace">
+        <header class="topbar">
+            <div class="topbar-title">
+                <div class="eyebrow">F6600P • OPERATIONS</div>
+                <h1 id="pageTitle">Conexão</h1>
+                <p id="pageSubtitle">Entre na ONT para iniciar o atendimento.</p>
+            </div>
+
+            <div class="topbar-actions">
+                <div id="topDeviceChip" class="device-chip hidden">
+                    <span class="material-symbols-outlined">router</span>
+                    <div>
+                        <strong id="topDeviceModel">ZTE</strong>
+                        <span id="topDeviceMeta" class="mono">-</span>
+                    </div>
+                </div>
+
+                <button id="refreshButton" class="icon-button hidden" type="button" title="Atualizar dados">
+                    <span class="material-symbols-outlined">sync</span>
+                </button>
+            </div>
+        </header>
+
+        <main class="main-content">
+
+            <!-- ==================================================
+                 CONNECTION
+            =================================================== -->
+            <section id="page-connection" class="page active">
+                <div class="login-layout">
+                    <div class="login-hero">
+                        <div class="hero-badge">
+                            <span class="material-symbols-outlined">terminal</span>
+                            CPE CONTROL PLANE
+                        </div>
+                        <h2>Uma console de atendimento para a ONT.</h2>
+                        <p>
+                            Leitura, diagnóstico e provisionamento usando o mesmo fluxo HTTP da interface ThinkLua do equipamento.
+                        </p>
+
+                        <div class="hero-flow">
+                            <div><span>01</span><strong>Conectar</strong><small>sessão HTTP persistente</small></div>
+                            <i></i>
+                            <div><span>02</span><strong>Diagnosticar</strong><small>WAN, Wi-Fi, clientes e PON</small></div>
+                            <i></i>
+                            <div><span>03</span><strong>Provisionar</strong><small>perfil do atendente em poucos cliques</small></div>
+                        </div>
+                    </div>
+
+                    <div class="panel login-panel">
+                        <div class="panel-heading">
+                            <div class="heading-icon"><span class="material-symbols-outlined">router</span></div>
+                            <div>
+                                <span class="section-kicker">NOVA SESSÃO</span>
+                                <h3>Acesso à ONT</h3>
+                                <p>Use as credenciais administrativas do equipamento.</p>
+                            </div>
+                        </div>
+
+                        <form id="connectionForm" class="form-stack">
+                            <div class="field-grid two">
+                                <label class="field">
+                                    <span>IP / HOST</span>
+                                    <input id="zteIp" type="text" placeholder="100.64.230.64:6080" autocomplete="off" required>
+                                </label>
+
+                                <label class="field">
+                                    <span>ATENDENTE</span>
+                                    <input id="attendantName" type="text" placeholder="marinaldo" autocomplete="off" required>
+                                </label>
+                            </div>
+
+                            <label class="field">
+                                <span>USUÁRIO DA ONT</span>
+                                <input id="zteUsername" type="text" placeholder="admin" autocomplete="username" required>
+                            </label>
+
+                            <label class="field">
+                                <span>SENHA DA ONT</span>
+                                <div class="password-control">
+                                    <input id="ztePassword" type="password" placeholder="Senha" autocomplete="current-password" required>
+                                    <button id="togglePassword" type="button">Mostrar</button>
+                                </div>
+                            </label>
+
+                            <label class="check-row">
+                                <input id="zteHttps" type="checkbox">
+                                <span>Usar HTTPS neste equipamento</span>
+                            </label>
+
+                            <button id="connectButton" class="button primary wide" type="submit">
+                                <span class="material-symbols-outlined">power</span>
+                                Conectar ao equipamento
+                            </button>
+                        </form>
+
+                        <div id="connectionResult" class="connection-result hidden"></div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ==================================================
+                 DASHBOARD
+            =================================================== -->
+            <section id="page-dashboard" class="page">
+                <div class="operations-strip">
+                    <div class="operations-main">
+                        <span class="pulse"></span>
+                        <div>
+                            <span class="section-kicker">ATENDIMENTO ATIVO</span>
+                            <strong id="dashboardProfileName">-</strong>
+                        </div>
+                    </div>
+                    <div class="operations-copy">
+                        Perfil padrão pronto para aplicar em Wi-Fi e DNS.
+                    </div>
+                    <button id="applyDefaultButton" class="button primary" type="button">
+                        <span class="material-symbols-outlined">bolt</span>
+                        Aplicar configuração padrão
+                    </button>
+                </div>
+
+                <div class="kpi-grid">
+                    <article class="kpi-card cyan">
+                        <div class="kpi-head"><span>ONT</span><span class="material-symbols-outlined">memory</span></div>
+                        <strong id="deviceModel">-</strong>
+                        <small id="deviceFirmware">Firmware: -</small>
+                    </article>
+
+                    <article class="kpi-card violet">
+                        <div class="kpi-head"><span>RECURSOS</span><span class="material-symbols-outlined">developer_board</span></div>
+                        <div class="dual-metric">
+                            <div><strong id="deviceCpu">-</strong><small>CPU</small></div>
+                            <div><strong id="deviceMemory">-</strong><small>RAM</small></div>
+                        </div>
+                    </article>
+
+                    <article class="kpi-card green">
+                        <div class="kpi-head"><span>GPON RX</span><span class="material-symbols-outlined">cell_tower</span></div>
+                        <strong id="opticalRxKpi">-</strong>
+                        <small id="opticalStatusKpi">Aguardando leitura óptica</small>
+                    </article>
+
+                    <article class="kpi-card amber">
+                        <div class="kpi-head"><span>CLIENTES</span><span class="material-symbols-outlined">devices</span></div>
+                        <strong id="clientTotalKpi">0</strong>
+                        <small>dispositivos encontrados</small>
+                    </article>
+                </div>
+
+                <div class="dashboard-grid">
+                    <article class="panel span-2">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">RF OVERVIEW</span>
+                                <h3>Redes Wi-Fi</h3>
+                            </div>
+                            <button class="text-action" data-jump="wifi" type="button">Gerenciar SSIDs</button>
+                        </div>
+                        <div id="dashboardNetworks" class="network-overview"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">UPLINK</span><h3>WAN principal</h3></div></div>
+                        <div id="wanSummary"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">AUTH</span><h3>PPPoE</h3></div></div>
+                        <div id="dashboardPppoe"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">RESOLVER</span><h3>DNS</h3></div></div>
+                        <div id="dashboardDns"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">SESSION</span><h3>Equipamento</h3></div></div>
+                        <div class="mini-metrics">
+                            <div><span>Uptime</span><strong id="deviceUptime">-</strong></div>
+                            <div><span>Serial</span><strong id="dashboardSerial" class="mono">-</strong></div>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+
+            <!-- ==================================================
+                 WIFI
+            =================================================== -->
+            <section id="page-wifi" class="page">
+                <div class="section-intro">
+                    <div>
+                        <span class="section-kicker">WIRELESS PROVISIONING</span>
+                        <h2>SSIDs e rádio</h2>
+                        <p>Ative, desative, renomeie redes, altere senha e ajuste parâmetros de RF.</p>
+                    </div>
+                    <button id="revealWifiPasswordsButton" class="button ghost" type="button">
+                        <span class="material-symbols-outlined">visibility</span>
+                        Revelar senhas Wi-Fi
+                    </button>
+                </div>
+
+                <div class="subsection-title">
+                    <div><span class="material-symbols-outlined">wifi</span><h3>SSIDs</h3></div>
+                    <span>Alterações são aplicadas individualmente por rede.</span>
+                </div>
+                <div id="wifiNetworks" class="ssid-grid"></div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">cell_tower</span><h3>Rádios 2.4 / 5 GHz</h3></div>
+                    <span>Canal, largura, modo, potência, SGI e estado do rádio.</span>
+                </div>
+                <div id="wifiRadios" class="radio-grid"></div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">lock_reset</span><h3>WPS</h3></div>
+                    <span>Desative ou inicie PBC quando o firmware permitir.</span>
+                </div>
+                <div id="wpsControls" class="feature-grid">
+                    <div class="loading">Carregando suporte WPS...</div>
+                </div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">hub</span><h3>Band Steering</h3></div>
+                    <span>Smart Connect / direcionamento entre 2.4 e 5 GHz quando o firmware expõe o recurso.</span>
+                </div>
+                <div id="bandSteeringControl" class="feature-grid">
+                    <div class="loading">Carregando Band Steering...</div>
+                </div>
+            </section>
+
+
+            <!-- ==================================================
+                 WAN / LAN
+            =================================================== -->
+            <section id="page-wan" class="page">
+                <div class="section-intro">
+                    <div>
+                        <span class="section-kicker">NETWORK EDGE</span>
+                        <h2>WAN, PPPoE e Ethernet</h2>
+                        <p>Estado da Internet, autenticação e negociação das portas LAN.</p>
+                    </div>
+                </div>
+
+                <div id="wanConnections" class="wan-grid"></div>
+
+                <div class="two-column-layout">
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div><span class="section-kicker">PPPoE</span><h3>Credenciais</h3></div>
+                            <button id="revealPppoeButton" class="text-action" type="button">Revelar senha</button>
+                        </div>
+                        <div id="pppoeDetails"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">ETHERNET</span><h3>Portas LAN</h3></div></div>
+                        <div id="lanPorts" class="port-grid"><div class="loading">Carregando...</div></div>
+                    </article>
+                </div>
+
+                <article class="panel with-top-space">
+                    <div class="panel-header">
+                        <div><span class="section-kicker">DISCOVERY SERVICE</span><h3>UPnP</h3></div>
+                        <span id="upnpBadge" class="badge">Carregando</span>
+                    </div>
+                    <div id="upnpDetails" class="upnp-layout">
+                        <div class="loading">Carregando configuração UPnP...</div>
+                    </div>
+                </article>
+            </section>
+
+
+            <!-- ==================================================
+                 CLIENTS
+            =================================================== -->
+            <section id="page-clients" class="page">
+                <div class="section-intro compact">
+                    <div>
+                        <span class="section-kicker">ACTIVE ENDPOINTS</span>
+                        <h2>Clientes conectados</h2>
+                        <p>Visão de dispositivos wireless e cabeados.</p>
+                    </div>
+                    <div class="client-counter-row">
+                        <div><span>Wi-Fi</span><strong id="wifiClientCount">0</strong></div>
+                        <div><span>LAN</span><strong id="lanClientCount">0</strong></div>
+                    </div>
+                </div>
+
+                <article class="panel table-panel">
+                    <div class="panel-header"><div><span class="section-kicker">WIRELESS</span><h3>Clientes Wi-Fi</h3></div></div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Hostname</th><th>IP</th><th>MAC</th><th>SSID</th><th>RSSI</th><th>SNR</th><th>RX</th><th>TX</th></tr></thead>
+                            <tbody id="wifiClientsTable"></tbody>
+                        </table>
+                    </div>
+                </article>
+
+                <article class="panel table-panel">
+                    <div class="panel-header"><div><span class="section-kicker">ETHERNET</span><h3>Clientes LAN</h3></div></div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Hostname</th><th>IP</th><th>MAC</th></tr></thead>
+                            <tbody id="lanClientsTable"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+
+
+            <!-- ==================================================
+                 DIAGNOSTICS
+            =================================================== -->
+            <section id="page-diagnostics" class="page">
+                <div class="section-intro">
+                    <div>
+                        <span class="section-kicker">CPE DIAGNOSTICS</span>
+                        <h2>Testes a partir da própria ONT</h2>
+                        <p>O tráfego parte do equipamento, não do computador do atendente.</p>
+                    </div>
+                </div>
+
+                <div class="diagnostic-grid">
+                    <article class="panel diagnostic-card">
+                        <div class="panel-header"><div><span class="material-symbols-outlined panel-icon">network_ping</span><h3>Ping</h3></div></div>
+                        <form id="pingForm" class="form-stack">
+                            <label class="field"><span>HOST / IP</span><input id="pingHost" type="text" value="8.8.8.8" required></label>
+                            <div class="field-grid two">
+                                <label class="field"><span>INTERFACE</span><select id="pingInterface"><option value="">Rota padrão</option></select></label>
+                                <label class="field"><span>IP VERSION</span><select id="pingIpVersion"><option value="IPv4">IPv4</option><option value="IPv6">IPv6</option></select></label>
+                            </div>
+                            <button class="button primary" type="submit"><span class="material-symbols-outlined">play_arrow</span>Executar ping</button>
+                        </form>
+                        <pre id="pingOutput" class="terminal-output">Aguardando teste...</pre>
+                    </article>
+
+                    <article class="panel diagnostic-card">
+                        <div class="panel-header"><div><span class="material-symbols-outlined panel-icon">route</span><h3>Traceroute</h3></div></div>
+                        <form id="tracerouteForm" class="form-stack">
+                            <label class="field"><span>HOST / IP</span><input id="traceHost" type="text" value="8.8.8.8" required></label>
+                            <div class="field-grid two">
+                                <label class="field"><span>INTERFACE</span><select id="traceInterface"><option value="">Rota padrão</option></select></label>
+                                <label class="field"><span>PROTOCOLO</span><select id="traceProtocol"><option value="ICMP">ICMP</option><option value="UDP">UDP</option></select></label>
+                                <label class="field"><span>MAX HOPS</span><input id="traceHops" type="number" min="1" max="64" value="30"></label>
+                                <label class="field"><span>TIMEOUT (MS)</span><input id="traceTimeout" type="number" min="2000" max="10000" value="5000"></label>
+                            </div>
+                            <button class="button primary" type="submit"><span class="material-symbols-outlined">play_arrow</span>Executar traceroute</button>
+                        </form>
+                        <pre id="tracerouteOutput" class="terminal-output">Aguardando teste...</pre>
+                    </article>
+                </div>
+            </section>
+
+
+            <!-- ==================================================
+                 PROFILES
+            =================================================== -->
+            <section id="page-profiles" class="page">
+                <div class="section-intro">
+                    <div>
+                        <span class="section-kicker">TECHNICIAN PRESET</span>
+                        <h2>Configuração padrão</h2>
+                        <p>Perfil persistente do atendente para padronizar rádio e DNS.</p>
+                    </div>
+                    <div class="profile-actions">
+                        <button id="captureProfileButton" class="button ghost" type="button"><span class="material-symbols-outlined">download</span>Capturar atual</button>
+                        <button id="saveProfileButton" class="button ghost" type="button"><span class="material-symbols-outlined">save</span>Salvar perfil</button>
+                        <button id="applyProfileButton" class="button primary" type="button"><span class="material-symbols-outlined">bolt</span>Aplicar perfil</button>
+                    </div>
+                </div>
+
+                <article class="panel profile-banner">
+                    <span class="section-kicker">PERFIL ATIVO</span>
+                    <strong id="profileAttendant">-</strong>
+                    <p>Os parâmetros abaixo pertencem somente a este atendente.</p>
+                </article>
+
+                <div id="profileRadios" class="radio-grid"></div>
+
+                <article class="panel with-top-space">
+                    <div class="panel-header"><div><span class="section-kicker">DNS PRESET</span><h3>DNS padrão</h3></div></div>
+                    <div class="field-grid three">
+                        <label class="field"><span>DOMÍNIO</span><input id="profileDomainName" type="text" placeholder="Opcional"></label>
+                        <label class="field"><span>DNS IPv4 1</span><input id="profileDns4_1" type="text"></label>
+                        <label class="field"><span>DNS IPv4 2</span><input id="profileDns4_2" type="text"></label>
+                        <label class="field"><span>DNS IPv6 1</span><input id="profileDns6_1" type="text"></label>
+                        <label class="field"><span>DNS IPv6 2</span><input id="profileDns6_2" type="text"></label>
+                    </div>
+                </article>
+
+                <article class="panel with-top-space">
+                    <div class="panel-header">
+                        <div><span class="section-kicker">STATIC DNS HOSTS</span><h3>Nomes de servidor</h3></div>
+                        <button id="addProfileHostButton" class="text-action" type="button">+ Adicionar</button>
+                    </div>
+                    <div id="profileHosts" class="stack-list"></div>
+                </article>
+
+                <article class="panel with-top-space">
+                    <div class="panel-header"><div><span class="section-kicker">LAST RUN</span><h3>Resultado da aplicação</h3></div></div>
+                    <div id="profileApplyResult" class="stack-list"><span class="muted">Nenhuma aplicação realizada nesta sessão.</span></div>
+                </article>
+            </section>
+
+
+            <!-- ==================================================
+                 DEVICE
+            =================================================== -->
+            <section id="page-device" class="page">
+                <div class="section-intro">
+                    <div>
+                        <span class="section-kicker">DEVICE MANAGEMENT</span>
+                        <h2>Equipamento e PON</h2>
+                        <p>Telemetria óptica, conta administrativa e ações da ONT.</p>
+                    </div>
+                </div>
+
+                <div class="device-grid">
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">HARDWARE</span><h3>Informações da ONT</h3></div></div>
+                        <div id="deviceDetails"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel optical-panel">
+                        <div class="panel-header"><div><span class="section-kicker">GPON OPTICS</span><h3>Sinal óptico</h3></div></div>
+                        <div id="opticalDetails"><div class="loading">Carregando...</div></div>
+                    </article>
+                </div>
+
+                <div class="two-column-layout with-top-space">
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">ACCOUNT MANAGER</span><h3>Senha administrativa</h3></div><span class="badge warning">Avançado</span></div>
+                        <div id="accountDetails" class="account-list"><div class="loading">Carregando...</div></div>
+                        <form id="adminPasswordForm" class="admin-password-form">
+                            <label class="field"><span>NOVA SENHA</span><input id="newAdminPassword" type="password" autocomplete="new-password" placeholder="Nova senha da conta usada no login" required></label>
+                            <label class="field"><span>CONFIRMAR</span><input id="confirmAdminPassword" type="password" autocomplete="new-password" placeholder="Repita a senha" required></label>
+                            <button class="button ghost" type="submit"><span class="material-symbols-outlined">key</span>Trocar senha da ONT</button>
+                        </form>
+                    </article>
+
+                    <article class="panel danger-zone">
+                        <div class="panel-header"><div><span class="section-kicker">POWER CONTROL</span><h3>Reinicialização</h3></div></div>
+                        <p>Envia o mesmo comando de Restart da interface original. A sessão será perdida enquanto a ONT reinicia.</p>
+                        <button id="rebootDeviceButton" class="button danger" type="button"><span class="material-symbols-outlined">restart_alt</span>Reiniciar equipamento</button>
+                    </article>
+                </div>
+            </section>
+
+        </main>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<div id="busyOverlay" class="busy-overlay hidden">
+    <div class="busy-card">
+        <span class="loader-ring"></span>
+        <div><strong id="busyText">Processando...</strong><small>Não feche a sessão enquanto a ONT responde.</small></div>
+    </div>
+</div>
+
+<script src="{{ static('zte_manager/js/app.js') }}"></script>
