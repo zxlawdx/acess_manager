@@ -1,6 +1,17 @@
 -r requirements.txt
-pyinstaller>=6.11
-pywebview
+
+# Build reproduzível - mesmas versões/base usadas no PIBIC LAB.
+pyinstaller==6.22.2
+pywebview==6.2.1
+
+# Backend Windows do pywebview.
 PyQt5
 PyQtWebEngine
 qtpy
+
+# Dependências auxiliares que o PyInstaller/setuptools pode carregar
+# dinamicamente durante a análise do bundle.
+jaraco.text
+jaraco.functools
+jaraco.context
+more-itertools
