@@ -1376,6 +1376,7 @@ class ZTEService:
             readers = {
                 "qos": zte.qos_status,
                 "firewall": zte.firewall_management_status,
+                "firewall_rules": zte.firewall_rules,
                 "wan": zte.wan_configurations,
                 "sntp": zte.sntp_management_status,
                 "tr069": zte.tr069_management_status,
@@ -1489,6 +1490,90 @@ class ZTEService:
                 ),
             )
 
+    def firewall_rules(self):
+        with self._lock:
+            return self.get_client().firewall_rules()
+
+    def save_management_firewall_rule(
+        self,
+        kind,
+        config,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a alteração do filtro de firewall."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation=f"firewall_{kind}_rule_save",
+                target=(
+                    config.get("id")
+                    or config.get("Name")
+                    or kind
+                ),
+                before_reader=zte.firewall_rules,
+                action=lambda: zte.save_firewall_rule(
+                    kind,
+                    config
+                ),
+                after_reader=zte.firewall_rules,
+            )
+
+    def delete_management_firewall_rule(
+        self,
+        kind,
+        instance_id,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a remoção do filtro de firewall."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation=f"firewall_{kind}_rule_delete",
+                target=instance_id,
+                before_reader=zte.firewall_rules,
+                action=lambda: zte.delete_firewall_rule(
+                    kind,
+                    instance_id
+                ),
+                after_reader=zte.firewall_rules,
+            )
+
+    def set_management_filter_global(
+        self,
+        config,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a alteração das políticas globais de filtro."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="firewall_filter_global",
+                target="filterCriteria",
+                before_reader=zte.firewall_rules,
+                action=lambda: zte.set_filter_global(
+                    config
+                ),
+                after_reader=zte.firewall_rules,
+            )
+
     def sntp_management_status(self):
         with self._lock:
             return (
@@ -1561,6 +1646,39 @@ class ZTEService:
             return (
                 self.get_client()
                 .wan_configurations()
+            )
+
+    def create_management_wan(
+        self,
+        config,
+        *,
+        confirm=False,
+        backup=True
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a criação da WAN/VLAN/PPPoE."
+            )
+
+        with self._lock:
+            if backup:
+                self.management_backup(
+                    reason="pre_wan_create"
+                )
+
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="wan_create",
+                target=(
+                    config.get("name")
+                    or "new_wan"
+                ),
+                before_reader=zte.wan_configurations,
+                action=lambda: zte.create_wan(
+                    config
+                ),
+                after_reader=zte.wan_configurations,
             )
 
     def update_management_wan(
