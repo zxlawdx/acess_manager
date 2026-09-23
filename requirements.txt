@@ -6,3 +6,6 @@ requests>=2.31
 urllib3>=2.0
 cryptography>=42
 pydantic>=2.7
+
+# Necessário em runtime por pkg_resources/setuptools dentro do bundle PyInstaller.
+platformdirs>=4.2,<5
