@@ -1594,6 +1594,134 @@ async function saveManagementFirewall() {
 }
 
 
+async function saveManagementFirewallRule() {
+    if (!window.confirm(
+        "Salvar este filtro no firewall da ONT atual?"
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/firewall/rules/save",
+            {
+                method: "POST",
+                body: {
+                    kind: document.getElementById(
+                        "managementFirewallRuleKind"
+                    ).value,
+                    config: managementParseJson(
+                        "managementFirewallRuleJson"
+                    ),
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "Filtro de firewall salvo."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function deleteManagementFirewallRule() {
+    const id = document.getElementById(
+        "managementFirewallRuleId"
+    ).value.trim();
+
+    if (!id) {
+        showToast(
+            "Informe o ID do filtro."
+        );
+
+        return;
+    }
+
+    if (!window.confirm(
+        "Excluir este filtro do firewall?"
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/firewall/rules/delete",
+            {
+                method: "POST",
+                body: {
+                    kind: document.getElementById(
+                        "managementFirewallRuleKind"
+                    ).value,
+                    id,
+                    config: {},
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "Filtro removido."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function saveManagementFilterGlobal() {
+    if (!window.confirm(
+        "Alterar a política global de filtros?"
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/firewall/filter-global",
+            {
+                method: "POST",
+                body: {
+                    config: managementParseJson(
+                        "managementFirewallGlobalJson"
+                    ),
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "Política global atualizada."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
 async function saveManagementSntp() {
     try {
         const result = await managementRequest(
@@ -1652,6 +1780,43 @@ async function saveManagementTr069() {
 
         showToast(
             "TR-069 atualizado."
+        );
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function createManagementWan() {
+    if (!window.confirm(
+        "Criar uma nova WAN/VLAN/PPPoE? Um backup será criado antes."
+    )) {
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/wan/create",
+            {
+                method: "POST",
+                body: {
+                    config: managementParseJson(
+                        "managementWanJson"
+                    ),
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementNetworkOutput",
+            result
+        );
+
+        showToast(
+            "Nova WAN criada."
         );
     } catch (error) {
         showToast(
@@ -1790,6 +1955,51 @@ async function createManagementBackup() {
         );
 
         await refreshManagement();
+    } catch (error) {
+        showToast(
+            error.message
+        );
+    }
+}
+
+
+async function compareManagementBackups() {
+    const leftId = Number(
+        document.getElementById(
+            "managementBackupLeft"
+        ).value || 0
+    );
+
+    const rightId = Number(
+        document.getElementById(
+            "managementBackupRight"
+        ).value || 0
+    );
+
+    if (!leftId || !rightId) {
+        showToast(
+            "Informe os dois IDs de backup."
+        );
+
+        return;
+    }
+
+    try {
+        const result = await managementRequest(
+            "/management/backups/compare",
+            {
+                method: "POST",
+                body: {
+                    left_id: leftId,
+                    right_id: rightId
+                }
+            }
+        );
+
+        managementOutput(
+            "managementBackupCompareOutput",
+            result
+        );
     } catch (error) {
         showToast(
             error.message
@@ -2190,6 +2400,30 @@ document.getElementById(
 
 
 document.getElementById(
+    "managementFirewallRuleSave"
+)?.addEventListener(
+    "click",
+    saveManagementFirewallRule
+);
+
+
+document.getElementById(
+    "managementFirewallRuleDelete"
+)?.addEventListener(
+    "click",
+    deleteManagementFirewallRule
+);
+
+
+document.getElementById(
+    "managementFirewallGlobalSave"
+)?.addEventListener(
+    "click",
+    saveManagementFilterGlobal
+);
+
+
+document.getElementById(
     "managementSntpSave"
 )?.addEventListener(
     "click",
@@ -2202,6 +2436,14 @@ document.getElementById(
 )?.addEventListener(
     "click",
     saveManagementTr069
+);
+
+
+document.getElementById(
+    "managementWanCreate"
+)?.addEventListener(
+    "click",
+    createManagementWan
 );
 
 
@@ -2242,6 +2484,14 @@ document.getElementById(
 )?.addEventListener(
     "click",
     refreshManagement
+);
+
+
+document.getElementById(
+    "managementBackupCompare"
+)?.addEventListener(
+    "click",
+    compareManagementBackups
 );
 
 
