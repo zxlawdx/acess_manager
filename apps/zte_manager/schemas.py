@@ -560,3 +560,32 @@ class ZeroTouchRequest(BaseModel):
         default_factory=list
     )
     confirm: bool = False
+
+
+
+class FirewallRuleManagementRequest(BaseModel):
+    kind: str
+    id: str | None = None
+    config: dict[str, Any] = Field(
+        default_factory=dict
+    )
+    confirm: bool = False
+
+
+class FilterGlobalManagementRequest(BaseModel):
+    config: dict[str, Any] = Field(
+        default_factory=dict
+    )
+    confirm: bool = False
+
+
+class WANCreateRequest(BaseModel):
+    config: dict[str, Any] = Field(
+        default_factory=dict
+    )
+    confirm: bool = False
+
+
+class BackupCompareRequest(BaseModel):
+    left_id: int = Field(ge=1)
+    right_id: int = Field(ge=1)
