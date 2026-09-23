@@ -201,6 +201,7 @@ class SpeedTestService:
         *,
         allow_fallback: bool = True,
         server_url: str | None = None,
+        fallback_base_url: str | None = None,
     ) -> dict[str, Any]:
         strategies: list[SpeedTestStrategy] = [
             NativeOntSpeedTestStrategy(
@@ -211,7 +212,9 @@ class SpeedTestService:
 
         if allow_fallback:
             strategies.append(
-                HttpWorkstationSpeedTestStrategy()
+                HttpWorkstationSpeedTestStrategy(
+                    base_url=fallback_base_url
+                )
             )
 
         attempts = []

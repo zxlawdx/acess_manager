@@ -894,6 +894,9 @@ class ZTEService:
                 "allow_speedtest_fallback",
                 True
             ),
+            speedtest_base_url=config.get(
+                "speedtest_base_url"
+            ),
             expected_download_mbps=config.get(
                 "expected_download_mbps"
             ),
@@ -1219,6 +1222,9 @@ class ZTEService:
                 ),
                 server_url=config.get(
                     "server_url"
+                ),
+                fallback_base_url=config.get(
+                    "fallback_base_url"
                 ),
             )
 

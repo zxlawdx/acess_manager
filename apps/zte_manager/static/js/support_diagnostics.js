@@ -86,6 +86,19 @@ function diagnosticPayload({
         )?.value || 0
     );
 
+    const speedtestPreset = document.getElementById(
+        "supportSpeedtestPreset"
+    )?.value || "https://speed.cloudflare.com";
+
+    const speedtestBaseUrl = speedtestPreset === "custom"
+        ? (
+            document.getElementById(
+                "supportSpeedtestBaseUrl"
+            )?.value.trim()
+            || null
+        )
+        : speedtestPreset;
+
     return {
         mode,
         affected_mac: (
@@ -131,6 +144,7 @@ function diagnosticPayload({
                 "supportAllowSpeedFallback"
             )?.checked ?? true
         ),
+        speedtest_base_url: speedtestBaseUrl,
         auto_optimize_wifi: (
             full
             && Boolean(
@@ -1122,6 +1136,23 @@ async function runStandaloneSpeedTest() {
                         document.getElementById(
                             "supportAllowSpeedFallback"
                         )?.checked ?? true
+                    ),
+                    fallback_base_url: (
+                        document.getElementById(
+                            "supportSpeedtestPreset"
+                        )?.value === "custom"
+                            ? (
+                                document.getElementById(
+                                    "supportSpeedtestBaseUrl"
+                                )?.value.trim()
+                                || null
+                            )
+                            : (
+                                document.getElementById(
+                                    "supportSpeedtestPreset"
+                                )?.value
+                                || "https://speed.cloudflare.com"
+                            )
                     )
                 })
             }
@@ -1234,3 +1265,29 @@ document.getElementById(
         full: true
     })
 );
+
+
+
+function syncSpeedtestServerField() {
+    const preset = document.getElementById(
+        "supportSpeedtestPreset"
+    )?.value;
+
+    document.getElementById(
+        "supportSpeedtestCustomField"
+    )?.classList.toggle(
+        "hidden",
+        preset !== "custom"
+    );
+}
+
+
+document.getElementById(
+    "supportSpeedtestPreset"
+)?.addEventListener(
+    "change",
+    syncSpeedtestServerField
+);
+
+
+syncSpeedtestServerField();
