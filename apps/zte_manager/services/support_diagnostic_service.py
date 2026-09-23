@@ -86,6 +86,7 @@ class SupportDiagnosticOptions:
     include_traceroute: bool = False
     include_speedtest: bool = True
     allow_speedtest_fallback: bool = True
+    speedtest_base_url: str | None = None
     expected_download_mbps: float | None = None
     expected_upload_mbps: float | None = None
 
@@ -349,10 +350,14 @@ class SpeedTestCollector(DiagnosticCollector):
         zte,
         *,
         allow_fallback: bool,
+        fallback_base_url: str | None = None,
     ):
         self.zte = zte
         self.allow_fallback = (
             allow_fallback
+        )
+        self.fallback_base_url = (
+            fallback_base_url
         )
 
     def collect(
@@ -364,7 +369,10 @@ class SpeedTestCollector(DiagnosticCollector):
         ).run(
             allow_fallback=(
                 self.allow_fallback
-            )
+            ),
+            fallback_base_url=(
+                self.fallback_base_url
+            ),
         )
 
 
@@ -1709,6 +1717,9 @@ class SupportDiagnosticService:
                     self.zte,
                     allow_fallback=(
                         options.allow_speedtest_fallback
+                    ),
+                    fallback_base_url=(
+                        options.speedtest_base_url
                     ),
                 )
             )
