@@ -283,6 +283,57 @@ do_download_usercfg.lua
 
 O arquivo retornado é salvo localmente; restore automático não é feito.
 
+## Scan Wi-Fi de vizinhança
+
+Em firmwares ThinkLua aparentados, a página de scan usa:
+
+```text
+menuView: wlanStaScanAP
+menuData: tot_wlan_wlan_profile_lua.lua
+object: OBJ_WLANGETNEBAP_ID
+
+APGetFrom=ScanAP    -> 2.4 GHz
+APGetFrom=ScanAP5g  -> 5 GHz
+```
+
+Campos observados: `Essid`, `MacAddr`, `AuthMode`, `Signal`, `Noise`, `Channel`, `ScndChannel`, `DTIM` e `BeaconIntervel`.
+
+O projeto tenta também variantes `wlan_sta_wlan_profile_lua.lua`. A leitura é opcional: se o firmware F670L não expuser o backend, somente a análise de vizinhança fica indisponível.
+
+## DNS Lookup nativo
+
+```text
+menuView: networkDiag
+menuData: DiagnosisNsLookupReq_lua.lua
+IF_ACTION: NsLookupDiagnosis
+objects: OBJ_DEVNSLOOKUP_ID / OBJ_DEV_GETRESULT_NSLOOKUP_ID
+```
+
+O resultado é usado para evitar o falso diagnóstico de DNS quando os campos estáticos estão vazios/`0.0.0.0`, mas a ONT recebe DNS pela WAN e resolve nomes normalmente.
+
+## Speed Test nativo
+
+Alguns firmwares AIS/ThinkLua expõem no dashboard:
+
+```text
+menuView: homePage
+menuData: home_ais_lua.lua
+
+SetSpeedtestServer
+    -> SESSION_IDVALUE
+GetSpeedtestServer
+    -> OBJ_SPEEDTEST_SERVERS_ID
+    -> URL0..URL14 (nome@url)
+
+SpeedtestDIAG
+    -> SESSION_IDVALUE
+SpeedtestGetDIAG
+    -> OBJ_SPEEDTEST_DIAGNOSE_ID
+    -> UpRate / DownRate / Percntage / State
+```
+
+A console tenta esse fluxo primeiro. Se ele não existir e o usuário permitir fallback, o desktop faz medição HTTP e marca explicitamente `source=workstation_http`, pois esse segundo caminho inclui PC/LAN/Wi-Fi além da ONT.
+
 ## Ping
 
 ```text
