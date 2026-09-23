@@ -383,6 +383,11 @@ class ZTE:
                 ),
                 "ip": cliente.get("IPAddress"),
                 "mac": cliente.get("MACAddress"),
+                "interface": (
+                    cliente.get("Interface")
+                    or cliente.get("Layer2Interface")
+                    or cliente.get("InterfaceName")
+                ),
                 "raw": cliente,
             })
 
