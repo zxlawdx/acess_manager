@@ -894,6 +894,10 @@ class ZTEService:
                 "allow_speedtest_fallback",
                 True
             ),
+            speedtest_provider=config.get(
+                "speedtest_provider",
+                "native_auto"
+            ),
             speedtest_base_url=config.get(
                 "speedtest_base_url"
             ),
@@ -1225,6 +1229,10 @@ class ZTEService:
                 ),
                 fallback_base_url=config.get(
                     "fallback_base_url"
+                ),
+                provider=config.get(
+                    "provider",
+                    "native_auto"
                 ),
             )
 
