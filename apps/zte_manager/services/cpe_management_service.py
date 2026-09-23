@@ -616,6 +616,39 @@ class CPEManagementService:
             or {},
         )
 
+    def bufferbloat(
+        self,
+        data,
+    ):
+        return remote_access_service.bufferbloat_test(
+            int(
+                data["agent_id"]
+            ),
+            ping_host=data.get(
+                "ping_host"
+            )
+            or "1.1.1.1",
+            iperf_host=data[
+                "iperf_host"
+            ],
+            direction=data.get(
+                "direction"
+            )
+            or "download",
+            duration=int(
+                data.get(
+                    "duration"
+                )
+                or 10
+            ),
+            streams=int(
+                data.get(
+                    "streams"
+                )
+                or 4
+            ),
+        )
+
     # =====================================================
     # MONITORAMENTO / TOPOLOGIA / INCIDENTES
     # =====================================================
