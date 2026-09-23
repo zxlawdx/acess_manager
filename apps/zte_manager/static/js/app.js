@@ -3571,6 +3571,129 @@ function escapeHtml(value) {
 
 
 // =========================================================
+// UI ZOOM
+// =========================================================
+
+const UI_ZOOM_KEY = "zteAutomatic.uiZoom";
+const UI_ZOOM_MIN = 0.8;
+const UI_ZOOM_MAX = 1.6;
+const UI_ZOOM_STEP = 0.1;
+
+let uiZoom = 1;
+
+
+function clampUiZoom(value) {
+    return Math.min(
+        UI_ZOOM_MAX,
+        Math.max(
+            UI_ZOOM_MIN,
+            Number(value) || 1
+        )
+    );
+}
+
+
+function applyUiZoom(
+    value,
+    persist = true
+) {
+    uiZoom = clampUiZoom(
+        value
+    );
+
+    // CSS zoom é suportado pelos engines Chromium/QtWebEngine usados
+    // pelo Vela e escala a UI inteira, inclusive componentes com px fixos.
+    document.documentElement.style.zoom = String(
+        uiZoom
+    );
+
+    const level = document.getElementById(
+        "zoomLevel"
+    );
+
+    if (level) {
+        level.textContent = `${Math.round(uiZoom * 100)}%`;
+    }
+
+    if (persist) {
+        try {
+            localStorage.setItem(
+                UI_ZOOM_KEY,
+                String(uiZoom)
+            );
+        } catch (error) {
+            console.warn(
+                "Não foi possível persistir o zoom:",
+                error
+            );
+        }
+    }
+}
+
+
+function changeUiZoom(delta) {
+    applyUiZoom(
+        Math.round(
+            (uiZoom + delta) * 10
+        ) / 10
+    );
+}
+
+
+function loadUiZoom() {
+    let saved = 1;
+
+    try {
+        saved = Number(
+            localStorage.getItem(
+                UI_ZOOM_KEY
+            )
+        ) || 1;
+    } catch (error) {
+        console.warn(
+            "Não foi possível ler o zoom salvo:",
+            error
+        );
+    }
+
+    applyUiZoom(
+        saved,
+        false
+    );
+}
+
+
+function setRefreshBusy(busy) {
+    const button = document.getElementById(
+        "refreshButton"
+    );
+
+    if (!button) {
+        return;
+    }
+
+    button.disabled = busy;
+
+    button.classList.toggle(
+        "is-loading",
+        busy
+    );
+
+    button.title = busy
+        ? "Atualizando dados..."
+        : "Atualizar dados";
+
+    button.setAttribute(
+        "aria-label",
+        button.title
+    );
+
+    // Não trocamos mais o conteúdo do botão por texto. O botão tem largura
+    // fixa e isso causava o 'Atualizar' sobrepor o chip do equipamento.
+}
+
+
+// =========================================================
 // LOAD ALL
 // =========================================================
 
@@ -3583,8 +3706,9 @@ async function loadAll() {
         "refreshButton"
     );
 
-    refreshButton.disabled = true;
-    refreshButton.textContent = "Atualizando...";
+    setRefreshBusy(
+        true
+    );
 
     try {
         // Não executamos em paralelo. O firmware guarda a view atual dentro
@@ -3630,8 +3754,9 @@ async function loadAll() {
             );
         }
     } finally {
-        refreshButton.disabled = false;
-        refreshButton.textContent = "Atualizar";
+        setRefreshBusy(
+            false
+        );
     }
 }
 
@@ -3829,6 +3954,79 @@ document
     );
 
 
+document
+    .getElementById(
+        "zoomOutButton"
+    )
+    ?.addEventListener(
+        "click",
+        () => changeUiZoom(
+            -UI_ZOOM_STEP
+        )
+    );
+
+
+document
+    .getElementById(
+        "zoomInButton"
+    )
+    ?.addEventListener(
+        "click",
+        () => changeUiZoom(
+            UI_ZOOM_STEP
+        )
+    );
+
+
+document.addEventListener(
+    "keydown",
+    event => {
+        if (
+            !event.ctrlKey
+            && !event.metaKey
+        ) {
+            return;
+        }
+
+        const key = event.key;
+
+        if (
+            key === "+"
+            || key === "="
+        ) {
+            event.preventDefault();
+
+            changeUiZoom(
+                UI_ZOOM_STEP
+            );
+
+            return;
+        }
+
+        if (
+            key === "-"
+            || key === "_"
+        ) {
+            event.preventDefault();
+
+            changeUiZoom(
+                -UI_ZOOM_STEP
+            );
+
+            return;
+        }
+
+        if (key === "0") {
+            event.preventDefault();
+
+            applyUiZoom(
+                1
+            );
+        }
+    }
+);
+
+
 // =========================================================
 // INIT
 // =========================================================
@@ -3839,6 +4037,8 @@ function initZteAutomatic() {
     }
 
     window.__zteAutomaticInitialized = true;
+
+    loadUiZoom();
 
     setConnectionStatus(
         false
