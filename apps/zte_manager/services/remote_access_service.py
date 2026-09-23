@@ -378,9 +378,25 @@ class SSHGatewayClient:
             ) from error
 
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(
-            paramiko.AutoAddPolicy()
+        client.load_system_host_keys()
+
+        vpn_config = (
+            self.agent.get(
+                "vpn_config"
+            )
+            or {}
         )
+
+        if vpn_config.get(
+            "allow_unknown_host_keys"
+        ):
+            client.set_missing_host_key_policy(
+                paramiko.AutoAddPolicy()
+            )
+        else:
+            client.set_missing_host_key_policy(
+                paramiko.RejectPolicy()
+            )
 
         connect_kwargs = {
             "hostname": self.agent[
@@ -847,6 +863,10 @@ class RemoteAccessService:
             "-o",
             "ExitOnForwardFailure=yes",
             "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
             "ServerAliveInterval=15",
             "-o",
             "ServerAliveCountMax=2",
@@ -863,6 +883,43 @@ class RemoteAccessService:
                 f"{target_host}:{remote_port}"
             ),
         ]
+
+        vpn_config = (
+            agent.get(
+                "vpn_config"
+            )
+            or {}
+        )
+
+        if vpn_config.get(
+            "allow_unknown_host_keys"
+        ):
+            argv.extend([
+                "-o",
+                "StrictHostKeyChecking=accept-new",
+            ])
+        else:
+            argv.extend([
+                "-o",
+                "StrictHostKeyChecking=yes",
+            ])
+
+        known_hosts = vpn_config.get(
+            "known_hosts_file"
+        )
+
+        if known_hosts:
+            argv.extend([
+                "-o",
+                (
+                    "UserKnownHostsFile="
+                    + str(
+                        Path(
+                            known_hosts
+                        ).expanduser()
+                    )
+                ),
+            ])
 
         key_path = agent.get(
             "ssh_key_path"
