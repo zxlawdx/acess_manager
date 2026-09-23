@@ -589,3 +589,9 @@ class WANCreateRequest(BaseModel):
 class BackupCompareRequest(BaseModel):
     left_id: int = Field(ge=1)
     right_id: int = Field(ge=1)
+
+
+
+class WANDeleteRequest(BaseModel):
+    id: str
+    confirm: bool = False
