@@ -130,7 +130,8 @@ class WifiEnvironmentCollector(DiagnosticCollector):
                 item
                 for item in radios
                 if str(
-                    item.get("band")
+                    item.get("banda")
+                    or item.get("band")
                 ).lower() == band.lower()
             ), {})
 
@@ -138,11 +139,15 @@ class WifiEnvironmentCollector(DiagnosticCollector):
                 channels = self.zte.available_channels(
                     band=band,
                     bandwidth=radio.get(
+                        "largura"
+                    ) or radio.get(
                         "bandwidth"
                     ),
-                    country=radio.get(
-                        "country"
-                    ) or "BRI",
+                    country=(
+                        radio.get("pais")
+                        or radio.get("country")
+                        or "BRI"
+                    ),
                 )
             except Exception:
                 channels = []
@@ -928,11 +933,15 @@ class ChannelAnalyzer:
         )
 
         current = _number(
-            radio.get("channel")
+            radio.get("canal")
+            if "canal" in radio
+            else radio.get("channel")
         )
 
         auto = bool(
-            radio.get("auto_channel")
+            radio.get("canal_automatico")
+            if "canal_automatico" in radio
+            else radio.get("auto_channel")
         )
 
         scores = {
@@ -1058,6 +1067,7 @@ class ChannelAnalyzer:
                 "channels",
                 "available_channels",
                 "values",
+                "canais",
             ):
                 value = available_channels.get(
                     key
