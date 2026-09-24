@@ -441,6 +441,27 @@ class MonitorStartRequest(BaseModel):
     ping_host: str = "1.1.1.1"
 
 
+class MeshConfigRequest(BaseModel):
+    enabled: bool
+    band_steering: bool | None = None
+    rssi_limit_24g: int | None = Field(
+        default=None,
+        ge=-110,
+        le=-40
+    )
+    rssi_limit_5g: int | None = Field(
+        default=None,
+        ge=-110,
+        le=-40
+    )
+    legacy_station_roaming: bool | None = None
+    confirm: bool = False
+
+
+class MeshPairRequest(BaseModel):
+    confirm: bool = False
+
+
 class QoSManagementRequest(BaseModel):
     kind: str
     id: str | None = None
