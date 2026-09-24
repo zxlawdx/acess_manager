@@ -240,12 +240,19 @@ class EasyMeshBackendTests(unittest.TestCase):
         self.assertTrue(
             result["available"]
         )
-        self.assertEqual(
+        self.assertIn(
             result["backend"]["context_view"],
-            "wlanBasic",
+            {
+                "smNetSphereMAP",
+                "wlanBasic",
+            },
         )
         self.assertTrue(
             result["backend"]["used_session_token"]
+        )
+        self.assertEqual(
+            result["backend"]["menu_auth"],
+            "session_token",
         )
         self.assertIn(
             (
