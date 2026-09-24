@@ -78,6 +78,55 @@ class FakeMeshZTE:
         return self.parsed
 
 
+class FakeFallbackMeshZTE(FakeMeshZTE):
+    def __init__(self):
+        super().__init__()
+        self.session_tmp_token = None
+
+    def get_view(
+        self,
+        view,
+        **kwargs,
+    ):
+        super().get_view(
+            view,
+            **kwargs,
+        )
+
+        if view == "wlanBasic":
+            self.session_tmp_token = (
+                "fresh-token"
+            )
+
+        return "<html></html>"
+
+    def get_menu(
+        self,
+        tag,
+        **kwargs,
+    ):
+        self.menu_tags.append(
+            (
+                tag,
+                kwargs,
+            )
+        )
+
+        if (
+            tag
+            == "wlan_NetSphere_Mode_lua.lua"
+            and kwargs.get(
+                "_sessionTOKEN"
+            )
+            == "fresh-token"
+        ):
+            return "<ajax_response/>"
+
+        raise RuntimeError(
+            "A sessão do ZTE expirou ou a view necessária não foi aberta."
+        )
+
+
 class EasyMeshBackendTests(unittest.TestCase):
     def test_mesh_status_reads_hidden_netsphere_backend(self):
         zte = FakeMeshZTE()
@@ -110,6 +159,33 @@ class EasyMeshBackendTests(unittest.TestCase):
         self.assertEqual(
             result["backend"]["tag"],
             "wlan_NetSphere_Mode_lua.lua",
+        )
+
+    def test_mesh_probe_falls_back_to_known_view_and_forwards_token(self):
+        zte = FakeFallbackMeshZTE()
+
+        result = zte_mesh.mesh_status(
+            zte
+        )
+
+        self.assertTrue(
+            result["available"]
+        )
+        self.assertEqual(
+            result["backend"]["context_view"],
+            "wlanBasic",
+        )
+        self.assertTrue(
+            result["backend"]["used_session_token"]
+        )
+        self.assertIn(
+            (
+                "wlan_NetSphere_Mode_lua.lua",
+                {
+                    "_sessionTOKEN": "fresh-token"
+                },
+            ),
+            zte.menu_tags,
         )
 
     @patch(
