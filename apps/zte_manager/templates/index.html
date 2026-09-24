@@ -1062,6 +1062,7 @@
                     <button class="management-tab" data-management-tab="remote" type="button">Remoto / VPN</button>
                     <button class="management-tab" data-management-tab="monitor" type="button">Monitoramento</button>
                     <button class="management-tab" data-management-tab="network" type="button">Rede</button>
+                    <button class="management-tab" data-management-tab="mesh" type="button">Mesh</button>
                     <button class="management-tab" data-management-tab="lifecycle" type="button">Backup / Firmware</button>
                     <button class="management-tab" data-management-tab="provisioning" type="button">ACS / Zero-touch</button>
                 </div>
@@ -1373,6 +1374,112 @@
                             <button id="managementBridgeRun" class="button danger" type="button">Assistente Bridge</button>
                         </div>
                     </article>
+                </div>
+
+                <div class="management-pane" data-management-pane="mesh">
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <span class="section-kicker">EASYMESH / NETSPHERE</span>
+                                    <h3>Controller Mesh da ONT</h3>
+                                </div>
+                                <span id="managementMeshStatusBadge" class="badge">Não verificado</span>
+                            </div>
+
+                            <p class="muted">
+                                Na F670L, habilitar Mesh transforma a ONT em Controller.
+                                O segundo equipamento precisa ser um ZTE compatível operando como Agent.
+                            </p>
+
+                            <div class="management-form-grid">
+                                <label class="check-row">
+                                    <input id="managementMeshEnabled" type="checkbox">
+                                    <span>Ativar EasyMesh / NetSphere</span>
+                                </label>
+
+                                <label class="check-row">
+                                    <input id="managementMeshBandSteering" type="checkbox">
+                                    <span>Band Steering no Mesh</span>
+                                </label>
+
+                                <label class="field">
+                                    <span>RSSI LIMITE 2.4 GHz</span>
+                                    <input id="managementMeshRssi24" type="number" min="-110" max="-40" value="-70">
+                                </label>
+
+                                <label class="field">
+                                    <span>RSSI LIMITE 5 GHz</span>
+                                    <input id="managementMeshRssi5" type="number" min="-110" max="-40" value="-75">
+                                </label>
+
+                                <label class="check-row">
+                                    <input id="managementMeshLegacyRoaming" type="checkbox">
+                                    <span>Legacy Station Roaming</span>
+                                </label>
+                            </div>
+
+                            <div class="management-action-row">
+                                <button id="managementMeshRead" class="button ghost" type="button">
+                                    <span class="material-symbols-outlined">radar</span>
+                                    Detectar suporte
+                                </button>
+
+                                <button id="managementMeshApply" class="button primary" type="button">
+                                    <span class="material-symbols-outlined">hub</span>
+                                    Aplicar Mesh
+                                </button>
+                            </div>
+
+                            <pre id="managementMeshOutput" class="management-code-output selectable-output" tabindex="0">Ainda não verificado.</pre>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <span class="section-kicker">WIRELESS BACKHAUL</span>
+                                    <h3>Parear um Agent sem cabo</h3>
+                                </div>
+                            </div>
+
+                            <div class="mesh-flow">
+                                <div>
+                                    <span>01</span>
+                                    <strong>Ative o EasyMesh no Controller</strong>
+                                    <small>A F670L principal precisa estar com Mesh habilitado.</small>
+                                </div>
+                                <div>
+                                    <span>02</span>
+                                    <strong>Prepare o segundo ZTE como Agent</strong>
+                                    <small>O equipamento secundário precisa suportar EasyMesh/NetSphere Agent.</small>
+                                </div>
+                                <div>
+                                    <span>03</span>
+                                    <strong>Inicie o pareamento abaixo</strong>
+                                    <small>O app dispara o mesmo comando interno do botão WPS da ZTE.</small>
+                                </div>
+                                <div>
+                                    <span>04</span>
+                                    <strong>Acione WPS/EasyMesh no Agent</strong>
+                                    <small>Faça isso logo após iniciar a janela no Controller.</small>
+                                </div>
+                            </div>
+
+                            <button id="managementMeshPair" class="button primary" type="button">
+                                <span class="material-symbols-outlined">wifi_tethering</span>
+                                Iniciar pareamento EasyMesh / WPS
+                            </button>
+
+                            <div class="management-warning-box">
+                                <strong>Importante</strong>
+                                <span>
+                                    Duas F670L não necessariamente formam Controller + Agent.
+                                    Em firmwares comuns da F670L, a ONT atua como Controller;
+                                    o nó secundário costuma ser um roteador Mesh ZTE compatível.
+                                </span>
+                            </div>
+                        </article>
+                    </div>
                 </div>
 
                 <div class="management-pane" data-management-pane="lifecycle">
