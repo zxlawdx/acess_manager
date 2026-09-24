@@ -17,7 +17,8 @@ const managementState = {
     firmware: [],
     selectedDeviceId: null,
     monitorId: null,
-    networkResult: null
+    networkResult: null,
+    meshResult: null
 };
 
 
@@ -1786,6 +1787,295 @@ async function loadManagementTopology() {
 }
 
 
+function renderManagementMesh(result) {
+    managementState.meshResult = result;
+
+    managementOutput(
+        "managementMeshOutput",
+        result
+    );
+
+    const badge = document.getElementById(
+        "managementMeshStatusBadge"
+    );
+
+    if (badge) {
+        badge.className = "badge " + (
+            result.available
+                ? (
+                    result.enabled
+                        ? "ok"
+                        : "warning"
+                )
+                : "critical"
+        );
+
+        badge.textContent = !result.available
+            ? "Indisponível"
+            : result.enabled
+                ? "Mesh ativo"
+                : "Mesh desligado";
+    }
+
+    const enabled = document.getElementById(
+        "managementMeshEnabled"
+    );
+
+    if (enabled) {
+        enabled.checked = Boolean(
+            result.enabled
+        );
+    }
+
+    const steering = document.getElementById(
+        "managementMeshBandSteering"
+    );
+
+    if (
+        steering
+        && result.band_steering !== null
+        && result.band_steering !== undefined
+    ) {
+        steering.checked = Boolean(
+            result.band_steering
+        );
+    }
+
+    const rssi24 = document.getElementById(
+        "managementMeshRssi24"
+    );
+
+    if (
+        rssi24
+        && result.rssi_limit_24g !== null
+        && result.rssi_limit_24g !== undefined
+    ) {
+        rssi24.value = result.rssi_limit_24g;
+    }
+
+    const rssi5 = document.getElementById(
+        "managementMeshRssi5"
+    );
+
+    if (
+        rssi5
+        && result.rssi_limit_5g !== null
+        && result.rssi_limit_5g !== undefined
+    ) {
+        rssi5.value = result.rssi_limit_5g;
+    }
+
+    const legacy = document.getElementById(
+        "managementMeshLegacyRoaming"
+    );
+
+    if (
+        legacy
+        && result.legacy_station_roaming !== null
+        && result.legacy_station_roaming !== undefined
+    ) {
+        legacy.checked = Boolean(
+            result.legacy_station_roaming
+        );
+    }
+}
+
+
+async function readManagementMesh() {
+    setBusy(
+        true,
+        "Detectando EasyMesh / NetSphere..."
+    );
+
+    try {
+        const result = await managementRequest(
+            "/management/mesh"
+        );
+
+        renderManagementMesh(
+            result
+        );
+
+        showToast(
+            result.available
+                ? "Backend EasyMesh detectado."
+                : "EasyMesh não foi detectado."
+        );
+
+        return result;
+    } catch (error) {
+        const result = {
+            available: false,
+            error: error.message
+        };
+
+        renderManagementMesh(
+            result
+        );
+
+        showToast(
+            error.message
+        );
+
+        return result;
+    } finally {
+        setBusy(
+            false
+        );
+    }
+}
+
+
+async function applyManagementMesh() {
+    if (!window.confirm(
+        "Aplicar a configuração EasyMesh na ONT atual? A rede Wi-Fi pode reiniciar por alguns instantes."
+    )) {
+        return;
+    }
+
+    const rssi24Raw = document.getElementById(
+        "managementMeshRssi24"
+    )?.value;
+
+    const rssi5Raw = document.getElementById(
+        "managementMeshRssi5"
+    )?.value;
+
+    setBusy(
+        true,
+        "Aplicando EasyMesh..."
+    );
+
+    try {
+        const result = await managementRequest(
+            "/management/mesh/configure",
+            {
+                method: "POST",
+                body: {
+                    enabled: Boolean(
+                        document.getElementById(
+                            "managementMeshEnabled"
+                        )?.checked
+                    ),
+                    band_steering: Boolean(
+                        document.getElementById(
+                            "managementMeshBandSteering"
+                        )?.checked
+                    ),
+                    rssi_limit_24g: rssi24Raw
+                        ? Number(rssi24Raw)
+                        : null,
+                    rssi_limit_5g: rssi5Raw
+                        ? Number(rssi5Raw)
+                        : null,
+                    legacy_station_roaming: Boolean(
+                        document.getElementById(
+                            "managementMeshLegacyRoaming"
+                        )?.checked
+                    ),
+                    confirm: true
+                }
+            }
+        );
+
+        renderManagementMesh(
+            result.after || result
+        );
+
+        showToast(
+            "Configuração EasyMesh aplicada."
+        );
+    } catch (error) {
+        managementOutput(
+            "managementMeshOutput",
+            {
+                error: error.message
+            }
+        );
+
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(
+            false
+        );
+    }
+}
+
+
+async function pairManagementMesh() {
+    if (!managementState.meshResult) {
+        const status = await readManagementMesh();
+
+        if (
+            !status
+            || !status.available
+        ) {
+            return;
+        }
+    }
+
+    if (
+        !managementState.meshResult?.enabled
+    ) {
+        showToast(
+            "Ative o EasyMesh antes de parear o Agent."
+        );
+
+        return;
+    }
+
+    if (!window.confirm(
+        "Abrir a janela WPS/EasyMesh do Controller agora? Depois acione WPS no equipamento Agent."
+    )) {
+        return;
+    }
+
+    setBusy(
+        true,
+        "Abrindo janela de pareamento EasyMesh..."
+    );
+
+    try {
+        const result = await managementRequest(
+            "/management/mesh/pair",
+            {
+                method: "POST",
+                body: {
+                    confirm: true
+                }
+            }
+        );
+
+        managementOutput(
+            "managementMeshOutput",
+            result
+        );
+
+        showToast(
+            result.message
+            || "Pareamento iniciado."
+        );
+    } catch (error) {
+        managementOutput(
+            "managementMeshOutput",
+            {
+                error: error.message
+            }
+        );
+
+        showToast(
+            error.message
+        );
+    } finally {
+        setBusy(
+            false
+        );
+    }
+}
+
+
 async function refreshManagementNetwork() {
     setBusy(
         true,
@@ -2768,6 +3058,38 @@ document.getElementById(
 )?.addEventListener(
     "click",
     loadManagementTopology
+);
+
+
+document.getElementById(
+    "managementMeshRead"
+)?.addEventListener(
+    "click",
+    readManagementMesh
+);
+
+
+document.getElementById(
+    "managementMeshApply"
+)?.addEventListener(
+    "click",
+    applyManagementMesh
+);
+
+
+document.getElementById(
+    "managementMeshPair"
+)?.addEventListener(
+    "click",
+    pairManagementMesh
+);
+
+
+document.querySelector(
+    '[data-management-tab="mesh"]'
+)?.addEventListener(
+    "click",
+    readManagementMesh
 );
 
 
