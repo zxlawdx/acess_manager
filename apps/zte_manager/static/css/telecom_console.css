@@ -1884,3 +1884,65 @@ input[type="radio"] {
         justify-content: flex-start;
     }
 }
+
+
+/* =========================================================
+   EASYMESH / NETSPHERE
+========================================================= */
+
+.mesh-flow {
+    display: grid;
+    gap: 8px;
+    margin: 14px 0;
+}
+
+.mesh-flow > div {
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 3px 10px;
+    align-items: start;
+    padding: 10px 11px;
+    border: 1px solid rgba(255, 255, 255, .075);
+    border-radius: 6px;
+    background: #0e0e10;
+}
+
+.mesh-flow > div > span {
+    grid-row: 1 / span 2;
+    color: var(--primary);
+    font: 600 10px var(--font-mono);
+}
+
+.mesh-flow strong {
+    color: var(--text);
+    font-size: 10px;
+}
+
+.mesh-flow small {
+    color: #707681;
+    font-size: 9px;
+    line-height: 1.45;
+}
+
+.management-warning-box {
+    margin-top: 12px;
+    padding: 10px 11px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid rgba(245, 158, 11, .16);
+    border-radius: 6px;
+    background: rgba(245, 158, 11, .055);
+}
+
+.management-warning-box strong {
+    color: var(--warning);
+    font: 600 9px var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .055em;
+}
+
+.management-warning-box span {
+    color: #a5a8ae;
+    font-size: 9px;
+    line-height: 1.5;
+}
