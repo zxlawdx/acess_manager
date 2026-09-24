@@ -381,3 +381,27 @@ A chave RSA não fica fixa no código.
 - `langit7/zte-f670L` — confirmação pública do fluxo ThinkLua de login/WAN em variantes F670L.
 
 Os repositórios aparentados ajudam a reproduzir o protocolo, mas o F6600P e seu firmware continuam sendo a autoridade final. O código lê estado/tokens/chaves dinamicamente exatamente por isso.
+
+
+### Build e instalação local com Vela 0.2.1 (Linux)
+
+Se o executável anterior abortava com `No module named gi` / `No module named qtpy`,
+foi gerado com bindings gráficos ausentes. **Instalar pacotes GTK no host
+não modifica binários já congelados**. Recompile o projeto usando o Vela
+atualizado e Qt6 no mesmo virtualenv:
+
+~~~bash
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pip install 'vela-framework[qt6,build]'
+python manage.py doctor --gui qt6
+python manage.py buildapp --gui qt6 --installer
+./dist/ZTE-Automatic/ZTE-Automatic --self-test
+python manage.py installapp
+~~~
+
+Também é possível usar `python manage.py init-process:instalation`,
+selecionar explicitamente **Qt6** e utilizar os botões de compilação e
+instalação. O assistente verifica as dependências e solicita confirmação
+antes de instalar qualquer componente. O teste interno do executável
+acontece automaticamente antes da geração do pacote ZIP.

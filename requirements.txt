@@ -1,6 +1,6 @@
-# Framework Vela 0.2.0 com buildapp, assistente visual e API multithread.
+# Framework Vela 0.2.1: instala e verifica os bindings GUI empacotados.
 # Mantém os builds de release reproduzíveis.
-git+https://github.com/zxlawdx/Vela-framework.git@099ce8158b8533d311245883e7c0e89275d6730a
+git+https://github.com/zxlawdx/Vela-framework.git@29950dfec352d952a1739589bee5411376b75a95
 
 requests>=2.31
 urllib3>=2.0
