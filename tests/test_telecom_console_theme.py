@@ -100,3 +100,43 @@ def test_connection_state_updates_console_chrome():
         '"ont-connected"',
     ):
         assert marker in js
+
+
+
+def test_management_network_output_has_copy_controls():
+    html = TEMPLATE.read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="managementNetworkCopy"' in html
+    assert 'id="managementNetworkCopyRelevant"' in html
+    assert 'class="management-code-output large selectable-output"' in html
+
+
+def test_management_network_copy_supports_webview_fallback():
+    js = APP_JS.read_text(
+        encoding="utf-8"
+    )
+
+    management_js = (
+        ROOT
+        / "apps"
+        / "zte_manager"
+        / "static"
+        / "js"
+        / "management.js"
+    ).read_text(
+        encoding="utf-8"
+    )
+
+    for marker in (
+        "navigator.clipboard",
+        "document.execCommand",
+        "managementNetworkCopy",
+        "managementNetworkCopyRelevant",
+        "managementRelevantNetworkResult",
+        "TR-069 e WAN copiados.",
+    ):
+        assert marker in management_js
+
+    assert "setConnectionStatus" in js
