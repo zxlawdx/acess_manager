@@ -16,7 +16,8 @@ const managementState = {
     backups: [],
     firmware: [],
     selectedDeviceId: null,
-    monitorId: null
+    monitorId: null,
+    networkResult: null
 };
 
 
@@ -62,6 +63,91 @@ function managementOutput(id, value) {
     element.textContent = typeof value === "string"
         ? value
         : managementJson(value);
+}
+
+
+async function managementCopyText(
+    text,
+    successMessage = "Conteúdo copiado."
+) {
+    const value = String(
+        text ?? ""
+    );
+
+    if (!value) {
+        showToast(
+            "Não há conteúdo para copiar."
+        );
+
+        return false;
+    }
+
+    try {
+        if (
+            navigator.clipboard
+            && window.isSecureContext
+        ) {
+            await navigator.clipboard.writeText(
+                value
+            );
+        } else {
+            throw new Error(
+                "Clipboard API indisponível."
+            );
+        }
+    } catch (error) {
+        // Fallback importante para WebView/Qt e HTTP local, onde a
+        // Clipboard API pode ser bloqueada mesmo com interação do usuário.
+        const textarea = document.createElement(
+            "textarea"
+        );
+
+        textarea.value = value;
+        textarea.setAttribute(
+            "readonly",
+            ""
+        );
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.top = "0";
+
+        document.body.appendChild(
+            textarea
+        );
+
+        textarea.focus();
+        textarea.select();
+
+        const copied = document.execCommand(
+            "copy"
+        );
+
+        textarea.remove();
+
+        if (!copied) {
+            throw error;
+        }
+    }
+
+    showToast(
+        successMessage
+    );
+
+    return true;
+}
+
+
+function managementRelevantNetworkResult() {
+    const result = managementState.networkResult;
+
+    if (!result) {
+        return null;
+    }
+
+    return {
+        tr069: result.tr069 ?? null,
+        wan: result.wan ?? null
+    };
 }
 
 
@@ -1711,17 +1797,53 @@ async function refreshManagementNetwork() {
             "/management/network"
         );
 
+        managementState.networkResult = result;
+
         managementOutput(
             "managementNetworkOutput",
             result
         );
+
+        const copyButton = document.getElementById(
+            "managementNetworkCopy"
+        );
+
+        const relevantButton = document.getElementById(
+            "managementNetworkCopyRelevant"
+        );
+
+        if (copyButton) {
+            copyButton.disabled = false;
+        }
+
+        if (relevantButton) {
+            relevantButton.disabled = false;
+        }
     } catch (error) {
+        managementState.networkResult = null;
+
         managementOutput(
             "managementNetworkOutput",
             {
                 error: error.message
             }
         );
+
+        const copyButton = document.getElementById(
+            "managementNetworkCopy"
+        );
+
+        const relevantButton = document.getElementById(
+            "managementNetworkCopyRelevant"
+        );
+
+        if (copyButton) {
+            copyButton.disabled = true;
+        }
+
+        if (relevantButton) {
+            relevantButton.disabled = true;
+        }
 
         showToast(
             error.message
@@ -2654,6 +2776,54 @@ document.getElementById(
 )?.addEventListener(
     "click",
     refreshManagementNetwork
+);
+
+
+document.getElementById(
+    "managementNetworkCopy"
+)?.addEventListener(
+    "click",
+    async () => {
+        if (!managementState.networkResult) {
+            showToast(
+                "Execute Ler tudo primeiro."
+            );
+
+            return;
+        }
+
+        await managementCopyText(
+            managementJson(
+                managementState.networkResult
+            ),
+            "JSON completo copiado."
+        );
+    }
+);
+
+
+document.getElementById(
+    "managementNetworkCopyRelevant"
+)?.addEventListener(
+    "click",
+    async () => {
+        const relevant = managementRelevantNetworkResult();
+
+        if (!relevant) {
+            showToast(
+                "Execute Ler tudo primeiro."
+            );
+
+            return;
+        }
+
+        await managementCopyText(
+            managementJson(
+                relevant
+            ),
+            "TR-069 e WAN copiados."
+        );
+    }
 );
 
 

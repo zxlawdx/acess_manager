@@ -1301,9 +1301,22 @@
                     <article class="panel">
                         <div class="panel-header">
                             <div><span class="section-kicker">NETWORK CONTROL</span><h3>Estado completo da ONT atual</h3></div>
-                            <button id="managementNetworkRefresh" class="button primary compact" type="button">Ler tudo</button>
+                            <div class="management-action-row management-header-actions">
+                                <button id="managementNetworkCopyRelevant" class="button ghost compact" type="button" disabled>
+                                    <span class="material-symbols-outlined">content_copy</span>
+                                    Copiar TR-069 / WAN
+                                </button>
+                                <button id="managementNetworkCopy" class="button ghost compact" type="button" disabled>
+                                    <span class="material-symbols-outlined">content_copy</span>
+                                    Copiar JSON
+                                </button>
+                                <button id="managementNetworkRefresh" class="button primary compact" type="button">
+                                    <span class="material-symbols-outlined">sync</span>
+                                    Ler tudo
+                                </button>
+                            </div>
                         </div>
-                        <pre id="managementNetworkOutput" class="management-code-output large">Nenhuma leitura executada.</pre>
+                        <pre id="managementNetworkOutput" class="management-code-output large selectable-output" tabindex="0">Nenhuma leitura executada.</pre>
                     </article>
 
                     <div class="management-grid three">
