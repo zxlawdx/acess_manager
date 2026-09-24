@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — EasyMesh / NetSphere
+
+- Adiciona **Gerenciamento → Mesh** com probe do backend EasyMesh/NetSphere mesmo quando o menu está oculto.
+- Suporta variantes ThinkLua `wlan_NetSphere_Mode_lua.lua`, `NetSphere_Mode_lua.lua` e `Localnet_NetSphere_Mode_lua.lua`.
+- Permite habilitar/desabilitar Mesh, Band Steering e thresholds RSSI quando o firmware expõe esses campos.
+- Preserva o `Mode` devolvido pelo firmware para não trocar Controller/Agent acidentalmente.
+- Na F670L, o fluxo assume o comportamento documentado pela ZTE: Mesh habilitado = ONT Controller.
+- Adiciona pareamento sem fio pelo comando interno do botão WPS (`cmd_wpsbtn`) para onboarding de um Agent compatível.
+- Todas as mudanças passam pelo audit trail `before -> action -> after` e exigem confirmação explícita.
+
 ## 0.6.2 — Speed Test Providers
 
 - Corrige URLs como `https://fast.com` que antes eram tratadas incorretamente como endpoints Cloudflare `/__down` e `/__up`.
