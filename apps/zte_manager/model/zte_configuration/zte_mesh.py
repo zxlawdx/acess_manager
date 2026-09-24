@@ -8,6 +8,13 @@ from .zte_post import post_menu
 MESH_SOURCES = (
     {
         "view": "smNetSphereMAP",
+        "tag": "braziloi_Localnet_NetSphere_Mode_lua.lua",
+        "kind": "localnet_netsphere",
+        "profile": "f670l_v9_braziloi",
+        "prefer_cookie_only": True,
+    },
+    {
+        "view": "smNetSphereMAP",
         "tag": "wlan_NetSphere_Mode_lua.lua",
         "kind": "wlan_netsphere",
     },
@@ -152,12 +159,15 @@ def _mesh_payload_from_xml(
     resolved_source[
         "context_view"
     ] = context_view
-    resolved_source[
-        "used_session_token"
-    ] = bool(
-        _menu_extras(
-            zte
-        )
+    # O método de autenticação usado no menuData é preenchido
+    # pelo caller com base na tentativa que realmente respondeu.
+    resolved_source.setdefault(
+        "used_session_token",
+        False,
+    )
+    resolved_source.setdefault(
+        "menu_auth",
+        "cookie_only",
     )
 
     return {
@@ -227,18 +237,76 @@ def _source_payload(
                     f"menuView {context_view} devolveu SessionTimeout."
                 )
 
-            xml = zte.get_menu(
-                source["tag"],
-                **_menu_extras(
-                    zte
-                ),
+            token_extras = _menu_extras(
+                zte
             )
 
-            return _mesh_payload_from_xml(
-                zte,
-                xml,
-                source,
-                context_view,
+            menu_attempts = [
+                (
+                    "cookie_only",
+                    {},
+                ),
+            ]
+
+            if token_extras:
+                token_attempt = (
+                    "session_token",
+                    token_extras,
+                )
+
+                if source.get(
+                    "prefer_cookie_only",
+                    False,
+                ):
+                    menu_attempts.append(
+                        token_attempt
+                    )
+                else:
+                    menu_attempts = [
+                        token_attempt,
+                        *menu_attempts,
+                    ]
+
+            menu_errors = []
+
+            for (
+                auth_mode,
+                extras,
+            ) in menu_attempts:
+                try:
+                    xml = zte.get_menu(
+                        source["tag"],
+                        **extras,
+                    )
+
+                    resolved_source = dict(
+                        source
+                    )
+                    resolved_source[
+                        "used_session_token"
+                    ] = bool(
+                        extras
+                    )
+                    resolved_source[
+                        "menu_auth"
+                    ] = auth_mode
+
+                    return _mesh_payload_from_xml(
+                        zte,
+                        xml,
+                        resolved_source,
+                        context_view,
+                    )
+
+                except Exception as error:
+                    menu_errors.append(
+                        f"{auth_mode}: {error}"
+                    )
+
+            raise RuntimeError(
+                " | ".join(
+                    menu_errors
+                )
             )
 
         except Exception as error:

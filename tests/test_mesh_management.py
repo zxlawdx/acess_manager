@@ -127,7 +127,76 @@ class FakeFallbackMeshZTE(FakeMeshZTE):
         )
 
 
+class FakeBrazilOiMeshZTE(FakeMeshZTE):
+    def __init__(self):
+        super().__init__()
+        self.session_tmp_token = "token-that-browser-does-not-need"
+
+    def get_view(
+        self,
+        view,
+        **kwargs,
+    ):
+        self.views.append(
+            (
+                view,
+                kwargs,
+            )
+        )
+
+        return "<html></html>"
+
+    def get_menu(
+        self,
+        tag,
+        **kwargs,
+    ):
+        self.menu_tags.append(
+            (
+                tag,
+                kwargs,
+            )
+        )
+
+        if (
+            tag
+            == "braziloi_Localnet_NetSphere_Mode_lua.lua"
+            and not kwargs
+        ):
+            return "<ajax_response/>"
+
+        raise RuntimeError(
+            "unsupported"
+        )
+
+
 class EasyMeshBackendTests(unittest.TestCase):
+    def test_f670l_braziloi_backend_prefers_cookie_only_menu_data(self):
+        zte = FakeBrazilOiMeshZTE()
+
+        result = zte_mesh.mesh_status(
+            zte
+        )
+
+        self.assertTrue(
+            result["available"]
+        )
+        self.assertEqual(
+            result["backend"]["tag"],
+            "braziloi_Localnet_NetSphere_Mode_lua.lua",
+        )
+        self.assertEqual(
+            result["backend"]["profile"],
+            "f670l_v9_braziloi",
+        )
+        self.assertEqual(
+            result["backend"]["menu_auth"],
+            "cookie_only",
+        )
+        self.assertFalse(
+            result["backend"]["used_session_token"]
+        )
+
     def test_mesh_status_reads_hidden_netsphere_backend(self):
         zte = FakeMeshZTE()
 
@@ -171,12 +240,19 @@ class EasyMeshBackendTests(unittest.TestCase):
         self.assertTrue(
             result["available"]
         )
-        self.assertEqual(
+        self.assertIn(
             result["backend"]["context_view"],
-            "wlanBasic",
+            {
+                "smNetSphereMAP",
+                "wlanBasic",
+            },
         )
         self.assertTrue(
             result["backend"]["used_session_token"]
+        )
+        self.assertEqual(
+            result["backend"]["menu_auth"],
+            "session_token",
         )
         self.assertIn(
             (
