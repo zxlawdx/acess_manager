@@ -461,49 +461,68 @@ def configure_mesh(
         "kind"
     )
 
-    if (
-        kind == "wlan_netsphere"
-        and band_steering is not None
-    ):
-        fields.append((
-            "EnBandSteer",
-            "1"
-            if bool(
-                band_steering
-            )
-            else "0",
-        ))
+    raw = current.get(
+        "raw",
+        {},
+    )
 
-        if rssi_24 is not None:
+    if kind == "wlan_netsphere":
+        if (
+            raw.get(
+                "map_master"
+            )
+            and band_steering is not None
+        ):
             fields.append((
-                "BsRssiLmt24G",
-                str(
-                    rssi_24
-                ),
+                "EnBandSteer",
+                "1"
+                if bool(
+                    band_steering
+                )
+                else "0",
             ))
 
-        if rssi_5 is not None:
+        if raw.get(
+            "domain_band_steering"
+        ):
+            if rssi_24 is not None:
+                fields.append((
+                    "BsRssiLmt24G",
+                    str(
+                        rssi_24
+                    ),
+                ))
+
+            if rssi_5 is not None:
+                fields.append((
+                    "BsRssiLmt5G",
+                    str(
+                        rssi_5
+                    ),
+                ))
+
+    elif kind == "netsphere":
+        if (
+            raw.get(
+                "netsphere_band_steering"
+            )
+            and band_steering is not None
+        ):
             fields.append((
-                "BsRssiLmt5G",
-                str(
-                    rssi_5
-                ),
+                "BandSteerEnable",
+                "1"
+                if bool(
+                    band_steering
+                )
+                else "0",
             ))
 
     elif (
-        kind == "netsphere"
-        and band_steering is not None
+        kind == "localnet_netsphere"
+        and raw.get(
+            "roaming"
+        )
     ):
-        fields.append((
-            "BandSteerEnable",
-            "1"
-            if bool(
-                band_steering
-            )
-            else "0",
-        ))
-
-    elif kind == "localnet_netsphere":
         if config.get(
             "legacy_station_roaming"
         ) is not None:
