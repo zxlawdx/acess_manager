@@ -7,9 +7,14 @@ from .zte_post import post_menu
 
 MESH_SOURCES = (
     {
-        "view": "wlanBasic",
+        "view": "smNetSphereMAP",
         "tag": "wlan_NetSphere_Mode_lua.lua",
         "kind": "wlan_netsphere",
+    },
+    {
+        "view": "smNetSphereMAP",
+        "tag": "Localnet_NetSphere_Mode_lua.lua",
+        "kind": "localnet_netsphere",
     },
     {
         "view": "BandSteerMesh",
