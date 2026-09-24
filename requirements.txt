@@ -1,6 +1,6 @@
-# Framework fixado no commit que inclui fallback automático de porta.
+# Framework Vela 0.2.0 com buildapp, assistente visual e API multithread.
 # Mantém os builds de release reproduzíveis.
-git+https://github.com/zxlawdx/Vela-framework.git@3ff06cb7800e2b4d3ef1d766f779206da5f003df
+git+https://github.com/zxlawdx/Vela-framework.git@099ce8158b8533d311245883e7c0e89275d6730a
 
 requests>=2.31
 urllib3>=2.0
