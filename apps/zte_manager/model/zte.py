@@ -14,6 +14,7 @@ from .zte_configuration import (
     zte_get_menu,
     zte_lan,
     zte_management,
+    zte_mesh,
     zte_network_management,
     zte_save_content,
     zte_session,
@@ -589,6 +590,25 @@ class ZTE:
         return zte_advanced.set_upnp(
             self,
             config
+        )
+
+    def mesh_status(self):
+        return zte_mesh.mesh_status(
+            self
+        )
+
+    def configure_mesh(
+        self,
+        config
+    ):
+        return zte_mesh.configure_mesh(
+            self,
+            config
+        )
+
+    def start_mesh_pairing(self):
+        return zte_mesh.start_mesh_pairing(
+            self
         )
 
     def band_steering_status(self):
