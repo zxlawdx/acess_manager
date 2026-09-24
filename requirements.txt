@@ -1,6 +1,6 @@
-# Framework Vela 0.2.1: instala e verifica os bindings GUI empacotados.
+# Framework Vela 0.2.2: corrige pkg_resources/jaraco e diagnostica virtualenv Linux.
 # Mantém os builds de release reproduzíveis.
-git+https://github.com/zxlawdx/Vela-framework.git@29950dfec352d952a1739589bee5411376b75a95
+git+https://github.com/zxlawdx/Vela-framework.git@175d54f8b8997c70ea34bb302acce038944c2d56
 
 requests>=2.31
 urllib3>=2.0
