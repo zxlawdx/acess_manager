@@ -22,9 +22,10 @@ jobs:
 
       - name: Verify pinned Vela CLI
         run: |
-          python -c "import vela; assert vela.__version__ == '0.2.1', vela.__version__"
+          python -c "import vela; assert vela.__version__ == '0.2.2', vela.__version__"
           python manage.py help | grep -F 'init-process:instalation'
           python manage.py buildapp --dry-run
+          python -c "from vela.cli.build import linux_venv_info, legacy_pkg_resources_collect_args; assert 'system_site_packages' in linux_venv_info()"
           python -c "from vela.cli.build import BuildOptions, build_plan, launcher_source; from pathlib import Path; p=build_plan(Path.cwd(), BuildOptions(gui='qt6')); assert 'qtpy' in p['command']; assert 'webview.platforms.qt' in launcher_source('qt6')"
 
       - name: Compile Python
