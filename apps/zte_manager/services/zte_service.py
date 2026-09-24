@@ -644,6 +644,55 @@ class ZTEService:
                 after_reader=zte.upnp_status,
             )
 
+    def mesh_status(self):
+        with self._lock:
+            return self.get_client().mesh_status()
+
+    def configure_mesh(
+        self,
+        config,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme explicitamente a alteração do EasyMesh."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="easymesh_configure",
+                target="wifi_mesh",
+                before_reader=zte.mesh_status,
+                action=lambda: zte.configure_mesh(
+                    config
+                ),
+                after_reader=zte.mesh_status,
+            )
+
+    def start_mesh_pairing(
+        self,
+        *,
+        confirm=False
+    ):
+        if not confirm:
+            raise ValueError(
+                "Confirme o início do pareamento EasyMesh/WPS."
+            )
+
+        with self._lock:
+            zte = self.get_client()
+
+            return self._run_change(
+                operation="easymesh_pairing",
+                target="wifi_mesh",
+                before_reader=zte.mesh_status,
+                action=zte.start_mesh_pairing,
+                after_reader=zte.mesh_status,
+            )
+
     def band_steering_status(self):
         with self._lock:
             return self.get_client().band_steering_status()
@@ -1374,6 +1423,7 @@ class ZTEService:
             zte = self.get_client()
 
             readers = {
+                "mesh": zte.mesh_status,
                 "qos": zte.qos_status,
                 "firewall": zte.firewall_management_status,
                 "firewall_rules": zte.firewall_rules,
