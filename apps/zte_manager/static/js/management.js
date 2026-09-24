@@ -1831,52 +1831,72 @@ function renderManagementMesh(result) {
         "managementMeshBandSteering"
     );
 
-    if (
-        steering
-        && result.band_steering !== null
-        && result.band_steering !== undefined
-    ) {
-        steering.checked = Boolean(
-            result.band_steering
+    if (steering) {
+        const supported = (
+            result.band_steering !== null
+            && result.band_steering !== undefined
         );
+
+        steering.disabled = !supported;
+
+        if (supported) {
+            steering.checked = Boolean(
+                result.band_steering
+            );
+        }
     }
 
     const rssi24 = document.getElementById(
         "managementMeshRssi24"
     );
 
-    if (
-        rssi24
-        && result.rssi_limit_24g !== null
-        && result.rssi_limit_24g !== undefined
-    ) {
-        rssi24.value = result.rssi_limit_24g;
+    if (rssi24) {
+        const supported = (
+            result.rssi_limit_24g !== null
+            && result.rssi_limit_24g !== undefined
+        );
+
+        rssi24.disabled = !supported;
+
+        if (supported) {
+            rssi24.value = result.rssi_limit_24g;
+        }
     }
 
     const rssi5 = document.getElementById(
         "managementMeshRssi5"
     );
 
-    if (
-        rssi5
-        && result.rssi_limit_5g !== null
-        && result.rssi_limit_5g !== undefined
-    ) {
-        rssi5.value = result.rssi_limit_5g;
+    if (rssi5) {
+        const supported = (
+            result.rssi_limit_5g !== null
+            && result.rssi_limit_5g !== undefined
+        );
+
+        rssi5.disabled = !supported;
+
+        if (supported) {
+            rssi5.value = result.rssi_limit_5g;
+        }
     }
 
     const legacy = document.getElementById(
         "managementMeshLegacyRoaming"
     );
 
-    if (
-        legacy
-        && result.legacy_station_roaming !== null
-        && result.legacy_station_roaming !== undefined
-    ) {
-        legacy.checked = Boolean(
-            result.legacy_station_roaming
+    if (legacy) {
+        const supported = (
+            result.legacy_station_roaming !== null
+            && result.legacy_station_roaming !== undefined
         );
+
+        legacy.disabled = !supported;
+
+        if (supported) {
+            legacy.checked = Boolean(
+                result.legacy_station_roaming
+            );
+        }
     }
 }
 
@@ -1957,21 +1977,41 @@ async function applyManagementMesh() {
                             "managementMeshEnabled"
                         )?.checked
                     ),
-                    band_steering: Boolean(
+                    band_steering: (
                         document.getElementById(
                             "managementMeshBandSteering"
-                        )?.checked
+                        )?.disabled
+                            ? null
+                            : Boolean(
+                                document.getElementById(
+                                    "managementMeshBandSteering"
+                                )?.checked
+                            )
                     ),
-                    rssi_limit_24g: rssi24Raw
-                        ? Number(rssi24Raw)
-                        : null,
-                    rssi_limit_5g: rssi5Raw
-                        ? Number(rssi5Raw)
-                        : null,
-                    legacy_station_roaming: Boolean(
+                    rssi_limit_24g: document.getElementById(
+                        "managementMeshRssi24"
+                    )?.disabled
+                        ? null
+                        : rssi24Raw
+                            ? Number(rssi24Raw)
+                            : null,
+                    rssi_limit_5g: document.getElementById(
+                        "managementMeshRssi5"
+                    )?.disabled
+                        ? null
+                        : rssi5Raw
+                            ? Number(rssi5Raw)
+                            : null,
+                    legacy_station_roaming: (
                         document.getElementById(
                             "managementMeshLegacyRoaming"
-                        )?.checked
+                        )?.disabled
+                            ? null
+                            : Boolean(
+                                document.getElementById(
+                                    "managementMeshLegacyRoaming"
+                                )?.checked
+                            )
                     ),
                     confirm: true
                 }
