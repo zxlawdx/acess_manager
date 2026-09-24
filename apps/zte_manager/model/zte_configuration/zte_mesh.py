@@ -98,19 +98,36 @@ def _as_int(
         return None
 
 
-def _source_payload(
+def _menu_extras(
     zte,
-    source,
 ) -> dict[str, Any]:
-    zte.get_view(
-        source["view"],
-        Menu3Location=0,
+    """
+    Alguns firmwares exigem o token temporário também no GET menuData.
+
+    A UI original costuma carregar esse valor a partir da menuView. Em menus
+    ocultos a view pode não existir para a role atual, então reaproveitamos o
+    token de uma view conhecida antes de concluir que o backend não existe.
+    """
+    token = getattr(
+        zte,
+        "session_tmp_token",
+        None,
     )
 
-    xml = zte.get_menu(
-        source["tag"]
-    )
+    if not token:
+        return {}
 
+    return {
+        "_sessionTOKEN": token,
+    }
+
+
+def _mesh_payload_from_xml(
+    zte,
+    xml,
+    source,
+    context_view,
+) -> dict[str, Any]:
     zte._validar_resposta(
         xml
     )
@@ -129,8 +146,22 @@ def _source_payload(
             "O backend respondeu, mas OBJ_NETSPHERE_MAP_ID não foi retornado."
         )
 
+    resolved_source = dict(
+        source
+    )
+    resolved_source[
+        "context_view"
+    ] = context_view
+    resolved_source[
+        "used_session_token"
+    ] = bool(
+        _menu_extras(
+            zte
+        )
+    )
+
     return {
-        "source": dict(source),
+        "source": resolved_source,
         "mesh": mesh,
         "map_master": _first(
             parsed,
@@ -154,6 +185,73 @@ def _source_payload(
         ),
         "raw_objects": parsed,
     }
+
+
+def _source_payload(
+    zte,
+    source,
+) -> dict[str, Any]:
+    """
+    Tenta o backend Mesh usando primeiro sua view canônica e depois views
+    conhecidas que conseguem renovar o _sessionTmpToken.
+
+    SessionTimeout no menuData nem sempre significa logout: em vários ZTE ele
+    também significa que a tag foi chamada sem o contexto de menu correto.
+    """
+    attempts = []
+
+    context_views = []
+
+    for view in (
+        source["view"],
+        "wlanBasic",
+        "wps",
+        "homePage",
+    ):
+        if view not in context_views:
+            context_views.append(
+                view
+            )
+
+    for context_view in context_views:
+        try:
+            html = zte.get_view(
+                context_view,
+                Menu3Location=0,
+            )
+
+            if "SessionTimeout" in str(
+                html
+            ):
+                raise RuntimeError(
+                    f"menuView {context_view} devolveu SessionTimeout."
+                )
+
+            xml = zte.get_menu(
+                source["tag"],
+                **_menu_extras(
+                    zte
+                ),
+            )
+
+            return _mesh_payload_from_xml(
+                zte,
+                xml,
+                source,
+                context_view,
+            )
+
+        except Exception as error:
+            attempts.append(
+                f"{context_view}: {error}"
+            )
+
+    raise RuntimeError(
+        "nenhum contexto de view aceitou este backend: "
+        + " | ".join(
+            attempts
+        )
+    )
 
 
 def _read_mesh(
