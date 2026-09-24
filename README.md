@@ -31,6 +31,7 @@ A versão web/FastAPI foi convertida para a arquitetura do Vela sem alterar a l�
   - SGI;
   - beacon interval.
 - WPS PBC/Disabled quando o firmware expõe a função.
+- **EasyMesh / NetSphere**: detecção de backend oculto, habilitação do Controller, Band Steering/thresholds quando suportados e pareamento wireless de Agent via WPS.
 - Band Steering quando o firmware/permissão expõe a função.
 - UPnP.
 - DNS IPv4/IPv6 e nomes estáticos.

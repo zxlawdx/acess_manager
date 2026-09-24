@@ -794,6 +794,55 @@ class CPEManagementService:
             .management_overview()
         )
 
+    def mesh_status(
+        self,
+        zte_service,
+    ):
+        return zte_service.mesh_status()
+
+    def mesh_configure(
+        self,
+        zte_service,
+        data,
+    ):
+        return zte_service.configure_mesh(
+            {
+                "enabled": data.get(
+                    "enabled"
+                ),
+                "band_steering": data.get(
+                    "band_steering"
+                ),
+                "rssi_limit_24g": data.get(
+                    "rssi_limit_24g"
+                ),
+                "rssi_limit_5g": data.get(
+                    "rssi_limit_5g"
+                ),
+                "legacy_station_roaming": data.get(
+                    "legacy_station_roaming"
+                ),
+            },
+            confirm=bool(
+                data.get(
+                    "confirm"
+                )
+            ),
+        )
+
+    def mesh_pair(
+        self,
+        zte_service,
+        data,
+    ):
+        return zte_service.start_mesh_pairing(
+            confirm=bool(
+                data.get(
+                    "confirm"
+                )
+            )
+        )
+
     def qos_save(
         self,
         zte_service,

@@ -34,6 +34,8 @@ from apps.zte_manager.schemas import (
     InventoryUpdateRequest,
     ManagementBackupRequest,
     ManagementProfileRequest,
+    MeshConfigRequest,
+    MeshPairRequest,
     MonitorStartRequest,
     NumericIdRequest,
     PingRequest,
@@ -1500,6 +1502,50 @@ def management_network_overview(context=None):
     return _safe_call(
         cpe_management_service.network_overview,
         zte_service,
+    )
+
+
+@api.get("/management/mesh")
+def management_mesh_status(context=None):
+    return _safe_call(
+        cpe_management_service.mesh_status,
+        zte_service,
+    )
+
+
+@api.post("/management/mesh/configure")
+def management_mesh_configure(context=None):
+    def action():
+        data = _validated(
+            MeshConfigRequest,
+            context
+        )
+
+        return cpe_management_service.mesh_configure(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/management/mesh/pair")
+def management_mesh_pair(context=None):
+    def action():
+        data = _validated(
+            MeshPairRequest,
+            context
+        )
+
+        return cpe_management_service.mesh_pair(
+            zte_service,
+            data.model_dump(),
+        )
+
+    return _safe_call(
+        action
     )
 
 
