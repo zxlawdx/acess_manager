@@ -1853,3 +1853,34 @@ input[type="radio"] {
         min-height: 36px;
     }
 }
+
+
+/* =========================================================
+   COPYABLE MANAGEMENT OUTPUT
+========================================================= */
+
+.selectable-output,
+.selectable-output * {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+}
+
+.selectable-output {
+    cursor: text;
+}
+
+.management-header-actions {
+    margin-top: 0;
+    justify-content: flex-end;
+}
+
+.management-header-actions .button {
+    white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+    .management-header-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
