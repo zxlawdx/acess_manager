@@ -174,6 +174,56 @@ class EasyMeshBackendTests(unittest.TestCase):
     @patch(
         "apps.zte_manager.model.zte_configuration.zte_mesh.post_menu"
     )
+    def test_unsupported_optional_mesh_objects_are_not_written(
+        self,
+        mocked_post,
+    ):
+        zte = FakeMeshZTE()
+        zte.parsed.pop(
+            "OBJ_MAP_MASTER_ID"
+        )
+        zte.parsed.pop(
+            "OBJ_TEMP_DOMAIN_BS"
+        )
+        mocked_post.return_value = (
+            "<ajax_response/>"
+        )
+
+        zte_mesh.configure_mesh(
+            zte,
+            {
+                "enabled": True,
+                "band_steering": True,
+                "rssi_limit_24g": -68,
+                "rssi_limit_5g": -74,
+            },
+        )
+
+        fields = mocked_post.call_args.args[
+            2
+        ]
+
+        names = {
+            item[0]
+            for item in fields
+        }
+
+        self.assertNotIn(
+            "EnBandSteer",
+            names,
+        )
+        self.assertNotIn(
+            "BsRssiLmt24G",
+            names,
+        )
+        self.assertNotIn(
+            "BsRssiLmt5G",
+            names,
+        )
+
+    @patch(
+        "apps.zte_manager.model.zte_configuration.zte_mesh.post_menu"
+    )
     def test_pairing_uses_router_wps_button_action(
         self,
         mocked_post,
