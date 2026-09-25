@@ -532,9 +532,17 @@ document
                     "connection-result connection-success"
                 );
 
-                result.textContent = (
-                    "Conectado com sucesso."
-                );
+                result.textContent = response.writes_enabled === false
+                    ? "Conectado no modo somente leitura. Diagnóstico por firmware disponível em Avançado."
+                    : "Conectado com sucesso.";
+
+                // Não disparar rotinas de configuração/dashboard da F670L
+                // contra firmwares cujo perfil ainda está em descoberta.
+                if (response.writes_enabled === false) {
+                    showToast("Modelo experimental: escrita desativada. Use Avançado para detectar endpoints.");
+                    openPage("advanced");
+                    return;
+                }
 
                 await loadProfile();
                 await loadAll();
