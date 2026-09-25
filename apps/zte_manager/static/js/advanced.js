@@ -508,7 +508,7 @@ async function probeCapabilities() {
         await probeMultimodel();
         return;
     }
-    setBusy(true, "Detectando recursos por etapas...");
+    setBusy(true, "Carregando catálogo de menus nativos...");
 
     try {
         // Lotes curtos evitam uma requisição longa contendo todos os menus
@@ -528,22 +528,35 @@ async function probeCapabilities() {
 
         for (let index = 0; index < keys.length; index += batchSize) {
             const batch = keys.slice(index, index + batchSize);
+            setBusy(true,
+                `Detectar recursos: ${Math.min(index + batchSize, keys.length)}/${keys.length} menus...`);
             try {
-                const response = await apiRequest(
+                const response = await discoveryRequest(
                     "/device/capabilities/probe",
                     {
                         method: "POST",
-                        body: JSON.stringify({ features: batch })
+                        body: JSON.stringify({ features: batch }),
+                        timeoutMs: 70000
                     }
                 );
                 results.push(...(response.features || []));
             } catch (error) {
                 console.warn("Probe parcial:", batch, error);
+                const timeout = /passou de \\d+s/.test(String(error.message));
                 results.push(...batch.map(feature => ({
                     feature,
                     available: false,
-                    error: error.message
+                    error: error.message,
+                    not_tested: timeout
                 })));
+                if (timeout) {
+                    const info = document.getElementById("trackerDiscoveryStatus");
+                    if (info) info.textContent =
+                        "Sondagem nativa interrompida por demora. O firmware pode continuar processando.";
+                    advancedState.capabilityProbe = { features: results };
+                    renderCapabilities(catalog, results);
+                    break;
+                }
             }
 
             advancedState.capabilityProbe = { features: results };
@@ -566,6 +579,7 @@ async function probeCapabilities() {
 let trackerQuickScanKey = null;
 let trackerQuickScanPromise = null;
 let trackerDetectedModel = null;
+let trackerSelectedFamily = null;
 
 function renderTrackerDiscovery(data) {
     const grid = document.getElementById("trackerCapabilityGrid");
@@ -607,48 +621,110 @@ function renderTrackerDiscovery(data) {
     }).join("") : '<p class="muted">Nenhum endpoint documentado confirmado para este perfil.</p>';
 }
 
-async function loadMultimodelCatalog() {
+let discoveryBootPromise = null;
+let discoveryCatalogHost = null;
+
+// O bootstrap não consulta a ONT: a lista de modelos precisa aparecer mesmo
+// se outro diagnóstico estiver segurando o contexto HTTP do equipamento.
+async function loadMultimodelCatalog({ refresh = false } = {}) {
     const select = document.getElementById("multimodelSelect");
-    if (!select) return;
-    if (select.dataset.loaded === "true") return;
-    const [catalog, status] = await Promise.all([
-        apiRequest("/multimodel/catalog"),
-        apiRequest("/connection/status")
-    ]);
-    for (const item of catalog.models || []) {
-        const option = document.createElement("option");
-        option.value = item.model;
-        option.textContent = `${item.model} • ${item.protocol.toUpperCase()}`;
-        select.appendChild(option);
-    }
+    const info = document.getElementById("trackerDiscoveryStatus");
+    if (!select) return null;
+    if (!refresh && select.dataset.loaded === "true"
+        && discoveryCatalogHost === currentHost) return null;
+    if (discoveryBootPromise) return discoveryBootPromise;
+    if (info) info.textContent = "Lendo o estado da sessão local...";
 
-    trackerDetectedModel = status.model || null;
-    // Campo opcional é somente uma forma de *visualizar* o modelo já
-    // identificado. Nunca alterar família numa sessão autenticada.
-    const matched = (catalog.models || []).find(
-        item => (trackerDetectedModel || "").toUpperCase().includes(item.model)
-    );
-    if (matched) select.value = matched.model;
-    select.dataset.loaded = "true";
-    const badge = document.getElementById("adapterBadge");
-    if (badge) badge.textContent = trackerDetectedModel
-        ? `PERFIL ${trackerDetectedModel}` : "IDENTIFICAÇÃO PENDENTE";
-
-    if (matched) {
-        const candidates = (matched.candidate_features || []).map(feature => ({
-            feature,
-            label: feature.replace(/_/g, " "),
-            status: "not_tested"
-        }));
-        renderTrackerDiscovery({
-            model: matched.model, family: matched.family,
-            candidate_features: candidates
+    discoveryBootPromise = (async () => {
+        // O servidor não realiza I/O com o roteador nesta rota.
+        const response = await discoveryRequest("/discovery/bootstrap", {
+            timeoutMs: 10000
         });
-    } else {
-        document.getElementById("trackerDiscoveryStatus").textContent =
-            trackerDetectedModel
-                ? "Modelo não consta nos perfis do zte_tracker; menus nativos continuam disponíveis."
-                : "Firmware não informou modelo. Escolha o modelo no login para fazer descoberta.";
+        if (response.error) throw new Error(response.error);
+        if (!response.connected) {
+            if (info) info.textContent =
+                response.reason || "Conecte-se ao equipamento primeiro.";
+            return response;
+        }
+
+        // Recriar options impede duplicatas após reconexão/troca de ONT.
+        select.replaceChildren(new Option("Usar identificação automática", ""));
+        for (const item of response.catalog?.models || []) {
+            select.add(new Option(
+                `${item.model} · ${item.protocol.toUpperCase()}`,
+                item.model
+            ));
+        }
+
+        // O backend conhece o modelo selecionado no LOGIN. Nunca mudar
+        // silenciosamente o perfil de uma sessão já autenticada.
+        trackerDetectedModel = response.model || response.detected_model || null;
+        const normalized = String(trackerDetectedModel || "").toUpperCase();
+        const matched = (response.catalog?.models || []).find(item =>
+            normalized.includes(item.model.toUpperCase())
+        );
+        trackerSelectedFamily = matched?.family || null;
+        if (matched) select.value = matched.model;
+        select.dataset.loaded = "true";
+        discoveryCatalogHost = currentHost;
+
+        const badge = document.getElementById("adapterBadge");
+        if (badge) badge.textContent = trackerDetectedModel
+            ? `PERFIL ${trackerDetectedModel}` : "MODELO NÃO INFORMADO";
+
+        if (matched) {
+            const candidates = (matched.candidate_features || []).map(feature => ({
+                feature,
+                label: feature.replace(/_/g, " "),
+                status: "not_tested"
+            }));
+            renderTrackerDiscovery({
+                model: matched.model, family: matched.family,
+                candidate_features: candidates
+            });
+        } else if (info) {
+            info.textContent = trackerDetectedModel
+                ? "Este modelo não tem perfil no zte_tracker. Menus nativos ainda podem funcionar."
+                : "O login não identificou o modelo. Reconecte informando o modelo.";
+        }
+        return response;
+    })().catch(error => {
+        if (info) info.textContent =
+            "Falha ao carregar catálogo: " + String(error.message || error);
+        throw error;
+    }).finally(() => { discoveryBootPromise = null; });
+    return discoveryBootPromise;
+}
+
+// Timeout somente nas rotas de descoberta. Não encerra a sessão da ONT:
+// uma falha ou diagnóstico prolongado é exibido e os outros botões
+// permanecem operacionais no QtWebEngine.
+async function discoveryRequest(endpoint, {
+    method = "GET", body = undefined, timeoutMs = 55000
+} = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const data = await apiRequest(endpoint, { method, body,
+            signal: controller.signal
+        });
+        if (!data || typeof data !== "object" || Array.isArray(data)) {
+            throw new Error(
+                "O servidor devolveu um formato inesperado para " +
+                endpoint + ". Verifique se o app instalado é a versão atual."
+            );
+        }
+        return data;
+    } catch (error) {
+        if (error?.name === "AbortError") {
+            throw new Error(
+                `A consulta ${endpoint} passou de ${Math.round(timeoutMs / 1000)}s. ` +
+                "A conexão local continua ativa; aguarde antes de repetir."
+            );
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
     }
 }
 
@@ -669,42 +745,107 @@ function autoDiscoverTracker() {
 }
 
 
+let modelDiagnosticRunning = false;
 async function runMultimodelDiagnostic() {
     const output = document.getElementById("multimodelProbeOutput");
-    const select = document.getElementById("multimodelSelect");
+    const button = document.getElementById("multimodelDiagnosticButton");
     if (!ontConnected) {
         showToast("Conecte ao equipamento antes do diagnóstico.");
         return;
     }
-    setBusy(true, "Executando leituras por família (sem alterações)...");
+    if (modelDiagnosticRunning) {
+        showToast("O diagnóstico anterior ainda está em andamento.");
+        return;
+    }
+    modelDiagnosticRunning = true;
+    if (button) button.disabled = true;
+    const family = advancedState.trackerProbe?.family
+        || trackerSelectedFamily;
+    // Consultar somente páginas documentadas para a família, em vez de
+    // gastar 10-20 segundos em cada menu que não existe na F6600P.
+    const profiles = {
+        f6640: ["device", "wan", "wifi_ssids",
+            "wifi_clients", "lan_clients"],
+        h288a: ["device", "wan", "wifi_clients", "lan_clients"],
+        h388x: ["device", "wan", "wifi_clients", "lan_clients"],
+        h2640: ["device", "dsl", "wifi_clients", "lan_clients"],
+        vue: ["wan", "wifi_clients", "lan_clients"]
+    };
+    const sections = [...(profiles[family] || [
+        "device", "wan", "wifi_clients", "lan_clients"
+    ])];
+    if (family === "f6640" &&
+        String(trackerDetectedModel || "").toUpperCase().includes("F6600P")) {
+        sections.splice(2, 0, "optical");
+    }
+    const report = {
+        model: trackerDetectedModel || "Sessão atual",
+        read_only: true, sections: {}, errors: {}
+    };
+    const render = (step, total) => {
+        if (!output) return;
+        const ok = Object.values(report.sections).filter(
+            item => item?.available
+        ).length;
+        output.textContent = [
+            `DIAGNÓSTICO DO EQUIPAMENTO — ${step}/${total} ETAPAS`,
+            `Seções com dados: ${ok}`,
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            JSON.stringify(report, null, 2)
+        ].join("\n");
+    };
+    setBusy(true, "Preparando diagnóstico por modelo...");
+    render(0, sections.length);
     try {
-        const report = await apiRequest("/multimodel/diagnostic", {
-            method: "POST",
-            body: JSON.stringify({ model: select?.value || null })
-        });
-        output.textContent = JSON.stringify(report, null, 2);
-        showToast(
-            report.supported
-                ? "Diagnóstico por família concluído. Seções não confirmadas estão sinalizadas."
-                : (report.reason || "Não foi possível confirmar endpoints deste firmware.")
-        );
-    } catch (error) {
-        output.textContent = "Diagnóstico indisponível; a sessão não foi encerrada.";
-        showToast(error.message);
+        // Toda consulta tem resposta própria. Erro em LAN/DSL não impede
+        // visualizar WAN, recursos ou GPON já obtidos.
+        for (const [index, section] of sections.entries()) {
+            setBusy(true,
+                `Diagnóstico ${index + 1}/${sections.length}: ${section}...`);
+            try {
+                const data = await discoveryRequest("/multimodel/diagnostic", {
+                    method: "POST",
+                    body: JSON.stringify({ section }),
+                    timeoutMs: 48000
+                });
+                report.model = data.model || report.model;
+                report.family = data.family;
+                Object.assign(report.sections, data.sections || {});
+                if (data.reason) report.errors[section] = data.reason;
+            } catch (error) {
+                report.errors[section] = String(error.message || error);
+                // Timeout não invalida o que já temos, mas a consulta
+                // anterior pode ainda estar executando no backend.
+                if (/passou de \d+s/.test(String(error.message))) {
+                    render(index + 1, sections.length);
+                    showToast("Diagnóstico parcial: tempo esgotado. Dados anteriores mantidos.");
+                    break;
+                }
+            }
+            render(index + 1, sections.length);
+        }
+        const found = Object.values(report.sections).filter(
+            item => item?.available
+        ).length;
+        showToast(found
+            ? `Diagnóstico finalizado: ${found} seções com dados.`
+            : "Diagnóstico sem dados confirmados. Consulte os motivos no relatório.");
     } finally {
+        modelDiagnosticRunning = false;
+        if (button) button.disabled = false;
         setBusy(false);
     }
 }
-
 
 async function showMultimodelMesh() {
     const output = document.getElementById("multimodelProbeOutput");
     const select = document.getElementById("multimodelSelect");
     setBusy(true, "Consultando topologia Mesh...");
     try {
-        const result = await apiRequest("/multimodel/mesh", {
+        const result = await discoveryRequest("/multimodel/mesh", {
             method: "POST",
-            body: JSON.stringify({ model: select?.value || null })
+            body: JSON.stringify({ model: trackerDetectedModel || null }),
+            timeoutMs: 50000
         });
         output.textContent = JSON.stringify(result, null, 2);
         showToast(
@@ -738,7 +879,28 @@ async function probeMultimodel({ quick = false } = {}) {
     const button = document.getElementById("multimodelProbeButton");
     if (button) button.disabled = true;
 
+    if (!trackerDetectedModel) {
+        try {
+            await loadMultimodelCatalog();
+        } catch (error) {
+            trackerProbeBusy = false;
+            if (button) button.disabled = false;
+            if (output) output.textContent =
+                "Erro ao obter modelo do servidor: " + error.message;
+            showToast(error.message);
+            return;
+        }
+    }
     const model = select?.value || trackerDetectedModel || null;
+    if (!model) {
+        trackerProbeBusy = false;
+        if (button) button.disabled = false;
+        const status = document.getElementById("trackerDiscoveryStatus");
+        if (status) status.textContent =
+            "Não foi possível identificar o modelo. Reconecte escolhendo-o no login.";
+        showToast("Identifique o modelo antes da sondagem.");
+        return;
+    }
     if (!quick) setBusy(true, "Detectando endpoints documentados...");
     const status = document.getElementById("trackerDiscoveryStatus");
     if (status) status.textContent = quick
@@ -756,13 +918,14 @@ async function probeMultimodel({ quick = false } = {}) {
         // O operador consegue ver o que foi confirmado após cada lote,
         // sem aguardar o último endpoint nem interpretar candidato como real.
         do {
-            const batch = await apiRequest("/multimodel/probe", {
+            const batch = await discoveryRequest("/multimodel/probe", {
                 method: "POST",
                 body: JSON.stringify({
                     model,
                     max_endpoints: 2,
                     start: offset
-                })
+                }),
+                timeoutMs: 55000
             });
             last = batch;
             total = Number(batch.total_candidates || 0);
@@ -931,19 +1094,14 @@ function renderCapabilities(
                 );
 
                 const stateClass = state
-                    ? (
-                        state.available
-                            ? "available"
-                            : "unavailable"
-                    )
+                    ? (state.not_tested ? "" : (
+                        state.available ? "available" : "unavailable"
+                    ))
                     : "";
 
                 const stateText = state
-                    ? (
-                        state.available
-                            ? "Disponível"
-                            : "Indisponível"
-                    )
+                    ? (state.not_tested ? "Não concluído (timeout)" :
+                        state.available ? "Confirmado" : "Não confirmado")
                     : "Não testado";
 
                 return `
@@ -1962,36 +2120,44 @@ function loadOperationsConsole() {
 async function loadOperationsConsoleInternal() {
     if (!ontConnected) return;
 
-    const loaders = routerWriteEnabled
-        ? [
-            loadCapabilityCatalog,
-            loadMultimodelCatalog,
-            loadDhcpOperations,
-            loadNatOperations,
-            loadHistory
-        ]
-        : [
-            loadCapabilityCatalog,
-            loadMultimodelCatalog,
-            loadHistory
-        ];
-
-    for (const loader of loaders) {
-        try {
-            await loader();
-            // Mostrar resultado de detecção antes de carregamentos de NAT
-            // ou histórico, que são opcionais e podem demorar neste firmware.
-            if (loader === loadMultimodelCatalog) {
-                await autoDiscoverTracker();
-            }
-        } catch (error) {
-            console.warn(
-                "Operations suite:",
-                error
-            );
-        }
+    // Prioridade absoluta: bootstrap e recursos visíveis. A versão anterior
+    // aguardava /device/capabilities e depois DHCP/NAT/histórico;
+    // qualquer leitura demorada impedia que o modelo aparecesse na UI.
+    try {
+        await loadMultimodelCatalog();
+    } catch (error) {
+        console.warn("Bootstrap de descoberta:", error);
     }
 
+    if (trackerDetectedModel) {
+        // Não iniciar DHCP/NAT durante menuView -> menuData: todos usam
+        // a mesma sessão/contexto do firmware e devem ser serializados.
+        await autoDiscoverTracker();
+    }
+
+    const optionalLoaders = routerWriteEnabled
+        ? [loadCapabilityCatalog, loadDhcpOperations, loadNatOperations, loadHistory]
+        : [loadCapabilityCatalog, loadHistory];
+
+    // Rodar sequencialmente no equipamento, mas não atrasar a UI.
+    // A falha de um módulo não interrompe os demais.
+    for (const loader of optionalLoaders) {
+        try {
+            await loader();
+        } catch (error) {
+            console.warn("Módulo opcional:", loader.name, error);
+            if (loader === loadCapabilityCatalog) {
+                const grid = document.getElementById("capabilityGrid");
+                if (grid) grid.textContent =
+                    "Inspeção nativa indisponível: " + error.message;
+            }
+            if (loader === loadHistory) {
+                const history = document.getElementById("historyOutput");
+                if (history) history.textContent =
+                    "Histórico não carregado: " + error.message;
+            }
+        }
+    }
     advancedState.loaded = true;
 }
 
@@ -2002,7 +2168,9 @@ window.startQuickProbe = async function startQuickProbe() {
         return;
     }
     try {
-        await loadOperationsConsole();
+        // Não aguardar DHCP/NAT/histórico para executar o botão Probe.
+        // O botão funciona mesmo quando outro módulo está demorando.
+        await loadMultimodelCatalog();
         if (routerWriteEnabled) {
             await probeCapabilities();
         } else {
@@ -2010,6 +2178,9 @@ window.startQuickProbe = async function startQuickProbe() {
         }
     } catch (error) {
         console.error("Falha no atalho Probe:", error);
+        const status = document.getElementById("trackerDiscoveryStatus");
+        if (status) status.textContent =
+            "Falha ao executar Probe: " + error.message;
         showToast(error.message);
     }
 };
