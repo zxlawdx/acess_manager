@@ -1294,6 +1294,14 @@ def f6201b_profile_preview(context=None):
     return _safe_call(action)
 
 
+@api.post("/f6201b/profile/apply-saved")
+def f6201b_profile_apply_saved(context=None):
+    def action():
+        data = _validated(AttendantRequest, context)
+        return zte_service.f6201b_profile_apply_saved(data.attendant)
+    return _safe_call(action)
+
+
 @api.post("/f6201b/profile/apply")
 def f6201b_profile_apply(context=None):
     body = _json(context)

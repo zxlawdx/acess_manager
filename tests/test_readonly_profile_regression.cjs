@@ -108,9 +108,9 @@ function testReadOnlyAndDnsIsolation() {
   assert.ok(dns.includes('await apiRequest("/f6201b/dns/status")'));
   const apply=extract("async function applyExperimentalF6201BProfile()",
     "async function applyProfile()");
-  assert.ok(apply.includes("proposal.noop === true"),
-    "matching profile must not attempt an undefined-nonce Apply");
-  assert.ok(apply.includes("renderProfileActionError(profileStage, error)"));
+  assert.ok(apply.includes("report.noop"),
+    "matching profile must show a verified no-op result without another POST");
+  assert.ok(apply.includes("renderProfileActionError(stage, error)"));
 }
 (async()=>{
   await testSavedAttendantProfile();

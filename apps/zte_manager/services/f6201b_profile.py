@@ -181,10 +181,20 @@ class ExperimentalF6201BProfile:
                 )
             before = found[0]
             target = _build_target(parsed, before, band, config)
+            # A ONT informa o canal em operação (1, 6, 36...) mesmo
+            # com AutoChannelEnabled=1. "NULL" no formulário significa
+            # *configurar automático*, não exigir que o GET fique NULL.
+            # Sem este filtro o simples perfil padrão dispara dois POSTs
+            # de rádio redundantes a cada clique.
+            unchanged_auto = (
+                str(before.get("AutoChannelEnabled")) == "1"
+                and str(target.get("AutoChannelEnabled")) == "1"
+            )
             delta = {
                 name: {"before": str(before[name]), "after": str(target[name])}
                 for name in CAPTURED_RF_FIELDS
                 if str(before[name]) != str(target[name])
+                and not (name == "Channel" and unchanged_auto)
             }
             if delta:
                 proposals.append({
@@ -278,6 +288,36 @@ class ExperimentalF6201BProfile:
                 "deixar um perfil parcial. Use acesso local por cabo."
             ),
         }
+
+    def apply_saved(self, zte, *, host, revision, firmware, profile,
+                    original_post, dns_adapter):
+        """One user action: inspect + apply the saved preset synchronously.
+
+        The preview nonce is strictly an *internal* replay guard; the
+        attendant is not asked for a second click or a typed phrase.
+        The caller holds the service RLock across the entire workflow.
+        If preflight fails no router POST is attempted. Changed fields are
+        re-read after every successful POST by apply().
+        """
+        proposal = self.preview(
+            zte, host=host, revision=revision, firmware=firmware,
+            profile=profile, dns_adapter=dns_adapter,
+        )
+        if proposal.get("noop"):
+            return {
+                "success": True, "verified": True, "noop": True,
+                "partial": False, "steps": [],
+                "message": proposal["message"],
+                "not_included": proposal["not_included"],
+            }
+        report = self.apply(
+            zte, host=host, revision=revision, firmware=firmware,
+            nonce=proposal["nonce"], confirmation="APLICAR PERFIL F6201B",
+            original_post=original_post, dns_adapter=dns_adapter,
+        )
+        report["verified"] = report.get("success") is True
+        report["noop"] = False
+        return report
 
     def apply(self, zte, *, host, revision, firmware, nonce, confirmation,
               original_post, dns_adapter):
