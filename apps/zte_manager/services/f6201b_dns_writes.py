@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import ipaddress
 import secrets
 import time
+import xml.etree.ElementTree as ET
 
 from apps.zte_manager.model.zte_configuration.zte_post import post_menu
 from apps.zte_manager.services.f6201b_writes import (
@@ -32,6 +33,13 @@ def _read(zte):
     zte.get_view("dns", Menu3Location=0)
     xml = zte.get_menu("dns_localdns_lua.lua")
     zte._validar_resposta(xml)
+    try:
+        response = ET.fromstring(xml)
+    except ET.ParseError:
+        raise RuntimeError("Resposta DNS não é XML válido.") from None
+    if (response.tag != "ajax_response_xml_root" or
+            (response.findtext("IF_ERRORID") or "").strip() != "0"):
+        raise RuntimeError("O firmware rejeitou a consulta DNS.")
     data = zte._parse_instances(xml).get("OBJ_DNS_ID", [])
     if len(data) != 1 or not data[0].get("_InstID"):
         raise RuntimeError("A ONT não expôs uma instância DNS inequívoca.")
