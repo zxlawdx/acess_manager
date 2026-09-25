@@ -499,41 +499,54 @@ async function loadCapabilityCatalog() {
 
 
 async function probeCapabilities() {
-    setBusy(
-        true,
-        "Detectando menus disponíveis no firmware..."
-    );
+    setBusy(true, "Detectando recursos por etapas...");
 
     try {
-        const data = await apiRequest(
-            "/device/capabilities/probe",
-            {
-                method: "POST",
-                body: JSON.stringify({
-                    features: []
-                })
+        // Lotes curtos evitam uma requisição longa contendo todos os menus
+        // e mantêm os resultados obtidos mesmo se um lote falhar.
+        if (!advancedState.capabilities) {
+            await loadCapabilityCatalog();
+        }
+
+        const catalog = advancedState.capabilities?.features || {};
+        const keys = Object.keys(catalog);
+        const results = [];
+        const batchSize = 3;
+
+        for (let index = 0; index < keys.length; index += batchSize) {
+            const batch = keys.slice(index, index + batchSize);
+            try {
+                const response = await apiRequest(
+                    "/device/capabilities/probe",
+                    {
+                        method: "POST",
+                        body: JSON.stringify({ features: batch })
+                    }
+                );
+                results.push(...(response.features || []));
+            } catch (error) {
+                console.warn("Probe parcial:", batch, error);
+                results.push(...batch.map(feature => ({
+                    feature,
+                    available: false,
+                    error: error.message
+                })));
             }
-        );
 
-        advancedState.capabilityProbe = data;
+            advancedState.capabilityProbe = { features: results };
+            renderCapabilities(catalog, results);
+            showToast(
+                `Recursos verificados: ${Math.min(index + batchSize, keys.length)}/${keys.length}`
+            );
+        }
 
-        renderCapabilities(
-            advancedState.capabilities?.features || {},
-            data.features || []
-        );
-
-        showToast(
-            "Detecção de capabilities concluída."
-        );
+        showToast("Detecção finalizada. Recursos indisponíveis identificados.");
     } catch (error) {
-        showToast(
-            error.message
-        );
+        showToast(error.message);
     } finally {
         setBusy(false);
     }
 }
-
 
 function renderCapabilities(
     catalog,
@@ -1363,11 +1376,14 @@ async function backupConfiguration() {
             </div>
         `;
 
-        await loadHistory();
+        showToast("Backup local concluído.");
 
-        showToast(
-            "Backup local concluído."
-        );
+        // Falha no refresh visual não invalida o backup já persistido.
+        try {
+            await loadHistory();
+        } catch (historyError) {
+            console.warn("Backup salvo; histórico indisponível:", historyError);
+        }
     } catch (error) {
         showToast(
             error.message
@@ -1403,7 +1419,12 @@ async function captureSnapshot() {
             `Snapshot #${data.snapshot_id} salvo.`
         );
 
-        await loadHistory();
+        // Snapshot já persistido; atualização visual é independente.
+        try {
+            await loadHistory();
+        } catch (historyError) {
+            console.warn("Snapshot salvo; histórico indisponível:", historyError);
+        }
     } catch (error) {
         showToast(
             error.message
