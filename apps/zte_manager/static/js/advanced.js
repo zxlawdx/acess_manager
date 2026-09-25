@@ -548,6 +548,45 @@ async function probeCapabilities() {
     }
 }
 
+async function loadMultimodelCatalog() {
+    const select = document.getElementById("multimodelSelect");
+    if (!select || select.dataset.loaded === "true") return;
+    const data = await apiRequest("/multimodel/catalog");
+    for (const item of data.models || []) {
+        const option = document.createElement("option");
+        option.value = item.model;
+        option.textContent = `${item.model} • ${item.protocol.toUpperCase()}`;
+        select.appendChild(option);
+    }
+    select.dataset.loaded = "true";
+}
+
+
+async function probeMultimodel() {
+    const output = document.getElementById("multimodelProbeOutput");
+    const select = document.getElementById("multimodelSelect");
+    setBusy(true, "Identificando família do equipamento...");
+    try {
+        output.textContent = "Consultando endpoints somente leitura...";
+        const result = await apiRequest("/multimodel/probe", {
+            method: "POST",
+            body: JSON.stringify({ model: select?.value || null })
+        });
+        output.textContent = JSON.stringify(result, null, 2);
+        showToast(
+            result.supported
+                ? "Endpoint confirmado. Recursos de escrita exigem validação adicional."
+                : (result.reason || "Nenhum endpoint disponível para este firmware.")
+        );
+    } catch (error) {
+        output.textContent = "Não foi possível identificar o protocolo.";
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
+}
+
+
 async function exportFeatureShapes() {
     const results = advancedState.capabilityProbe?.features || [];
     const available = results
@@ -1632,6 +1671,7 @@ async function loadOperationsConsole() {
 
     const loaders = [
         loadCapabilityCatalog,
+        loadMultimodelCatalog,
         loadDhcpOperations,
         loadNatOperations,
         loadHistory
@@ -1669,6 +1709,15 @@ function initAdvancedOperations() {
         ?.addEventListener(
             "click",
             probeCapabilities
+        );
+
+    document
+        .getElementById(
+            "multimodelProbeButton"
+        )
+        ?.addEventListener(
+            "click",
+            probeMultimodel
         );
 
     document
