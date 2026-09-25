@@ -1812,12 +1812,14 @@ async function runSelectedFirmwareDiagnostic() {
     const panel = firmwareDiagnosticPanel();
     if (!panel || !ontConnected || firmwareDiagnosticState.probeRunning) return;
     await loadFirmwareDiagnosticOptions();
-    let choices = [...panel.querySelectorAll("#firmwareDiagnosticChoices input:checked")]
-        .filter(input => !input.disabled).map(input => input.value);
+    let choices = firmwareDiagnosticState.options
+        .filter(item => item.confirmed && firmwareDiagnosticState.selected.has(item.name))
+        .map(item => item.name);
     if (!choices.length && !firmwareDiagnosticState.scanComplete) {
         await detectFirmwareDiagnosticOptions();
-        choices = [...panel.querySelectorAll("#firmwareDiagnosticChoices input:checked")]
-            .filter(input => !input.disabled).map(input => input.value);
+        choices = firmwareDiagnosticState.options
+            .filter(item => item.confirmed && firmwareDiagnosticState.selected.has(item.name))
+            .map(item => item.name);
     }
     if (!choices.length) {
         showToast("Nenhuma seção validada. Verifique recursos antes de diagnosticar.");
@@ -1825,6 +1827,7 @@ async function runSelectedFirmwareDiagnostic() {
     }
     const report = {
         model: firmwareDiagnosticState.model,
+        firmware: firmwareDiagnosticState.firmware,
         read_only: true,
         sections: {}, errors: {},
         evidence: "Somente endpoints confirmados pela detecção GET"
@@ -1844,7 +1847,7 @@ async function runSelectedFirmwareDiagnostic() {
                     );
                     report.sections[feature] = {
                         available: data.available === true,
-                        objects: data.objects || {}
+                        data: { objects: data.objects || {} }
                     };
                 } else {
                     const data = await discoveryRequest("/multimodel/diagnostic", {
@@ -1859,11 +1862,17 @@ async function runSelectedFirmwareDiagnostic() {
                 report.errors[section] = error.message;
                 if (String(error.message).includes("passou de")) break;
             }
-            result.textContent = `DIAGNÓSTICO POR FIRMWARE — ${index + 1}/${choices.length}\n` +
-                JSON.stringify(report, null, 2);
+            if (window.renderAdaptiveDiagnostic) {
+                window.renderAdaptiveDiagnostic(report, result, {
+                    progress: "Diagnóstico " + (index + 1) + "/" + choices.length +
+                              " · " + feature
+                });
+            }
         }
+        supportDiagnosticState.firmwareReport = report;
+        document.getElementById("supportReportActions")?.classList.remove("hidden");
         showToast(Object.values(report.sections).some(item => item.available)
-            ? "Diagnóstico por firmware concluído."
+            ? "Diagnóstico por firmware concluído. Gere o atendimento abaixo."
             : "O firmware não retornou dados nas seções selecionadas.");
     } finally {
         setBusy(false);
