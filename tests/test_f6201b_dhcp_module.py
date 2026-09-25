@@ -18,7 +18,9 @@ class FakeONT:
         self.calls.append(tag)
         if tag == self.fail_tag:
             raise RuntimeError("field not exposed")
-        return tag
+        self.last_tag = tag
+        return ("<ajax_response_xml_root><IF_ERRORID>0</IF_ERRORID>"
+                "</ajax_response_xml_root>")
 
     def _validar_resposta(self, raw):
         assert raw
@@ -38,7 +40,7 @@ class FakeONT:
             dhcp.IPV6: {"OBJ_DHCP6S_ID": [{
                 "_InstID": "DEV.DHCP6.1", "Enable": "0"
             }]},
-        }.get(raw, {})
+        }.get(self.last_tag, {})
 
 
 class DhcpTests(unittest.TestCase):
