@@ -62,3 +62,35 @@
   .adaptive-grid { grid-template-columns: 1fr; }
   .adaptive-fields { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
+
+/* Discoverable full GET capture without automatic probing all routes. */
+.adaptive-route-explorer { margin: 22px 0; padding: 20px; }
+.adaptive-route-head { margin-bottom: 14px; }
+.adaptive-route-head h2 { margin: 7px 0; font-size: 19px; }
+.adaptive-search {
+    display: block; width: 100%; padding: 13px 15px; margin: 16px 0;
+    border: 1px solid #3a444a; border-radius: 9px;
+    background: #15191e; color: #e8f2f7; outline: none;
+}
+.adaptive-search:focus { border-color: #1de1aa; box-shadow: 0 0 0 3px rgba(29,225,170,.1); }
+.adaptive-route-groups { display: grid; gap: 9px; }
+.adaptive-route-category { border: 1px solid #343d43; border-radius: 9px; overflow: hidden; }
+.adaptive-route-category summary {
+    padding: 13px 16px; cursor: pointer; font-size: 12px;
+    font-weight: 700; color: #e7eff6; background: #1a1e23;
+}
+.adaptive-route-list { padding: 3px 15px 14px; display: grid; gap: 8px; }
+.adaptive-route-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px; border: 1px solid #303940; border-radius: 8px;
+    background: #15181c; min-width: 0;
+}
+.adaptive-route-row > div { min-width: 0; }
+.adaptive-route-row strong { display:block; overflow-wrap:anywhere; font: 11px/1.5 monospace; }
+.adaptive-route-row small { display:block; color: #97a6b0; margin-top: 3px; font-size: 10px; }
+.adaptive-route-row button { flex-shrink: 0; }
+.adaptive-route-result { margin-top: 18px; }
+@media (max-width: 520px) {
+  .adaptive-route-row { align-items: stretch; flex-direction: column; }
+  .adaptive-route-row button { align-self: start; }
+}
