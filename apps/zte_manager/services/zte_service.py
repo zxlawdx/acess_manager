@@ -1000,11 +1000,12 @@ class ZTEService:
                 self.get_client(), selected
             )
 
-    def multimodel_probe(self, model=None):
+    def multimodel_probe(self, model=None, max_endpoints=4):
         with self._lock:
             selected = self._confirmed_probe_model(model)
             return multimodel_service.probe(
                 self.get_client(), selected,
+                max_endpoints=max_endpoints,
             )
 
     def multimodel_diagnostic(self, model=None):
