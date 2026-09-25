@@ -85,7 +85,8 @@ FORM_SPECS: dict[str, FormSpec] = {
     "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua": FormSpec(
         "OBJ_Br0AndDhcpsHosCfg_ID",
         ("ServerEnable", "MinAddress", "MaxAddress", "LeaseTime",
-         "DNSServer1", "DNSServer2", "DnsServerSource", "DomainName"),
+         "DNSServer1", "DNSServer2", "DnsServerSource", "DomainName",
+         "IPRouters"),
         additional_roots=("OBJ_LANDNS_ID",),
         description="DHCP IPv4: preserva IP/Submask LAN e todos os campos condicionais capturados.",
     ),
@@ -421,7 +422,7 @@ def _validate_value(tag: str, key: str, value) -> str:
     if key == "URL" and value and not value.startswith(("http://", "https://")):
         raise ValueError("ACS URL deve usar HTTP ou HTTPS.")
     if key in {"DestIP", "DestIPMask", "GWIP", "MinAddress", "MaxAddress",
-               "DNSServer1", "DNSServer2", "InternalClient"} and value:
+               "DNSServer1", "DNSServer2", "InternalClient", "IPRouters"} and value:
         if key == "InternalClient" and value == "0.0.0.0":
             return value
         try:
@@ -657,6 +658,37 @@ class FullCapturedForms:
                 )
         if not changed:
             raise ValueError("Nenhuma diferença detectada.")
+        if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua":
+            # Pool addresses must be in order, within the actual LAN subnet.
+            # No guessed gateway or subnet is silently posted.
+            target = dict(row.values)
+            target.update(changed)
+            try:
+                pool_start = ipaddress.IPv4Address(target["MinAddress"])
+                pool_end = ipaddress.IPv4Address(target["MaxAddress"])
+                network = ipaddress.IPv4Network(
+                    target["IPAddr"] + "/" + target["SubMask"],
+                    strict=False,
+                )
+            except (KeyError, ValueError, ipaddress.AddressValueError):
+                raise ValueError(
+                    "A ONT deve informar IP LAN, máscara e faixa DHCP válidos."
+                ) from None
+            if pool_start > pool_end:
+                raise ValueError("Início DHCP maior que o final da faixa.")
+            if pool_start not in network or pool_end not in network:
+                raise ValueError("A faixa DHCP está fora da rede LAN.")
+            if network.network_address in (pool_start, pool_end) or (
+                network.broadcast_address in (pool_start, pool_end)
+            ):
+                raise ValueError("A faixa inclui endereço de rede/broadcast.")
+            gateway = target.get("IPRouters") or target.get("IPAddr")
+            try:
+                gateway_ip = ipaddress.IPv4Address(gateway)
+            except ValueError:
+                raise ValueError("Gateway DHCP inválido.") from None
+            if gateway_ip not in network:
+                raise ValueError("Gateway DHCP fora da rede LAN.")
         # Dry-run using the captured schema, never echo raw payload.
         _assemble(tag, row.values, changed)
         nonce = secrets.token_urlsafe(24)
