@@ -55,7 +55,8 @@ class TrackerCapabilityDetectionTests(unittest.TestCase):
             "H3640", "H6645P", "H6745", "E2631", "SR7410",
             "SR7110",
         }
-        self.assertEqual(expected, set(MODEL_FAMILY))
+        self.assertEqual(expected, set(MODEL_FAMILY) - {"F6201B"})
+        self.assertEqual(catalog()["experimental_models"], ["F6201B"])
         self.assertEqual(catalog()["tracker_models"], len(expected))
         self.assertEqual(find_family("ZTE SR7110"), ("SR7110", "vue"))
 

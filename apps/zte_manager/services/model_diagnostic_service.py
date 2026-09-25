@@ -216,7 +216,7 @@ def diagnostic(
             lambda: optical_details(zte),
         )
 
-    if family == "f6640" and wants("wifi_ssids"):
+    if family in {"f6640", "f6201b_candidate"} and wants("wifi_ssids"):
         sections["wifi_ssids"] = _result(
             "wifi_ssids",
             lambda: wifi_ssid_summary(zte, endpoints["wifi_ssids"]),
@@ -239,6 +239,7 @@ def diagnostic(
 
     return {
         "model": selected, "family": family, "read_only": True,
+        "experimental": family == "f6201b_candidate",
         "supported": any(item["available"] for item in sections.values()),
         "sections": sections,
         "notes": (

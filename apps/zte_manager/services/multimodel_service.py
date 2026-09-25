@@ -78,6 +78,9 @@ MODEL_FAMILY = {
     "H3640": "h288a", "H6645P": "h288a", "H6745": "h288a",
     "H388X": "h388x", "H2640": "h2640",
     "E2631": "vue", "SR7410": "vue", "SR7110": "vue",
+    # Perfil PROVISÓRIO: candidatos F6640, não há engenharia F6201B publicada.
+    # Nunca habilitar escrita antes da identificação do protocolo real.
+    "F6201B": "f6201b_candidate",
 }
 
 # Endpoints de leitura adicionais documentados em zte_tracker/zteclient/README.md
@@ -92,6 +95,11 @@ for _family in ("h288a", "h388x", "h2640"):
     FAMILY[_family]["device_info"] = ReadEndpoint(
         "statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"
     )
+
+# F6201B: testar SOMENTE endpoints GET conhecidos da família F6640.
+# Reutilização experimental não é confirmação de compatibilidade; a
+# descoberta confronta XML/objeto esperado para cada função individual.
+FAMILY["f6201b_candidate"] = dict(FAMILY["f6640"])
 
 # PON é opt-in por modelo, não propriedade compartilhada das aliases.
 PON_F6600P = ReadEndpoint(
@@ -122,6 +130,7 @@ def find_family(model: str | None) -> tuple[str | None, str | None]:
 # As aliases compartilham endpoints, mas NÃO atestam funções de escrita.
 MODEL_EXTRAS: dict[str, tuple[str, ...]] = {
     "F6600P": ("pon_optical", "mesh_topology_candidate"),
+    "F6201B": ("experimental_get_candidates", "firmware_validation_required"),
     "F8748": ("wan_traffic_counters",),
     "H2640": ("dsl_sync_not_internet",),
     "SR7410": ("vue_api",),
@@ -150,13 +159,18 @@ def catalog() -> dict[str, Any]:
                 "candidate_features": list(FAMILY[family])
                     + (["pon_optical"] if model == "F6600P" else []),
                 "firmware_differences": MODEL_EXTRAS.get(model, ()),
+                "evidence": ("unverified_candidate" if model == "F6201B"
+                             else "zte_tracker_documented"),
             }
             for model, family in MODEL_FAMILY.items()
         ],
-        "tracker_models": len(MODEL_FAMILY),
+        "tracker_models": sum(1 for name in MODEL_FAMILY if name != "F6201B"),
+        "experimental_models": ["F6201B"],
         "notes": (
-            "O catálogo mostra candidatos documentados pelo zte_tracker, "
-            "não valida compatibilidade de cada firmware. Probe é somente leitura."
+            "O catálogo mostra candidatos zte_tracker, não garante compatibilidade. "
+            "O perfil F6201B é uma hipótese experimental de GET ThinkLua "
+            "sem endpoints comprovados; confirme cada recurso no firmware. "
+            "Nenhuma escrita é habilitada pelo perfil."
         ),
     }
 
@@ -329,14 +343,18 @@ def probe(
         "model": selected, "family": family, "read_only": True,
         "supported": any(x["available"] for x in endpoints.values()),
         "endpoints": endpoints,
-        "notes": "Somente descoberta; escrita e backup requerem validação por firmware.",
+        "notes": ("F6201B experimental: endpoints candidatos não documentados "
+                  "para este modelo. Compatibilidade depende do XML observado; "
+                  "nenhuma escrita permitida." if selected == "F6201B" else
+                  "Somente descoberta; escrita e backup requerem validação por firmware."),
         "capabilities": [
             {
                 "feature": name,
                 "label": DISCOVERY_NAMES.get(name, name),
                 "available": item["available"],
                 "writable": False,
-                "source": "zte_tracker endpoint profile",
+                "source": ("experimental_f6640_candidate" if selected == "F6201B"
+                           else "zte_tracker endpoint profile"),
                 "status": "detected" if item["available"] else "not_confirmed",
                 "reason": item.get("reason"),
             }
