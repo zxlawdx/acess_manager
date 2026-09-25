@@ -289,6 +289,7 @@ def probe(
     start = max(0, min(int(start), len(candidates)))
     count = max(1, min(int(max_endpoints), 10))
     endpoints = {}
+    session_expired = False
     for name, endpoint in list(candidates.items())[start:start + count]:
         try:
             xml = _fetch(zte, endpoint)
@@ -299,12 +300,30 @@ def probe(
                 "tag": endpoint.tag,
             }
         except Exception as exc:
-            # Não expor HTML, tokens ou payloads fornecidos pelo firmware.
+            # HTTP 200 pode significar página de login, não funcionalidade.
+            # Apenas categorias saneadas, nenhum HTML/token/credencial em UI.
+            message = str(exc).lower()
+            if "sessiontimeout" in message or "sessão expirada" in message:
+                reason = "session_expired"
+            elif "html" in message or "login" in message:
+                reason = "login_page_instead_of_data"
+            elif isinstance(exc, ET.ParseError):
+                reason = "invalid_xml"
+            elif isinstance(exc, ValueError):
+                reason = "unexpected_firmware_response"
+            elif "timeout" in type(exc).__name__.lower():
+                reason = "network_timeout"
+            else:
+                reason = "not_exposed_or_permission_denied"
             endpoints[name] = {
                 "available": False,
                 "error_type": type(exc).__name__,
+                "reason": reason,
                 "tag": endpoint.tag,
             }
+            if reason == "session_expired":
+                session_expired = True
+                break
 
     return {
         "model": selected, "family": family, "read_only": True,
@@ -319,6 +338,7 @@ def probe(
                 "writable": False,
                 "source": "zte_tracker endpoint profile",
                 "status": "detected" if item["available"] else "not_confirmed",
+                "reason": item.get("reason"),
             }
             for name, item in endpoints.items()
         ],
@@ -334,6 +354,7 @@ def probe(
         "model_specific": list(MODEL_EXTRAS.get(selected, ())),
         "next_offset": min(len(candidates), start + count),
         "total_candidates": len(candidates),
+        "session_expired": session_expired,
     }
 
 
