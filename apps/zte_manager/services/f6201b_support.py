@@ -42,6 +42,7 @@ def run_f6201b_support(
     read_section: Callable[[str], dict], ping: Callable[[dict], dict],
     traceroute: Callable[[dict], dict], speedtest: Callable[[dict], dict],
     optimize: Callable[[], dict],
+    dns_lookup: Callable[[str], dict] | None = None,
 ) -> dict:
     """Dependency-injected stages facilitate no-router contract tests."""
     mode = config.get("mode") or "general"
@@ -80,6 +81,20 @@ def run_f6201b_support(
             })
         except Exception as exc:
             report["errors"]["ping"] = _problem(exc)
+
+    # The captured F6201B firmware does not prove a native nslookup POST.
+    # An optional OS-level lookup is reported explicitly as PC, never
+    # misrepresented as the ONT's own DNS resolver.
+    if config.get("run_ping", True) and dns_lookup is not None:
+        try:
+            value = dns_lookup(config.get("dns_host") or "cloudflare.com")
+            report["sections"]["dns_lookup"] = value
+            report["performed"].append({
+                "operation": "dns_lookup_pc", "target": "PC do atendente",
+                "verified": bool(value.get("verified")),
+            })
+        except Exception as exc:
+            report["errors"]["dns_lookup_pc"] = _problem(exc)
 
     if config.get("include_traceroute"):
         try:
