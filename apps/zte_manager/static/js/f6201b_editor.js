@@ -382,6 +382,8 @@
         const reboot=$("rebootDeviceButton");if(reboot)reboot.disabled=true;
     }
     async function open(page) {
+        // F6600P/F670L continue usando integralmente os carregadores antigos.
+        if (!ontConnected || routerWriteEnabled) return;
         if(!["wifi","wan","clients","dashboard","device"].includes(page))return;
         const info=await bootstrap();
         if(!info)return;
