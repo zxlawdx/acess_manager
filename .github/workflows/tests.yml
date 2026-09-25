@@ -42,6 +42,7 @@ jobs:
           node --check apps/zte_manager/static/js/management.js
           node --check apps/zte_manager/static/js/adaptive_firmware.js
           node --check apps/zte_manager/static/js/f6201b_editor.js
+          node --check apps/zte_manager/static/js/adaptive_firmware.js
 
       - name: Verify loading overlay behavior
         run: node tests/test_loading_overlay.cjs
@@ -54,3 +55,6 @@ jobs:
 
       - name: Verify adaptive firmware UI and sanitized attendance
         run: node tests/test_adaptive_firmware.cjs
+
+      - name: Verify native and experimental model UI isolation
+        run: node tests/test_model_ui_isolation.cjs
