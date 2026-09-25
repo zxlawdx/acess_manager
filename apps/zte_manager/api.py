@@ -753,12 +753,14 @@ def multimodel_probe(context=None):
     model = str(body.get("model") or "")[:50].strip()
     try:
         count = min(10, max(1, int(body.get("max_endpoints", 4))))
+        start = min(10, max(0, int(body.get("start", 0))))
     except (TypeError, ValueError):
-        count = 4
+        count, start = 4, 0
     return _safe_call(
         zte_service.multimodel_probe,
         model or None,
         count,
+        start,
     )
 
 
