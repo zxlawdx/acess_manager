@@ -4164,9 +4164,7 @@ document.addEventListener(
         const jump = target.dataset.jump;
         // Famílias ainda não homologadas não executam diagnóstico F670L,
         // que pode solicitar comandos via POST e desconectar a sessão.
-        const destination = (
-            jump === "supportDiagnostic" && !routerWriteEnabled
-        ) ? "advanced" : jump;
+        const destination = jump;
         openPage(destination);
 
         // Os atalhos do topo são ações, não apenas links invisíveis.
@@ -4184,12 +4182,9 @@ document.addEventListener(
                     }
                 }, 0);
             } else if (jump === "supportDiagnostic") {
-                if (!routerWriteEnabled) {
-                    showToast("Este firmware exige diagnóstico por modelo, somente leitura.");
-                    if (typeof runMultimodelDiagnostic === "function") {
-                        void runMultimodelDiagnostic();
-                    }
-                } else if (typeof window.runQuickSupportDiagnostic === "function") {
+                // O painel automático também aceita famílias experimentais:
+                // opções aparecem dinamicamente conforme probes GET confirmados.
+                if (typeof window.runQuickSupportDiagnostic === "function") {
                     void window.runQuickSupportDiagnostic();
                 }
             } else if (jump === "management") {
