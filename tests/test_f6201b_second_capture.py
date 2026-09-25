@@ -8,7 +8,7 @@ from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.f6201b_writes import OPT_IN_ENV
 from apps.zte_manager.services.f6201b_evidence import (
     SSID_APPLY_FIELDS, OBSERVED_APPLY_FIELDS, CAPTURED_GET_VIEWS,
-    CAPTURED_GET_ROOTS,
+    CAPTURED_GET_ROOTS, CAPTURE_STATISTICS,
 )
 from apps.zte_manager.services import f6201b_capture
 
@@ -64,6 +64,12 @@ class CaptureCompatibilityTests(unittest.TestCase):
                          len(set(SSID_APPLY_FIELDS)))
         self.assertEqual(OBSERVED_APPLY_FIELDS[
             "wlan_wlansssidconf_lua.lua"],SSID_APPLY_FIELDS)
+        self.assertEqual(CAPTURE_STATISTICS["total_http"],209)
+        self.assertEqual(CAPTURE_STATISTICS["successful_apply_events"],28)
+        self.assertEqual(len(OBSERVED_APPLY_FIELDS),25)
+        self.assertEqual(CAPTURE_STATISTICS["successful_unique_apply_routes"],25)
+        self.assertEqual(len(OBSERVED_APPLY_FIELDS["wan_internet_lua.lua"]),66)
+        self.assertEqual(len(OBSERVED_APPLY_FIELDS["dns_localdns_lua.lua"]),9)
 
     def test_all_repeated_encode_blocks_are_detected(self):
         self.assertEqual(zte_wifi._get_encode_fields(XML_ENCODE),
