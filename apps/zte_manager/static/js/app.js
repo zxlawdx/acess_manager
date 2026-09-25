@@ -931,6 +931,9 @@ async function loadOptical() {
             "/device/optical"
         );
 
+        if (!data || typeof data !== "object" || !Object.keys(data).length || data.error) {
+            throw new Error(data?.error || "A ONT não retornou dados ópticos.");
+        }
         const rx = normalizeOpticalPower(
             data.rx_power_dbm
         );
