@@ -548,6 +548,60 @@ async function probeCapabilities() {
     }
 }
 
+async function exportFeatureShapes() {
+    const results = advancedState.capabilityProbe?.features || [];
+    const available = results
+        .filter(item => item.available)
+        .map(item => item.feature);
+
+    if (!available.length) {
+        showToast("Execute Detectar recursos antes de gerar o mapa.");
+        return;
+    }
+
+    const panel = document.getElementById("firmwareShapePanel");
+    const output = document.getElementById("firmwareShapeOutput");
+    panel.classList.remove("hidden");
+
+    const report = {
+        schema: 1,
+        adapter: advancedState.capabilities?.adapter || "ThinkLua",
+        notes: "Contém somente campos e contagens. Revisar antes de compartilhar.",
+        features: []
+    };
+
+    setBusy(true, "Lendo estrutura do firmware...");
+
+    try {
+        // Uma leitura por vez: o firmware mantém sessão compartilhada.
+        for (const [index, feature] of available.entries()) {
+            try {
+                const shape = await apiRequest(
+                    `/features/shape?feature=${encodeURIComponent(feature)}`
+                );
+                report.features.push(shape);
+            } catch (error) {
+                report.features.push({
+                    feature,
+                    available: false,
+                    error_type: "read_failed"
+                });
+                console.warn("Estrutura não disponível:", feature, error);
+            }
+
+            output.value = JSON.stringify(report, null, 2);
+            showToast(
+                `Estruturas analisadas: ${index + 1}/${available.length}`
+            );
+        }
+
+        showToast("Mapa estrutural gerado. Revise antes de compartilhar.");
+    } finally {
+        setBusy(false);
+    }
+}
+
+
 function renderCapabilities(
     catalog,
     probe
@@ -1613,6 +1667,15 @@ function initAdvancedOperations() {
         ?.addEventListener(
             "click",
             probeCapabilities
+        );
+
+    document
+        .getElementById(
+            "exportFeatureShapesButton"
+        )
+        ?.addEventListener(
+            "click",
+            exportFeatureShapes
         );
 
     document
