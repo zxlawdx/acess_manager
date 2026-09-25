@@ -530,7 +530,8 @@ class ZTEService:
             self._selected_model
         )
         # A família F6640 reutiliza os mesmos menus da F6600P/F670L.
-        return family if family in {"h288a", "h388x", "h2640", "vue"} else None
+        return family if family in {"h288a", "h388x", "h2640", "vue",
+                                    "f6201b_candidate"} else None
 
     def wifi_clients(self):
         with self._lock:
@@ -544,6 +545,10 @@ class ZTEService:
     def lan_clients(self):
         with self._lock:
             family = self._multimodel_client_family()
+            if family == "f6201b_candidate":
+                # Captura comprova DHCP leases e tabela ARP, não usuários
+                # Ethernet ativos. Evitar falso positivo de cliente online.
+                return []
             if family:
                 return multimodel_service.read_clients(
                     self.get_client(), self._selected_model, "lan_clients"
