@@ -22,6 +22,7 @@ from apps.zte_manager.services import model_diagnostic_service
 from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.services.f6201b_writes import ExperimentalF6201BWrites, EXACT_FIRMWARE
 from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
+from apps.zte_manager.services.f6201b_profile import ExperimentalF6201BProfile
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -57,6 +58,7 @@ class ZTEService:
         self._session_revision = uuid4().hex
         self._f6201b_writer = ExperimentalF6201BWrites()
         self._f6201b_dns = ExperimentalF6201BDNS()
+        self._f6201b_profile = ExperimentalF6201BProfile()
         self._readonly_original_post = None
 
     # =========================================================
@@ -178,6 +180,7 @@ class ZTEService:
 
             self._f6201b_writer.clear()
             self._f6201b_dns.clear()
+            self._f6201b_profile.clear()
             self._readonly_original_post = None
             self._session_revision = uuid4().hex
             self._model_verified = False
@@ -383,6 +386,7 @@ class ZTEService:
                 self._session_revision = uuid4().hex
                 self._f6201b_writer.clear()
                 self._f6201b_dns.clear()
+                self._f6201b_profile.clear()
                 self._readonly_original_post = None
 
     def get_client(self) -> ZTE:
@@ -1207,6 +1211,29 @@ class ZTEService:
                 firmware=firmware, nonce=nonce,
                 confirmation=confirmation,
                 original_post=self._readonly_original_post,
+            )
+
+    def f6201b_profile_preview(self, attendant):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            if attendant != self.current_attendant:
+                raise PermissionError("O perfil deve pertencer ao atendente atual.")
+            return self._f6201b_profile.preview(
+                self.get_client(), host=self.current_host,
+                revision=self._session_revision, firmware=firmware,
+                profile=profile_service.get_profile(attendant),
+                dns_adapter=self._f6201b_dns,
+            )
+
+    def f6201b_profile_apply(self, nonce, confirmation):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            return self._f6201b_profile.apply(
+                self.get_client(), host=self.current_host,
+                revision=self._session_revision, firmware=firmware,
+                nonce=nonce, confirmation=confirmation,
+                original_post=self._readonly_original_post,
+                dns_adapter=self._f6201b_dns,
             )
 
     def mapped_f6201b_routes(self):
