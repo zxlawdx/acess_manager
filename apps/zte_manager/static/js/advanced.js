@@ -508,7 +508,7 @@ async function probeCapabilities() {
         await probeMultimodel();
         return;
     }
-    setBusy(true, "Detectando recursos por etapas...");
+    setBusy(true, "Carregando catálogo de menus nativos...");
 
     try {
         // Lotes curtos evitam uma requisição longa contendo todos os menus
@@ -528,22 +528,35 @@ async function probeCapabilities() {
 
         for (let index = 0; index < keys.length; index += batchSize) {
             const batch = keys.slice(index, index + batchSize);
+            setBusy(true,
+                `Detectar recursos: ${Math.min(index + batchSize, keys.length)}/${keys.length} menus...`);
             try {
-                const response = await apiRequest(
+                const response = await discoveryRequest(
                     "/device/capabilities/probe",
                     {
                         method: "POST",
-                        body: JSON.stringify({ features: batch })
+                        body: JSON.stringify({ features: batch }),
+                        timeoutMs: 70000
                     }
                 );
                 results.push(...(response.features || []));
             } catch (error) {
                 console.warn("Probe parcial:", batch, error);
+                const timeout = /passou de \\d+s/.test(String(error.message));
                 results.push(...batch.map(feature => ({
                     feature,
                     available: false,
-                    error: error.message
+                    error: error.message,
+                    not_tested: timeout
                 })));
+                if (timeout) {
+                    const info = document.getElementById("trackerDiscoveryStatus");
+                    if (info) info.textContent =
+                        "Sondagem nativa interrompida por demora. O firmware pode continuar processando.";
+                    advancedState.capabilityProbe = { features: results };
+                    renderCapabilities(catalog, results);
+                    break;
+                }
             }
 
             advancedState.capabilityProbe = { features: results };
@@ -2134,7 +2147,9 @@ window.startQuickProbe = async function startQuickProbe() {
         return;
     }
     try {
-        await loadOperationsConsole();
+        // Não aguardar DHCP/NAT/histórico para executar o botão Probe.
+        // O botão funciona mesmo quando outro módulo está demorando.
+        await loadMultimodelCatalog();
         if (routerWriteEnabled) {
             await probeCapabilities();
         } else {
@@ -2142,6 +2157,9 @@ window.startQuickProbe = async function startQuickProbe() {
         }
     } catch (error) {
         console.error("Falha no atalho Probe:", error);
+        const status = document.getElementById("trackerDiscoveryStatus");
+        if (status) status.textContent =
+            "Falha ao executar Probe: " + error.message;
         showToast(error.message);
     }
 };
