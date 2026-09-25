@@ -1693,13 +1693,19 @@ async function loadOperationsConsole() {
         return;
     }
 
-    const loaders = [
-        loadCapabilityCatalog,
-        loadMultimodelCatalog,
-        loadDhcpOperations,
-        loadNatOperations,
-        loadHistory
-    ];
+    const loaders = routerWriteEnabled
+        ? [
+            loadCapabilityCatalog,
+            loadMultimodelCatalog,
+            loadDhcpOperations,
+            loadNatOperations,
+            loadHistory
+        ]
+        : [
+            loadCapabilityCatalog,
+            loadMultimodelCatalog,
+            loadHistory
+        ];
 
     for (const loader of loaders) {
         try {
