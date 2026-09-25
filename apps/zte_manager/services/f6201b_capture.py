@@ -103,7 +103,7 @@ Multicast|multicast_igmpwan_lua.lua||menuData|XML
 Multicast|multicast_mldwan_lua.lua||menuData|XML
 Multicast|igmp_lua.lua|OBJ_IGMPPROXYC_ID|menuData|XML
 Multicast|multicast_vlan_lua.lua||menuData|XML
-Multicast|multicast_address_lua|OBJ_IGMPADDLIMITUNTAG_ID|menuData|XML"""
+Multicast|multicast_address_lua.lua|OBJ_IGMPADDLIMITUNTAG_ID|menuData|XML"""
 
 
 def _rows():
