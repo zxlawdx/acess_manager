@@ -107,7 +107,8 @@ class F6201BWriteTests(unittest.TestCase):
     def test_apply_uses_legacy_verified_writer_once_then_relocks(self):
         with patch.dict(os.environ, {OPT_IN_ENV: "1"}):
             preview = self.preview({"broadcast": False})
-            def fake_legacy(*args):
+            def fake_legacy(*args, **kwargs):
+                self.assertIs(kwargs.get("captured_f6201b"), True)
                 self.assertTrue(self.zte.writes_enabled)
                 self.assertIs(self.zte.session.post, original_post)
                 return {"success": True, "verified": True}
