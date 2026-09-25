@@ -20,6 +20,7 @@ class ReadEndpoint:
     tag: str
     root: str
     params: tuple[tuple[str, str], ...] = ()
+    request_type: str = "menuData"
 
 
 # Protocolos conhecidos por família, não garantias por firmware/operadora.
@@ -53,7 +54,20 @@ FAMILY: dict[str, dict[str, ReadEndpoint]] = {
         "lan_clients": ReadEndpoint("localNetStatus", "accessdev_landevs_lua.lua", "OBJ_ACCESSDEV_ID"),
         "dsl": ReadEndpoint("dslWanStatus", "dsl_interface_status_lua.lua", "OBJ_DSLINTERFACE_ID"),
     },
-    "vue": {},  # Não enviar menus ThinkLua a um firmware Vue.
+    "vue": {
+        "wifi_clients": ReadEndpoint(
+            "localNetStatus", "vue_client_data", "OBJ_CLIENTS_ID",
+            request_type="vueData",
+        ),
+        "lan_clients": ReadEndpoint(
+            "localNetStatus", "localnet_lan_info_lua", "OBJ_LAN_INFO_ID",
+            request_type="vueData",
+        ),
+        "wan": ReadEndpoint(
+            "vue_home_device_data_no_update_sess", "vue_mainwan_data",
+            "ID_WAN_COMFIG", request_type="vueData",
+        ),
+    },
 }
 
 MODEL_FAMILY = {
@@ -93,8 +107,7 @@ def catalog() -> dict[str, Any]:
                 "family": family,
                 "protocol": "vue" if family == "vue" else "thinklua",
                 "discovery": (
-                    "separate_auth_required" if family == "vue"
-                    else "read_only_probe"
+                    "read_only_probe"
                 ),
             }
             for model, family in MODEL_FAMILY.items()
@@ -149,20 +162,30 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
             "endpoints": {},
         }
 
-    if family == "vue":
-        return {
-            "model": selected, "family": family, "supported": False,
-            "read_only": True, "reason": (
-                "Este equipamento usa API Vue; a autenticação ThinkLua "
-                "atual não é compatível. Nenhum menu foi consultado."
-            ), "endpoints": {},
-        }
-
     endpoints = {}
     for name, endpoint in list(FAMILY[family].items())[:max(1, min(max_endpoints, 4))]:
         try:
-            zte.get_view(endpoint.view, Menu3Location=0)
-            xml = zte.get_menu(endpoint.tag, **dict(endpoint.params))
+            if endpoint.request_type == "vueData":
+                # Vue usa os mesmos desafios loginData em vários modelos,
+                # mas acessa leituras com _type=vueData. Nunca enviar POST.
+                # Inicializa o contexto do menu sem supor compatibilidade.
+                if endpoint.view:
+                    first = zte.session.get(
+                        zte.base_url + "/",
+                        params={"_type": "vueData", "_tag": endpoint.view},
+                        timeout=10,
+                    )
+                    first.raise_for_status()
+                response = zte.session.get(
+                    zte.base_url + "/",
+                    params={"_type": "vueData", "_tag": endpoint.tag},
+                    timeout=10,
+                )
+                response.raise_for_status()
+                xml = response.text
+            else:
+                zte.get_view(endpoint.view, Menu3Location=0)
+                xml = zte.get_menu(endpoint.tag, **dict(endpoint.params))
             # Faz a validação local mesmo quando implementação de ZTE mudar.
             endpoints[name] = {
                 "available": True,
