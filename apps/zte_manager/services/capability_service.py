@@ -80,18 +80,42 @@ class ThinkLuaCapabilityGateway:
                     **dict(endpoint.query),
                 )
 
+                # ZTE pode retornar 200 com HTML de LOGIN / SessionTimeout.
+                # Isso NUNCA é prova de capability. Anteriormente a ausência
+                # do objeto esperado era convertida em [] (falso positivo).
+                if not isinstance(xml, str) or not xml.strip():
+                    raise ValueError("Resposta vazia do firmware")
+                parsed_root = ET.fromstring(xml)
+                if parsed_root.tag != "ajax_response_xml_root":
+                    raise ValueError("Firmware devolveu outra página, possivelmente login")
+                if "SessionTimeout" in xml:
+                    raise RuntimeError("Sessão expirada na consulta")
+                firmware_error = (parsed_root.findtext("IF_ERRORSTR") or "").strip()
+                if firmware_error and firmware_error.upper() not in (
+                    "SUCC", "SUCCESS", "OK", "0"
+                ):
+                    raise RuntimeError("O firmware negou o menu solicitado")
                 self.zte._validar_resposta(xml)
                 objects = self.zte._parse_instances(xml)
 
                 if endpoint.object_keys:
+                    present = [
+                        key for key in endpoint.object_keys
+                        if key in objects
+                    ]
+                    if not present:
+                        raise ValueError("Resposta sem objeto esperado para a capability")
                     objects = {
-                        key: objects.get(key, [])
-                        for key in endpoint.object_keys
+                        key: objects[key]
+                        for key in present
                     }
 
                 meta = self._scalar_meta(
                     xml
                 )
+                # Menus sem object_keys precisam trazer evidência não vazia.
+                if not endpoint.object_keys and not objects and not meta:
+                    raise ValueError("O firmware não retornou dados de confirmação")
 
                 if meta:
                     objects["__meta__"] = meta
@@ -112,8 +136,10 @@ class ThinkLuaCapabilityGateway:
                 }
 
             except Exception as error:
+                # Retornar o TIPO, jamais HTML, parâmetros ou tokens
+                # contidos em exceções HTTP.
                 errors.append(
-                    f"{endpoint.view}/{endpoint.tag}: {error}"
+                    f"{endpoint.view}/{endpoint.tag}: {type(error).__name__}"
                 )
 
         raise RuntimeError(

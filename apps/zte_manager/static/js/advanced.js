@@ -561,17 +561,111 @@ async function probeCapabilities() {
     }
 }
 
+// Relatório independente dos menus comuns F6600P. Alguns modelos usam
+// vueData e não possuem sequer o mesmo endpoint menuView.
+let trackerQuickScanKey = null;
+let trackerQuickScanPromise = null;
+let trackerDetectedModel = null;
+
+function renderTrackerDiscovery(data) {
+    const grid = document.getElementById("trackerCapabilityGrid");
+    const status = document.getElementById("trackerDiscoveryStatus");
+    if (!grid || !status) return;
+    const features = [
+        ...(data.capabilities || []),
+        ...(data.candidate_features || [])
+    ];
+    const found = features.filter(item => item.status === "detected").length;
+    const notConfirmed = features.filter(
+        item => item.status === "not_confirmed"
+    ).length;
+    const model = data.model || trackerDetectedModel || "Não identificado";
+    status.textContent = data.reason ||
+        `${model} • ${found} confirmado(s), ${notConfirmed} indisponível(is), ${features.length - found - notConfirmed} ainda não testado(s)`;
+    grid.innerHTML = features.length ? features.map(item => {
+        const confirmed = item.status === "detected";
+        const unconfirmed = item.status === "not_confirmed";
+        const reasonLabels = {
+            session_expired: "Sessão expirada — reconecte",
+            login_page_instead_of_data: "Firmware retornou página de login",
+            invalid_xml: "Resposta do menu em formato inesperado",
+            unexpected_firmware_response: "Objeto esperado não retornado",
+            network_timeout: "O equipamento não respondeu a tempo",
+            not_exposed_or_permission_denied: "Menu ausente ou permissão insuficiente"
+        };
+        const label = confirmed ? "Confirmado neste equipamento"
+            : unconfirmed
+                ? (reasonLabels[item.reason] || "Endpoint não confirmado")
+                : "Documentado, ainda não testado";
+        return `<article class="capability-card">
+            <div class="capability-head"><div>
+                <strong>${escapeHtml(item.label || item.feature)}</strong>
+                <p>${escapeHtml(label)}</p>
+            </div><i class="capability-state ${confirmed ? "available" : unconfirmed ? "unavailable" : ""}"></i></div>
+            <div class="operation-meta"><span>LEITURA</span><span>zte_tracker / ${escapeHtml(data.family || "desconhecida")}</span></div>
+        </article>`;
+    }).join("") : '<p class="muted">Nenhum endpoint documentado confirmado para este perfil.</p>';
+}
+
 async function loadMultimodelCatalog() {
     const select = document.getElementById("multimodelSelect");
-    if (!select || select.dataset.loaded === "true") return;
-    const data = await apiRequest("/multimodel/catalog");
-    for (const item of data.models || []) {
+    if (!select) return;
+    if (select.dataset.loaded === "true") return;
+    const [catalog, status] = await Promise.all([
+        apiRequest("/multimodel/catalog"),
+        apiRequest("/connection/status")
+    ]);
+    for (const item of catalog.models || []) {
         const option = document.createElement("option");
         option.value = item.model;
         option.textContent = `${item.model} • ${item.protocol.toUpperCase()}`;
         select.appendChild(option);
     }
+
+    trackerDetectedModel = status.model || null;
+    // Campo opcional é somente uma forma de *visualizar* o modelo já
+    // identificado. Nunca alterar família numa sessão autenticada.
+    const matched = (catalog.models || []).find(
+        item => (trackerDetectedModel || "").toUpperCase().includes(item.model)
+    );
+    if (matched) select.value = matched.model;
     select.dataset.loaded = "true";
+    const badge = document.getElementById("adapterBadge");
+    if (badge) badge.textContent = trackerDetectedModel
+        ? `PERFIL ${trackerDetectedModel}` : "IDENTIFICAÇÃO PENDENTE";
+
+    if (matched) {
+        const candidates = (matched.candidate_features || []).map(feature => ({
+            feature,
+            label: feature.replace(/_/g, " "),
+            status: "not_tested"
+        }));
+        renderTrackerDiscovery({
+            model: matched.model, family: matched.family,
+            candidate_features: candidates
+        });
+    } else {
+        document.getElementById("trackerDiscoveryStatus").textContent =
+            trackerDetectedModel
+                ? "Modelo não consta nos perfis do zte_tracker; menus nativos continuam disponíveis."
+                : "Firmware não informou modelo. Escolha o modelo no login para fazer descoberta.";
+    }
+}
+
+// Faz uma coleta pequena na primeira abertura, sem sondar dezenas de
+// páginas e competir com o login/diagnóstico do firmware.
+function autoDiscoverTracker() {
+    if (!ontConnected || !trackerDetectedModel) return Promise.resolve();
+    const key = `${currentHost || ""}:${trackerDetectedModel}`;
+    if (trackerQuickScanKey === key) return trackerQuickScanPromise || Promise.resolve();
+    trackerQuickScanKey = key;
+    trackerQuickScanPromise = probeMultimodel({ quick: true })
+        .catch(error => {
+            trackerQuickScanKey = null;
+            console.warn("Leitura automática não confirmada:", error);
+        })
+        .finally(() => { trackerQuickScanPromise = null; });
+    return trackerQuickScanPromise;
 }
 
 
@@ -627,30 +721,118 @@ async function showMultimodelMesh() {
 }
 
 
-async function probeMultimodel() {
+let trackerProbeBusy = false;
+
+async function probeMultimodel({ quick = false } = {}) {
     const output = document.getElementById("multimodelProbeOutput");
     const select = document.getElementById("multimodelSelect");
-    setBusy(true, "Identificando família do equipamento...");
+    if (!ontConnected) {
+        showToast("Conecte-se ao equipamento primeiro.");
+        return;
+    }
+    if (trackerProbeBusy) {
+        if (!quick) showToast("Uma detecção já está em andamento.");
+        return;
+    }
+    trackerProbeBusy = true;
+    const button = document.getElementById("multimodelProbeButton");
+    if (button) button.disabled = true;
+
+    const model = select?.value || trackerDetectedModel || null;
+    if (!quick) setBusy(true, "Detectando endpoints documentados...");
+    const status = document.getElementById("trackerDiscoveryStatus");
+    if (status) status.textContent = quick
+        ? "Iniciando leitura automática do firmware..."
+        : "Verificando recursos reais, por etapas...";
+    const verified = new Map();
+    const candidates = new Map();
+    const endpoints = {};
+    let total = 0;
+    let offset = 0;
+    let last = null;
+
     try {
-        output.textContent = "Consultando endpoints somente leitura...";
-        const result = await apiRequest("/multimodel/probe", {
-            method: "POST",
-            body: JSON.stringify({ model: select?.value || null })
-        });
-        output.textContent = JSON.stringify(result, null, 2);
-        showToast(
-            result.supported
-                ? "Endpoint confirmado. Recursos de escrita exigem validação adicional."
-                : (result.reason || "Nenhum endpoint disponível para este firmware.")
+        // Requisições sequenciais: os menus ZTE compartilham o contexto.
+        // O operador consegue ver o que foi confirmado após cada lote,
+        // sem aguardar o último endpoint nem interpretar candidato como real.
+        do {
+            const batch = await apiRequest("/multimodel/probe", {
+                method: "POST",
+                body: JSON.stringify({
+                    model,
+                    max_endpoints: 2,
+                    start: offset
+                })
+            });
+            last = batch;
+            total = Number(batch.total_candidates || 0);
+            for (const item of batch.capabilities || []) {
+                verified.set(item.feature, item);
+                candidates.delete(item.feature);
+            }
+            for (const item of batch.candidate_features || []) {
+                if (!verified.has(item.feature)) {
+                    candidates.set(item.feature, item);
+                }
+            }
+            Object.assign(endpoints, batch.endpoints || {});
+            const combined = {
+                ...batch,
+                endpoints,
+                capabilities: [...verified.values()],
+                candidate_features: [...candidates.values()]
+            };
+            advancedState.trackerProbe = combined;
+            renderTrackerDiscovery(combined);
+            offset = Number(batch.next_offset ?? (offset + 2));
+            const confirmed = [...verified.values()].filter(item => item.available).length;
+            if (status && total) {
+                status.textContent =
+                    `${batch.model || model}: ${Math.min(offset, total)}/${total} verificações · ${confirmed} confirmado(s)`;
+            }
+            if (output) {
+                output.textContent = JSON.stringify({
+                    model: batch.model,
+                    family: batch.family,
+                    progress: `${Math.min(offset, total)}/${total}`,
+                    endpoints
+                }, null, 2);
+            }
+            if (batch.session_expired) {
+                if (status) status.textContent =
+                    "Sessão expirada durante a leitura. Reconecte à ONT antes de continuar.";
+                break;
+            }
+            if (quick || !total) break;
+        } while (offset < total);
+
+        const confirmed = [...verified.values()].filter(item => item.available).length;
+        const badge = document.getElementById("adapterBadge");
+        if (badge) badge.textContent = `${confirmed} CONFIRMADO(S)`;
+        if (!quick) showToast(
+            confirmed
+                ? `${confirmed} recurso(s) de leitura validado(s) neste firmware.`
+                : "Não foi possível confirmar endpoints. Verifique as permissões."
         );
+        return {
+            ...last,
+            endpoints,
+            capabilities: [...verified.values()],
+            candidate_features: [...candidates.values()],
+        };
     } catch (error) {
-        output.textContent = "Não foi possível identificar o protocolo.";
-        showToast(error.message);
+        if (status) {
+            status.textContent = "Leitura parcial ou falhou: " + error.message;
+        }
+        if (output) output.textContent += "\nFalha: " + error.message;
+        if (!quick) showToast(error.message);
+        throw error;
     } finally {
-        setBusy(false);
+        trackerProbeBusy = false;
+        if (button) button.disabled = false;
+        if (!quick) setBusy(false);
     }
 }
-
 
 async function exportFeatureShapes() {
     const results = advancedState.capabilityProbe?.features || [];
@@ -658,8 +840,9 @@ async function exportFeatureShapes() {
         .filter(item => item.available)
         .map(item => item.feature);
 
-    if (!available.length) {
-        showToast("Execute Detectar recursos antes de gerar o mapa.");
+    const tracker = advancedState.trackerProbe || null;
+    if (!available.length && !tracker) {
+        showToast("Detecte os menus nativos ou o modelo antes de gerar o mapa.");
         return;
     }
 
@@ -670,9 +853,20 @@ async function exportFeatureShapes() {
     const report = {
         schema: 1,
         adapter: advancedState.capabilities?.adapter || "ThinkLua",
-        notes: "Contém somente campos e contagens. Revisar antes de compartilhar.",
+        notes: "Contém apenas estrutura de menu e contagens. Revisar antes de compartilhar.",
+        tracker: tracker ? {
+            model: tracker.model,
+            family: tracker.family,
+            endpoints: tracker.endpoints,
+            features: tracker.capabilities,
+            untested: tracker.candidate_features,
+        } : null,
         features: []
     };
+    // O tracker já entregou campos/contagens sem valores pessoais. Isto
+    // também funciona quando não existe um adaptador ThinkLua nativo.
+    document.getElementById("firmwareShapeOutput").value =
+        JSON.stringify(report, null, 2);
 
     setBusy(true, "Lendo estrutura do firmware...");
 
@@ -699,7 +893,11 @@ async function exportFeatureShapes() {
             );
         }
 
-        showToast("Mapa estrutural gerado. Revise antes de compartilhar.");
+        showToast(
+            tracker && !available.length
+                ? "Mapa estrutural do modelo gerado. Revise antes de compartilhar."
+                : "Mapa estrutural gerado. Revise antes de compartilhar."
+        );
     } finally {
         setBusy(false);
     }
@@ -1781,6 +1979,11 @@ async function loadOperationsConsoleInternal() {
     for (const loader of loaders) {
         try {
             await loader();
+            // Mostrar resultado de detecção antes de carregamentos de NAT
+            // ou histórico, que são opcionais e podem demorar neste firmware.
+            if (loader === loadMultimodelCatalog) {
+                await autoDiscoverTracker();
+            }
         } catch (error) {
             console.warn(
                 "Operations suite:",

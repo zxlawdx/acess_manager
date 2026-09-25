@@ -77,8 +77,26 @@ MODEL_FAMILY = {
     "H169A": "h288a", "H288A": "h288a", "H3600P": "h288a",
     "H3640": "h288a", "H6645P": "h288a", "H6745": "h288a",
     "H388X": "h388x", "H2640": "h2640",
-    "E2631": "vue", "SR7410": "vue",
+    "E2631": "vue", "SR7410": "vue", "SR7110": "vue",
 }
+
+# Endpoints de leitura adicionais documentados em zte_tracker/zteclient/README.md
+# e zte_client.py. Apenas F6600P possui confirmação documentada de PON.
+FAMILY["f6640"]["wifi_ssids"] = ReadEndpoint(
+    "wlanBasic", "wlan_wlansssidconf_lua.lua", "OBJ_WLANAP_ID"
+)
+FAMILY["f6640"]["device_info"] = ReadEndpoint(
+    "statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"
+)
+for _family in ("h288a", "h388x", "h2640"):
+    FAMILY[_family]["device_info"] = ReadEndpoint(
+        "statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"
+    )
+
+# PON é opt-in por modelo, não propriedade compartilhada das aliases.
+PON_F6600P = ReadEndpoint(
+    "ponopticalinfo", "optical_info_lua.lua", "OBJ_PON_OPTICALPARA_ID"
+)
 
 # Não armazenar respostas XML nem campos de clientes no relatório estrutural.
 SENSITIVE_NAME = re.compile(
@@ -100,6 +118,27 @@ def find_family(model: str | None) -> tuple[str | None, str | None]:
     return None, None
 
 
+# Diferenças documentadas por firmware no projeto zte_tracker.
+# As aliases compartilham endpoints, mas NÃO atestam funções de escrita.
+MODEL_EXTRAS: dict[str, tuple[str, ...]] = {
+    "F6600P": ("pon_optical", "mesh_topology_candidate"),
+    "F8748": ("wan_traffic_counters",),
+    "H2640": ("dsl_sync_not_internet",),
+    "SR7410": ("vue_api",),
+    "SR7110": ("vue_api",),
+    "E2631": ("vue_api",),
+}
+
+DISCOVERY_NAMES = {
+    "wifi_clients": "Clientes Wi-Fi",
+    "lan_clients": "Clientes cabeados",
+    "wan": "Status WAN",
+    "dsl": "Sincronismo DSL",
+    "wifi_ssids": "Configuração de SSIDs (leitura)",
+    "device_info": "Identificação e firmware",
+    "pon_optical": "Potência óptica GPON",
+}
+
 def catalog() -> dict[str, Any]:
     return {
         "models": [
@@ -107,12 +146,14 @@ def catalog() -> dict[str, Any]:
                 "model": model,
                 "family": family,
                 "protocol": "vue" if family == "vue" else "thinklua",
-                "discovery": (
-                    "read_only_probe"
-                ),
+                "discovery": "read_only_probe",
+                "candidate_features": list(FAMILY[family])
+                    + (["pon_optical"] if model == "F6600P" else []),
+                "firmware_differences": MODEL_EXTRAS.get(model, ()),
             }
             for model, family in MODEL_FAMILY.items()
         ],
+        "tracker_models": len(MODEL_FAMILY),
         "notes": (
             "O catálogo mostra candidatos documentados pelo zte_tracker, "
             "não valida compatibilidade de cada firmware. Probe é somente leitura."
@@ -138,7 +179,21 @@ def _fetch(zte, endpoint: ReadEndpoint) -> str:
         response.raise_for_status()
         return response.text
 
-    zte.get_view(endpoint.view, Menu3Location=0)
+    # No F6640/H288A, o zte_tracker documenta acesso menuData direto
+    # para clientes. Outros firmwares exigem uma menuView prévia (#75).
+    # Primeiro tentamos o fluxo conservador com contexto; se somente a
+    # VIEW não existir, uma leitura direta do MESMO tag documentado
+    # pode funcionar. Nunca repetimos em erro explícito de sessão expirada.
+    if not endpoint.view:
+        return zte.get_menu(endpoint.tag, **dict(endpoint.params))
+    try:
+        zte.get_view(endpoint.view, Menu3Location=0)
+    except Exception as error:
+        if "session" in str(error).lower() or "login" in str(error).lower():
+            raise
+        # O menuData direto aparece nos exemplos oficiais do tracker;
+        # não tentamos tags diferentes nem POST de configuração.
+        return zte.get_menu(endpoint.tag, **dict(endpoint.params))
     return zte.get_menu(endpoint.tag, **dict(endpoint.params))
 
 
@@ -192,7 +247,7 @@ def _shape(xml: str, expected_root: str) -> dict[str, Any]:
         raise RuntimeError("Resposta não é XML ThinkLua")
 
     error = (root.findtext("IF_ERRORSTR") or "").strip()
-    if error and error.upper() not in {"SUCC", "SUCCESS", "0"}:
+    if error and error.upper() not in {"SUCC", "SUCCESS", "OK", "0"}:
         raise RuntimeError("Firmware não disponibilizou este menu")
 
     result = {}
@@ -217,7 +272,9 @@ def _shape(xml: str, expected_root: str) -> dict[str, Any]:
     return result
 
 
-def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
+def probe(
+    zte, model: str, *, max_endpoints: int = 4, start: int = 0
+) -> dict[str, Any]:
     selected, family = find_family(model)
     if family is None:
         return {
@@ -226,8 +283,14 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
             "endpoints": {},
         }
 
+    candidates = dict(FAMILY[family])
+    if selected == "F6600P":
+        candidates["pon_optical"] = PON_F6600P
+    start = max(0, min(int(start), len(candidates)))
+    count = max(1, min(int(max_endpoints), 10))
     endpoints = {}
-    for name, endpoint in list(FAMILY[family].items())[:max(1, min(max_endpoints, 4))]:
+    session_expired = False
+    for name, endpoint in list(candidates.items())[start:start + count]:
         try:
             xml = _fetch(zte, endpoint)
             # Faz a validação local mesmo quando implementação de ZTE mudar.
@@ -237,18 +300,61 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
                 "tag": endpoint.tag,
             }
         except Exception as exc:
-            # Não expor HTML, tokens ou payloads fornecidos pelo firmware.
+            # HTTP 200 pode significar página de login, não funcionalidade.
+            # Apenas categorias saneadas, nenhum HTML/token/credencial em UI.
+            message = str(exc).lower()
+            if "sessiontimeout" in message or "sessão expirada" in message:
+                reason = "session_expired"
+            elif "html" in message or "login" in message:
+                reason = "login_page_instead_of_data"
+            elif isinstance(exc, ET.ParseError):
+                reason = "invalid_xml"
+            elif isinstance(exc, ValueError):
+                reason = "unexpected_firmware_response"
+            elif "timeout" in type(exc).__name__.lower():
+                reason = "network_timeout"
+            else:
+                reason = "not_exposed_or_permission_denied"
             endpoints[name] = {
                 "available": False,
                 "error_type": type(exc).__name__,
+                "reason": reason,
                 "tag": endpoint.tag,
             }
+            if reason == "session_expired":
+                session_expired = True
+                break
 
     return {
         "model": selected, "family": family, "read_only": True,
         "supported": any(x["available"] for x in endpoints.values()),
         "endpoints": endpoints,
         "notes": "Somente descoberta; escrita e backup requerem validação por firmware.",
+        "capabilities": [
+            {
+                "feature": name,
+                "label": DISCOVERY_NAMES.get(name, name),
+                "available": item["available"],
+                "writable": False,
+                "source": "zte_tracker endpoint profile",
+                "status": "detected" if item["available"] else "not_confirmed",
+                "reason": item.get("reason"),
+            }
+            for name, item in endpoints.items()
+        ],
+        "candidate_features": [
+            {
+                "feature": name,
+                "label": DISCOVERY_NAMES.get(name, name),
+                "status": "not_tested",
+                "writable": False,
+            }
+            for name in candidates if name not in endpoints
+        ],
+        "model_specific": list(MODEL_EXTRAS.get(selected, ())),
+        "next_offset": min(len(candidates), start + count),
+        "total_candidates": len(candidates),
+        "session_expired": session_expired,
     }
 
 

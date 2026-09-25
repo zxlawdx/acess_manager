@@ -749,10 +749,18 @@ def multimodel_mesh(context=None):
 def multimodel_probe(context=None):
     # O usuário pode informar modelo quando o firmware omite a identificação.
     # Não envia escrita ao roteador e limita o nome fornecido.
-    model = str(_json(context).get("model") or "")[:50].strip()
+    body = _json(context)
+    model = str(body.get("model") or "")[:50].strip()
+    try:
+        count = min(10, max(1, int(body.get("max_endpoints", 4))))
+        start = min(10, max(0, int(body.get("start", 0))))
+    except (TypeError, ValueError):
+        count, start = 4, 0
     return _safe_call(
         zte_service.multimodel_probe,
         model or None,
+        count,
+        start,
     )
 
 
