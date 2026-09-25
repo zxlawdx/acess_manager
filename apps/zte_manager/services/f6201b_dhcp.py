@@ -1,5 +1,6 @@
 """DHCP read model and captured-form integration for authenticated F6201B."""
 from __future__ import annotations
+import xml.etree.ElementTree as ET
 
 from apps.zte_manager.services.f6201b_evidence import CAPTURED_GET_VIEWS
 
@@ -65,7 +66,7 @@ def status(zte):
             result["warnings"].append(
                 "A ONT não retornou o formulário completo para editar DHCP."
             )
-    except (RuntimeError, KeyError, ValueError) as exc:
+    except (RuntimeError, KeyError, ValueError, ET.ParseError) as exc:
         result["warnings"].append(
             "Validação do formulário DHCP: " + str(exc)
         )
