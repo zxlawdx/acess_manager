@@ -1009,11 +1009,11 @@ class ZTEService:
                 start=start,
             )
 
-    def multimodel_diagnostic(self, model=None):
+    def multimodel_diagnostic(self, model=None, section=None):
         with self._lock:
             selected = self._confirmed_probe_model(model)
             return model_diagnostic_service.diagnostic(
-                self.get_client(), selected,
+                self.get_client(), selected, section=section,
             )
 
     def capability_shape(self, feature):
