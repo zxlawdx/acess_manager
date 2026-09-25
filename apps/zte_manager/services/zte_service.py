@@ -16,6 +16,7 @@ from apps.zte_manager.services.attendance_report_service import (
     AttendanceReportService,
 )
 from apps.zte_manager.services.capability_service import CapabilityService
+from apps.zte_manager.services import multimodel_service
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -872,6 +873,22 @@ class ZTEService:
         with self._lock:
             return self._capabilities().probe(
                 features
+            )
+
+    def multimodel_catalog(self):
+        return multimodel_service.catalog()
+
+    def multimodel_probe(self, model=None):
+        with self._lock:
+            selected = (
+                model
+                or self._device_info.get("modelo")
+                or self._device_info.get("model")
+                or ""
+            )
+            return multimodel_service.probe(
+                self.get_client(),
+                selected,
             )
 
     def capability_shape(self, feature):
