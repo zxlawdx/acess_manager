@@ -60,12 +60,27 @@ class MultiModelDiscoveryTests(unittest.TestCase):
         self.assertEqual(client.calls[0][1], "localNetStatus")
         self.assertEqual(client.calls[1][1], "accessdev_ssiddev_lua.lua")
 
-    def test_vue_never_calls_thinklua_endpoint(self):
-        client = FakeClient(xml())
-        result = probe(client, "SR7410")
-        self.assertFalse(result["supported"])
-        self.assertEqual(result["family"], "vue")
-        self.assertEqual(client.calls, [])
+    def test_vue_uses_read_only_vue_data(self):
+        class VueClient:
+            base_url = "https://router.local"
+            def __init__(self):
+                self.calls = []
+                self.session = self
+            def get(self, url, params, timeout):
+                self.calls.append(params)
+                return self
+            @property
+            def text(self):
+                return xml("OBJ_CLIENTS_ID")
+            def raise_for_status(self):
+                return None
+
+        client = VueClient()
+        result = probe(client, "SR7410", max_endpoints=1)
+        self.assertTrue(result["supported"])
+        self.assertEqual(client.calls[0]["_type"], "vueData")
+        self.assertEqual(client.calls[1]["_tag"], "vue_client_data")
+        self.assertEqual(result["read_only"], True)
 
     def test_unknown_does_not_guess_endpoints(self):
         client = FakeClient(xml())
