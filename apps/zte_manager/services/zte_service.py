@@ -1240,6 +1240,19 @@ class ZTEService:
                 dns_adapter=self._f6201b_dns,
             )
 
+    def f6201b_profile_apply_saved(self, attendant):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            if attendant != self.current_attendant:
+                raise PermissionError("Perfil de outro atendente.")
+            return self._f6201b_profile.apply_saved(
+                self.get_client(), host=self.current_host,
+                revision=self._session_revision, firmware=firmware,
+                profile=profile_service.get_profile(attendant),
+                original_post=self._readonly_original_post,
+                dns_adapter=self._f6201b_dns,
+            )
+
     # Comandos capturados com Strategy específica por formulário.
     # Estas rotas preservam o transporte read-only salvo na conexão.
     def captured_workbench_catalog(self):
