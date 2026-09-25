@@ -3256,9 +3256,14 @@ async function applyExperimentalF6201BProfile() {
             throw new Error("Ative ZTE_F6201B_EXPERIMENTAL_WRITES=1 para " +
                 "testar o perfil deste firmware.");
         }
+        if (!currentProfile) {
+            // O fluxo somente leitura pulava loadProfile() após login.
+            // Carregar os dados persistidos, nunca inventar um perfil vazio.
+            await loadProfile();
+        }
         if (!document.querySelector('[data-profile-band="2.4GHz"]') ||
             !document.querySelector('[data-profile-band="5GHz"]')) {
-            await renderProfileForm(currentProfile || { wifi: {}, dns: {} });
+            await renderProfileForm(currentProfile);
         }
         await saveProfile(true);
         if (startEpoch !== sessionEpoch) return;
