@@ -342,13 +342,11 @@
     document.addEventListener("zte:session-changed", teardownOldPanels);
     document.addEventListener("zte:page-open", event => {
         const page = event.detail?.pageName;
-        if (page && PAGE_SECTIONS[page] && ontConnected) {
-            void loadPage(page).catch(error => {
-                const panel = ensurePagePanel(page);
-                panel?.querySelector(".adaptive-page-body")?.replaceChildren(
-                    el("p", "adaptive-empty", "Falha na leitura: " + error.message));
-            });
-        }
+        // O painel original é o ÚNICO layout para todas as famílias.
+        // Este módulo continua exportando renderAdaptiveDiagnostic somente
+        // para o resultado de sondagem em Avançado/diagnóstico técnico.
+        // Nunca substituir as páginas Visão geral, Wi-Fi, WAN ou Clientes.
+        if (PAGE_SECTIONS[page]) teardownOldPanels();
     });
 })();
 
