@@ -131,11 +131,25 @@ def _result(name: str, reader):
             "reason": None if populated else "no_data_from_firmware",
         }
     except Exception as exc:
-        # Não propagar texto da ONT: exceções HTTP podem conter credenciais.
+        # Categorias seguras ajudam a distinguir falha de sessão, menu
+        # incompatível e timeout. NUNCA enviar mensagem HTTP/XML da ONT:
+        # ela pode conter sessão, senhas ou dados dos assinantes.
+        kind = type(exc).__name__
+        message = str(exc).lower()
+        if "sessão expirada" in message or "sessiontimeout" in message:
+            reason = "session_expired"
+        elif "objeto esperado" in message:
+            reason = "unexpected_xml_object"
+        elif kind in {"Timeout", "ReadTimeout", "ConnectTimeout"}:
+            reason = "network_timeout"
+        elif kind == "ParseError" or "não é xml" in message:
+            reason = "invalid_xml"
+        else:
+            reason = "read_failed"
         return {
             "available": False,
-            "reason": "read_failed",
-            "error_type": type(exc).__name__,
+            "reason": reason,
+            "error_type": kind,
         }
 
 
