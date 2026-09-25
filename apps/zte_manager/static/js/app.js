@@ -555,6 +555,17 @@ function openPage(pageName) {
         ).textContent = info.subtitle;
     }
 
+    if (pageName === "profiles") {
+        const batch = document.getElementById("applyProfileButton");
+        if (batch) {
+            batch.disabled = !routerWriteEnabled;
+            batch.title = routerWriteEnabled
+                ? "Aplica o perfil completo nesta família validada."
+                : "O firmware conectado suporta alterações F6201B " +
+                  "somente pelos editores individuais validados.";
+        }
+    }
+
     // Todas as entradas (sidebar, cartões, topo e restore) carregam dados.
     document.dispatchEvent(new CustomEvent(
         "zte:page-open", { detail: { pageName } }
