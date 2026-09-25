@@ -11,6 +11,7 @@ from apps.zte_manager.services.f6201b_evidence import OBSERVED_APPLY_FIELDS
 from apps.zte_manager.model.zte_configuration import zte_security
 from apps.zte_manager.services.f6201b_full_forms import (
     FORM_SPECS, FullCapturedForms, _assemble, _form_fields, _load,
+    _encode_secrets,
 )
 from apps.zte_manager.services.f6201b_workbench import (
     CapturedFormWorkbench, catalog,
@@ -144,6 +145,32 @@ class FullFormTests(unittest.TestCase):
                 )
                 self.assertEqual(dict(body)["IF_ACTION"], "Apply")
                 self.assertEqual(records[0].instance_id, "DEV.SYNTHETIC.1")
+
+    def test_native_dhcp_decodes_get_and_encodes_all_five_post_fields(self):
+        tag = "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua"
+        fake = FakeONT(tag)
+        live = _load(fake, tag)[0]
+        self.assertEqual(live.values["IPAddr"], "192.0.2.1")
+        self.assertEqual(live.values["MinAddress"], "192.0.2.100")
+        self.assertEqual(live.values["DNSServer1"], "1.1.1.1")
+        with patch(
+            "apps.zte_manager.services.f6201b_full_forms."
+            "zte_security.aes_encrypt_value",
+            side_effect=lambda value, key, iv: "AES:" + str(value),
+        ) as aes, patch(
+            "apps.zte_manager.services.f6201b_full_forms."
+            "zte_security.rsa_encrypt_text",
+            return_value="RSA-key",
+        ) as rsa:
+            values, encoded = _encode_secrets(fake, tag, live,
+                                              {"DNSServer2": "8.8.8.8"})
+        self.assertEqual(aes.call_count, 5)
+        rsa.assert_called_once()
+        self.assertEqual(encoded, "RSA-key")
+        self.assertEqual(values["IPAddr"], "AES:192.0.2.1")
+        self.assertEqual(values["DNSServer2"], "AES:8.8.8.8")
+        self.assertEqual(dict(_assemble(tag, values, {}, encoded))[
+            "encode"], "RSA-key")
 
     def test_fails_closed_if_conditional_field_missing(self):
         tag = "route_routestaticipv4_lua.lua"
