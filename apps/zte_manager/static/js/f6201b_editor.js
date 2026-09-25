@@ -509,8 +509,8 @@
             if(run !== epoch) return;
             primary.value = current.ipv4_1 || "";
             secondary.value = current.ipv4_2 || "";
-            // O formulário legado possui DNS IPv6, mas este adaptador
-            // deliberadamente preserva esses campos, sem alterá-los.
+            // O novo adaptador expõe os mesmos 4 campos capturados no
+            // formulário original, sem inventar outra interface.
             $("profileDns6_1").value = current.ipv6_1 || "";
             $("profileDns6_2").value = current.ipv6_2 || "";
             action.disabled = !status.opted_in || !status.supported_firmware;
@@ -523,6 +523,10 @@
                     changes.ipv4_1 = primary.value;
                 if (secondary.value !== current.ipv4_2)
                     changes.ipv4_2 = secondary.value;
+                if ($("profileDns6_1").value !== current.ipv6_1)
+                    changes.ipv6_1 = $("profileDns6_1").value;
+                if ($("profileDns6_2").value !== current.ipv6_2)
+                    changes.ipv6_2 = $("profileDns6_2").value;
                 if (!Object.keys(changes).length) {
                     report.textContent = "Nenhuma alteração de DNS.";
                     return;
