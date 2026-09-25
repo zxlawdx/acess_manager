@@ -2137,3 +2137,34 @@ pre, textarea, .management-code-output {
 .request-status-indicator.hidden {
     display: none !important;
 }
+
+
+/* Modal de progresso para TODAS as operações (Windows / QtWebEngine).
+   Não depender apenas do indicador discreto no rodapé. */
+.busy-overlay:not(.hidden) {
+    display: grid !important;
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    place-items: center;
+    background: rgba(4, 8, 11, .78);
+    backdrop-filter: blur(5px);
+}
+.busy-overlay .busy-card {
+    width: min(440px, calc(100% - 36px));
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 20px 22px;
+    border: 1px solid rgba(0, 229, 153, .26);
+    box-shadow: 0 24px 75px rgba(0, 0, 0, .68);
+}
+.busy-overlay .loader-ring {
+    animation: spin .7s linear infinite;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+}
+.busy-overlay #busyText {
+    display: block;
+    overflow-wrap: anywhere;
+}
