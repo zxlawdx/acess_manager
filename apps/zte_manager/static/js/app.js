@@ -558,11 +558,35 @@ function openPage(pageName) {
     if (pageName === "profiles") {
         const batch = document.getElementById("applyProfileButton");
         if (batch) {
-            batch.disabled = !routerWriteEnabled;
-            batch.title = routerWriteEnabled
-                ? "Aplica o perfil completo nesta família validada."
-                : "O firmware conectado suporta alterações F6201B " +
-                  "somente pelos editores individuais validados.";
+            if (routerWriteEnabled) {
+                batch.disabled = false;
+                batch.title = "Aplicar o perfil do atendente.";
+            } else {
+                batch.disabled = true;
+                batch.title = "Verificando perfil experimental na ONT atual...";
+                const revision = sessionEpoch;
+                void Promise.all([
+                    apiRequest("/discovery/bootstrap"),
+                    apiRequest("/f6201b/write/status")
+                ]).then(([device, flags]) => {
+                    if (revision !== sessionEpoch ||
+                        !document.getElementById("page-profiles")?.classList.contains("active"))
+                        return;
+                    const verified = device.connected === true &&
+                        device.model_verified === true &&
+                        String(device.detected_model || "").toUpperCase() === "F6201B";
+                    batch.disabled = !(verified && flags.opted_in &&
+                        flags.supported_firmware);
+                    batch.title = !verified
+                        ? "A ONT conectada não foi confirmada como F6201B."
+                        : !flags.opted_in
+                        ? "Para o laboratório, reinicie com ZTE_F6201B_EXPERIMENTAL_WRITES=1."
+                        : "Perfil F6201B experimental: prévia e confirmação obrigatórias.";
+                }).catch(() => {
+                    batch.disabled = true;
+                    batch.title = "Identificação experimental indisponível nesta sessão.";
+                });
+            }
         }
     }
 
@@ -3206,6 +3230,133 @@ async function captureCurrentConfiguration() {
 }
 
 
+// Perfil experimental completo do formulário existente: dois rádios RF
+// e servidores DNS IPv4, reproduzindo as requisições CAPTURADAS no F6201B.
+// O primeiro clique nunca escreve. Mostramos o diff, as exclusões e
+// exigimos confirmação humana antes do endpoint POST único de execução.
+async function applyExperimentalF6201BProfile() {
+    let startEpoch = sessionEpoch;
+    const resultArea = document.getElementById("profileApplyResult");
+    if (!resultArea) {
+        showToast("Painel de resultado do perfil não encontrado.");
+        return;
+    }
+    setBusy(true, "Validando o perfil experimental...");
+    try {
+        const [identity, authorization] = await Promise.all([
+            apiRequest("/discovery/bootstrap"),
+            apiRequest("/f6201b/write/status")
+        ]);
+        if (startEpoch !== sessionEpoch) return;
+        if (identity.connected !== true || identity.model_verified !== true ||
+            String(identity.detected_model || "").toUpperCase() !== "F6201B") {
+            throw new Error("A sessão atual não confirmou um F6201B.");
+        }
+        if (!authorization.opted_in || !authorization.supported_firmware) {
+            throw new Error("Ative ZTE_F6201B_EXPERIMENTAL_WRITES=1 para " +
+                "testar o perfil deste firmware.");
+        }
+        if (!document.querySelector('[data-profile-band="2.4GHz"]') ||
+            !document.querySelector('[data-profile-band="5GHz"]')) {
+            await renderProfileForm(currentProfile || { wifi: {}, dns: {} });
+        }
+        await saveProfile(true);
+        if (startEpoch !== sessionEpoch) return;
+        const proposal = await apiRequest("/f6201b/profile/preview", {
+            method: "POST",
+            body: JSON.stringify({attendant: currentAttendant})
+        });
+        if (startEpoch !== sessionEpoch) return;
+        resultArea.replaceChildren();
+        const header = document.createElement("h3");
+        header.textContent = "Prévia do perfil F6201B";
+        resultArea.append(header);
+        for (const radio of proposal.radios || []) {
+            const title = document.createElement("strong");
+            title.textContent = "Rádio " + radio.band;
+            resultArea.append(title);
+            for (const [field, change] of Object.entries(radio.changes || {})) {
+                const row = document.createElement("p");
+                row.className = "muted";
+                row.textContent = field + ": " + change.before + " → " + change.after;
+                resultArea.append(row);
+            }
+        }
+        if (Object.keys(proposal.dns || {}).length) {
+            const dnsTitle = document.createElement("strong");
+            dnsTitle.textContent = "DNS IPv4";
+            resultArea.append(dnsTitle);
+            for (const [field, change] of Object.entries(proposal.dns)) {
+                const row = document.createElement("p");
+                row.className = "muted";
+                row.textContent = field + ": " + change.before + " → " + change.after;
+                resultArea.append(row);
+            }
+        }
+        const omitted = document.createElement("p");
+        omitted.className = "muted";
+        omitted.textContent = "Não incluído neste teste: " +
+            (proposal.not_included || []).join("; ") + ".";
+        resultArea.append(omitted);
+        const warning = document.createElement("p");
+        warning.className = "profile-experiment-warning";
+        warning.textContent = proposal.warning ||
+            "Mudanças sequenciais podem interromper o Wi-Fi. Sem rollback automático.";
+        const confirmation = document.createElement("input");
+        confirmation.type = "text";
+        confirmation.autocomplete = "off";
+        confirmation.placeholder = "Digite APLICAR PERFIL F6201B";
+        confirmation.setAttribute("aria-label", "Confirmação do perfil experimental");
+        const execute = document.createElement("button");
+        execute.className = "button primary";
+        execute.type = "button";
+        execute.textContent = "Confirmar e testar perfil";
+        resultArea.append(warning, confirmation, execute);
+        execute.addEventListener("click", async () => {
+            if (confirmation.value !== "APLICAR PERFIL F6201B") {
+                showToast("Digite exatamente APLICAR PERFIL F6201B.");
+                return;
+            }
+            if (startEpoch !== sessionEpoch) {
+                showToast("A sessão mudou. Gere outra prévia.");
+                return;
+            }
+            execute.disabled = true;
+            setBusy(true, "Aplicando RF e DNS e verificando cada etapa...");
+            try {
+                const report = await apiRequest("/f6201b/profile/apply", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        nonce: proposal.nonce, confirmation: confirmation.value
+                    })
+                });
+                if (startEpoch !== sessionEpoch) return;
+                renderProfileApplyResult(report);
+                if (report.not_included?.length) {
+                    const exclusions = document.createElement("p");
+                    exclusions.className = "muted";
+                    exclusions.textContent =
+                        "Não incluído: " + report.not_included.join("; ");
+                    resultArea.append(exclusions);
+                }
+                showToast(report.success
+                    ? "Etapas experimentais confirmadas por releitura."
+                    : "Execução interrompida. Verifique o relatório e o painel original.");
+            } catch (error) {
+                showToast("Aplicação não confirmada: " + error.message +
+                    ". Consulte o painel original antes de repetir.");
+            } finally {
+                setBusy(false);
+            }
+        }, {once: true});
+    } catch (error) {
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
+}
+
+
 async function applyProfile() {
     if (!currentAttendant) return;
 
@@ -3213,10 +3364,7 @@ async function applyProfile() {
     // O F6201B não pode receber esse batch: apenas seus fluxos
     // capturados e validados de SSID/DNS são liberados individualmente.
     if (!routerWriteEnabled) {
-        showToast(
-            "Aplicação em lote indisponível para este firmware. " +
-            "Use Prévia / Aplicar DNS ou cada cartão SSID."
-        );
+        await applyExperimentalF6201BProfile();
         return;
     }
 
