@@ -1554,38 +1554,75 @@ function firmwareDiagnosticPanel() {
 function renderFirmwareDiagnosticOptions() {
     const panel = firmwareDiagnosticPanel();
     if (!panel) return;
-    // Controles legados (incluindo POST de ping e otimização) não se aplicam
-    // a firmwares experimentais. Não deixar opções visíveis que serão ignoradas.
     const form = document.getElementById("supportDiagnosticForm");
-    for (const legacy of form.querySelectorAll(":scope > .support-form-grid, :scope > .support-check-grid, :scope > .support-action-row")) {
-        legacy.classList.toggle("hidden", !routerWriteEnabled);
-    }
+    for (const legacy of form.querySelectorAll(
+        ":scope > .support-form-grid, :scope > .support-check-grid, :scope > .support-action-row"
+    )) legacy.classList.toggle("hidden", !routerWriteEnabled);
+
     const grid = panel.querySelector("#firmwareDiagnosticChoices");
     const status = panel.querySelector("#firmwareDiagnosticStatus");
-    const detected = firmwareDiagnosticState.options.filter(item => item.confirmed).length;
-    const experimental = firmwareDiagnosticState.model?.toUpperCase().includes("F6201B");
+    const confirmed = firmwareDiagnosticState.options.filter(item => item.confirmed);
     status.textContent = !ontConnected
-        ? "Conecte-se antes de executar qualquer diagnóstico."
-        : `${firmwareDiagnosticState.model || "Modelo desconhecido"}: ${detected} recurso(s) confirmado(s), ${firmwareDiagnosticState.options.length - detected} candidato(s) não confirmado(s).` +
-          (experimental ? " F6201B: perfil experimental, sem garantia de compatibilidade." : "");
-    const selected = new Set([...grid.querySelectorAll("input:checked")].map(input => input.value));
+        ? "Conecte uma ONT para consultar seus recursos."
+        : (firmwareDiagnosticState.model || "ZTE") + " · " +
+          confirmed.length + " recurso(s) confirmados · " +
+          (firmwareDiagnosticState.options.length - confirmed.length) +
+          " indisponíveis ou não testados.";
+
+    const groupOf = feature => {
+        if (/wifi|wps|band_steering|mesh/i.test(feature)) return "Wi-Fi e Mesh";
+        if (/wan|dns|dhcp|lan|arp|route|upnp/i.test(feature)) return "WAN, LAN e rede";
+        if (/device|pon|optical|tr069|voip/i.test(feature)) return "Equipamento e GPON";
+        return "Segurança e diagnóstico";
+    };
+    const groups = new Map();
+    firmwareDiagnosticState.options.forEach(item => {
+        const group = groupOf(item.name);
+        if (!groups.has(group)) groups.set(group, []);
+        groups.get(group).push(item);
+    });
     grid.replaceChildren();
-    for (const option of firmwareDiagnosticState.options) {
-        const label = document.createElement("label");
-        label.className = "advanced-switch";
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.value = option.name;
-        input.disabled = !option.confirmed;
-        input.checked = option.confirmed && (option.justConfirmed || selected.size === 0 || selected.has(option.name));
-        option.justConfirmed = false;
-        const text = document.createElement("span");
-        text.textContent = `${option.label || FIRMWARE_DIAGNOSTIC_LABELS[option.name] || option.name} — ${option.confirmed ? "confirmado" : "candidato (não testado/indisponível)"}`;
-        label.append(text, input);
-        grid.append(label);
-    }
-    panel.querySelector("#firmwareDiagnosticRun").disabled = !detected || firmwareDiagnosticState.probeRunning;
-    panel.querySelector("#firmwareDiagnosticDetect").disabled = !ontConnected || firmwareDiagnosticState.probeRunning;
+    groups.forEach((items, title) => {
+        const fieldset = document.createElement("fieldset");
+        fieldset.className = "adaptive-choice-group";
+        const legend = document.createElement("legend");
+        legend.textContent = title;
+        fieldset.append(legend);
+        const choices = document.createElement("div");
+        choices.className = "adaptive-choice-grid";
+        for (const item of items) {
+            const label = document.createElement("label");
+            label.className = "adaptive-choice";
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.value = item.name;
+            input.disabled = !item.confirmed;
+            input.checked = item.confirmed &&
+                firmwareDiagnosticState.selected.has(item.name);
+            input.addEventListener("change", () => {
+                if (input.checked) firmwareDiagnosticState.selected.add(item.name);
+                else firmwareDiagnosticState.selected.delete(item.name);
+            });
+            const content = document.createElement("div");
+            const name = document.createElement("span");
+            name.textContent = item.label ||
+                FIRMWARE_DIAGNOSTIC_LABELS[item.name] || item.name;
+            const note = document.createElement("small");
+            note.className = "adaptive-choice-note";
+            note.textContent = item.confirmed ? "Leitura confirmada" :
+                (firmwareDiagnosticState.scanComplete
+                    ? "Não respondeu neste firmware" : "Aguardando verificação");
+            content.append(name, note);
+            label.append(input, content);
+            choices.append(label);
+        }
+        fieldset.append(choices);
+        grid.append(fieldset);
+    });
+    panel.querySelector("#firmwareDiagnosticRun").disabled =
+        !confirmed.length || firmwareDiagnosticState.probeRunning;
+    panel.querySelector("#firmwareDiagnosticDetect").disabled =
+        !ontConnected || firmwareDiagnosticState.probeRunning;
 }
 
 async function loadFirmwareDiagnosticOptions() {
@@ -1617,6 +1654,8 @@ async function loadFirmwareDiagnosticOptions() {
         firmwareDiagnosticState.model = model;
         firmwareDiagnosticState.firmware = bootstrap.firmware || null;
         firmwareDiagnosticState.scanComplete = false;
+        firmwareDiagnosticState.selected.clear();
+        supportDiagnosticState.firmwareReport = null;
         firmwareDiagnosticState.source = "multimodel";
         firmwareDiagnosticState.options = (entry?.candidate_features || [])
             .filter(name => FIRMWARE_DIAGNOSTIC_SECTIONS[name])
