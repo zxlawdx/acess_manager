@@ -260,7 +260,10 @@ def _form_fields(tag: str, row: dict, index: int, rows: list,
     # Only borrow a value when exactly ONE object provides that field.
     spec = FORM_SPECS[tag]
     for name in schema:
-        if name in merged or name.startswith(("Btn_", "_InstID")):
+        # Live XML from a dedicated secondary object is more authoritative
+        # than a template's hidden input default. Never override primary
+        # Instance data and never invent a value when objects disagree.
+        if name in row or name.startswith(("Btn_", "_InstID")):
             continue
         candidates = [
             item[name] for root in spec.additional_roots
