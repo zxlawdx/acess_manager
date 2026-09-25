@@ -176,6 +176,13 @@ class FullFormTests(unittest.TestCase):
         }.items():
             self.assertEqual(record.values[key], val)
 
+    def test_wps_enable_also_updates_captured_choose_field(self):
+        fake = FakeONT("wlan_wps_lua.lua")
+        preview = self._preview(fake, {"Enable": "1"})
+        self.assertEqual(preview["diff"]["WPSChoose"]["after"], "PBC")
+        with self.assertRaisesRegex(ValueError, "diverge"):
+            self._preview(fake, {"Enable": "1", "WPSChoose": "Disabled"})
+
     def test_nonce_risk_and_readback_for_each_strategy(self):
         # Uses the same Command interface for each captured schema.
         for tag, spec in FORM_SPECS.items():
@@ -206,6 +213,8 @@ class FullFormTests(unittest.TestCase):
                          if name != "_sessionTOKEN"],
                     )
                     zte.current[key] = new_value
+                    if tag == "wlan_wps_lua.lua":
+                        zte.current["WPSChoose"] = dict(body)["WPSChoose"]
                     zte.post_count += 1
                     return "<synthetic-success/>"
 
