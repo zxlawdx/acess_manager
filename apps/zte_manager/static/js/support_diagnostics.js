@@ -1605,7 +1605,7 @@ async function loadFirmwareDiagnosticOptions() {
                 }));
         }
         renderFirmwareDiagnosticOptions();
-        if (!entry) {
+        if (!entry && !firmwareDiagnosticState.options.length) {
             panel.querySelector("#firmwareDiagnosticStatus").textContent =
                 `O modelo ${model || "não identificado"} ainda não possui perfil. Não serão executadas consultas por suposição.`;
         }
