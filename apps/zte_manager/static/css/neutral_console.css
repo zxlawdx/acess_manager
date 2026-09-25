@@ -1,0 +1,264 @@
+/* ZTE Automatic — Neutral Console UI
+ * Intentionally layered AFTER the original CSS. Native DOM IDs and
+ * component class contracts remain unchanged. No gradients or frameworks.
+ */
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --ui-bg: #171819;
+  --ui-sidebar: #1c1d1f;
+  --ui-surface: #242528;
+  --ui-elevated: #2c2d30;
+  --ui-field: #202123;
+  --ui-border: #393b3e;
+  --ui-border-muted: #303235;
+  --ui-text: #f0f0ee;
+  --ui-text-secondary: #b7b9b7;
+  --ui-muted: #939792;
+  --ui-accent: #65b28c; /* reserved for selected/primary actions */
+  --ui-accent-contrast: #0e2219;
+  --ui-accent-wash: #243b31;
+  --ui-success: #78b994;
+  --ui-success-wash: #283b31;
+  --ui-warning: #ddb575;
+  --ui-warning-wash: #41382b;
+  --ui-danger: #e18d83;
+  --ui-danger-wash: #432f2d;
+  --ui-neutral: #b7b9b7;
+  --ui-neutral-wash: #323437;
+  --ui-shadow: 0 1px 3px rgba(0,0,0,.13);
+  --ui-radius: 8px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  /* Backward compatibility for old component variables */
+  --bg: var(--ui-bg);
+  --bg-deep: var(--ui-bg);
+  --surface-low: var(--ui-sidebar);
+  --surface: var(--ui-surface);
+  --surface-high: var(--ui-elevated);
+  --surface-highest: var(--ui-elevated);
+  --surface-hover: var(--ui-elevated);
+  --border: var(--ui-border);
+  --border-soft: var(--ui-border-muted);
+  --text: var(--ui-text);
+  --text-soft: var(--ui-text-secondary);
+  --muted: var(--ui-muted);
+  --primary: var(--ui-accent);
+  --primary-strong: var(--ui-accent);
+  --primary-soft: var(--ui-accent-wash);
+  --secondary: var(--ui-text-secondary);
+  --secondary-soft: var(--ui-neutral-wash);
+  --success: var(--ui-success);
+  --success-soft: var(--ui-success-wash);
+  --warning: var(--ui-warning);
+  --warning-soft: var(--ui-warning-wash);
+  --danger: var(--ui-danger);
+  --danger-soft: var(--ui-danger-wash);
+  --shadow: var(--ui-shadow);
+  --radius-sm: 5px;
+  --radius: var(--ui-radius);
+  --radius-lg: 10px;
+}
+html[data-theme="light"] {
+  color-scheme: light;
+  --ui-bg: #f5f5f2;
+  --ui-sidebar: #edeeea;
+  --ui-surface: #ffffff;
+  --ui-elevated: #f6f7f4;
+  --ui-field: #ffffff;
+  --ui-border: #d7dad5;
+  --ui-border-muted: #e6e8e3;
+  --ui-text: #242726;
+  --ui-text-secondary: #525955;
+  --ui-muted: #717b74;
+  --ui-accent: #276c50;
+  --ui-accent-contrast: #ffffff;
+  --ui-accent-wash: #e2efe6;
+  --ui-success: #26774b;
+  --ui-success-wash: #e1f0e4;
+  --ui-warning: #98611a;
+  --ui-warning-wash: #fff1d8;
+  --ui-danger: #af433d;
+  --ui-danger-wash: #f9e8e6;
+  --ui-neutral: #5c655f;
+  --ui-neutral-wash: #eef0ec;
+  --ui-shadow: 0 1px 2px rgba(32,40,34,.05);
+}
+html, body, #vela-page, .app-shell, .workspace,
+.main-content, .page {
+  background: var(--ui-bg) !important;
+  background-image: none !important;
+  color: var(--ui-text);
+}
+body {
+  font: 400 14px/1.55 "Segoe UI Variable","Inter","Segoe UI",sans-serif;
+  letter-spacing: 0;
+}
+.sidebar {
+  background: var(--ui-sidebar) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-right: 1px solid var(--ui-border-muted) !important;
+}
+.console-ribbon {
+  background: var(--ui-sidebar) !important;
+  color: var(--ui-muted) !important;
+  border-color: var(--ui-border-muted) !important;
+  letter-spacing: 0;
+}
+.topbar {
+  background: var(--ui-bg) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-color: var(--ui-border-muted) !important;
+}
+.topbar-title h1, .section-intro h2 {
+  font-size: 24px !important; font-weight: 650 !important;
+  line-height: 1.22 !important; letter-spacing: -.025em !important;
+  color: var(--ui-text) !important;
+}
+.section-intro, .section-intro.compact { margin-bottom: var(--ui-space-8) !important; }
+.panel-header h3, .panel-heading h3, .ssid-card h3, .radio-card h3 {
+  color: var(--ui-text) !important; font-size: 16px !important;
+  font-weight: 620 !important; line-height: 1.35 !important;
+}
+.topbar-title p, .section-intro p, .panel p, .panel-header p {
+  color: var(--ui-text-secondary) !important;
+  font-size: 13px; line-height: 1.55;
+}
+.section-kicker, .eyebrow, .nav-caption, .field > span {
+  color: var(--ui-muted) !important;
+  font-family: inherit !important;
+  font-size: 11px !important; font-weight: 620 !important;
+  letter-spacing: .035em !important;
+}
+.menu-item {
+  min-height: 42px; font-size: 13px !important;
+  color: var(--ui-text-secondary) !important;
+  border-radius: 6px !important;
+}
+.menu-item .material-symbols-outlined {
+  font-size: 17px !important; color: var(--ui-muted) !important;
+}
+.menu-item:hover, .menu-item:hover:not(.locked) {
+  background: var(--ui-elevated) !important;
+  border-color: transparent !important;
+  color: var(--ui-text) !important;
+}
+.menu-item.active {
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  border: 1px solid var(--ui-border) !important;
+  box-shadow: none !important;
+}
+.menu-item.active::before { color: var(--ui-text-secondary) !important; }
+.panel, .kpi-card, .ssid-card, .radio-card, .wan-card, .client-card,
+.feature-card, .profile-card, .diagnostic-card, .support-panel,
+.support-summary, .finding-item, .feature-control-card,
+.management-status-strip > div, .management-list-item, .target-card {
+  background: var(--ui-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--ui-border-muted) !important;
+  border-radius: var(--ui-radius) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+.panel { padding: var(--ui-space-6) !important; }
+.panel:hover { border-color: var(--ui-border) !important; }
+.target-card { background: var(--ui-elevated) !important; box-shadow: none !important; }
+.target-card > .mono { color: var(--ui-text-secondary) !important; }
+.brand-mark svg path { stroke: var(--ui-text) !important; }
+.brand-mark svg rect:first-child { fill: var(--ui-sidebar) !important; }
+.brand-mark svg rect:nth-child(2) { stroke: var(--ui-border) !important; }
+.live-dot, .status-led.on { background: var(--ui-success) !important; box-shadow: none !important; }
+.live-dot-wrap { color: var(--ui-success) !important; }
+.button, button.button, .console-action, .sidebar-action,
+.icon-button, .zoom-button, .text-action {
+  background: var(--ui-surface) !important;
+  background-image: none !important;
+  color: var(--ui-text-secondary) !important;
+  border: 1px solid var(--ui-border) !important;
+  box-shadow: none !important;
+  border-radius: 6px !important;
+  font-weight: 560 !important;
+  transition: background-color .13s ease, border-color .13s ease;
+}
+.button:hover:not(:disabled), .console-action:hover,
+.icon-button:hover, .text-action:hover {
+  background: var(--ui-elevated) !important;
+  color: var(--ui-text) !important;
+}
+.button.primary, .button-primary, #connectButton, #applyProfileButton,
+#supportRunButton, .login-card .primary {
+  background: var(--ui-accent) !important;
+  color: var(--ui-accent-contrast) !important;
+  border-color: var(--ui-accent) !important;
+  box-shadow: none !important;
+}
+.button.danger, .button-danger, .sidebar-action.danger {
+  color: var(--ui-danger) !important;
+  background: transparent !important; border-color: var(--ui-border) !important;
+}
+/* Quick navigation must never compete with the screen's actual action. */
+.topbar-quick-actions .primary, .topbar-quick-actions .console-action {
+  background: transparent !important; color: var(--ui-text-secondary) !important;
+  border-color: var(--ui-border-muted) !important;
+}
+button:disabled, .button:disabled { opacity: .52 !important; }
+input, select, textarea {
+  background: var(--ui-field) !important;
+  color: var(--ui-text) !important;
+  border-color: var(--ui-border) !important;
+  box-shadow: none !important;
+}
+input:focus-visible, select:focus-visible, button:focus-visible,
+textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--ui-accent) !important; outline-offset: 2px;
+}
+.badge, .status-badge {
+  font-size: 11px !important; font-weight: 610 !important;
+  line-height: 1.25 !important; letter-spacing: 0 !important;
+  padding: 3px 7px !important;
+  border-radius: 5px !important;
+  background: var(--ui-neutral-wash) !important;
+  color: var(--ui-neutral) !important;
+  border: 1px solid var(--ui-border-muted) !important;
+}
+.badge.ok, .badge.success, .badge-success, .status-badge.online {
+  color: var(--ui-success) !important;
+  background: var(--ui-success-wash) !important;
+  border-color: var(--ui-success-wash) !important;
+}
+.badge.warning, .badge-warning {
+  color: var(--ui-warning) !important;
+  background: var(--ui-warning-wash) !important;
+}
+.badge.critical, .badge.danger, .badge-danger {
+  color: var(--ui-danger) !important;
+  background: var(--ui-danger-wash) !important;
+}
+table, .client-table, .management-table { background: var(--ui-surface); }
+th { font: 620 11px/1.4 inherit !important; color: var(--ui-muted) !important; }
+td, th { border-color: var(--ui-border-muted) !important; }
+tr:hover td { background: var(--ui-elevated) !important; }
+.device-chip {
+  background: var(--ui-surface) !important; border: 1px solid var(--ui-border) !important;
+  color: var(--ui-text) !important;
+}
+.profile-banner, .support-summary, .status-strip {
+  background: var(--ui-elevated) !important;
+  background-image: none !important;
+}
+#themeToggle { white-space: nowrap; font-size: 12px !important; padding: 8px 11px; }
+#themeToggle [aria-hidden] { margin-right: 5px; }
+@media(max-width: 900px) {
+  .panel { padding: var(--ui-space-4) !important; }
+  .topbar-title h1, .section-intro h2 { font-size: 21px !important; }
+  #themeToggle .theme-label { display: none; }
+}
+@media(prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; }
+}
