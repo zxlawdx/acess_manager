@@ -105,6 +105,7 @@ class FamilyDiagnosticTests(unittest.TestCase):
 
     def test_vue_protocol_uses_only_get(self):
         router = ReadOnlyRouter({
+            "vue_home_device_data_no_update_sess": xml("OBJ_DEVINFO_ID", []),
             "vue_mainwan_data": xml("ID_WAN_COMFIG", [{"ConnStatus": "Up"}]),
         })
         report = diagnostics.diagnostic(router, "SR7410", include_clients=False)
