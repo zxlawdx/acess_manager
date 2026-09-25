@@ -20,6 +20,7 @@ class FakeSession:
         raise PermissionError("transport locked")
 
     def __init__(self):
+        self.blocked = self.blocked
         self.post = self.blocked
 
 
