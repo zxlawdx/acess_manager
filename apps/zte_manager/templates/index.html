@@ -791,6 +791,10 @@
                             <span class="material-symbols-outlined">radar</span>
                             Detectar recursos
                         </button>
+                        <button id="multimodelProbeButton" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">router</span>
+                            Detectar modelo
+                        </button>
                         <button id="exportFeatureShapesButton" class="button ghost" type="button">
                             <span class="material-symbols-outlined">data_object</span>
                             Mapa do firmware
@@ -813,6 +817,18 @@
                             <h3>Recursos detectados</h3>
                         </div>
                         <span id="adapterBadge" class="badge">Não detectado</span>
+                    </div>
+                    <div class="operation-row with-top-space" style="margin-bottom:14px;">
+                        <label class="field">
+                            <span>MODELO / PERFIL DO EQUIPAMENTO (opcional)</span>
+                            <select id="multimodelSelect" aria-label="Modelo para detecção multi-firmware">
+                                <option value="">Usar identificação automática</option>
+                            </select>
+                        </label>
+                        <p class="muted">Detecção somente leitura. Não libera alterações nos outros modelos.</p>
+                        <pre id="multimodelProbeOutput" class="selectable-output"
+                             style="max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;"
+                             aria-live="polite">Selecione um modelo e clique em Detectar modelo.</pre>
                     </div>
                     <div id="capabilityGrid" class="capability-grid">
                         <div class="loading">Abra a detecção para validar os menus disponíveis neste firmware.</div>
