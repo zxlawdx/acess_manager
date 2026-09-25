@@ -104,10 +104,23 @@
             available ? "Lido" : "Indisponível"));
         card.append(head);
         if (available) renderFields(section.data, card);
-        else card.append(el("p", "adaptive-empty",
-            section?.reason === "no_data_from_firmware"
-                ? "Menu disponível, mas sem dados nesta consulta."
-                : "Este recurso não respondeu neste firmware ou neste login."));
+        else {
+            const messages = {
+                no_data_from_firmware: "O menu respondeu, mas não trouxe dados nesta leitura.",
+                session_expired: "A sessão do equipamento expirou. Reconecte para continuar.",
+                unexpected_xml_object: "O firmware respondeu, mas não retornou o objeto esperado para esta função.",
+                network_timeout: "Tempo de resposta esgotado. Confira a conexão com a ONT.",
+                invalid_xml: "A resposta do equipamento não corresponde ao formato XML esperado.",
+                read_failed: "A consulta foi recusada ou falhou. Verifique permissões e mapeamento.",
+            };
+            card.append(el("p", "adaptive-empty",
+                messages[section?.reason] ||
+                "Função ainda não confirmada nesta versão de firmware."));
+            if (section?.error_type) {
+                card.append(el("small", "adaptive-choice-note",
+                    "Tipo técnico: " + String(section.error_type).slice(0, 50)));
+            }
+        }
         return card;
     }
     function renderReport(report, mount, options = {}) {
