@@ -705,9 +705,16 @@ async function discoveryRequest(endpoint, {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        return await apiRequest(endpoint, { method, body,
+        const data = await apiRequest(endpoint, { method, body,
             signal: controller.signal
         });
+        if (!data || typeof data !== "object" || Array.isArray(data)) {
+            throw new Error(
+                "O servidor devolveu um formato inesperado para " +
+                endpoint + ". Verifique se o app instalado é a versão atual."
+            );
+        }
+        return data;
     } catch (error) {
         if (error?.name === "AbortError") {
             throw new Error(
