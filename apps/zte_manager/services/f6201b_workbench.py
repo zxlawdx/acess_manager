@@ -24,6 +24,9 @@ from apps.zte_manager.services.f6201b_evidence import (
 from apps.zte_manager.services.f6201b_writes import (
     EXACT_FIRMWARE, ExperimentalF6201BWrites, PREVIEW_TTL,
 )
+from apps.zte_manager.services.f6201b_full_forms import (
+    FORM_SPECS, FullCapturedForms,
+)
 
 # These routes have an observed single-object GET matching all *data* fields
 # of the captured Apply. Every extra field or mismatch fails closed.
@@ -106,7 +109,10 @@ def catalog() -> dict:
         spec = STRATEGIES.get(tag)
         if spec:
             state = "supervised_lab"
-            explanation = "Apply implementado com preflight, nonce e releitura; homologação física pendente."
+            explanation = "Apply implementado com preflight, nonce e releitura."
+        elif tag in FORM_SPECS:
+            state = "supervised_lab"
+            explanation = FORM_SPECS[tag].description
         elif tag in INTEGRATED:
             state = "existing_adapter"
             explanation = INTEGRATED[tag] + ". Homologação física independente."
@@ -118,8 +124,17 @@ def catalog() -> dict:
             "view": CAPTURED_GET_VIEWS.get(tag),
             "state": state,
             "reason": explanation,
-            "editable": list(spec.editable) if spec else [],
-            "dangerous": spec.dangerous if spec else False,
+            "editable": (
+                list(spec.editable) if spec else
+                list(FORM_SPECS[tag].editable) if tag in FORM_SPECS else []
+            ),
+            "secret_fields": (
+                list(FORM_SPECS[tag].secrets) if tag in FORM_SPECS else []
+            ),
+            "dangerous": (
+                spec.dangerous if spec else
+                FORM_SPECS[tag].dangerous if tag in FORM_SPECS else False
+            ),
         })
     return {
         "model": "F6201B", "firmware": EXACT_FIRMWARE,
@@ -194,9 +209,13 @@ class CapturedFormWorkbench:
     def __init__(self, clock=time.monotonic):
         self._pending: CapturedPreview | None = None
         self._clock = clock
+        self._full = FullCapturedForms(clock=clock)
+        self._active: str | None = None
 
     def clear(self):
         self._pending = None
+        self._full.clear()
+        self._active = None
 
     @staticmethod
     def _read(zte, tag: str, instance_id: str | None = None) -> dict:
@@ -222,6 +241,8 @@ class CapturedFormWorkbench:
 
     def inspect(self, zte, tag: str) -> dict:
         """Read-only values only for a spec with a verified, nonsecret field map."""
+        if tag in FORM_SPECS:
+            return self._full.inspect(zte, tag)
         if tag not in STRATEGIES:
             meta = next((r for r in catalog()["routes"] if r["tag"] == tag), None)
             if not meta:
@@ -254,8 +275,16 @@ class CapturedFormWorkbench:
                 changes: dict, host: str, revision: str,
                 attendant: str) -> dict:
         self.clear()
+        if tag in FORM_SPECS:
+            result = self._full.preview(
+                zte, tag=tag, instance_id=instance_id, changes=changes,
+                host=host, revision=revision, attendant=attendant,
+            )
+            self._active = "full"
+            return result
         if tag not in STRATEGIES:
             raise PermissionError("Rota sem adaptador de gravação supervisionada.")
+        self._active = "simple"
         if not ExperimentalF6201BWrites.opted_in():
             raise PermissionError("Habilite ZTE_F6201B_EXPERIMENTAL_WRITES=1.")
         if not isinstance(changes, dict) or not changes:
@@ -291,6 +320,13 @@ class CapturedFormWorkbench:
     def apply(self, zte, *, host: str, revision: str,
               attendant: str, nonce: str,
               confirmation: str, risk_ack: bool, original_post) -> dict:
+        if self._active == "full":
+            self._active = None
+            return self._full.apply(
+                zte, host=host, revision=revision, attendant=attendant,
+                nonce=nonce, confirmation=confirmation, risk_ack=risk_ack,
+                original_post=original_post,
+            )
         proposal = self._pending
         self.clear()  # one-shot, including rejected attempts
         if not ExperimentalF6201BWrites.opted_in() or original_post is None:
