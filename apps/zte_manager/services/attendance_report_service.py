@@ -73,6 +73,11 @@ class AttendanceReportService:
         device = sections.get(
             "device"
         ) or {}
+        if not device and diagnostic.get("source") == "backend_authenticated_ont":
+            device = {
+                "modelo": diagnostic.get("model"),
+                "firmware": diagnostic.get("firmware"),
+            }
 
         if device:
             model = (
@@ -251,7 +256,7 @@ class AttendanceReportService:
         import re
         text = str(value or "")[:100]
         text = re.sub(
-            r"(?i)\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b",
+            r"(?i)\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b",
             "[MAC oculto]", text,
         )
         return text
