@@ -95,7 +95,8 @@ class FullFormTests(unittest.TestCase):
                 "confirmation", "APLICAR ROTA F6201B"
             ), risk_ack=kw.get("risk_ack", True),
             original_post=fake.original_post, host="192.0.2.10",
-            revision="syn-r1", attendant=kw.get("attendant", "synthetic-tech"),
+            revision=kw.get("revision", "syn-r1"),
+            attendant=kw.get("attendant", "synthetic-tech"),
         )
 
     def test_all_remaining_routes_have_individual_strategies(self):
@@ -304,11 +305,11 @@ class FullFormTests(unittest.TestCase):
         self.assertEqual(captured["Password"], "aes-plain-cipher-password")
         self.assertEqual(captured["encode"], "new-RSA")
 
-    def test_attendant_switch_and_uncertain_post_no_retry(self):
+    def test_session_revision_and_uncertain_post_no_retry(self):
         fake = FakeONT("firewall_dmz_lua.lua")
         proposal = self._preview(fake, {"Enable": "1"})
         with self.assertRaisesRegex(PermissionError, "mudou"):
-            self._apply(fake, proposal, attendant="different-tech")
+            self._apply(fake, proposal, revision="different-session")
         proposal = self._preview(fake, {"Enable": "1"})
         with patch("apps.zte_manager.services.f6201b_full_forms.post_menu",
                    side_effect=TimeoutError("synthetic")) as mocked:
