@@ -277,7 +277,9 @@ def wifi_networks(
 def set_ssid_config(
     zte,
     ssid_id,
-    config
+    config,
+    *,
+    captured_f6201b=False,
 ):
     """
     Atualiza um único SSID preservando o restante da configuração atual.
@@ -612,6 +614,21 @@ def set_ssid_config(
             )
         ))
 
+    if captured_f6201b:
+        # Corpo reproduzido do Apply real (F6201B V9.3.10P7N7).
+        # Campos extras do F6600P poderiam alterar funções não solicitadas.
+        # Falha fechada se os campos do manifesto não puderem ser montados.
+        from apps.zte_manager.services.f6201b_evidence import SSID_APPLY_FIELDS
+        fields = dict(campos)
+        fields["BackupAuthServerIp"] = atual.get("BackupAuthServerIp", "")
+        fields["MasterAcctServerIp"] = atual.get("MasterAcctServerIp", "")
+        fields["BackupAcctServerIp"] = atual.get("BackupAcctServerIp", "")
+        fields["_InstID_GUEST"] = atual.get("_InstID_GUEST", "")
+        campos = [(name, fields[name]) for name in SSID_APPLY_FIELDS
+                  if name != "_sessionTOKEN"]
+        if len(campos) != len(SSID_APPLY_FIELDS) - 1:
+            raise RuntimeError("O payload de SSID não corresponde à captura.")
+
     # Reabre a view imediatamente antes do POST. O GET acima é útil para
     # montar o payload, mas outras chamadas não podem trocar o contexto.
     zte.get_view(
@@ -657,13 +674,12 @@ def _get_encode_fields(xml_text):
     except ET.ParseError:
         return set()
 
-    encode = root.findtext(
-        "encode"
-    ) or ""
-
+    # F6201B retorna <encode> separado para AP, WEP e PSK.
+    # Ler somente o primeiro perde KeyPassphrase e impede preservar a senha.
     return {
         item.strip()
-        for item in encode.split(",")
+        for node in root.findall("encode")
+        for item in (node.text or "").split(",")
         if item.strip()
     }
 

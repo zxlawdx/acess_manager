@@ -42,6 +42,14 @@ DSL_FIELDS = {
 # ACS URL, usuários ou dados telefônicos no relatório do atendimento.
 F6201B_FIELDS = {
     "wifi_radios": {"Band": "band", "RadioStatus": "radio_status"},
+    # A captura de RF foi truncada em 30 KB; somente a resposta XML
+    # COMPLETA da ONT ativa permite confirmar estas leituras.
+    "wifi_radio_advanced": {
+        "Band": "band", "RadioStatus": "radio_status",
+        "Channel": "channel", "AutoChannelEnabled": "auto_channel",
+        "BandWidth": "bandwidth", "Standard": "standard",
+        "TxPower": "tx_power", "SGIEnabled": "sgi",
+    },
     "lan_ports": {"_InstID": "port", "Status": "status", "Speed": "speed",
                   "Duplex": "duplex", "InError": "rx_errors",
                   "OutError": "tx_errors"},

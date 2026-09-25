@@ -15,7 +15,10 @@ for (const id of ["wifiNetworks","wifiRadios","wanConnections",
 for(const cls of ["ssid-card","ssid-card-head","switch-row","form-grid",
     "form-footer","wan-card","port-card"]){
     assert.ok(native.includes(cls),"Existing class missing: "+cls);
-    assert.ok(profile.includes(cls),"F6201B not using native class: "+cls);
+    assert.ok(cls === "wan-card"
+        ? profile.includes("renderWanCard(")
+        : profile.includes(cls),
+        "F6201B not using native class or original renderer: "+cls);
 }
 assert.ok(!profile.includes('panel f6201b-editor'),
     "Old full-width experimental panel must be removed");

@@ -57,6 +57,7 @@ jobs:
         run: node tests/test_adaptive_firmware.cjs
 
       - name: Verify native and experimental model UI isolation
-        run: node tests/test_model_ui_isolation.cjs
+        run: |
+          node tests/test_model_ui_isolation.cjs
           node tests/test_native_ui_preserved.cjs
           node tests/test_classic_support_ui.cjs

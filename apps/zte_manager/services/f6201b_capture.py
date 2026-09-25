@@ -9,6 +9,7 @@ Não faz POST para a ONT e não expõe nenhuma resposta bruta ou senha.
 from __future__ import annotations
 
 from apps.zte_manager.services import multimodel_service as mm
+from apps.zte_manager.services.f6201b_evidence import CAPTURED_GET_VIEWS, CAPTURED_GET_ROOTS, GET_PARAMS, OBSERVED_APPLY_FIELDS
 
 
 # categoria | _tag | OBJ esperado | _type | formato observado
@@ -117,14 +118,39 @@ def _rows():
 
 
 ALLOWED = {row["tag"]: row for row in _rows()}
+for tag, view in CAPTURED_GET_VIEWS.items():
+    if tag in ALLOWED:
+        # Second capture resolves earlier unknown-XML records too.
+        root = CAPTURED_GET_ROOTS.get(tag)
+        if root and not ALLOWED[tag]["inspectable"]:
+            ALLOWED[tag]["root"] = root
+            ALLOWED[tag]["response_format"] = "XML"
+            ALLOWED[tag]["inspectable"] = True
+        continue
+    root = CAPTURED_GET_ROOTS.get(tag, "")
+    # A segunda captura também registra vistas e tabelas novas.
+    # Nunca tratar HTML/JSON (root vazio) como XML inspecionável.
+    ALLOWED[tag] = {
+        "category": "Captura complementar", "tag": tag, "root": root,
+        "request_type": "menuData", "response_format":
+            "XML" if root else "OUTRO",
+        "inspectable": bool(root),
+    }
 
 
 def catalog() -> dict:
+    updated_routes = []
+    for original in ALLOWED.values():
+        route = dict(original)
+        route["view"] = CAPTURED_GET_VIEWS.get(route["tag"])
+        route["observed_apply"] = route["tag"] in OBSERVED_APPLY_FIELDS
+        route["parameters"] = sorted(GET_PARAMS.get(route["tag"], {}))
+        updated_routes.append(route)
     return {
         "model": "F6201B", "firmware": "V9.3.10P7N7",
         "origin": "owner_sanitized_capture",
         "total_get_routes": len(ALLOWED),
-        "routes": list(ALLOWED.values()),
+        "routes": updated_routes,
         "note": (
             "Inventário estrutural da captura; opções sem OBJ XML validável "
             "aparecem como referência. Inspeção somente GET sob demanda."
@@ -139,6 +165,11 @@ def inspect(zte, tag: str) -> dict:
     if not route["inspectable"]:
         return {"tag": tag, "available": False,
                 "reason": "Sem objeto XML completo na captura fornecida."}
+    if tag == "wlan_sta_wlan_profile_lua.lua":
+        # Este endpoint exige _sessionTOKEN na URL e APGetFrom:
+        # não realizar scan involuntário durante inspeção estrutural.
+        return {"tag": tag, "available": False,
+                "reason": "Wi-Fi Scan exige procedimento específico."}
     if route["request_type"] == "hiddenData":
         response = zte.session.get(zte.base_url + "/", params={
             "_type": "hiddenData", "_tag": tag
@@ -146,7 +177,12 @@ def inspect(zte, tag: str) -> dict:
         response.raise_for_status()
         raw = response.text
     else:
-        raw = zte.get_menu(tag)
+        view = CAPTURED_GET_VIEWS.get(tag)
+        if not view:
+            return {"tag": tag, "available": False,
+                    "reason": "Captura não confirmou menuView da rota."}
+        zte.get_view(view, Menu3Location=0)
+        raw = zte.get_menu(tag, **GET_PARAMS.get(tag, {}))
     # Modelo comum sanitiza nomes de campo e não retorna ParaValue.
     try:
         structure = mm._shape(raw, route["root"])

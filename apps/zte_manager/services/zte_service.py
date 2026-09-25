@@ -21,6 +21,7 @@ from apps.zte_manager.services import multimodel_service
 from apps.zte_manager.services import model_diagnostic_service
 from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.services.f6201b_writes import ExperimentalF6201BWrites, EXACT_FIRMWARE
+from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -55,6 +56,7 @@ class ZTEService:
         self._model_verified = False
         self._session_revision = uuid4().hex
         self._f6201b_writer = ExperimentalF6201BWrites()
+        self._f6201b_dns = ExperimentalF6201BDNS()
         self._readonly_original_post = None
 
     # =========================================================
@@ -175,6 +177,7 @@ class ZTEService:
                     pass
 
             self._f6201b_writer.clear()
+            self._f6201b_dns.clear()
             self._readonly_original_post = None
             self._session_revision = uuid4().hex
             self._model_verified = False
@@ -379,6 +382,7 @@ class ZTEService:
                 self._model_verified = False
                 self._session_revision = uuid4().hex
                 self._f6201b_writer.clear()
+                self._f6201b_dns.clear()
                 self._readonly_original_post = None
 
     def get_client(self) -> ZTE:
@@ -1146,6 +1150,62 @@ class ZTEService:
             return self._f6201b_writer.apply(
                 self.get_client(), host=self.current_host,
                 firmware=firmware, nonce=nonce, confirmation=confirmation,
+                original_post=self._readonly_original_post,
+            )
+
+    def f6201b_wan_summary(self):
+        """WAN local para cartões antigos; nunca salvar credenciais."""
+        with self._lock:
+            self._f6201b_write_firmware()
+            endpoint = multimodel_service.FAMILY[
+                "f6201b_candidate"]["wan"]
+            zte = self.get_client()
+            raw = multimodel_service._fetch(zte, endpoint)
+            multimodel_service._shape(raw, endpoint.root)
+            records = zte._parse_instances(raw).get(
+                "ID_WAN_COMFIG", []
+            )
+            # Campos observados no segundo GET status, sem UserName,
+            # Password, serial/MAC ou dados de provisionamento.
+            return [{
+                "id": row.get("_InstID"),
+                "nome": row.get("WANCName"),
+                "status": row.get("ConnStatus"),
+                "wan_type": row.get("TransType"),
+                "ip": row.get("IPAddress"),
+                "gateway": row.get("GateWay"),
+                "vlan": row.get("VLANID"),
+                "mtu": row.get("MTU"),
+                "dns1": row.get("DNS1"),
+                "dns2": row.get("DNS2"),
+                "nat": row.get("IsNAT"),
+                "uptime": row.get("UpTime"),
+                "rx_bytes": row.get("RxBytes"),
+                "tx_bytes": row.get("TxBytes"),
+                "rx_errors": row.get("ErrorsReceived"),
+                "tx_errors": row.get("ErrorsSent"),
+            } for row in records[:12]]
+
+    def f6201b_dns_status(self):
+        with self._lock:
+            self._f6201b_write_firmware()
+            return self._f6201b_dns.read(self.get_client())
+
+    def f6201b_dns_preview(self, changes):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            return self._f6201b_dns.preview(
+                self.get_client(), host=self.current_host,
+                firmware=firmware, changes=changes
+            )
+
+    def f6201b_dns_apply(self, nonce, confirmation):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            return self._f6201b_dns.apply(
+                self.get_client(), host=self.current_host,
+                firmware=firmware, nonce=nonce,
+                confirmation=confirmation,
                 original_post=self._readonly_original_post,
             )
 
