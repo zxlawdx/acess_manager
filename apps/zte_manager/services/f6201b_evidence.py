@@ -125,12 +125,17 @@ OBSERVED_APPLY_FIELDS: dict[str, tuple[str, ...]] = {
         "IF_ACTION", "_InstID", "uplink", "InstHasGot", "ControlType",
         "WANCName", "Enable", "mode", "ServList", "MTU", "linkMode",
         "TransType", "UserName", "Password", "AuthType",
-        "ConnTrigger", "IdleTime0", "IdleTime1", "IpMode",
-        "Addressingtype", "DNS10", "DNS11", "DNS12", "DNS13",
-        "DNS20", "DNS21", "DNS22", "DNS23", "DNS30", "DNS31",
-        "DNS32", "DNS33", "IsNAT", "IPv6AcquireMode", "Gua1PrefixLen",
+        "ConnTrigger", "IdleTime0", "IdleTime1", "IpMode", "Addressingtype",
+        "IPAddress0", "IPAddress1", "IPAddress2", "IPAddress3",
+        "SubnetMask0", "SubnetMask1", "SubnetMask2", "SubnetMask3",
+        "GateWay0", "GateWay1", "GateWay2", "GateWay3",
+        "DNS10", "DNS11", "DNS12", "DNS13", "DNS20", "DNS21",
+        "DNS22", "DNS23", "DNS30", "DNS31", "DNS32", "DNS33",
+        "IsNAT", "IPv6AcquireMode", "Gua1", "Gua1PrefixLen",
+        "Gateway6", "Pd", "PdLen", "Dns1v6", "Dns2v6", "Dns3v6",
         "IsPD", "Unnumbered", "IsSLAAC", "IsGUA", "IsPdAddr",
-        "VlanEnable", "VLANID", "Priority", "encode", "_sessionTOKEN",
+        "VlanEnable", "VLANID", "Priority", "Btn_cancel_internet",
+        "Btn_apply_internet", "encode", "_sessionTOKEN",
     ),
     "upnp_upnp_lua.lua": (
         "IF_ACTION", "_InstID", "EnableUPnPIGD", "ADPeriod",
@@ -231,4 +236,11 @@ OBSERVED_DIAGNOSTIC_ACTIONS = {
         "IF_ACTION", "Control", "Host", "MaxHopCount", "Timeout",
         "Protocol", "_sessionTOKEN",
     ),
+}
+
+CAPTURE_STATISTICS = {
+    "total_http": 209, "get": 179, "post": 30,
+    "successful_apply_events": 28,
+    "successful_unique_apply_routes": len(OBSERVED_APPLY_FIELDS),
+    "diagnostic_post_events": 2,
 }
