@@ -63,16 +63,9 @@ class ZTEService:
         model_hint: str | None = None,
     ):
         with self._lock:
-            # Vue precisa de fluxo de autenticação próprio: não tentar
-            # autenticar um dispositivo da família via challenge ThinkLua.
-            if model_hint:
-                from apps.zte_manager.services.multimodel_service import find_family
-                _, family_hint = find_family(model_hint)
-                if family_hint == "vue":
-                    raise ValueError(
-                        "Este modelo usa API Vue e requer autenticação "
-                        "específica. Não é suportado pelo login ThinkLua atual."
-                    )
+            # O zte_tracker documenta o mesmo desafio loginData para a
+            # família Vue, porém seus endpoints de leitura usam vueData.
+            # Nunca assumir que os menus de escrita ThinkLua sejam compatíveis.
 
             protocolo = "https" if https else "http"
             base_url = f"{protocolo}://{ip}"
