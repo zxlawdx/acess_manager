@@ -216,6 +216,7 @@ def connect(context=None):
             password=data.password,
             https=data.https,
             attendant=data.attendant,
+            model_hint=data.model_hint,
         )
 
     return _safe_call(
