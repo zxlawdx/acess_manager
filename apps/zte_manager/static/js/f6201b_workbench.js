@@ -3,7 +3,11 @@
   "use strict";
   const ID = "f6201b-workbench";
   const BOOL_FIELDS = new Set([
-    "BPDUEnable", "EnableUPnPIGD", "BsEnable", "Enable"
+    "BPDUEnable", "EnableUPnPIGD", "BsEnable", "Enable",
+    "TimerEnable", "RadioStatus", "Autoneg", "IsPrefixAutoMode",
+    "ManualDNSEnable", "AdvLinkMTUEnable", "PeriodicInformEnable",
+    "ServerEnable", "VlanEnable", "IANAEnable", "EnLegacyStaRoam",
+    "SupportCertAuth", "RemoteUpgradeCertAuth"
   ]);
   let generation = 0;
   let catalog = null;
@@ -46,7 +50,7 @@
   function rowFor(tag) { return catalog?.routes?.find(row => row.tag === tag); }
   function stateLabel(state) {
     return ({
-      supervised_lab: "Teste supervisionado",
+      supervised_lab: "Formulário supervisionado",
       existing_adapter: "Adaptador existente",
       needs_form_adapter: "Captura complementar"
     })[state] || "Não verificado";
@@ -145,23 +149,32 @@
     if (!data) return;
     const grid = el("div", "f6201b-wb-form-grid");
     const missing = new Set(data.missing || []);
+    const secrets = new Set(data.secret_fields || row.secret_fields || []);
+    const privateFields = new Set(data.private_fields || []);
     for (const key of row.editable) {
       const field = el("label", "f6201b-wb-field");
       field.append(el("span", "", key));
       let input;
-      if (BOOL_FIELDS.has(key) || key.startsWith("Is") && key.endsWith("Alg")) {
+      if (BOOL_FIELDS.has(key) ||
+          /^(?:Is[A-Z]|AllowRA_|AllowDHCP6S_|RadioStatus_|ProcFlag_)/.test(key)) {
         input = el("select");
         input.append(new Option("0 — Desativado", "0"),
           new Option("1 — Ativado", "1"));
       } else {
         input = el("input");
-        input.type = "text";
-        input.autocomplete = "off";
+        input.type = secrets.has(key) ? "password" : "text";
+        input.autocomplete = secrets.has(key) ? "new-password" : "off";
+        if (secrets.has(key)) input.placeholder = "Deixe vazio para preservar";
+        else if (privateFields.has(key)) input.placeholder = "Campo protegido";
         input.spellcheck = false;
       }
       input.name = key;
-      input.dataset.original = String(data.current?.[key] ?? "");
+      input.dataset.secret = String(secrets.has(key));
+      input.dataset.original = secrets.has(key) ? "" :
+        String(data.current?.[key] ?? "");
       input.value = input.dataset.original;
+      // Only disable a field when it is absent from the actual payload.
+      // Missing metadata elsewhere still disables the submit button.
       input.disabled = missing.has(key);
       input.addEventListener("input", () => {
         proposal = null;
@@ -195,7 +208,12 @@
     const changes = {};
     for (const input of fields.querySelectorAll("[name][data-original]")) {
       if (input.disabled) return;
-      if (input.value !== input.dataset.original) changes[input.name] = input.value;
+      // An empty secret input means preserve the current server-side value.
+      if (input.dataset.secret === "true") {
+        if (input.value.length) changes[input.name] = input.value;
+      } else if (input.value !== input.dataset.original) {
+        changes[input.name] = input.value;
+      }
     }
     if (!Object.keys(changes).length) {
       status(root, "Nenhuma diferença: altere um campo antes da prévia.", "error");
@@ -276,9 +294,13 @@
       });
       if (requestGeneration !== generation || tag !== selected) return;
       clear(root.querySelector(".f6201b-wb-preview"));
-      if (result.verified) {
-        status(root, "Aplicado e confirmado por releitura: " +
-          (result.changed_fields || []).join(", ") + ".", "ok");
+      if (result.success) {
+        const verified = result.changed_fields || result.verified_fields || [];
+        status(root, result.partial ?
+          "Configuração aplicada. Campos legíveis verificados (" +
+          verified.join(", ") + "). Confirme credenciais por autenticação funcional: " +
+          (result.manual_verification_fields || []).join(", ") + "." :
+          "Aplicado e confirmado por releitura: " + verified.join(", ") + ".", "ok");
         // GET again only after a positively verified POST.
         working = false;
         await fetchInspect(root);
