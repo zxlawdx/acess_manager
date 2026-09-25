@@ -793,6 +793,14 @@
                                 <label class="field"><span>INTERFACE</span><select id="pingInterface"><option value="">Rota padrão</option></select></label>
                                 <label class="field"><span>IP VERSION</span><select id="pingIpVersion"><option value="IPv4">IPv4</option><option value="IPv6">IPv6</option></select></label>
                             </div>
+                            <div class="field-grid three">
+                                <label class="field"><span>PACOTES</span>
+                                    <input id="pingCount" type="number" min="1" max="30" value="4"></label>
+                                <label class="field"><span>TAMANHO (BYTES)</span>
+                                    <input id="pingSize" type="number" min="1" max="1400" value="64"></label>
+                                <label class="field"><span>TIMEOUT (MS)</span>
+                                    <input id="pingTimeout" type="number" min="1000" max="10000" value="5000"></label>
+                            </div>
                             <button class="button primary" type="submit"><span class="material-symbols-outlined">play_arrow</span>Executar ping</button>
                         </form>
                         <pre id="pingOutput" class="terminal-output">Aguardando teste...</pre>
