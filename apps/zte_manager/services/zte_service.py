@@ -1066,6 +1066,11 @@ class ZTEService:
                 self._device_info.get("firmware")
             )
 
+    def f6201b_write_ssids(self):
+        with self._lock:
+            self._f6201b_write_firmware()
+            return self._f6201b_writer.list_ssids(self.get_client())
+
     def f6201b_write_preview(self, ssid_id, config):
         with self._lock:
             firmware = self._f6201b_write_firmware()
