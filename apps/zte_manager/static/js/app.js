@@ -643,7 +643,8 @@ document
                 // anteriores ANTES de renderizar o novo modelo.
                 document.dispatchEvent(new CustomEvent("zte:session-changed"));
                 document.getElementById("connectedModel").textContent =
-                    response.model || response.device?.modelo || "Não identificado";
+                    (response.model || response.device?.modelo || "Não identificado") +
+                    (response.model_verified === false ? " · não confirmado" : "");
                 setConnectionStatus(
                     true
                 );
@@ -4353,7 +4354,8 @@ async function restoreDesktopSession() {
         document.getElementById("connectedAttendant").textContent =
             `Atendente: ${currentAttendant}`;
         document.getElementById("connectedModel").textContent =
-            status.model || "ZTE";
+            (status.model || "ZTE") +
+            (status.model_verified === false ? " · não confirmado" : "");
         document.getElementById("dashboardProfileName").textContent =
             currentAttendant;
         document.getElementById("profileAttendant").textContent =
