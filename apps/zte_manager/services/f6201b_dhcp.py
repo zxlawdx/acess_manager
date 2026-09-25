@@ -3,6 +3,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 
 from apps.zte_manager.services.f6201b_evidence import CAPTURED_GET_VIEWS
+from apps.zte_manager.model.zte_configuration import zte_security
 
 
 BASIC = "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua"
@@ -25,7 +26,39 @@ def _rows(zte, view, tag, root):
     zte.get_view(view, Menu3Location=0)
     raw = zte.get_menu(tag)
     zte._validar_resposta(raw)
-    return zte._parse_instances(raw).get(root, [])
+    rows = zte._parse_instances(raw).get(root, [])
+    if tag == BASIC:
+        xml = ET.fromstring(raw)
+        encrypted = {field.strip() for field in
+                     (xml.findtext("encode") or "").split(",")
+                     if field.strip()}
+        fields = {"IPAddr", "MinAddress", "MaxAddress",
+                  "DNSServer1", "DNSServer2"}
+        if encrypted:
+            if not fields.issubset(encrypted):
+                raise RuntimeError(
+                    "O GET DHCP não confirmou todos os campos AES esperados."
+                )
+            token = getattr(zte, "session_tmp_token", None)
+            if not token:
+                raise RuntimeError("O formulário DHCP não retornou token AES.")
+            clean = []
+            for original in rows:
+                row = dict(original)
+                for name in fields:
+                    value = row.get(name) or ""
+                    if value:
+                        plain = zte_security.aes_decrypt_value(
+                            value, token, token[::-1]
+                        )
+                        if plain == value:
+                            raise RuntimeError(
+                                "Falha na leitura do campo DHCP " + name
+                            )
+                        row[name] = plain
+                clean.append(row)
+            return clean
+    return rows
 
 
 def status(zte):
