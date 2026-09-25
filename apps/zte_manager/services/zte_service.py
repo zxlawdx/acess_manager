@@ -1,4 +1,5 @@
 from dataclasses import replace
+from uuid import uuid4
 from threading import RLock
 from typing import Optional
 
@@ -51,6 +52,8 @@ class ZTEService:
         self._history_session_id = None
         self._device_info = {}
         self._selected_model = None
+        self._model_verified = False
+        self._session_revision = uuid4().hex
         self._f6201b_writer = ExperimentalF6201BWrites()
         self._readonly_original_post = None
 
@@ -92,6 +95,41 @@ class ZTEService:
                     or "default"
                 )
 
+                # Um novo clique em Conectar pode trazer outra escolha
+                # manual para o MESMO endereço. Não preservar a identidade
+                # anterior sem revalidar o equipamento.
+                actual = {}
+                try:
+                    actual = self._zte.device_status() or {}
+                except Exception:
+                    pass
+                claimed, _ = multimodel_service.find_family(model_hint)
+                detected, _ = multimodel_service.find_family(
+                    actual.get("modelo") or ""
+                )
+                if claimed and detected and claimed != detected:
+                    raise ValueError(
+                        "O modelo escolhido diverge da identificação atual "
+                        "do equipamento; escolha o modelo detectado."
+                    )
+                if claimed and self._selected_model:
+                    selected, _ = multimodel_service.find_family(
+                        self._selected_model
+                    )
+                    if selected and claimed != selected and not detected:
+                        raise ValueError(
+                            "Não foi possível confirmar uma troca de modelo "
+                            "reutilizando a sessão. Desconecte e reconecte."
+                        )
+                if detected:
+                    self._device_info = actual
+                    self._selected_model = detected
+                    self._model_verified = True
+                elif actual:
+                    # Não substituir dados válidos por uma resposta parcial.
+                    self._device_info.update({
+                        k: v for k, v in actual.items() if v is not None
+                    })
                 self.current_host = ip
 
                 return {
@@ -100,6 +138,9 @@ class ZTEService:
                     "attendant": self.current_attendant,
                     "host": self.current_host,
                     "reused_session": True,
+                    "model": self._selected_model,
+                    "model_verified": self._model_verified,
+                    "session_revision": self._session_revision,
                     "device": self._device_info,
                     "adapter": (
                         self._adapter.name
@@ -125,6 +166,10 @@ class ZTEService:
 
             self._f6201b_writer.clear()
             self._readonly_original_post = None
+            self._session_revision = uuid4().hex
+            self._model_verified = False
+            self._selected_model = None
+            self._device_info = {}
             self._zte = ZTE(
                 ip=ip,
                 username=username,
@@ -190,6 +235,7 @@ class ZTEService:
                 self._device_info.get("firmware"),
             )
             self._selected_model = selected_model
+            self._model_verified = bool(known_detected)
             # Somente os adaptadores originais possuem rotinas de escrita
             # implementadas/testadas; os novos perfis iniciam read-only.
             from apps.zte_manager.model.device_adapters import (
@@ -287,6 +333,9 @@ class ZTEService:
                 "attendant": self.current_attendant,
                 "host": self.current_host,
                 "reused_session": False,
+                "model": self._selected_model,
+                "model_verified": self._model_verified,
+                "session_revision": self._session_revision,
                 "writes_enabled": self._zte.writes_enabled,
                 "device": self._device_info,
                 "adapter": self._adapter.name,
@@ -317,6 +366,8 @@ class ZTEService:
                 self._history_session_id = None
                 self._device_info = {}
                 self._selected_model = None
+                self._model_verified = False
+                self._session_revision = uuid4().hex
                 self._f6201b_writer.clear()
                 self._readonly_original_post = None
 
