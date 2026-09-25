@@ -824,11 +824,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração do EasyMesh."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -847,11 +842,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme o início do pareamento EasyMesh/WPS."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -974,11 +964,6 @@ class ZTEService:
         self,
         config
     ):
-        if not config.get("confirm"):
-            raise ValueError(
-                "Confirme explicitamente a alteração de port forwarding."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -996,11 +981,6 @@ class ZTEService:
         instance_id,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a remoção do port forwarding."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -1021,11 +1001,6 @@ class ZTEService:
         self,
         config
     ):
-        if not config.get("confirm"):
-            raise ValueError(
-                "Confirme explicitamente a alteração da DMZ."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -1941,11 +1916,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração de QoS."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -1971,11 +1941,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a remoção da regra QoS."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2003,11 +1968,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração do firewall."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2038,11 +1998,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração do filtro de firewall."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2068,11 +2023,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a remoção do filtro de firewall."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2093,11 +2043,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração das políticas globais de filtro."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2154,11 +2099,6 @@ class ZTEService:
         *,
         confirm=True
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração do TR-069/ACS."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2192,11 +2132,6 @@ class ZTEService:
         confirm=False,
         backup=True
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a criação da WAN/VLAN/PPPoE."
-            )
-
         with self._lock:
             if backup:
                 self.management_backup(
@@ -2226,11 +2161,6 @@ class ZTEService:
         confirm=True,
         backup=True
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração da WAN/VLAN/PPPoE."
-            )
-
         with self._lock:
             if backup:
                 self.management_backup(
@@ -2260,11 +2190,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Excluir uma WAN pode derrubar o acesso. Confirme explicitamente."
-            )
-
         with self._lock:
             self.management_backup(
                 reason="pre_wan_delete"
@@ -2312,11 +2237,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Bridge Mode pode derrubar o gerenciamento. Confirme explicitamente."
-            )
-
         with self._lock:
             backup = self.management_backup(
                 reason="pre_bridge_mode"
@@ -2469,11 +2389,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Restauração pode reiniciar e desconectar a ONT. Confirme explicitamente."
-            )
-
         backups = management_repository.list_backups()
 
         backup = next((
@@ -2542,11 +2457,6 @@ class ZTEService:
         confirm=False,
         device_id=None
     ):
-        if not confirm:
-            raise ValueError(
-                "Upgrade de firmware pode reiniciar a ONT. Confirme explicitamente."
-            )
-
         with self._lock:
             self._assert_management_device_matches_current(
                 device_id
