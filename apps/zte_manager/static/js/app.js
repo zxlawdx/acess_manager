@@ -5,6 +5,73 @@ const API_BASE = "/api";
 let pendingApiRequests = 0;
 let requestStatusTimer = null;
 
+// A tela modal de carregamento é controlada pelo ciclo real das requisições,
+// inclusive nos handlers que não chamam setBusy(). Não retirar a animação
+// quando uma das várias consultas de um diagnóstico termina antes das outras.
+let explicitBusy = false;
+let explicitBusyText = "Processando...";
+let lastActionText = "Consultando equipamento...";
+let clickFeedbackUntil = 0;
+let overlayCloseTimer = null;
+const ACTION_FEEDBACK_MS = 620;
+
+function renderBusyOverlay() {
+    const overlay = document.getElementById("busyOverlay");
+    const label = document.getElementById("busyText");
+    if (!overlay || !label) return;
+
+    clearTimeout(overlayCloseTimer);
+    const clickPending = Date.now() < clickFeedbackUntil;
+    const active = explicitBusy || pendingApiRequests > 0 || clickPending;
+    overlay.classList.toggle("hidden", !active);
+    overlay.setAttribute("aria-busy", String(active));
+
+    if (active) {
+        label.textContent = explicitBusy
+            ? explicitBusyText
+            : lastActionText;
+    }
+
+    if (!explicitBusy && !pendingApiRequests && clickPending) {
+        overlayCloseTimer = setTimeout(
+            renderBusyOverlay,
+            Math.max(0, clickFeedbackUntil - Date.now()) + 15
+        );
+    }
+}
+
+// Identifica somente ações, nunca cliques de navegação, zoom ou toggles.
+// A captura mostra o modal ANTES dos handlers assíncronos e permite o
+// primeiro frame de animação mesmo quando o backend responde rapidamente.
+function startActionFeedback(button) {
+    if (!button || button.disabled) return;
+    if (
+        button.matches(
+            ".menu-item, .management-tab, .zoom-button, [data-page], [data-jump]"
+        )
+    ) return;
+
+    const rawLabel = button.textContent.replace(/\s+/g, " ").trim();
+    const label = rawLabel.slice(0, 85) || "Executando ação";
+    lastActionText = label + "...";
+    clickFeedbackUntil = Date.now() + ACTION_FEEDBACK_MS;
+    renderBusyOverlay();
+}
+
+document.addEventListener("click", event => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    // Abas e botões sem efeito no equipamento não abrem loading bloqueante.
+    startActionFeedback(button);
+}, true);
+
+document.addEventListener("submit", event => {
+    const submit = event.submitter;
+    if (submit && submit.tagName === "BUTTON") {
+        startActionFeedback(submit);
+    }
+}, true);
+
 function updateRequestStatus(errorMessage = null) {
     const indicator = document.getElementById("requestStatusIndicator");
     if (!indicator) return;
@@ -54,7 +121,12 @@ async function apiRequest(
     endpoint,
     options = {}
 ) {
+    if (!pendingApiRequests && !explicitBusy && Date.now() >= clickFeedbackUntil) {
+        lastActionText = "Consultando equipamento...";
+    }
     pendingApiRequests++;
+    lastActionText = explicitBusy ? explicitBusyText : lastActionText;
+    renderBusyOverlay();
     const slowTimer = setTimeout(updateRequestStatus, 180);
     try {
     const config = {
@@ -131,6 +203,7 @@ async function apiRequest(
     } finally {
         clearTimeout(slowTimer);
         pendingApiRequests = Math.max(0, pendingApiRequests - 1);
+        renderBusyOverlay();
         // Preserve a mensagem de falha até expirar, mesmo após finalizar.
         if (!pendingApiRequests) {
             const badge = document.getElementById("requestStatusIndicator");
@@ -221,20 +294,14 @@ function setBusy(
     busy,
     text = "Processando..."
 ) {
-    const overlay = document.getElementById(
-        "busyOverlay"
-    );
-
-    const label = document.getElementById(
-        "busyText"
-    );
-
-    label.textContent = text;
-
-    overlay.classList.toggle(
-        "hidden",
-        !busy
-    );
+    explicitBusy = Boolean(busy);
+    if (busy) {
+        explicitBusyText = text;
+        lastActionText = text;
+    }
+    // setBusy(false) não esconde o modal enquanto houver API pendente.
+    // O tempo mínimo dá feedback inclusive para ações muito rápidas.
+    renderBusyOverlay();
 }
 
 
