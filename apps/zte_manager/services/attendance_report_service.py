@@ -14,6 +14,23 @@ _OPERATION_LABELS = {
     "dhcp_basic": "Alteração do DHCP",
     "dhcp_reservation": "Alteração de reserva DHCP",
     "upnp_update": "Alteração de UPnP",
+    "f6201b_profile_apply": "Aplicação do perfil Wi-Fi e DNS",
+    "f6201b_ssid_update": "Configuração de SSID",
+    "f6201b_dns_update": "Configuração de DNS",
+    "f6201b_form_update": "Configuração avançada do equipamento",
+    "diagnostic_ping": "Teste de ping na ONT",
+    "diagnostic_traceroute": "Teste de traceroute na ONT",
+    "dhcp_reservation_save": "Cadastro de reserva DHCP",
+    "dhcp_reservation_delete": "Exclusão de reserva DHCP",
+    "wifi_schedule": "Configuração de horários Wi-Fi",
+    "wps_update": "Configuração WPS",
+    "dmz": "Configuração de DMZ",
+    "admin_password": "Alteração de senha administrativa",
+    "backup_configuration": "Backup de configuração",
+    "easymesh_configure": "Configuração EasyMesh",
+    "easymesh_pairing": "Pareamento EasyMesh",
+    "port_forward_save": "Cadastro de redirecionamento de portas",
+    "port_forward_delete": "Exclusão de redirecionamento de portas",
 }
 
 
@@ -105,53 +122,71 @@ class AttendanceReportService:
                     f"- {message}"
                 )
 
-        changes = [
-            item
-            for item in timeline.get(
-                "changes",
-                []
-            )
-            if item.get("success")
-        ]
+        # A OS pertence à sessão inteira, não só ao último diagnóstico.
+        # Inclui leituras/execuções registradas em outras abas, alterações
+        # efetivas, tentativas não confirmadas e testes manuais, sempre
+        # distinguindo um POST executado de uma alteração verificada.
+        changes = timeline.get("changes", [])
+        events = []
+        for change in changes:
+            operation = str(change.get("operation") or "operação")
+            label = _OPERATION_LABELS.get(operation, operation.replace("_", " "))
+            target = change.get("target")
+            description = label + (" (" + self._safe_target(target) + ")"
+                                   if target else "")
+            difference = self._change_summary(
+                change.get("before_json"), change.get("after_json")
+            ) if change.get("success") else ""
+            if difference:
+                description += ": " + difference
+            description += (" — realizado" if change.get("success")
+                            else " — tentativa sem confirmação")
+            events.append((change.get("created_at") or "", "change",
+                           change.get("id") or 0, description))
 
-        if changes:
-            lines.extend([
-                "",
-                "Procedimentos realizados:",
-            ])
-
-            for change in reversed(
-                changes
-            ):
-                operation = change.get(
-                    "operation"
+        for entry in timeline.get("diagnostics", []):
+            payload = entry.get("payload_json") or {}
+            if not isinstance(payload, dict):
+                payload = {}
+            if payload.get("source") == "backend_authenticated_ont":
+                count = len(payload.get("firmware_readings") or {})
+                options = [
+                    str(item.get("operation", "etapa")).replace("_", " ")
+                    for item in payload.get("performed", [])
+                    if isinstance(item, dict) and item.get("operation") != "leitura"
+                ]
+                detail = (f"Diagnóstico F6201B: {count} leituras confirmadas" +
+                          ("; " + ", ".join(options) if options else ""))
+            else:
+                detail = "Diagnóstico " + self._safe_target(
+                    str(payload.get("mode") or entry.get("summary") or "geral")
                 )
+            errors = payload.get("errors") or {}
+            if errors:
+                detail += ("; etapas sem confirmação: " +
+                           ", ".join(str(key) for key in errors.keys()))
+            events.append((entry.get("created_at") or "", "diagnostic",
+                           entry.get("id") or 0, detail))
 
-                label = _OPERATION_LABELS.get(
-                    operation,
-                    operation,
-                )
+        known_snapshots = {
+            "speedtest": "Teste de velocidade realizado",
+            "manual": "Captura manual das informações da ONT",
+            "backup_configuration": "Backup da configuração",
+            "automatic_diagnostic": "Coleta do diagnóstico automático",
+            "firmware_diagnostic_get": "Inspeção de firmware realizada",
+        }
+        for snapshot in timeline.get("snapshots", []):
+            reason = snapshot.get("reason")
+            if reason in known_snapshots:
+                events.append((
+                    snapshot.get("captured_at") or "", "snapshot",
+                    snapshot.get("id") or 0, known_snapshots[reason],
+                ))
 
-                target = change.get(
-                    "target"
-                )
-
-                difference = self._change_summary(
-                    change.get("before_json"),
-                    change.get("after_json"),
-                )
-
-                text = f"- {label}"
-
-                if target:
-                    text += f" ({target})"
-
-                if difference:
-                    text += f": {difference}"
-
-                lines.append(
-                    text + "."
-                )
+        if events:
+            lines.extend(["", "Atividades registradas nesta conexão:"])
+            for _date, _kind, _id, description in sorted(events):
+                lines.append("- " + description + ".")
 
         speed = sections.get(
             "speedtest"
@@ -189,9 +224,11 @@ class AttendanceReportService:
         lines.extend([
             "",
             "Situação final:",
-            self._final_status(
-                result
-            ),
+            (self._final_status(result) if diagnostic.get("sections") or
+             diagnostic.get("post_validation") or
+             diagnostic.get("firmware_readings") else
+             "Não houve diagnóstico consolidado nesta sessão; " +
+             "as ações acima refletem somente o histórico registrado."),
         ])
 
         return {
@@ -206,6 +243,18 @@ class AttendanceReportService:
                 changes
             ),
         }
+
+    @staticmethod
+    def _safe_target(value):
+        # Nunca inserir identificadores de clientes ou URLs do roteador
+        # diretamente em uma OS copiada para outro sistema.
+        import re
+        text = str(value or "")[:100]
+        text = re.sub(
+            r"(?i)\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b",
+            "[MAC oculto]", text,
+        )
+        return text
 
     @staticmethod
     def _complaint(
@@ -394,9 +443,8 @@ class AttendanceReportService:
         return any(
             marker in lower
             for marker in (
-                "password",
-                "passwd",
-                "passphrase",
-                "secret",
+                "password", "passwd", "passphrase", "secret",
+                "token", "credential", "username", "private",
+                "macaddr", "macaddress", "serial", "keypassphrase",
             )
         )
