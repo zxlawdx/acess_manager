@@ -1470,7 +1470,9 @@ async function captureSnapshot() {
         );
 
         showToast(
-            `Snapshot #${data.snapshot_id} salvo.`
+            data.partial
+                ? `Snapshot #${data.snapshot_id} parcial: falharam ${(data.failed_sections || []).join(", ")}.`
+                : `Snapshot #${data.snapshot_id} salvo.`
         );
 
         // Snapshot já persistido; atualização visual é independente.
