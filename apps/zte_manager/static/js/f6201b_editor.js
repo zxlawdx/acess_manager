@@ -421,7 +421,18 @@
                 nativeInfo("DNS",section);
         }
         const operations=$("applyDefaultButton");
-        if(operations)operations.disabled=true;
+        if(operations) {
+            try {
+                const flags = await apiRequest("/f6201b/write/status");
+                if (run !== epoch) return;
+                operations.disabled = !(flags.opted_in && flags.supported_firmware);
+                operations.title = operations.disabled
+                    ? "Ative a escrita experimental para testar o perfil F6201B."
+                    : "Perfil experimental: abrir prévia e confirmar RF/DNS.";
+            } catch(error) {
+                operations.disabled = true;
+            }
+        }
     }
     async function renderDevice() {
         const run=epoch;
