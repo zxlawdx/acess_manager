@@ -1703,7 +1703,7 @@ async function runSelectedFirmwareDiagnostic() {
                 if (data.reason) report.errors[section] = data.reason;
             } catch (error) {
                 report.errors[section] = error.message;
-                if (/passou de \\d+s/.test(error.message)) break;
+                if (String(error.message).includes("passou de")) break;
             }
             result.textContent = `DIAGNÓSTICO POR FIRMWARE — ${index + 1}/${choices.length}\n` +
                 JSON.stringify(report, null, 2);
