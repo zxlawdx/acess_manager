@@ -807,8 +807,8 @@ def multimodel_probe(context=None):
     )
 
 
-# As demais APIs de escrita NÃO ficam disponíveis para perfis novos.
-# Este fluxo exige liberação explícita, preflight, nonce e confirmção.
+# O aplicativo não concede nem restringe privilégios de roteador por operador.
+# Cada serviço confirma o modelo, o formulário real e a sessão da ONT.
 @api.get("/f6201b/write/status")
 def f6201b_write_status(context=None):
     return _safe_call(zte_service.f6201b_write_status)
@@ -838,6 +838,16 @@ def f6201b_write_apply(context=None):
     return _safe_call(zte_service.f6201b_write_apply, nonce, confirmation)
 
 
+@api.post("/f6201b/write/update")
+def f6201b_write_update(context=None):
+    body = _json(context)
+    return _safe_call(
+        zte_service.f6201b_ssid_update,
+        str(body.get("ssid_id") or "")[:64],
+        body.get("config"),
+    )
+
+
 @api.get("/f6201b/wan/summary")
 def f6201b_wan_summary(context=None):
     """Local read only; credentials are explicitly excluded."""
@@ -865,6 +875,15 @@ def f6201b_dns_apply(context=None):
     )
 
 
+@api.post("/f6201b/dns/update")
+def f6201b_dns_update(context=None):
+    return _safe_call(
+        zte_service.f6201b_dns_update,
+        _json(context).get("changes"),
+    )
+
+
+# Formulários capturados F6201B: operações específicas por modelo.
 # Laboratório F6201B: sete estratégias de formulário dedicadas e
 # catálogo do estado das 25 rotas. POST recebe só o nonce da prévia;
 # não aceita um body de configuração arbitrário.
@@ -898,6 +917,17 @@ def f6201b_workbench_apply(context=None):
         str(body.get("nonce") or "")[:100],
         str(body.get("confirmation") or "")[:50],
         body.get("risk_ack") is True,
+    )
+
+
+@api.post("/f6201b/workbench/update")
+def f6201b_workbench_update(context=None):
+    body = _json(context)
+    return _safe_call(
+        zte_service.captured_workbench_update,
+        str(body.get("tag") or "")[:100],
+        str(body.get("instance_id") or "")[:128],
+        body.get("changes"),
     )
 
 
