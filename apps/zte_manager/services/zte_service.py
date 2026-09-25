@@ -59,8 +59,20 @@ class ZTEService:
         password: str,
         https: bool = False,
         attendant: str | None = None,
+        model_hint: str | None = None,
     ):
         with self._lock:
+            # Vue precisa de fluxo de autenticação próprio: não tentar
+            # autenticar um dispositivo da família via challenge ThinkLua.
+            if model_hint:
+                from apps.zte_manager.services.multimodel_service import find_family
+                _, family_hint = find_family(model_hint)
+                if family_hint == "vue":
+                    raise ValueError(
+                        "Este modelo usa API Vue e requer autenticação "
+                        "específica. Não é suportado pelo login ThinkLua atual."
+                    )
+
             protocolo = "https" if https else "http"
             base_url = f"{protocolo}://{ip}"
 
@@ -143,8 +155,19 @@ class ZTEService:
             except Exception:
                 self._device_info = {}
 
+            detected_model = self._device_info.get("modelo")
+            if model_hint and detected_model:
+                from apps.zte_manager.services.multimodel_service import find_family
+                claimed, _ = find_family(model_hint)
+                actual, _ = find_family(detected_model)
+                if claimed and actual and claimed != actual:
+                    raise ValueError(
+                        "Modelo informado diverge do modelo retornado "
+                        "pelo equipamento. Verifique o perfil selecionado."
+                    )
+
             self._adapter = select_adapter(
-                self._device_info.get("modelo"),
+                detected_model or model_hint,
                 self._device_info.get("firmware"),
             )
 
