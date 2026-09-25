@@ -5,6 +5,11 @@ const vm = require("node:vm");
 const source = fs.readFileSync(
     "apps/zte_manager/static/js/app.js", "utf8"
 ).split("function updateRequestStatus(")[0];
+const fullSource = fs.readFileSync("apps/zte_manager/static/js/app.js", "utf8");
+const setBusySource = fullSource.slice(
+    fullSource.indexOf("function setBusy("),
+    fullSource.indexOf("function setConnectionStatus(")
+);
 
 const ids = {};
 function element(id) {
@@ -39,7 +44,7 @@ const sandbox = {
     clearTimeout() {}
 };
 vm.createContext(sandbox);
-vm.runInContext(source, sandbox);
+vm.runInContext(source + '\n' + setBusySource, sandbox);
 
 function isVisible() {
     return !element("busyOverlay").classList.contains("hidden");
