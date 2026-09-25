@@ -85,10 +85,12 @@ SSID_APPLY_FIELDS: tuple[str, ...] = (
     "WPAEncryptType", "11iEncryptType", "WPA3AuthMode", "WPA3EncryptType",
     "_InstID_WEP0", "_InstID_WEP1", "_InstID_WEP2", "_InstID_WEP3",
     "_InstID_PSK", "MasterAuthServerIp", "BackupAuthServerIp",
-    "MasterAcctServerIp", "BackupAcctServerIp", "_GUEST", "ESSID",
+    "MasterAcctServerIp", "BackupAcctServerIp", "_InstID_GUEST", "_GUEST", "ESSID",
     "ESSIDHideEnable", "EncryptionType", "KeyPassphrase", "WEPKeyIndex",
     "ShowWEPKey", "WEPKey00", "WEPKey01", "WEPKey02", "WEPKey03",
-    "VapIsolationEnable", "MaxUserNum", "encode", "_sessionTOKEN",
+    "VapIsolationEnable", "MaxUserNum",
+    "Btn_cancel_WLANSSIDConf", "Btn_apply_WLANSSIDConf",
+    "encode", "_sessionTOKEN",
 )
 
 # Explicitly observed successful Apply (IF_ERRORID=0). Each write
@@ -98,7 +100,9 @@ OBSERVED_APPLY_FIELDS: dict[str, tuple[str, ...]] = {
     "wlan_wlansssidconf_lua.lua": SSID_APPLY_FIELDS,
     "dns_localdns_lua.lua": (
         "IF_ACTION", "_InstID", "SerIPAddress1", "SerIPAddress2",
-        "SerIPv6Address1", "SerIPv6Address2", "_sessionTOKEN",
+        "SerIPv6Address1", "SerIPv6Address2",
+        "Btn_cancel_LocalDnsServer", "Btn_apply_LocalDnsServer",
+        "_sessionTOKEN",
     ),
     "wlan_BandSteering_lua.lua": (
         "IF_ACTION", "_InstID", "BsEnable", "BsRssiLmt24G",
@@ -182,3 +186,10 @@ CAPTURED_GET_ROOTS: dict[str, str] = {
     "tunnel_4in6_status_lua.lua": "",  # Valid response with no OBJ
     "l2tp_lua.lua": "OBJ_L2TP_ID",
 }
+
+# A mesma _tag dns_localdns usa um FORMULÁRIO DIFERENTE para DomainName.
+DNS_DOMAIN_APPLY_FIELDS = (
+    "IF_ACTION", "_InstID", "DomainName",
+    "Btn_cancel_instCfgArea", "Btn_apply_instCfgArea",
+    "_sessionTOKEN",
+)
