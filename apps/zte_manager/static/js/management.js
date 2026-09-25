@@ -61,9 +61,26 @@ function managementOutput(id, value) {
         return;
     }
 
-    element.textContent = typeof value === "string"
-        ? value
-        : managementJson(value);
+    // Saídas técnicas passam pela mesma UI responsiva das outras abas.
+    // Campos são inseridos com textContent (sem interpretar HTML do firmware).
+    if (value && typeof value === "object" &&
+        typeof window.renderAdaptiveDiagnostic === "function" &&
+        !["TEXTAREA", "INPUT"].includes(element.tagName)) {
+        const report = {
+            model: "Gerenciamento",
+            sections: {
+                result: {
+                    available: !Boolean(value.error),
+                    data: value,
+                    reason: value.error ? "read_failed" : null
+                }
+            }
+        };
+        window.renderAdaptiveDiagnostic(report, element);
+    } else {
+        element.textContent = typeof value === "string"
+            ? value : managementJson(value);
+    }
 }
 
 
