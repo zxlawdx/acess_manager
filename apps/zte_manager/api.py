@@ -65,6 +65,7 @@ from apps.zte_manager.schemas import (
 from apps.zte_manager.services.cpe_management_service import (
     cpe_management_service,
 )
+from apps.zte_manager.services.desktop_clipboard import copy_text as copy_desktop_text
 from apps.zte_manager.services.zte_service import zte_service
 
 
@@ -190,6 +191,15 @@ def health(context=None):
         "service": "ZTE Automatic",
         "runtime": "Vela Framework",
     }
+
+
+@api.post("/desktop/clipboard")
+def desktop_clipboard(context=None):
+    """Copia texto pela API Win32, contornando falhas do QtWebEngine."""
+    return _safe_call(
+        copy_desktop_text,
+        _json(context).get("text"),
+    )
 
 
 @api.post("/connect")
