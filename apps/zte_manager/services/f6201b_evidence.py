@@ -143,3 +143,37 @@ GET_PARAMS = {
     "wlan_homepage_lua.lua": {"InstNum": "5"},
     "accessdev_homepage_lua.lua": {"InstNum": "5"},
 }
+
+# Newly recovered XML objects from second capture. View-only HTML and JSON
+# routes are intentionally excluded from generic XML inspection.
+CAPTURED_GET_ROOTS: dict[str, str] = {
+    "dns_hostname_lua.lua": "",  # ALLDNSHOST is not OBJ XML
+    "upnp_portmap_lua.lua": "OBJ_UPNPPORTMAP_ID",
+    "route_routestaticipv4_lua.lua": "OBJ_ROUTESTATIC_ID",
+    "route_routepolicyipv4_lua.lua": "OBJ_ROUTETPOLICY_ID",
+    "Localnet_LanMgrIpv4_DHCPStaticRule_lua.lua": "OBJ_DHCPBIND_ID",
+    "dhcp6s_hostinfo_lua.lua": "OBJ_DHCP6C_ID",
+    "addr6_lanaddr_lua.lua": "OBJ_LANADDR6_ID",
+    "prefix_staticprefix_lua.lua": "OBJ_STATIC_PREFIX_ID",
+    "prefix_prefixpool_lua.lua": "OBJ_PREFIXPOOL_ID",
+    "dhcp6s_dhcpserver_lua.lua": "OBJ_DHCP6S_ID",
+    "ra_raservice_lua.lua": "OBJ_RAIS_ID",
+    "radhcp6s_portctrl_lua.lua": "OBJ_IPV6BANPORT_ID",
+    "wlan_macfilterrule_lua.lua": "OBJ_ACLCFG_ID",
+    "wlan_sta_wlan_profile_lua.lua": "OBJ_WLANGETNEBAP_ID",
+    "voip_voipbasic_lua.lua": "OBJ_VOIPSIPLINE_ID",
+    "voipDmtTimer_lua.lua": "OBJ_VOIPDMTIMER_ID",
+    "Voip_SipService_lua.lua": "OBJ_VOIPVPCALLFEATURE_ID",
+    "voip_sipadvanced_lua.lua": "OBJ_VRTPADV_ID",
+    "devmgr_statusmgr_lua.lua": "OBJ_DEVINFO_ID",
+    "register_sn_model.lua": "",  # JSON
+    "devauth_accountmgr_lua.lua": "OBJ_USERINFO_ID",
+    "log_syslogmgr_lua.lua": "OBJ_LOG_ID",
+    "networkdiag_svcsimulation_lua.lua": "OBJ_SIMULATION_PPPOE_GET_ID",
+    "ipv6_enable_lua.lua": "OBJ_IPGLOBAL_ID",
+    "devmgr_lan_backup_lua.lua": "OBJ_LAN_BACKUP_ID",
+    "firewall_portforwarding_lua.lua": "OBJ_FWPM_ID",
+    "firewall_porttrigger_m.lua": "OBJ_FWPT_ID",
+    "tunnel_4in6_status_lua.lua": "",  # Valid response with no OBJ
+    "l2tp_lua.lua": "OBJ_L2TP_ID",
+}
