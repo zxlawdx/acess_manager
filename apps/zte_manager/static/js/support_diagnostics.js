@@ -1597,7 +1597,8 @@ const firmwareDiagnosticState = {
     selected: new Set(),
     source: "multimodel",
     probeRunning: false,
-    scanComplete: false
+    scanComplete: false,
+    classicMode: false
 };
 
 const FIRMWARE_DIAGNOSTIC_SECTIONS = Object.freeze({
@@ -1674,9 +1675,29 @@ function renderFirmwareDiagnosticOptions() {
     const panel = firmwareDiagnosticPanel();
     if (!panel) return;
     const form = document.getElementById("supportDiagnosticForm");
+    const classic = firmwareDiagnosticState.classicMode;
+    // Manter rigorosamente o formulário original F6600P/F670L para o
+    // F6201B: o modo técnico por firmware não substitui sua aparência.
+    panel.classList.toggle("hidden", classic);
     for (const legacy of form.querySelectorAll(
         ":scope > .support-form-grid, :scope > .support-check-grid, :scope > .support-action-row"
-    )) legacy.classList.toggle("hidden", !routerWriteEnabled);
+    )) legacy.classList.toggle("hidden", !routerWriteEnabled && !classic);
+    const unsupported = [
+        "supportIncludeSpeedtest", "supportAllowSpeedFallback",
+        "supportIncludeTraceroute", "supportAutoOptimizeWifi",
+        "supportStandaloneSpeedButton", "supportSpeedtestPreset",
+        "supportPingHost", "supportDnsHost",
+        "supportExpectedDownload", "supportExpectedUpload"
+    ];
+    for (const id of unsupported) {
+        const element = document.getElementById(id);
+        if (!element) continue;
+        element.disabled = classic;
+        if (classic && element.type === "checkbox") element.checked = false;
+        element.title = classic
+            ? "Este recurso depende de comandos ainda não validados para F6201B."
+            : "";
+    }
 
     const grid = panel.querySelector("#firmwareDiagnosticChoices");
     const status = panel.querySelector("#firmwareDiagnosticStatus");
@@ -1783,6 +1804,9 @@ async function loadFirmwareDiagnosticOptions() {
         firmwareDiagnosticState.host = currentHost;
         firmwareDiagnosticState.revision = bootstrap.session_revision;
         firmwareDiagnosticState.model = model;
+        firmwareDiagnosticState.classicMode =
+            model.toUpperCase().replace(/[^A-Z0-9]/g, "") === "F6201B" &&
+            bootstrap.model_verified === true;
         firmwareDiagnosticState.firmware = bootstrap.firmware || null;
         firmwareDiagnosticState.scanComplete = false;
         firmwareDiagnosticState.selected.clear();
@@ -2023,7 +2047,24 @@ document.addEventListener("zte:session-changed", () => {
     firmwareDiagnosticState.options = [];
     firmwareDiagnosticState.selected.clear();
     firmwareDiagnosticState.scanComplete = false;
+    firmwareDiagnosticState.classicMode = false;
     supportDiagnosticState.firmwareReport = null;
+    const legacyForm = document.getElementById("supportDiagnosticForm");
+    if (legacyForm) {
+        for (const row of legacyForm.querySelectorAll(
+            ":scope > .support-form-grid, :scope > .support-check-grid, :scope > .support-action-row"
+        )) row.classList.remove("hidden");
+    }
+    for (const id of [
+        "supportIncludeSpeedtest", "supportAllowSpeedFallback",
+        "supportIncludeTraceroute", "supportAutoOptimizeWifi",
+        "supportStandaloneSpeedButton", "supportSpeedtestPreset",
+        "supportPingHost", "supportDnsHost",
+        "supportExpectedDownload", "supportExpectedUpload"
+    ]) {
+        const element = document.getElementById(id);
+        if (element) {element.disabled = false; element.title = "";}
+    }
     const panel = document.getElementById("firmwareDiagnosticPanel");
     if (panel) {
         panel.querySelector("#firmwareDiagnosticChoices")?.replaceChildren();
