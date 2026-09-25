@@ -102,7 +102,8 @@ async function connectONT(
     username,
     password,
     https,
-    attendant
+    attendant,
+    modelHint = null
 ) {
     return apiRequest(
         "/connect",
@@ -113,7 +114,8 @@ async function connectONT(
                 username,
                 password,
                 https,
-                attendant
+                attendant,
+                model_hint: modelHint
             })
         }
     );
@@ -470,6 +472,10 @@ document
                 "attendantName"
             ).value.trim();
 
+            const modelHint = document.getElementById(
+                "zteModelHint"
+            )?.value || null;
+
             const button = document.getElementById(
                 "connectButton"
             );
@@ -495,7 +501,8 @@ document
                     username,
                     password,
                     https,
-                    attendant
+                    attendant,
+                    modelHint
                 );
 
                 currentHost = response.host || ip;
