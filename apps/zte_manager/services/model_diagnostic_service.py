@@ -82,10 +82,31 @@ def _read(zte, endpoint: models.ReadEndpoint, fields: dict[str, str], limit=8):
 
 def _result(name: str, reader):
     try:
-        return {"available": True, "data": reader()}
+        data = reader()
+        # Um HTTP 200 / XML válido sem instâncias não é evidência de que
+        # o diagnóstico trouxe dados. Contagem 0 de clientes é legítima.
+        if isinstance(data, list):
+            populated = bool(data)
+        elif isinstance(data, dict):
+            populated = (
+                "connected" in data
+                or "ssid_total" in data
+                or any(bool(value) for value in data.values())
+            )
+        else:
+            populated = data is not None
+        return {
+            "available": populated,
+            "data": data,
+            "reason": None if populated else "no_data_from_firmware",
+        }
     except Exception as exc:
         # Não propagar texto da ONT: exceções HTTP podem conter credenciais.
-        return {"available": False, "error_type": type(exc).__name__}
+        return {
+            "available": False,
+            "reason": "read_failed",
+            "error_type": type(exc).__name__,
+        }
 
 
 def device_resource_details(zte) -> dict[str, Any]:
