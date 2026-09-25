@@ -122,6 +122,16 @@ class ZTEService:
                             "reutilizando a sessão. Desconecte e reconecte."
                         )
                 if detected:
+                    previous, _ = multimodel_service.find_family(self._selected_model)
+                    if previous and previous != detected:
+                        # A mesma porta HTTP pode apontar para outra ONT
+                        # (proxy/VPN redirecionado). A sessão antiga precisa
+                        # ser encerrada e o adaptador criado novamente.
+                        raise ValueError(
+                            "O equipamento conectado mudou desde o login "
+                            "anterior. Desconecte e conecte novamente para "
+                            "recriar o adaptador correto."
+                        )
                     self._device_info = actual
                     self._selected_model = detected
                     self._model_verified = True
