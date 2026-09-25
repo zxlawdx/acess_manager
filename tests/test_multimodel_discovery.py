@@ -102,7 +102,7 @@ class MultiModelDiscoveryTests(unittest.TestCase):
         result = probe(client, "SR7410", max_endpoints=1)
         self.assertTrue(result["supported"])
         self.assertEqual(client.calls[0]["_type"], "vueData")
-        self.assertEqual(client.calls[1]["_tag"], "vue_client_data")
+        self.assertEqual(client.calls[0]["_tag"], "vue_client_data")
         self.assertEqual(result["read_only"], True)
 
     def test_legacy_h_series_clients_return_normalized_fields(self):
