@@ -96,36 +96,33 @@ for _family in ("h288a", "h388x", "h2640"):
         "statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"
     )
 
-# O proprietário forneceu 244 eventos XHR/fetch, 93 combinações de rota e
-# 78 menuViews do F6201B V9.3.10P7N7. As tags e objetos abaixo foram
-# efetivamente OBSERVADOS. View="" executa GET menuData direto, sem inventar
-# a associação menuView↔menuData. Apenas campos públicos não sensíveis
-# são exibidos pelos renderizadores; estas entradas NUNCA habilitam POST.
+# Associação reconstruída diretamente da captura F6201B V9.3.10P7N7:
+# cada menuView correspondente precede o respectivo menuData GET.
+# ANTES, todas as views foram descartadas e a UI exibia zero leituras.
+# READ-ONLY: não atribuir autorização para POST pela existência da view.
 FAMILY["f6201b_candidate"] = {
-    "device_info": ReadEndpoint("", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"),
-    "pon_optical": ReadEndpoint("", "optical_info_lua.lua", "OBJ_PON_OPTICALPARA_ID"),
-    "wifi_clients": ReadEndpoint("", "wlan_homepage_lua.lua", "OBJ_ACCESSDEV_ID"),
-    # A captura registra LEASES DHCP, não comprovação de cliente LAN online.
-    "dhcp_leases": ReadEndpoint("", "Localnet_LanMgrIpv4_DHCPHostInfo_lua.lua", "OBJ_DHCPHOSTINFO_ID"),
-    "wifi_ssids": ReadEndpoint("", "wlan_wlansssidconf_lua.lua", "OBJ_WLANAP_ID"),
-    "wifi_radios": ReadEndpoint("", "wlan_wlanbasiconoff_lua.lua", "OBJ_WLANSETTING_ID"),
-    "lan_ports": ReadEndpoint("", "status_lan_info_lua.lua", "OBJ_PON_PORT_BASIC_STATUS_ID"),
-    "band_steering": ReadEndpoint("", "wlan_BandSteering_lua.lua", "OBJ_WLAN_BANDSTEERING_ID"),
-    "wps": ReadEndpoint("", "wlan_wps_lua.lua", "OBJ_WPS_ID"),
-    "mesh": ReadEndpoint("", "Localnet_NetSphere_Mode_lua.lua", "OBJ_NETSPHERE_MAP_ID"),
-    "dns": ReadEndpoint("", "dns_localdns_lua.lua", "OBJ_DNS_ID"),
-    "dhcp": ReadEndpoint("", "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua", "OBJ_Br0AndDhcpsHosCfg_ID"),
-    "route_table": ReadEndpoint("", "route_routetableipv4_lua.lua", "OBJ_ROUTETABLE_ID"),
-    "arp": ReadEndpoint("", "arp_arptable_lua.lua", "OBJ_GETARPINST_ID"),
-    "firewall": ReadEndpoint("", "firewall_config_lua.lua", "OBJ_FWLEVEL_ID"),
-    "voip_status": ReadEndpoint("", "voipRegStatus_lua.lua", "OBJ_VOIPVPLINE_ID"),
-    "tr069_status": ReadEndpoint("", "tr069_remotemgr_lua.lua", "OBJ_MANAGESERVER_ID"),
-    "upnp": ReadEndpoint("", "upnp_upnp_lua.lua", "OBJ_UPNPCONFIG_ID"),
-    "wifi_schedule": ReadEndpoint("", "wlan_wlanbasiconoff_lua.lua", "OBJ_WLANTIMECFG_ID"),
-    "ping_history": ReadEndpoint("", "networkdiag_ping_lua.lua", "OBJ_DEVPING_ID"),
-    "traceroute_history": ReadEndpoint("", "networkdiag_traceroute_lua.lua", "OBJ_TRACERT_ID"),
-    # A WAN foi confirmada em runtime na aplicação, porém a captura
-    # fornecida viu menu WAN vazio. Nunca inferir status se vier sem OBJ.
+    "device_info": ReadEndpoint("statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"),
+    "pon_optical": ReadEndpoint("ponopticalinfo", "optical_info_lua.lua", "OBJ_PON_OPTICALPARA_ID"),
+    "wifi_clients": ReadEndpoint("homePage", "wlan_homepage_lua.lua", "OBJ_ACCESSDEV_ID",
+                                 (("InstNum", "5"),)),
+    "dhcp_leases": ReadEndpoint("lanMgrIpv4", "Localnet_LanMgrIpv4_DHCPHostInfo_lua.lua", "OBJ_DHCPHOSTINFO_ID"),
+    "wifi_ssids": ReadEndpoint("wlanBasic", "wlan_wlansssidconf_lua.lua", "OBJ_WLANAP_ID"),
+    "wifi_radios": ReadEndpoint("wlanBasic", "wlan_wlanbasiconoff_lua.lua", "OBJ_WLANSETTING_ID"),
+    "lan_ports": ReadEndpoint("localNetStatus", "status_lan_info_lua.lua", "OBJ_PON_PORT_BASIC_STATUS_ID"),
+    "band_steering": ReadEndpoint("wifibandsteer", "wlan_BandSteering_lua.lua", "OBJ_WLAN_BANDSTEERING_ID"),
+    "wps": ReadEndpoint("wps", "wlan_wps_lua.lua", "OBJ_WPS_ID"),
+    "mesh": ReadEndpoint("smNetSphereMAP", "Localnet_NetSphere_Mode_lua.lua", "OBJ_NETSPHERE_MAP_ID"),
+    "dns": ReadEndpoint("dns", "dns_localdns_lua.lua", "OBJ_DNS_ID"),
+    "dhcp": ReadEndpoint("lanMgrIpv4", "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua", "OBJ_Br0AndDhcpsHosCfg_ID"),
+    "route_table": ReadEndpoint("routeIpv4", "route_routetableipv4_lua.lua", "OBJ_ROUTETABLE_ID"),
+    "arp": ReadEndpoint("arpTable", "arp_arptable_lua.lua", "OBJ_GETARPINST_ID"),
+    "firewall": ReadEndpoint("firewall", "firewall_config_lua.lua", "OBJ_FWLEVEL_ID"),
+    "voip_status": ReadEndpoint("voipStatus", "voipRegStatus_lua.lua", "OBJ_VOIPVPLINE_ID"),
+    "tr069_status": ReadEndpoint("remoteMgr", "tr069_remotemgr_lua.lua", "OBJ_MANAGESERVER_ID"),
+    "upnp": ReadEndpoint("upnp", "upnp_upnp_lua.lua", "OBJ_UPNPCONFIG_ID"),
+    "wifi_schedule": ReadEndpoint("wlanBasic", "wlan_wlanbasiconoff_lua.lua", "OBJ_WLANTIMECFG_ID"),
+    "ping_history": ReadEndpoint("networkDiag", "networkdiag_ping_lua.lua", "OBJ_DEVPING_ID"),
+    "traceroute_history": ReadEndpoint("networkDiag", "networkdiag_traceroute_lua.lua", "OBJ_TRACERT_ID"),
     "wan": ReadEndpoint("ethWanStatus", "wan_internetstatus_lua.lua",
                         "ID_WAN_COMFIG", (("TypeUplink", "2"), ("pageType", "1"))),
 }
