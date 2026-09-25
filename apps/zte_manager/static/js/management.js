@@ -2911,12 +2911,11 @@ document.querySelectorAll(
 );
 
 
-document.querySelector(
-    '[data-page="management"]'
-)?.addEventListener(
-    "click",
-    refreshManagement
-);
+document.addEventListener("zte:page-open", event => {
+    if (event.detail?.pageName === "management") {
+        void refreshManagement();
+    }
+});
 
 
 document.getElementById(
