@@ -80,6 +80,24 @@ MODEL_FAMILY = {
     "E2631": "vue", "SR7410": "vue", "SR7110": "vue",
 }
 
+# Endpoints de leitura adicionais documentados em zte_tracker/zteclient/README.md
+# e zte_client.py. Apenas F6600P possui confirmação documentada de PON.
+FAMILY["f6640"]["wifi_ssids"] = ReadEndpoint(
+    "wlanBasic", "wlan_wlansssidconf_lua.lua", "OBJ_WLANAP_ID"
+)
+FAMILY["f6640"]["device_info"] = ReadEndpoint(
+    "statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"
+)
+for _family in ("h288a", "h388x", "h2640"):
+    FAMILY[_family]["device_info"] = ReadEndpoint(
+        "statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"
+    )
+
+# PON é opt-in por modelo, não propriedade compartilhada das aliases.
+PON_F6600P = ReadEndpoint(
+    "ponopticalinfo", "optical_info_lua.lua", "OBJ_PON_OPTICALPARA_ID"
+)
+
 # Não armazenar respostas XML nem campos de clientes no relatório estrutural.
 SENSITIVE_NAME = re.compile(
     r"(password|passwd|secret|token|credential|key|serial|mac|ssid|"
@@ -116,6 +134,9 @@ DISCOVERY_NAMES = {
     "lan_clients": "Clientes cabeados",
     "wan": "Status WAN",
     "dsl": "Sincronismo DSL",
+    "wifi_ssids": "Configuração de SSIDs (leitura)",
+    "device_info": "Identificação e firmware",
+    "pon_optical": "Potência óptica GPON",
 }
 
 def catalog() -> dict[str, Any]:
@@ -126,7 +147,8 @@ def catalog() -> dict[str, Any]:
                 "family": family,
                 "protocol": "vue" if family == "vue" else "thinklua",
                 "discovery": "read_only_probe",
-                "candidate_features": list(FAMILY[family]),
+                "candidate_features": list(FAMILY[family])
+                    + (["pon_optical"] if model == "F6600P" else []),
                 "firmware_differences": MODEL_EXTRAS.get(model, ()),
             }
             for model, family in MODEL_FAMILY.items()
@@ -245,8 +267,11 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
             "endpoints": {},
         }
 
+    candidates = dict(FAMILY[family])
+    if selected == "F6600P":
+        candidates["pon_optical"] = PON_F6600P
     endpoints = {}
-    for name, endpoint in list(FAMILY[family].items())[:max(1, min(max_endpoints, 4))]:
+    for name, endpoint in list(candidates.items())[:max(1, min(max_endpoints, 10))]:
         try:
             xml = _fetch(zte, endpoint)
             # Faz a validação local mesmo quando implementação de ZTE mudar.
@@ -286,7 +311,7 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
                 "status": "not_tested",
                 "writable": False,
             }
-            for name in FAMILY[family] if name not in endpoints
+            for name in candidates if name not in endpoints
         ],
         "model_specific": list(MODEL_EXTRAS.get(selected, ())),
     }
