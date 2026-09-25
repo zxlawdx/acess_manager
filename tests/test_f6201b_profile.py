@@ -274,6 +274,53 @@ class BatchTests(unittest.TestCase):
         self.assertTrue(report["verified"])
         post.assert_not_called()
 
+    def test_oneclick_two_auto_radios_only_posts_actual_bandwidth_change(self):
+        """Screenshot case: live operating channels are not policy drift."""
+        self.zte._values["Channel"] = "1"
+        five = dict(self.zte._values)
+        five.update({
+            "Band": "5GHz", "Channel": "36", "BandWidth": "160MHz",
+            "Standard": "a,n,ac,ax", "_InstID": "DEV.WIFI.RADIO5",
+        })
+        self.zte._parse_instances = lambda _: {
+            "OBJ_WLANSETTING_ID": [dict(self.zte._values), dict(five)],
+        }
+        self.profile = {
+            "wifi": {
+                "2.4GHz": {"auto_channel": True},
+                "5GHz": {"auto_channel": True, "bandwidth": "80MHz"},
+            },
+            "dns": {"ipv4_1": "1.1.1.1", "ipv4_2": "9.9.9.9"},
+        }
+        logged = []
+
+        def fake_post(zte, tag, payload):
+            self.assertEqual(tag, "wlan_wlanbasicadconf_lua.lua")
+            body = dict(payload)
+            logged.append(body["_InstID"])
+            self.assertEqual(body["_InstID"], "DEV.WIFI.RADIO5")
+            self.assertEqual(body["BandWidth"], "80MHz")
+            five["BandWidth"] = "80MHz"
+            # A scan may select another channel after Apply.
+            five["Channel"] = "44"
+            return ("<ajax_response_xml_root><IF_ERRORID>0</IF_ERRORID>"
+                    "</ajax_response_xml_root>")
+
+        with patch.dict(os.environ, {OPT_IN_ENV: "1"}), patch(
+            "apps.zte_manager.services.f6201b_profile.post_menu",
+            side_effect=fake_post,
+        ):
+            report = self.engine.apply_saved(
+                self.zte, profile=self.profile,
+                original_post=self.zte.session.blocked, **self.kw
+            )
+        self.assertTrue(report["success"], report)
+        self.assertTrue(report["verified"])
+        self.assertEqual(logged, ["DEV.WIFI.RADIO5"])
+        self.assertEqual(
+            [step["name"] for step in report["steps"]], ["Wi-Fi 5GHz"]
+        )
+
     def test_oneclick_stops_without_second_network_post_on_uncertain_write(self):
         self.profile = {
             "wifi": {"2.4GHz": {"tx_power": "75%"}},
