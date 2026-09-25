@@ -134,3 +134,118 @@
       setBusy(false);
     }
   }
+
+  async function renderIpv6(data) {
+    const root = id("dhcpIpv6");
+    root.replaceChildren();
+    const title = document.createElement("h4");
+    title.textContent = "DHCP IPv6";
+    root.append(title);
+    const caps = data.capabilities || {};
+    if (!caps.ipv6_read || !Array.isArray(data.ipv6) || !data.ipv6.length) {
+      const note = document.createElement("p");
+      note.className = "muted";
+      note.textContent = "Este firmware não confirmou DHCP IPv6.";
+      root.append(note); return;
+    }
+    if (!caps.ipv6_write) {
+      const note = document.createElement("p");
+      note.textContent = "Estado IPv6 disponível para leitura.";
+      root.append(note); return;
+    }
+    const epoch = pageEpoch;
+    const tag = "dhcp6s_dhcpserver_lua.lua";
+    try {
+      const info = await apiRequest("/f6201b/workbench/inspect", {
+        method:"POST", body:JSON.stringify({tag})
+      });
+      if (epoch !== pageEpoch) return;
+      const record = (info.instances || [])[0];
+      if (!record) {
+        root.append(document.createTextNode("Nenhum formulário IPv6 retornado."));
+        return;
+      }
+      const fields = ["Enable","IANAEnable","IsPrefixAutoMode",
+        "ManualDNSEnable","DNSAddr1","DNSAddr2","DNSAddr3"];
+      const form = document.createElement("form");
+      form.className = "dhcp-reservation";
+      form.onsubmit = () => false;
+      const inputs = {};
+      for (const name of fields) {
+        if (!(name in record.current)) continue;
+        const label = document.createElement("label");
+        label.className = "dhcp-ipv6-field";
+        label.textContent = name;
+        const element = document.createElement(
+          ["Enable","IANAEnable","IsPrefixAutoMode","ManualDNSEnable"]
+            .includes(name) ? "select" : "input"
+        );
+        if (element.tagName === "SELECT") {
+          for (const [value,text] of [["0","Desativado"],["1","Ativado"]]) {
+            const option = new Option(text,value);
+            element.add(option);
+          }
+        }
+        element.value = record.current[name];
+        inputs[name] = element;
+        label.append(element); form.append(label);
+      }
+      if (record.missing?.length || !record.ready) {
+        const warn = document.createElement("p");
+        warn.className = "dhcp-note";
+        warn.textContent = "A ONT não expôs todos os campos condicionais: " +
+          (record.missing || []).join(", ") +
+          ". A escrita deste formulário não está confirmada.";
+        root.append(warn);
+      } else {
+        const warn = document.createElement("p");
+        warn.className = "dhcp-note";
+        warn.textContent =
+          "Atualizar DHCP IPv6 pode interromper a distribuição de endereços.";
+        form.append(warn);
+        const button = document.createElement("button");
+        button.className = "button primary";
+        button.type = "submit";
+        button.textContent = "Aplicar DHCP IPv6";
+        form.append(button);
+        form.addEventListener("submit", async event => {
+          event.preventDefault();
+          if (busy) return;
+          const changes = {};
+          for (const [key,element] of Object.entries(inputs))
+            if (element.value !== String(record.current[key]))
+              changes[key] = element.value;
+          if (!Object.keys(changes).length) {
+            feedback("DHCP IPv6 já possui os valores selecionados.", "ok");
+            return;
+          }
+          busy = true; button.disabled = true;
+          feedback("Enviando DHCP IPv6; aguardando a releitura…");
+          setBusy(true, "Aplicando DHCP IPv6…");
+          try {
+            const result = await apiRequest("/f6201b/workbench/update", {
+              method:"POST", body:JSON.stringify({
+                tag, instance_id:record.id, changes
+              })
+            });
+            feedback(result.success
+              ? "DHCP IPv6 enviado e verificado por releitura."
+              : "DHCP IPv6 não confirmado: " + (result.detail || ""), 
+              result.success ? "ok" : "error");
+            if (result.success) await refresh();
+          } catch(error) {
+            feedback("Falha DHCP IPv6: " + error.message, "error");
+          } finally {
+            busy = false; button.disabled = false;
+            setBusy(false);
+          }
+        });
+      }
+      root.append(form);
+    } catch(error) {
+      const note = document.createElement("p");
+      note.className = "dhcp-note";
+      note.textContent = "DHCP IPv6: " + error.message;
+      root.append(note);
+    }
+  }
