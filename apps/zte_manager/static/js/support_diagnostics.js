@@ -1109,37 +1109,43 @@ async function generateSupportAttendance() {
 
 
 async function copySupportAttendance() {
-    const textarea = document.getElementById(
-        "supportAttendanceText"
-    );
-
+    const textarea = document.getElementById("supportAttendanceText");
     const text = textarea?.value || "";
 
     if (!text) {
-        showToast(
-            "Gere o atendimento primeiro."
-        );
-
+        showToast("Gere o atendimento primeiro.");
         return;
     }
 
     try {
-        await navigator.clipboard.writeText(
-            text
-        );
+        // O botão no Windows NÃO chama as APIs do QtWebEngine: alguns builds
+        // encerram o processo ao acessar navigator.clipboard/execCommand.
+        if (/Windows/i.test(navigator.userAgent)) {
+            await apiRequest("/desktop/clipboard", {
+                method: "POST",
+                body: JSON.stringify({ text })
+            });
+        } else if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            textarea.focus();
+            textarea.select();
+            if (!document.execCommand("copy")) {
+                throw new Error("Clipboard não disponível.");
+            }
+        }
+
+        showToast("Atendimento copiado.");
     } catch (error) {
+        // Evita crash/propagação de falha no botão; preserva a seleção
+        // para cópia manual caso o desktop esteja sem permissão.
         textarea.focus();
         textarea.select();
-        document.execCommand(
-            "copy"
+        showToast(
+            `Cópia automática indisponível: ${error.message}. Use Ctrl+C.`
         );
     }
-
-    showToast(
-        "Atendimento copiado."
-    );
 }
-
 
 async function runStandaloneSpeedTest() {
     setBusy(
