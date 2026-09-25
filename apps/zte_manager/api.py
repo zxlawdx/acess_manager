@@ -248,8 +248,8 @@ def connection_status(context=None):
         # Estado para recuperar a SPA após reload do WebView.
         # Nunca retornar credenciais, cookies ou token da ONT.
         "model": (
-            zte_service._device_info.get("modelo")
-            or zte_service._selected_model
+            zte_service._selected_model
+            or zte_service._device_info.get("modelo")
         ),
         "firmware": zte_service._device_info.get("firmware"),
         "model_verified": zte_service._model_verified,
