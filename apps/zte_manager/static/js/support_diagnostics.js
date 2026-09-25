@@ -1461,6 +1461,7 @@ loadSpeedtestPreference();
 const firmwareDiagnosticState = {
     host: null,
     model: null,
+    firmware: null,
     options: [],
     source: "multimodel",
     probeRunning: false,
@@ -1585,6 +1586,7 @@ async function loadFirmwareDiagnosticOptions() {
         );
         firmwareDiagnosticState.host = currentHost;
         firmwareDiagnosticState.model = model;
+        firmwareDiagnosticState.firmware = bootstrap.firmware || null;
         firmwareDiagnosticState.scanComplete = false;
         firmwareDiagnosticState.source = "multimodel";
         firmwareDiagnosticState.options = (entry?.candidate_features || [])
@@ -1630,6 +1632,7 @@ async function detectFirmwareDiagnosticOptions() {
     let offset = 0;
     let total = 0;
     let stopped = false;
+    const results = {};
     setBusy(true, "Validando recursos disponíveis (somente GET)...");
     try {
         if (firmwareDiagnosticState.source === "native") {
@@ -1670,6 +1673,12 @@ async function detectFirmwareDiagnosticOptions() {
             });
             if (host !== currentHost || model !== firmwareDiagnosticState.model) return;
             total = Number(batch.total_candidates || 0);
+            for (const item of batch.capabilities || []) {
+                results[item.feature] = {
+                    available: item.available,
+                    reason: item.reason || null
+                };
+            }
             for (const capability of batch.capabilities || []) {
                 const option = firmwareDiagnosticState.options.find(
                     item => item.name === capability.feature
@@ -1686,11 +1695,9 @@ async function detectFirmwareDiagnosticOptions() {
                 model,
                 evaluated: Math.min(offset, total),
                 total,
-                results: (batch.capabilities || []).map(item => ({
-                    feature: item.feature,
-                    available: item.available,
-                    reason: item.reason || null
-                }))
+                firmware: firmwareDiagnosticState.firmware,
+                experimental: model.toUpperCase().includes("F6201B"),
+                results
             }, null, 2);
             renderFirmwareDiagnosticOptions();
             if (batch.session_expired) {
