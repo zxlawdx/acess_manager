@@ -608,6 +608,7 @@ function renderTrackerDiscovery(data) {
 }
 
 let discoveryBootPromise = null;
+let discoveryCatalogHost = null;
 
 // O bootstrap não consulta a ONT: a lista de modelos precisa aparecer mesmo
 // se outro diagnóstico estiver segurando o contexto HTTP do equipamento.
@@ -615,7 +616,8 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
     const select = document.getElementById("multimodelSelect");
     const info = document.getElementById("trackerDiscoveryStatus");
     if (!select) return null;
-    if (!refresh && select.dataset.loaded === "true") return null;
+    if (!refresh && select.dataset.loaded === "true"
+        && discoveryCatalogHost === currentHost) return null;
     if (discoveryBootPromise) return discoveryBootPromise;
     if (info) info.textContent = "Lendo o estado da sessão local...";
 
@@ -649,6 +651,7 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
         );
         if (matched) select.value = matched.model;
         select.dataset.loaded = "true";
+        discoveryCatalogHost = currentHost;
 
         const badge = document.getElementById("adapterBadge");
         if (badge) badge.textContent = trackerDetectedModel
@@ -794,7 +797,16 @@ async function probeMultimodel({ quick = false } = {}) {
     if (button) button.disabled = true;
 
     if (!trackerDetectedModel) {
-        await loadMultimodelCatalog();
+        try {
+            await loadMultimodelCatalog();
+        } catch (error) {
+            trackerProbeBusy = false;
+            if (button) button.disabled = false;
+            if (output) output.textContent =
+                "Erro ao obter modelo do servidor: " + error.message;
+            showToast(error.message);
+            return;
+        }
     }
     const model = select?.value || trackerDetectedModel || null;
     if (!model) {
