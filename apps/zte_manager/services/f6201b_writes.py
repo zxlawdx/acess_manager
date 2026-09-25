@@ -1,13 +1,10 @@
-"""F6201B V9.3.10P7N7: adaptador experimental de alterações supervisionadas.
+"""F6201B captured SSID operations on a native authenticated router session.
 
-O mapeamento do proprietário documenta GETs, mas NÃO um POST Apply.
-Reaproveitamos o read-modify-write SSID existente apenas sob opt-in
-explícito do operador, com preflight/preview, nonce de uso único, verificação
-de firmware, sem habilitar os demais endpoints de escrita da aplicação.
-
-Se o menu ou o token diferirem, a operação é recusada ANTES do POST.
-Não prometer rollback de Wi-Fi: mudanças podem derrubar o acesso remoto.
+The operator action starts one internal validation and captured Apply.
+Only the identified firmware and its actual XML form permit a write.
+Router auth, credentials preservation and readback remain mandatory.
 """
+
 from __future__ import annotations
 
 import re
@@ -57,7 +54,6 @@ class ExperimentalF6201BWrites:
             "model": "F6201B",
             "firmware": firmware,
             "supported_firmware": eligible,
-            "opted_in": ExperimentalF6201BWrites.opted_in(),
             "operations": [{
                 "id": "ssid_basic",
                 "label": "SSID: nome, senha, ativação, isolamento e clientes",
@@ -71,15 +67,14 @@ class ExperimentalF6201BWrites:
                 "releitura do equipamento"
             ),
             "requires": [
-                "firmware exato e autenticação administrativa",
+                "firmware mapeado e sessão aceita pelo próprio equipamento",
                 "menuView e token temporário reais",
                 "mapeamento atual de SSID/PSK confirmado no dispositivo",
                 "Apply reproduz a ordem dos campos da captura validada",
             ],
             "note": (
-                "Captura inclui Apply de Wi-Fi e outras funções, mas "
-                "somente SSID foi integrado ao editor protegido. "
-                "Demais mudanças aguardam adaptadores individualizados."
+                "SSID possui seu editor próprio; demais formulários capturados "
+                "usam estratégias específicas do gerenciamento avançado."
             ),
         }
 
