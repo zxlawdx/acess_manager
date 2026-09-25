@@ -1278,7 +1278,7 @@ function renderAutomaticDiagnostic(data) {
                     ${Object.entries(data.errors || {}).map(([section, reason]) => `
                         <p class="adaptive-footnote"><strong>${escapeHtml(section)}:</strong>
                         ${escapeHtml(String(reason).slice(0, 160))}</p>
-                    `.join("")}
+                    `).join("")}
                 </div>
             `
             : ""
