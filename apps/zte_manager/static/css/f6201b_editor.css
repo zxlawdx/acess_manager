@@ -24,3 +24,20 @@
 .f6201b-message { color: #a3bac5; font-size: 12px; min-height: 20px; }
 .f6201b-message.error { color: #ff9d92; }
 .f6201b-message.success { color: #67e1b8; }
+
+/* F6201B now reuses the original .ssid-card/.switch/.wan-card layouts.
+   Keep validation feedback small and contained within each original card. */
+.f6201b-ssid-form .f6201b-inline-result:not(:empty) {
+  margin-top: 12px; padding: 10px 12px; border: 1px solid #34564b;
+  border-radius: 8px; background: #162722; color: #bddbd1;
+  font-size: 12px; display: grid; gap: 9px;
+}
+.f6201b-ssid-form .f6201b-inline-result p {
+  margin: 0; white-space: pre-line; font-size: 12px;
+}
+.f6201b-ssid-form .f6201b-inline-result input {
+  max-width: 320px; min-height: 40px; padding: 10px;
+  background: #151a1e; color: #f2f7f5;
+  border: 1px solid #35423f; border-radius: 6px;
+}
+.f6201b-ssid-form .f6201b-inline-result button { justify-self: start; }
