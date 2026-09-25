@@ -1,0 +1,26 @@
+
+/* Experimental configuration preview; scoped to F6201B only. */
+.f6201b-editor { border-color: #376453; margin-top: 22px; padding: 21px; }
+.f6201b-editor h2 { margin: 8px 0; font-size: 20px; }
+.f6201b-badge { display: inline-flex; color: #ffcf9b; background: #493522;
+ border-radius: 8px; padding: 7px 12px; font: 11px monospace; }
+.f6201b-badge.enabled { color: #69edbd; background: #1b3e34; }
+.f6201b-warning { border-left: 3px solid #e5af67; padding: 13px 16px;
+ background: #322a25; border-radius: 6px; color: #f2d2ad; font-size: 12px; }
+.f6201b-form { display: grid; gap: 12px; margin-top: 16px; }
+.f6201b-field { display: grid; gap: 7px; color: #b5c4cf; font-size: 11px; }
+.f6201b-field select, .f6201b-field input, .f6201b-confirm {
+ min-height: 40px; background: #14181d; border: 1px solid #39434a;
+ color: #eef5f7; border-radius: 7px; padding: 8px 11px; width: 100%; }
+.f6201b-check { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.f6201b-check input { accent-color: #1bdb9e; }
+.f6201b-actions,.f6201b-apply { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.f6201b-diff { display: grid; gap: 7px; }
+.f6201b-diff h3 { font-size: 13px; margin: 8px 0; }
+.f6201b-diff-item { background: #101e1c; padding: 11px; display: flex; gap: 15px;
+ justify-content: space-between; border-radius: 7px; font: 11px/1.5 monospace; }
+.f6201b-diff-item strong { color: #49deb2; }
+.f6201b-apply input { flex: 2 1 190px; max-width: 420px; }
+.f6201b-message { color: #a3bac5; font-size: 12px; min-height: 20px; }
+.f6201b-message.error { color: #ff9d92; }
+.f6201b-message.success { color: #67e1b8; }
