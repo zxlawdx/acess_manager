@@ -67,7 +67,7 @@ class FakeONT:
         return {"OBJ_TRACERT_ID": [row]}
 
     def transport(self, url, *, params, data, headers, timeout):
-        self.posted.append((params, list(parse_qsl(data))))
+        self.posted.append((params, list(parse_qsl(data, keep_blank_values=True))))
         self.changed = True
         return FakeResponse()
 
