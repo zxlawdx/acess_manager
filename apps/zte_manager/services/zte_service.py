@@ -18,6 +18,7 @@ from apps.zte_manager.services.attendance_report_service import (
 from apps.zte_manager.services.capability_service import CapabilityService
 from apps.zte_manager.services import multimodel_service
 from apps.zte_manager.services import model_diagnostic_service
+from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -1020,6 +1021,20 @@ class ZTEService:
             return model_diagnostic_service.diagnostic(
                 self.get_client(), selected, section=section,
             )
+
+    def mapped_f6201b_routes(self):
+        # Catálogo local, não depende da sessão nem consulta o equipamento.
+        return f6201b_capture.catalog()
+
+    def inspect_mapped_f6201b_route(self, tag):
+        with self._lock:
+            selected = self._confirmed_probe_model()
+            model, _ = multimodel_service.find_family(selected)
+            if model != "F6201B":
+                raise ValueError(
+                    "A inspeção capturada somente está habilitada em F6201B."
+                )
+            return f6201b_capture.inspect(self.get_client(), tag)
 
     def capability_shape(self, feature):
         with self._lock:
