@@ -40,13 +40,36 @@ def status(zte):
         "basic": basic[0],
         "leases": [], "reservations": [], "lan_dns": {},
         "capabilities": {
-            "server_write": True, "gateway_write": True,
+            "server_write": False, "gateway_write": False,
             "lease_read": False,
             "reservation_write": False, "ipv6_read": False,
             "ipv6_write": False,
         },
         "warnings": [],
     }
+    # Actual write availability depends on all captured fields in a live
+    # menuView + XML, NOT on a hardcoded model or employee profile.
+    try:
+        from apps.zte_manager.services.f6201b_full_forms import (
+            _load, _required_fields
+        )
+        forms = _load(zte, BASIC)
+        ready = (
+            len(forms) == 1 and
+            forms[0].instance_id == basic[0].get("_InstID") and
+            not _required_fields(BASIC, forms[0].values)
+        )
+        result["capabilities"]["server_write"] = bool(ready)
+        result["capabilities"]["gateway_write"] = bool(ready)
+        if not ready:
+            result["warnings"].append(
+                "A ONT não retornou o formulário completo para editar DHCP."
+            )
+    except (RuntimeError, KeyError, ValueError) as exc:
+        result["warnings"].append(
+            "Validação do formulário DHCP: " + str(exc)
+        )
+
     try:
         leases = _rows(zte, "lanMgrIpv4", LEASE, "OBJ_DHCPHOSTINFO_ID")
         result["leases"] = leases
