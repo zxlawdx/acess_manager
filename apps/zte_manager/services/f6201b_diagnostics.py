@@ -78,3 +78,102 @@ def trace_hops(raw):
                      "timeout": "*" in content and not times,
                      "linha": line.strip()})
     return hops
+
+
+class F6201BDiagnostics:
+    """Strategy for one captured diagnostic operation at a time."""
+
+    def __init__(self, sleep=time.sleep, attempts=8):
+        self.sleep = sleep
+        self.attempts = attempts
+
+    @staticmethod
+    def _fields(tag, config, baseline):
+        destination = host_name(config.get("host"))
+        if config.get("interface"):
+            raise ValueError(
+                "A seleção de interface não foi exposta neste formulário."
+            )
+        if config.get("ip_version", "IPv4") != "IPv4":
+            raise ValueError("A captura não confirmou IPVersion IPv6.")
+        if tag == PING:
+            row = baseline[0] if baseline else {}
+            return {
+                "IF_ACTION": "PingDiagnosis",
+                "Host": destination,
+                "NumofRepeat": bounded(config.get("count", 4), "Pacotes", 1, 30),
+                "DataBlockSize": bounded(
+                    config.get("data_size", row.get("DataBlockSize") or 64),
+                    "Tamanho", 1, 1400,
+                ),
+                "Timeout": bounded(config.get("timeout", 5000),
+                                   "Timeout", 1000, 10000),
+            }
+        proto = config.get("protocol", "ICMP")
+        if proto not in ("ICMP", "UDP"):
+            raise ValueError("Protocolo inválido.")
+        return {
+            "IF_ACTION": "TraceRouteDiagnosis", "Control": "0",
+            "Host": destination,
+            "MaxHopCount": bounded(config.get("max_hops", 30), "Saltos", 1, 64),
+            "Timeout": bounded(config.get("timeout", 5000),
+                               "Timeout", 2000, 10000),
+            "Protocol": proto,
+        }
+
+    def execute(self, zte, original_post, tag, config):
+        if tag not in ROOTS:
+            raise ValueError("Diagnóstico não mapeado.")
+        baseline = read(zte, tag, view=True)
+        fields = self._fields(tag, config, baseline)
+        keys = OBSERVED_DIAGNOSTIC_ACTIONS[tag]
+        if set(fields) != set(keys) - {"_sessionTOKEN"}:
+            raise RuntimeError("Formulário de diagnóstico incompleto.")
+        before = dict(baseline[0]) if baseline else None
+        post(zte, original_post, tag, fields)
+        for attempt in range(self.attempts):
+            current = read(zte, tag)
+            if current:
+                row = current[0]
+                changed = before is None or any(
+                    row.get(key) != before.get(key)
+                    for key in ("PingAck", "SuccessCount", "FailureCount",
+                                "MinimumResponseTime", "MaximumResponseTime",
+                                "AverageResponseTime", "Flag", "Result",
+                                "NumberOfPRouteHops", "ResponseTime")
+                )
+                if tag == PING and changed and row.get("PingAck") not in (
+                    None, "", "NULL"
+                ):
+                    try:
+                        good = int(row.get("SuccessCount") or 0)
+                        bad = int(row.get("FailureCount") or 0)
+                    except ValueError:
+                        good = bad = 0
+                    return {
+                        "host": fields["Host"], "resultado": row["PingAck"],
+                        "minimo_ms": row.get("MinimumResponseTime"),
+                        "medio_ms": row.get("AverageResponseTime"),
+                        "maximo_ms": row.get("MaximumResponseTime"),
+                        "sucesso": row.get("SuccessCount"),
+                        "falha": row.get("FailureCount"),
+                        "perda_percentual": round(100 * bad / (bad + good), 2)
+                            if good + bad else None,
+                        "verified": True, "fonte": "ONT",
+                    }
+                if tag == TRACE and changed and row.get("Flag") != "1":
+                    result = row.get("Result")
+                    if result and result != "NULL":
+                        return {
+                            "host": fields["Host"], "resultado": result,
+                            "hops": trace_hops(result),
+                            "salto_total": row.get("NumberOfPRouteHops"),
+                            "response_time": row.get("ResponseTime"),
+                            "verified": True, "fonte": "ONT",
+                        }
+            if attempt + 1 < self.attempts:
+                self.sleep(1 if tag == PING else 3)
+        raise TimeoutError(
+            "A ONT recebeu o teste, mas não confirmou novo resultado. "
+            "Não reenviar automaticamente."
+        )
