@@ -803,6 +803,19 @@ def multimodel_probe(context=None):
     )
 
 
+@api.get("/multimodel/mapped-routes")
+def mapped_f6201b_routes(context=None):
+    """Inventário de rotas GET do manifesto sanitizado, sem acessar ONT."""
+    return zte_service.mapped_f6201b_routes()
+
+
+@api.post("/multimodel/mapped-inspect")
+def inspect_mapped_f6201b_route(context=None):
+    """Rota estritamente allowlist; só devolve formato, nunca valores XML."""
+    tag = str(_json(context).get("tag") or "").strip()[:100]
+    return _safe_call(zte_service.inspect_mapped_f6201b_route, tag)
+
+
 @api.get("/features/shape")
 def feature_shape(context=None):
     feature = str(
