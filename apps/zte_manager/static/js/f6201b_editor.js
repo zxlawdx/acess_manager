@@ -242,8 +242,52 @@
         }
         // Mantém os MESMOS containers do layout antigo, cada função
         // aparecendo exatamente na categoria correspondente.
+        const radios = $("wifiRadios");
+        if (radios) {
+            // A nova captura expõe canal, largura, padrão e potência.
+            // Só renderizar quando XML COMPLETO for confirmado na ONT.
+            try {
+                let section = await diagnostic("wifi_radio_advanced",run);
+                if (run!==epoch) return;
+                if (!section?.available) section=await diagnostic("wifi_radios",run);
+                if (run!==epoch) return;
+                if (!section?.available) radios.innerHTML=
+                    nativeInfo("Rádios 2,4 / 5 GHz",section);
+                else {
+                    const rows=Array.isArray(section.data)?section.data:[section.data];
+                    radios.innerHTML=rows.map(row=>`
+                        <article class="panel radio-card">
+                            <div class="radio-card-hero">
+                                <div>
+                                    <span class="section-kicker">RF ${safe(row.band)}</span>
+                                    <h3>${safe(row.band || "Rádio")}</h3>
+                                    <p>Canal <strong>${safe(
+                                        String(row.auto_channel)==="1"?"Auto":row.channel
+                                    )}</strong> • ${safe(row.bandwidth)} • ${safe(row.standard)}</p>
+                                </div>
+                                <span class="badge ${String(row.radio_status)==="1"?"badge-success":"badge-warning"}">
+                                    LEITURA
+                                </span>
+                            </div>
+                            <div class="form-grid two-fields">
+                                ${[
+                                  ["Canal",row.channel],["Largura",row.bandwidth],
+                                  ["Padrão",row.standard],["Potência",row.tx_power],
+                                  ["Canal automático",row.auto_channel],
+                                  ["SGI",row.sgi]
+                                ].map(([label,value])=>`
+                                  <div class="form-group"><label>${safe(label)}</label>
+                                  <input value="${safe(value)}" readonly></div>
+                                `).join("")}
+                            </div>
+                        </article>`).join("");
+                }
+            } catch(error) {
+                if(run===epoch)radios.innerHTML=failure(
+                    "Rádios 2,4 / 5 GHz","Leitura RF não confirmada.");
+            }
+        }
         const specs=[
-            ["wifi_radios","wifiRadios","Rádios 2,4 / 5 GHz","cell_tower"],
             ["wifi_schedule","wifiScheduleControl","Agendamento Wi-Fi","schedule"],
             ["wps","wpsControls","WPS","lock_reset"],
             ["band_steering","bandSteeringControl","Band Steering","hub"]
@@ -276,17 +320,15 @@
         const run=epoch;
         for(const [name,id] of [["wan","wanConnections"],["lan_ports","lanPorts"],["upnp","upnpDetails"]]){
             try{
-                const section=await diagnostic(name,run);
+                const section=name==="wan"?
+                    {available:true,data:await apiRequest("/f6201b/wan/summary")}:
+                    await diagnostic(name,run);
                 if(run!==epoch)return;
                 const container=$(id);if(!container)continue;
                 if(!section?.available){container.innerHTML=nativeInfo(name,section);continue;}
                 const records=Array.isArray(section.data)?section.data:[section.data];
                 if(name==="wan" && typeof renderWanCard==="function"){
-                    container.innerHTML=records.map(item=>renderWanCard({
-                        nome:item.name||"Conexão WAN",status:item.status,
-                        wan_type:item.transport,id:"F6201B",uptime:item.uptime_seconds,
-                        rx_bytes:item.rx_bytes,tx_bytes:item.tx_bytes
-                    })).join("");
+                    container.innerHTML=records.map(item=>renderWanCard(item)).join("");
                 }else if(name==="lan_ports"){
                     container.innerHTML=records.map(port=>`
                         <div class="port-card">
