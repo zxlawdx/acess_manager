@@ -27,7 +27,7 @@
         capabilities = null;
         ssids = [];
         fetches.clear();
-        document.querySelectorAll(".f6201b-inline").forEach(node => node.remove());
+        document.querySelectorAll(".f6201b-inline, .f6201b-dns-action, .f6201b-dns-feedback").forEach(node => node.remove());
         // Sem dados de uma ONT anterior nas mesmas caixas que o layout nativo usa.
         for (const ids of Object.values(originalNodes)) {
             for (const id of ids) {
@@ -403,16 +403,122 @@
         const password=$("adminPasswordForm");if(password)password.classList.add("hidden");
         const reboot=$("rebootDeviceButton");if(reboot)reboot.disabled=true;
     }
+    // DNS no próprio bloco antigo "Configuração padrão", sem telas extras.
+    async function renderDnsProfile() {
+        const run = epoch;
+        const primary = $("profileDns4_1");
+        const secondary = $("profileDns4_2");
+        if (!primary || !secondary) return;
+        const panel = primary.closest(".panel");
+        if (!panel) return;
+        const info = panel.querySelector(".panel-header");
+        let action = panel.querySelector(".f6201b-dns-action");
+        if (!action) {
+            action = document.createElement("button");
+            action.type = "button";
+            action.className = "button ghost compact f6201b-dns-action";
+            action.textContent = "Prévia / Aplicar DNS";
+            info?.append(action);
+        }
+        let report = panel.querySelector(".f6201b-dns-feedback");
+        if (!report) {
+            report = document.createElement("div");
+            report.className = "f6201b-inline-result f6201b-dns-feedback";
+            report.setAttribute("aria-live","polite");
+            panel.append(report);
+        }
+        try {
+            const status = await apiRequest("/f6201b/write/status");
+            const current = await apiRequest("/f6201b/dns/status");
+            if(run !== epoch) return;
+            primary.value = current.ipv4_1 || "";
+            secondary.value = current.ipv4_2 || "";
+            // O formulário legado possui DNS IPv6, mas este adaptador
+            // deliberadamente preserva esses campos, sem alterá-los.
+            $("profileDns6_1").value = current.ipv6_1 || "";
+            $("profileDns6_2").value = current.ipv6_2 || "";
+            action.disabled = !status.opted_in || !status.supported_firmware;
+            report.textContent = action.disabled
+                ? "DNS atual consultado. Alterações experimentais desativadas."
+                : "DNS atual consultado. Para alterar, gere uma prévia.";
+            action.onclick = async () => {
+                const changes = {};
+                if (primary.value !== current.ipv4_1)
+                    changes.ipv4_1 = primary.value;
+                if (secondary.value !== current.ipv4_2)
+                    changes.ipv4_2 = secondary.value;
+                if (!Object.keys(changes).length) {
+                    report.textContent = "Nenhuma alteração de DNS.";
+                    return;
+                }
+                setBusy(true,"Validando servidores DNS...");
+                try {
+                    const preview = await apiRequest("/f6201b/dns/preview",{
+                        method:"POST", body:JSON.stringify({changes})
+                    });
+                    if (run !== epoch) return;
+                    report.replaceChildren();
+                    const diff = document.createElement("p");
+                    diff.textContent = Object.entries(preview.changes)
+                        .map(([field,item])=>field+": "+
+                            item.before+" → "+item.after).join("\n");
+                    const warn = document.createElement("p");
+                    warn.textContent = "O DNS de clientes pode mudar. "
+                        +"Prévia válida por 120 segundos; exige acesso local.";
+                    const confirmation = document.createElement("input");
+                    confirmation.type="text";
+                    confirmation.placeholder="Digite APLICAR DNS F6201B";
+                    confirmation.autocomplete="off";
+                    const submit=document.createElement("button");
+                    submit.type="button";
+                    submit.className="button primary";
+                    submit.textContent="Confirmar DNS";
+                    submit.addEventListener("click",async()=>{
+                        if(confirmation.value!=="APLICAR DNS F6201B"){
+                            showToast("Confirmação de DNS incorreta.");
+                            return;
+                        }
+                        submit.disabled=true;
+                        setBusy(true,"Aplicando DNS e confirmando releitura...");
+                        try{
+                            const result=await apiRequest("/f6201b/dns/apply",{
+                                method:"POST",body:JSON.stringify({
+                                    nonce:preview.nonce,
+                                    confirmation:confirmation.value
+                                })
+                            });
+                            if(run!==epoch)return;
+                            report.textContent=result.verified
+                                ? "DNS confirmado pela releitura da ONT."
+                                : "DNS não confirmado. Confira o painel original.";
+                        }catch(error){
+                            if(run===epoch)report.textContent=
+                                "DNS não confirmado: "+error.message;
+                        }finally{setBusy(false);}
+                    });
+                    report.append(diff,warn,confirmation,submit);
+                }catch(error){
+                    if(run===epoch)report.textContent=
+                        "Falha na prévia: "+error.message;
+                }finally{setBusy(false);}
+            };
+        } catch(error){
+            if(run===epoch)report.textContent=
+                "A leitura DNS não está disponível neste firmware/login.";
+            action.disabled = true;
+        }
+    }
     async function open(page) {
         // F6600P/F670L continue usando integralmente os carregadores antigos.
         if (!ontConnected || routerWriteEnabled) return;
-        if(!["wifi","wan","clients","dashboard","device"].includes(page))return;
+        if(!["wifi","wan","clients","dashboard","device","profiles"].includes(page))return;
         const info=await bootstrap();
         if(!info)return;
         const run=epoch;
         const tasks={
             wifi:renderWifi,wan:renderWan,clients:renderClients,
-            dashboard:renderDashboard,device:renderDevice
+            dashboard:renderDashboard,device:renderDevice,
+            profiles:renderDnsProfile
         };
         if(run===epoch)await tasks[page]();
     }
