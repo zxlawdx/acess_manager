@@ -120,6 +120,69 @@ def catalog() -> dict[str, Any]:
     }
 
 
+def _fetch(zte, endpoint: ReadEndpoint) -> str:
+    """Executa o fluxo correto de GET para a família escolhida."""
+    if endpoint.request_type == "vueData":
+        if endpoint.view:
+            first = zte.session.get(
+                zte.base_url + "/",
+                params={"_type": "vueData", "_tag": endpoint.view},
+                timeout=10,
+            )
+            first.raise_for_status()
+        response = zte.session.get(
+            zte.base_url + "/",
+            params={"_type": "vueData", "_tag": endpoint.tag},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.text
+
+    zte.get_view(endpoint.view, Menu3Location=0)
+    return zte.get_menu(endpoint.tag, **dict(endpoint.params))
+
+
+def read_clients(zte, model: str, kind: str) -> list[dict[str, Any]]:
+    """Leitura de dispositivos normalizada para as telas existentes.
+
+    Esta função é local ao atendimento: não registra/salva IP, MAC, hostname
+    ou SSID em relatórios estruturais de suporte público.
+    """
+    if kind not in {"wifi_clients", "lan_clients"}:
+        raise ValueError("Tipo de cliente desconhecido")
+
+    selected, family = find_family(model)
+    if not family:
+        raise ValueError("O modelo não possui perfil de clientes.")
+
+    endpoint = FAMILY[family].get(kind)
+    if not endpoint:
+        raise RuntimeError("Endpoint não documentado nesta família.")
+
+    raw = _fetch(zte, endpoint)
+    _shape(raw, endpoint.root)  # valida XML e objeto esperado antes de ler.
+    root = ET.fromstring(raw)
+    clients = []
+    for entry in root.findall(f"{endpoint.root}/Instance"):
+        children = list(entry)
+        values = {}
+        for pos in range(len(children) - 1):
+            if children[pos].tag == "ParaName" and children[pos+1].tag == "ParaValue":
+                values[(children[pos].text or "").strip()] = (
+                    children[pos+1].text or ""
+                )
+        clients.append({
+            "hostname": values.get("HostName") or values.get("DeviceName") or "Desconhecido",
+            "ip": values.get("IPAddress") or values.get("IPAddr"),
+            "mac": values.get("MACAddress") or values.get("MacAddr"),
+            "ssid": values.get("ESSID") or values.get("AliasName") if kind == "wifi_clients" else None,
+            "interface": values.get("Interface") or values.get("AliasName") if kind == "lan_clients" else None,
+            "rssi": values.get("RSSI") if kind == "wifi_clients" else None,
+            "tempo_conectado": values.get("LinkTime"),
+        })
+    return clients
+
+
 def _shape(xml: str, expected_root: str) -> dict[str, Any]:
     if not xml or "SessionTimeout" in xml or "login_need_refresh" in xml:
         raise RuntimeError("Sessão expirada ou resposta vazia")
@@ -166,27 +229,7 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
     endpoints = {}
     for name, endpoint in list(FAMILY[family].items())[:max(1, min(max_endpoints, 4))]:
         try:
-            if endpoint.request_type == "vueData":
-                # Vue usa os mesmos desafios loginData em vários modelos,
-                # mas acessa leituras com _type=vueData. Nunca enviar POST.
-                # Inicializa o contexto do menu sem supor compatibilidade.
-                if endpoint.view:
-                    first = zte.session.get(
-                        zte.base_url + "/",
-                        params={"_type": "vueData", "_tag": endpoint.view},
-                        timeout=10,
-                    )
-                    first.raise_for_status()
-                response = zte.session.get(
-                    zte.base_url + "/",
-                    params={"_type": "vueData", "_tag": endpoint.tag},
-                    timeout=10,
-                )
-                response.raise_for_status()
-                xml = response.text
-            else:
-                zte.get_view(endpoint.view, Menu3Location=0)
-                xml = zte.get_menu(endpoint.tag, **dict(endpoint.params))
+            xml = _fetch(zte, endpoint)
             # Faz a validação local mesmo quando implementação de ZTE mudar.
             endpoints[name] = {
                 "available": True,
