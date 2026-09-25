@@ -3,6 +3,7 @@ import unittest
 
 from apps.zte_manager.services import multimodel_service as multimodel
 from apps.zte_manager.services import model_diagnostic_service as diagnostic
+from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.model.device_adapters import select_adapter
 
 
@@ -66,6 +67,26 @@ class F6201BTests(unittest.TestCase):
         self.assertEqual(features["wifi_ssids"].root, "OBJ_WLANAP_ID")
         self.assertNotIn("Username", str(diagnostic.F6201B_FIELDS))
         self.assertNotIn("Password", str(diagnostic.F6201B_FIELDS))
+
+    def test_captured_inventory_is_complete_and_manual(self):
+        routes = f6201b_capture.catalog()
+        self.assertEqual(routes["total_get_routes"], 92)
+        self.assertTrue(any(item["tag"] == "optical_info_lua.lua"
+                            for item in routes["routes"]))
+        self.assertFalse(f6201b_capture.ALLOWED["topo_lua.lua"]["inspectable"])
+        self.assertFalse(f6201b_capture.ALLOWED[
+            "wan_internetstatus_lua.lua"]["inspectable"])
+
+    def test_captured_inspection_is_structural_and_allowlisted(self):
+        fake = ReadOnlyDevice()
+        with self.assertRaises(ValueError):
+            f6201b_capture.inspect(fake, "arbitrary.lua")
+        self.assertEqual(fake.calls, [])
+        response = f6201b_capture.inspect(fake, "devmgr_statusmgr_lua.lua")
+        self.assertTrue(response["available"])
+        self.assertEqual(response["structure"]["OBJ_DEVINFO_ID"]["records"], 1)
+        self.assertNotIn("F6201B", str(response["structure"]))
+        self.assertTrue(all(action.startswith("GET") for action, _ in fake.calls))
 
     def test_device_diagnostic_can_use_validated_read_only_shape(self):
         client = ReadOnlyDevice()
