@@ -87,7 +87,7 @@ FORM_SPECS: dict[str, FormSpec] = {
         ("ServerEnable", "MinAddress", "MaxAddress", "LeaseTime",
          "DNSServer1", "DNSServer2", "DnsServerSource", "DomainName",
          "IPRouters"),
-        additional_roots=("OBJ_LANDNS_ID",),
+        additional_roots=("OBJ_LANDNS_ID", "OBJ_OPTTFTPSERV_ID"),
         description="DHCP IPv4: preserva IP/Submask LAN e todos os campos condicionais capturados.",
     ),
     "Localnet_LanDevDHCPSource_lua.lua": FormSpec(
@@ -451,6 +451,33 @@ def _load(zte, tag: str) -> list[LiveRecord]:
     html = zte.get_view(view, Menu3Location=0)
     xml = zte.get_menu(tag, **GET_PARAMS.get(tag, {}))
     rows, objects, html_values, encoded = _live_fields(xml, html, tag, zte)
+    if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua":
+        # This firmware encrypts FIVE ordinary IPv4 fields in GET/POST.
+        # Without decrypting with the GET view's token the UI would display
+        # ciphertext and a user edit would be rejected as invalid IPv4.
+        expected = {"IPAddr", "MinAddress", "MaxAddress",
+                    "DNSServer1", "DNSServer2"}
+        if not expected.issubset(encoded):
+            raise RuntimeError(
+                "O DHCP não expôs todos os campos AES documentados."
+            )
+        token = getattr(zte, "session_tmp_token", None)
+        if not token:
+            raise RuntimeError("O menu DHCP não forneceu token AES.")
+        rows = [dict(item) for item in rows]
+        for row in rows:
+            for name in expected:
+                raw_value = row.get(name, "")
+                if not raw_value:
+                    continue
+                value = zte_security.aes_decrypt_value(
+                    raw_value, token, token[::-1]
+                )
+                if value == raw_value:
+                    raise RuntimeError(
+                        "Não foi possível ler " + name + " do DHCP."
+                    )
+                row[name] = value
     out = []
     for index, row in enumerate(rows):
         # Never mix a stale page's selected WAN/rule/port with a different
