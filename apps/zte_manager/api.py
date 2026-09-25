@@ -791,7 +791,8 @@ def multimodel_probe(context=None):
     model = str(body.get("model") or "")[:50].strip()
     try:
         count = min(10, max(1, int(body.get("max_endpoints", 4))))
-        start = min(10, max(0, int(body.get("start", 0))))
+        # Modelos mapeados têm mais de dez rotas; não reiniciar no offset 10.
+        start = min(1000, max(0, int(body.get("start", 0))))
     except (TypeError, ValueError):
         count, start = 4, 0
     return _safe_call(
@@ -800,6 +801,19 @@ def multimodel_probe(context=None):
         count,
         start,
     )
+
+
+@api.get("/multimodel/mapped-routes")
+def mapped_f6201b_routes(context=None):
+    """Inventário de rotas GET do manifesto sanitizado, sem acessar ONT."""
+    return zte_service.mapped_f6201b_routes()
+
+
+@api.post("/multimodel/mapped-inspect")
+def inspect_mapped_f6201b_route(context=None):
+    """Rota estritamente allowlist; só devolve formato, nunca valores XML."""
+    tag = str(_json(context).get("tag") or "").strip()[:100]
+    return _safe_call(zte_service.inspect_mapped_f6201b_route, tag)
 
 
 @api.get("/features/shape")

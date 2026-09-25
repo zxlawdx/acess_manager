@@ -78,8 +78,8 @@ MODEL_FAMILY = {
     "H3640": "h288a", "H6645P": "h288a", "H6745": "h288a",
     "H388X": "h388x", "H2640": "h2640",
     "E2631": "vue", "SR7410": "vue", "SR7110": "vue",
-    # Perfil PROVISÓRIO: candidatos F6640, não há engenharia F6201B publicada.
-    # Nunca habilitar escrita antes da identificação do protocolo real.
+    # Perfil específico baseado na captura sanitizada F6201B V9.3.10P7N7.
+    # Somente GET observado; não pressupor acesso de escrita.
     "F6201B": "f6201b_candidate",
 }
 
@@ -96,10 +96,39 @@ for _family in ("h288a", "h388x", "h2640"):
         "statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"
     )
 
-# F6201B: testar SOMENTE endpoints GET conhecidos da família F6640.
-# Reutilização experimental não é confirmação de compatibilidade; a
-# descoberta confronta XML/objeto esperado para cada função individual.
-FAMILY["f6201b_candidate"] = dict(FAMILY["f6640"])
+# O proprietário forneceu 244 eventos XHR/fetch, 93 combinações de rota e
+# 78 menuViews do F6201B V9.3.10P7N7. As tags e objetos abaixo foram
+# efetivamente OBSERVADOS. View="" executa GET menuData direto, sem inventar
+# a associação menuView↔menuData. Apenas campos públicos não sensíveis
+# são exibidos pelos renderizadores; estas entradas NUNCA habilitam POST.
+FAMILY["f6201b_candidate"] = {
+    "device_info": ReadEndpoint("", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"),
+    "pon_optical": ReadEndpoint("", "optical_info_lua.lua", "OBJ_PON_OPTICALPARA_ID"),
+    "wifi_clients": ReadEndpoint("", "wlan_homepage_lua.lua", "OBJ_ACCESSDEV_ID"),
+    # A captura registra LEASES DHCP, não comprovação de cliente LAN online.
+    "dhcp_leases": ReadEndpoint("", "Localnet_LanMgrIpv4_DHCPHostInfo_lua.lua", "OBJ_DHCPHOSTINFO_ID"),
+    "wifi_ssids": ReadEndpoint("", "wlan_wlansssidconf_lua.lua", "OBJ_WLANAP_ID"),
+    "wifi_radios": ReadEndpoint("", "wlan_wlanbasiconoff_lua.lua", "OBJ_WLANSETTING_ID"),
+    "lan_ports": ReadEndpoint("", "status_lan_info_lua.lua", "OBJ_PON_PORT_BASIC_STATUS_ID"),
+    "band_steering": ReadEndpoint("", "wlan_BandSteering_lua.lua", "OBJ_WLAN_BANDSTEERING_ID"),
+    "wps": ReadEndpoint("", "wlan_wps_lua.lua", "OBJ_WPS_ID"),
+    "mesh": ReadEndpoint("", "Localnet_NetSphere_Mode_lua.lua", "OBJ_NETSPHERE_MAP_ID"),
+    "dns": ReadEndpoint("", "dns_localdns_lua.lua", "OBJ_DNS_ID"),
+    "dhcp": ReadEndpoint("", "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua", "OBJ_Br0AndDhcpsHosCfg_ID"),
+    "route_table": ReadEndpoint("", "route_routetableipv4_lua.lua", "OBJ_ROUTETABLE_ID"),
+    "arp": ReadEndpoint("", "arp_arptable_lua.lua", "OBJ_GETARPINST_ID"),
+    "firewall": ReadEndpoint("", "firewall_config_lua.lua", "OBJ_FWLEVEL_ID"),
+    "voip_status": ReadEndpoint("", "voipRegStatus_lua.lua", "OBJ_VOIPVPLINE_ID"),
+    "tr069_status": ReadEndpoint("", "tr069_remotemgr_lua.lua", "OBJ_MANAGESERVER_ID"),
+    "upnp": ReadEndpoint("", "upnp_upnp_lua.lua", "OBJ_UPNPCONFIG_ID"),
+    "wifi_schedule": ReadEndpoint("", "wlan_wlanbasiconoff_lua.lua", "OBJ_WLANTIMECFG_ID"),
+    "ping_history": ReadEndpoint("", "networkdiag_ping_lua.lua", "OBJ_DEVPING_ID"),
+    "traceroute_history": ReadEndpoint("", "networkdiag_traceroute_lua.lua", "OBJ_TRACERT_ID"),
+    # A WAN foi confirmada em runtime na aplicação, porém a captura
+    # fornecida viu menu WAN vazio. Nunca inferir status se vier sem OBJ.
+    "wan": ReadEndpoint("ethWanStatus", "wan_internetstatus_lua.lua",
+                        "ID_WAN_COMFIG", (("TypeUplink", "2"), ("pageType", "1"))),
+}
 
 # PON é opt-in por modelo, não propriedade compartilhada das aliases.
 PON_F6600P = ReadEndpoint(
@@ -130,7 +159,7 @@ def find_family(model: str | None) -> tuple[str | None, str | None]:
 # As aliases compartilham endpoints, mas NÃO atestam funções de escrita.
 MODEL_EXTRAS: dict[str, tuple[str, ...]] = {
     "F6600P": ("pon_optical", "mesh_topology_candidate"),
-    "F6201B": ("experimental_get_candidates", "firmware_validation_required"),
+    "F6201B": ("captured_get_routes_v9_3_10p7n7", "read_only"),
     "F8748": ("wan_traffic_counters",),
     "H2640": ("dsl_sync_not_internet",),
     "SR7410": ("vue_api",),
@@ -146,6 +175,15 @@ DISCOVERY_NAMES = {
     "wifi_ssids": "Configuração de SSIDs (leitura)",
     "device_info": "Identificação e firmware",
     "pon_optical": "Potência óptica GPON",
+    "dhcp_leases": "Dispositivos com lease DHCP (não necessariamente online)",
+    "wifi_radios": "Rádios Wi-Fi", "lan_ports": "Portas Ethernet",
+    "band_steering": "Band Steering", "wps": "WPS", "mesh": "Mesh / roaming",
+    "dns": "DNS local", "dhcp": "Servidor DHCP", "route_table": "Rotas IPv4",
+    "arp": "Tabela ARP", "firewall": "Firewall", "voip_status": "Telefonia",
+    "tr069_status": "TR-069 (status sem credenciais)", "upnp": "UPnP",
+    "wifi_schedule": "Agendamento Wi-Fi",
+    "ping_history": "Último ping (somente leitura)",
+    "traceroute_history": "Último traceroute (somente leitura)",
 }
 
 def catalog() -> dict[str, Any]:
@@ -159,7 +197,7 @@ def catalog() -> dict[str, Any]:
                 "candidate_features": list(FAMILY[family])
                     + (["pon_optical"] if model == "F6600P" else []),
                 "firmware_differences": MODEL_EXTRAS.get(model, ()),
-                "evidence": ("unverified_candidate" if model == "F6201B"
+                "evidence": ("owner_capture_V9.3.10P7N7" if model == "F6201B"
                              else "zte_tracker_documented"),
             }
             for model, family in MODEL_FAMILY.items()
@@ -168,9 +206,9 @@ def catalog() -> dict[str, Any]:
         "experimental_models": ["F6201B"],
         "notes": (
             "O catálogo mostra candidatos zte_tracker, não garante compatibilidade. "
-            "O perfil F6201B é uma hipótese experimental de GET ThinkLua "
-            "sem endpoints comprovados; confirme cada recurso no firmware. "
-            "Nenhuma escrita é habilitada pelo perfil."
+            "F6201B V9.3.10P7N7 tem rotas GET observadas em captura do "
+            "proprietário; cada recurso continua exigindo XML válido. "
+            "Outras versões não são validadas e nenhuma escrita é habilitada."
         ),
     }
 
@@ -260,6 +298,11 @@ def _shape(xml: str, expected_root: str) -> dict[str, Any]:
     if root.tag != "ajax_response_xml_root":
         raise RuntimeError("Resposta não é XML ThinkLua")
 
+    # Alguns firmwares incluem objeto válido junto com IF_ERRORID != 0.
+    # Não interpretar XML estrutural de uma requisição rejeitada como prova.
+    error_id = (root.findtext("IF_ERRORID") or "").strip()
+    if error_id and error_id not in {"0", "0000"}:
+        raise RuntimeError("O firmware rejeitou a consulta.")
     error = (root.findtext("IF_ERRORSTR") or "").strip()
     if error and error.upper() not in {"SUCC", "SUCCESS", "OK", "0"}:
         raise RuntimeError("Firmware não disponibilizou este menu")
@@ -343,9 +386,9 @@ def probe(
         "model": selected, "family": family, "read_only": True,
         "supported": any(x["available"] for x in endpoints.values()),
         "endpoints": endpoints,
-        "notes": ("F6201B experimental: endpoints candidatos não documentados "
-                  "para este modelo. Compatibilidade depende do XML observado; "
-                  "nenhuma escrita permitida." if selected == "F6201B" else
+        "notes": ("F6201B: tags observadas na captura V9.3.10P7N7. "
+                  "Disponibilidade depende de confirmação XML em runtime. "
+                  "Somente GET, sem escrita." if selected == "F6201B" else
                   "Somente descoberta; escrita e backup requerem validação por firmware."),
         "capabilities": [
             {
@@ -353,7 +396,7 @@ def probe(
                 "label": DISCOVERY_NAMES.get(name, name),
                 "available": item["available"],
                 "writable": False,
-                "source": ("experimental_f6640_candidate" if selected == "F6201B"
+                "source": ("owner_capture_V9.3.10P7N7" if selected == "F6201B"
                            else "zte_tracker endpoint profile"),
                 "status": "detected" if item["available"] else "not_confirmed",
                 "reason": item.get("reason"),

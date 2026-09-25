@@ -770,8 +770,12 @@ async function runMultimodelDiagnostic() {
         h388x: ["device", "wan", "wifi_clients", "lan_clients"],
         h2640: ["device", "dsl", "wifi_clients", "lan_clients"],
         vue: ["wan", "wifi_clients", "lan_clients"],
-        f6201b_candidate: ["device", "wan", "wifi_ssids",
-            "wifi_clients", "lan_clients"]
+        f6201b_candidate: ["device", "optical", "wan", "wifi_ssids",
+            "wifi_clients", "dhcp_leases", "wifi_radios", "lan_ports",
+            "band_steering", "wps", "mesh", "dns", "dhcp",
+            "route_table", "arp", "firewall", "voip_status",
+            "tr069_status", "upnp", "wifi_schedule",
+            "ping_history", "traceroute_history"]
     };
     const sections = [...(profiles[family] || [
         "device", "wan", "wifi_clients", "lan_clients"
@@ -789,12 +793,12 @@ async function runMultimodelDiagnostic() {
         const ok = Object.values(report.sections).filter(
             item => item?.available
         ).length;
-        output.textContent = [
-            `DIAGNÓSTICO DO EQUIPAMENTO — ${step}/${total} ETAPAS`,
-            `Seções com dados: ${ok}`,
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            JSON.stringify(report, null, 2)
-        ].join("\n");
+        if (window.renderAdaptiveDiagnostic) {
+            window.renderAdaptiveDiagnostic(report, output, {
+                progress: "Diagnóstico " + step + "/" + total +
+                          " · " + ok + " leituras confirmadas"
+            });
+        } else output.textContent = "Diagnóstico " + step + "/" + total;
     };
     setBusy(true, "Preparando diagnóstico por modelo...");
     render(0, sections.length);
@@ -849,7 +853,16 @@ async function showMultimodelMesh() {
             body: JSON.stringify({ model: trackerDetectedModel || null }),
             timeoutMs: 50000
         });
-        output.textContent = JSON.stringify(result, null, 2);
+        if (window.renderAdaptiveDiagnostic) {
+            window.renderAdaptiveDiagnostic({
+                model: trackerDetectedModel || "ZTE",
+                sections: { mesh: {
+                    available: result.available === true,
+                    data: result.available ? result : null,
+                    reason: result.reason
+                } }
+            }, output);
+        }
         showToast(
             result.available
                 ? "Resumo Mesh consultado. Nenhum dado pessoal exportado."
@@ -956,12 +969,24 @@ async function probeMultimodel({ quick = false } = {}) {
                     `${batch.model || model}: ${Math.min(offset, total)}/${total} verificações · ${confirmed} confirmado(s)`;
             }
             if (output) {
-                output.textContent = JSON.stringify({
-                    model: batch.model,
-                    family: batch.family,
-                    progress: `${Math.min(offset, total)}/${total}`,
-                    endpoints
-                }, null, 2);
+                if (window.renderAdaptiveDiagnostic) {
+                    const sections = {};
+                    Object.entries(endpoints).forEach(([name, value]) => {
+                        sections[name] = {
+                            available: value.available === true,
+                            data: value.available ? {
+                                status: "GET confirmado", tag: value.tag
+                            } : null,
+                            reason: value.reason
+                        };
+                    });
+                    window.renderAdaptiveDiagnostic({
+                        model: batch.model || model, sections
+                    }, output, {
+                        progress: "Verificação " + Math.min(offset, total) +
+                                  "/" + total
+                    });
+                }
             }
             if (batch.session_expired) {
                 if (status) status.textContent =
@@ -1250,7 +1275,10 @@ function renderAutomaticDiagnostic(data) {
             ? `
                 <div class="operation-row">
                     <strong>Coletas indisponíveis</strong>
-                    <pre class="firmware-json">${escapeHtml(JSON.stringify(data.errors, null, 2))}</pre>
+                    ${Object.entries(data.errors || {}).map(([section, reason]) => `
+                        <p class="adaptive-footnote"><strong>${escapeHtml(section)}:</strong>
+                        ${escapeHtml(String(reason).slice(0, 160))}</p>
+                    `).join("")}
                 </div>
             `
             : ""
@@ -1846,13 +1874,18 @@ async function readFirmwareFeature(event) {
             `/features/read?feature=${encodeURIComponent(feature)}`
         );
 
-        document.getElementById(
-            "featureInspectorOutput"
-        ).textContent = JSON.stringify(
-            data,
-            null,
-            2
-        );
+        const output = document.getElementById("featureInspectorOutput");
+        if (window.renderAdaptiveDiagnostic) {
+            window.renderAdaptiveDiagnostic({
+                model: trackerDetectedModel || "ZTE",
+                sections: { [feature]: {
+                    available: data.available === true,
+                    data: data.available === true ? data : null
+                }}
+            }, output);
+        } else {
+            output.textContent = "Inspeção indisponível.";
+        }
     } catch (error) {
         document.getElementById(
             "featureInspectorOutput"

@@ -36,6 +36,36 @@ DSL_FIELDS = {
     "Downstream_attenuation": "downstream_attenuation_db",
     "CurrentProfile": "dsl_profile",
 }
+
+# Campos efetivamente registrados no F6201B V9.3.10P7N7.
+# Whitelist explícita: nunca ler senhas, ESSID, IP/MAC de clientes,
+# ACS URL, usuários ou dados telefônicos no relatório do atendimento.
+F6201B_FIELDS = {
+    "wifi_radios": {"Band": "band", "RadioStatus": "radio_status"},
+    "lan_ports": {"_InstID": "port", "Status": "status", "Speed": "speed",
+                  "Duplex": "duplex", "InError": "rx_errors",
+                  "OutError": "tx_errors"},
+    "band_steering": {"BsEnable": "enabled"},
+    "wps": {"Enable": "enabled", "WPSMode": "mode"},
+    "mesh": {"Enable": "enabled", "Mode": "mode"},
+    "dns": {"SerIPAddress1": "dns_ipv4_1", "SerIPAddress2": "dns_ipv4_2",
+            "SerIPv6Address1": "dns_ipv6_1", "SerIPv6Address2": "dns_ipv6_2"},
+    "dhcp": {"ServerEnable": "enabled", "LeaseTime": "lease_seconds",
+             "DnsServerSource": "dns_origin"},
+    "firewall": {"Enable": "enabled", "Level": "level"},
+    "voip_status": {"IsOnline": "online", "VoIPRegStatus": "registration"},
+    "tr069_status": {"PeriodicInformEnable": "inform_enabled",
+                     "PeriodicInformInterval": "inform_interval"},
+    "upnp": {"EnableUPnPIGD": "enabled"},
+    "wifi_schedule": {"TimerEnable": "enabled"},
+    "ping_history": {"DiagnosticsState": "state",
+                     "AverageResponseTime": "average_ms",
+                     "FailureCount": "failures", "SuccessCount": "successes"},
+    "traceroute_history": {"DiagnosticsState": "state",
+                           "NumberOfPRouteHops": "hops"},
+}
+F6201B_COUNTS_ONLY = {"dhcp_leases", "arp", "route_table"}
+
 HEALTH_FIELDS = {
     "ModelName": "model",
     "HardwareVer": "hardware",
@@ -136,14 +166,15 @@ def device_resource_details(zte) -> dict[str, Any]:
     return result
 
 
-def optical_details(zte) -> dict[str, Any]:
+def optical_details(zte, endpoint=PON_OPTICAL) -> dict[str, Any]:
     """PON opt-in F6600P. Não supor unidade para campos desconhecidos."""
-    raw = models._fetch(zte, PON_OPTICAL)
+    raw = models._fetch(zte, endpoint)
     data = {
         "optical": _whitelist(
-            raw, PON_OPTICAL.root,
-            {"RxPower": "rx_dbm", "TxPower": "tx_dbm",
-             "Temp": "temperature_c"},
+            raw, endpoint.root,
+            {"RxPower": "rx_power_raw", "TxPower": "tx_power_raw",
+             "Temp": "temperature_raw", "Volt": "voltage_raw",
+             "Current": "current_raw"},
             limit=1,
         )
     }
@@ -180,6 +211,7 @@ def diagnostic(
     supported_sections = {
         "device", "wan", "dsl", "optical", "wifi_ssids",
         "wifi_clients", "lan_clients",
+        *F6201B_FIELDS, *F6201B_COUNTS_ONLY,
     }
     if section is not None and section not in supported_sections:
         raise ValueError("Seção de diagnóstico inválida")
@@ -210,10 +242,10 @@ def diagnostic(
                 lambda: _read(zte, status_endpoint, fields),
             )
 
-    if selected == "F6600P" and wants("optical"):
+    if selected in {"F6600P", "F6201B"} and wants("optical"):
         sections["optical"] = _result(
             "optical",
-            lambda: optical_details(zte),
+            lambda: optical_details(zte, endpoints.get("pon_optical", PON_OPTICAL)),
         )
 
     if family in {"f6640", "f6201b_candidate"} and wants("wifi_ssids"):
@@ -222,8 +254,38 @@ def diagnostic(
             lambda: wifi_ssid_summary(zte, endpoints["wifi_ssids"]),
         )
 
+    if selected == "F6201B":
+        # Campos reais do manifesto sanitizado. Sem captura em tempo real
+        # aqui: status é confirmado novamente pelos GETs da sessão ativa.
+        if wants("dhcp_leases"):
+            endpoint = endpoints["dhcp_leases"]
+            sections["dhcp_leases"] = _result(
+                "dhcp_leases",
+                lambda: {"leases": len(_instances(
+                    models._fetch(zte, endpoint), endpoint.root))},
+            )
+        for name, fields in F6201B_FIELDS.items():
+            if not wants(name):
+                continue
+            endpoint = endpoints[name]
+            sections[name] = _result(
+                name, lambda e=endpoint, f=fields: _read(zte, e, f, limit=16)
+            )
+        for name in F6201B_COUNTS_ONLY - {"dhcp_leases"}:
+            if not wants(name):
+                continue
+            endpoint = endpoints[name]
+            sections[name] = _result(
+                name, lambda e=endpoint, k=name: {
+                    "records": len(_instances(models._fetch(zte, e), e.root))
+                }
+            )
+
     if include_clients:
         for name in ("wifi_clients", "lan_clients"):
+            # DHCP leases não significam dispositivos cabeados online.
+            if selected == "F6201B" and name == "lan_clients":
+                continue
             endpoint = endpoints.get(name)
             if endpoint and wants(name):
                 # Para o relatório geral, apenas contagens de dispositivos:

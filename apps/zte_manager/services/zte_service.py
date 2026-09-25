@@ -18,6 +18,7 @@ from apps.zte_manager.services.attendance_report_service import (
 from apps.zte_manager.services.capability_service import CapabilityService
 from apps.zte_manager.services import multimodel_service
 from apps.zte_manager.services import model_diagnostic_service
+from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -530,7 +531,8 @@ class ZTEService:
             self._selected_model
         )
         # A família F6640 reutiliza os mesmos menus da F6600P/F670L.
-        return family if family in {"h288a", "h388x", "h2640", "vue"} else None
+        return family if family in {"h288a", "h388x", "h2640", "vue",
+                                    "f6201b_candidate"} else None
 
     def wifi_clients(self):
         with self._lock:
@@ -544,6 +546,10 @@ class ZTEService:
     def lan_clients(self):
         with self._lock:
             family = self._multimodel_client_family()
+            if family == "f6201b_candidate":
+                # Captura comprova DHCP leases e tabela ARP, não usuários
+                # Ethernet ativos. Evitar falso positivo de cliente online.
+                return []
             if family:
                 return multimodel_service.read_clients(
                     self.get_client(), self._selected_model, "lan_clients"
@@ -1015,6 +1021,20 @@ class ZTEService:
             return model_diagnostic_service.diagnostic(
                 self.get_client(), selected, section=section,
             )
+
+    def mapped_f6201b_routes(self):
+        # Catálogo local, não depende da sessão nem consulta o equipamento.
+        return f6201b_capture.catalog()
+
+    def inspect_mapped_f6201b_route(self, tag):
+        with self._lock:
+            selected = self._confirmed_probe_model()
+            model, _ = multimodel_service.find_family(selected)
+            if model != "F6201B":
+                raise ValueError(
+                    "A inspeção capturada somente está habilitada em F6201B."
+                )
+            return f6201b_capture.inspect(self.get_client(), tag)
 
     def capability_shape(self, feature):
         with self._lock:
