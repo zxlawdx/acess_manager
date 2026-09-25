@@ -105,6 +105,10 @@ class ExperimentalF6201BWrites:
     def list_ssids(zte) -> list[dict]:
         # Leitura direta observada na captura; não executar POST, nem
         # retornar os objetos PSK, cookies ou quaisquer credenciais.
+        # A captura mostra wlanBasic menuView ANTES de menuData.
+        # Sem esse contexto, o equipamento devolve menu vazio mesmo
+        # autenticado (também causava zero leituras no diagnóstico).
+        zte.get_view("wlanBasic", Menu3Location=0)
         raw = zte.get_menu("wlan_wlansssidconf_lua.lua")
         if not isinstance(raw, str):
             raise RuntimeError("Resposta de SSID não está em XML.")

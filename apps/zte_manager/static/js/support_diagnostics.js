@@ -1473,6 +1473,7 @@ loadSpeedtestPreference();
 
 const firmwareDiagnosticState = {
     host: null,
+    revision: null,
     model: null,
     firmware: null,
     options: [],
@@ -1640,18 +1641,30 @@ async function loadFirmwareDiagnosticOptions() {
                 "O backend não possui uma sessão autenticada.";
             return;
         }
-        const model = bootstrap.model || bootstrap.detected_model || "";
+        const actual = String(bootstrap.detected_model || "").toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+        const selected = String(bootstrap.model || "").toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+        if (actual && actual !== "ZTE" && selected && selected !== actual) {
+            panel.querySelector("#firmwareDiagnosticStatus").textContent =
+                "Identificação inconsistente: reconecte e selecione o modelo real.";
+            return;
+        }
+        const model = actual && actual !== "ZTE" ?
+            bootstrap.detected_model : bootstrap.model || "";
         const sameDevice = firmwareDiagnosticState.host === currentHost
-            && firmwareDiagnosticState.model === model;
+            && firmwareDiagnosticState.model === model
+            && firmwareDiagnosticState.revision === bootstrap.session_revision;
         if (sameDevice && firmwareDiagnosticState.options.length) {
             renderFirmwareDiagnosticOptions();
             return;
         }
         const normalized = model.toUpperCase().replace(/[^A-Z0-9]/g, "");
         const entry = (bootstrap.catalog?.models || []).find(item =>
-            normalized.includes(item.model.toUpperCase())
+            normalized === item.model.toUpperCase().replace(/[^A-Z0-9]/g, "")
         );
         firmwareDiagnosticState.host = currentHost;
+        firmwareDiagnosticState.revision = bootstrap.session_revision;
         firmwareDiagnosticState.model = model;
         firmwareDiagnosticState.firmware = bootstrap.firmware || null;
         firmwareDiagnosticState.scanComplete = false;
@@ -1886,6 +1899,22 @@ async function runSelectedFirmwareDiagnostic() {
     }
 }
 
+document.addEventListener("zte:session-changed", () => {
+    firmwareDiagnosticState.host = null;
+    firmwareDiagnosticState.revision = null;
+    firmwareDiagnosticState.model = null;
+    firmwareDiagnosticState.options = [];
+    firmwareDiagnosticState.selected.clear();
+    firmwareDiagnosticState.scanComplete = false;
+    supportDiagnosticState.firmwareReport = null;
+    const panel = document.getElementById("firmwareDiagnosticPanel");
+    if (panel) {
+        panel.querySelector("#firmwareDiagnosticChoices")?.replaceChildren();
+        panel.querySelector("#firmwareDiagnosticResult")?.replaceChildren();
+        const status = panel.querySelector("#firmwareDiagnosticStatus");
+        if (status) status.textContent = "Aguardando detecção da nova ONT.";
+    }
+});
 document.addEventListener("zte:page-open", event => {
     if (event.detail?.pageName === "supportDiagnostic") {
         void loadFirmwareDiagnosticOptions();

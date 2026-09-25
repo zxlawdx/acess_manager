@@ -21,9 +21,11 @@ function harness(status, isReadOnly = false) {
     const ctx = {
         console, sessionEpoch: 0, ontConnected: false, routerWriteEnabled: true,
         currentHost: null, currentAttendant: null,
+        CustomEvent: class { constructor(type) { this.type = type; } },
         document: {
             getElementById: id => nodes[id],
-            querySelector: () => ({ id: "page-connection" })
+            querySelector: () => ({ id: "page-connection" }),
+            dispatchEvent: event => calls.push("event:" + event.type)
         },
         apiRequest: async endpoint => {
             calls.push(endpoint);

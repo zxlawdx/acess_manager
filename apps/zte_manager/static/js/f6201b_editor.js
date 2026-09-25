@@ -207,8 +207,17 @@
     async function openEditor() {
         if (!ontConnected || routerWriteEnabled) return;
         const bootstrap = await apiRequest("/discovery/bootstrap");
-        if (!String(bootstrap?.model || "").toUpperCase().includes("F6201B"))
+        // A escolha anterior não autoriza exibir editor noutro modelo.
+        const actual = String(bootstrap?.detected_model || "").toUpperCase();
+        const selected = String(bootstrap?.model || "").toUpperCase();
+        if (selected.replace(/[^A-Z0-9]/g, "") !== "F6201B" ||
+            (actual && actual !== "ZTE" &&
+             actual.replace(/[^A-Z0-9]/g, "") !== "F6201B")) {
+            document.querySelectorAll(".f6201b-editor").forEach(
+                node => node.remove()
+            );
             return;
+        }
         const page = document.getElementById("page-wifi");
         if (!page) return;
         let panel = page.querySelector(".f6201b-editor");
@@ -229,6 +238,14 @@
                 "Editor indisponível: " + error.message));
         }
     }
+    document.addEventListener("zte:session-changed", () => {
+        currentPreview = null;
+        activeHost = null;
+        activeEpoch = -1;
+        document.querySelectorAll(".f6201b-editor").forEach(
+            node => node.remove()
+        );
+    });
     document.addEventListener("zte:page-open", event => {
         if (event.detail?.pageName === "wifi") {
             void openEditor().catch(error =>

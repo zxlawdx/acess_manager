@@ -638,6 +638,12 @@ document
                 currentHost = response.host || ip;
                 currentAttendant = response.attendant || attendant || "default";
 
+                // A resposta de /connect sempre pertence à sessão
+                // recém autenticada. Invalidar os painéis adaptativos
+                // anteriores ANTES de renderizar o novo modelo.
+                document.dispatchEvent(new CustomEvent("zte:session-changed"));
+                document.getElementById("connectedModel").textContent =
+                    response.model || response.device?.modelo || "Não identificado";
                 setConnectionStatus(
                     true
                 );
@@ -778,6 +784,7 @@ document
             pppoeRevealed = false;
             wifiPasswordsRevealed = false;
 
+            document.dispatchEvent(new CustomEvent("zte:session-changed"));
             setConnectionStatus(
                 false
             );
@@ -4335,6 +4342,8 @@ async function restoreDesktopSession() {
             return;
         }
 
+        // Clear orphaned cards from any earlier WebView/router state.
+        document.dispatchEvent(new CustomEvent("zte:session-changed"));
         currentHost = status.host || null;
         currentAttendant = status.attendant || "default";
         routerWriteEnabled = status.writes_enabled !== false;

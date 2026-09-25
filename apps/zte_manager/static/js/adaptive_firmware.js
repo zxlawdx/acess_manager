@@ -46,6 +46,34 @@
     const SENSITIVE = /password|passwd|secret|token|private|authuser|session|credential|keypassphrase/i;
     let cache = new Map();
     let lastHost = null;
+    let lastRevision = null;
+    let renderEpoch = 0;
+    const nativeModels = new Set(["F6600P", "F670L"]);
+    const requestedFeatures = {
+        dashboard: ["device_info", "pon_optical", "wan", "wifi_clients"],
+        wifi: ["wifi_ssids", "wifi_radios", "band_steering", "wps", "wifi_schedule"],
+        wan: ["wan", "lan_ports", "dns", "dhcp"],
+        clients: ["wifi_clients", "lan_ports", "dhcp_leases", "arp"],
+        device: ["device_info", "pon_optical", "voip_status", "tr069_status"]
+    };
+    const remap = { device_info: "device", pon_optical: "optical" };
+    const modelKey = value =>
+        String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    function teardownOldPanels() {
+        renderEpoch++;
+        cache.clear();
+        lastHost = null;
+        lastRevision = null;
+        for (const page of Object.keys(PAGE_SECTIONS)) {
+            const section = document.getElementById("page-" + page);
+            if (!section) continue;
+            section.querySelector(".adaptive-page-panel")?.remove();
+            section.querySelectorAll(".adaptive-hide-legacy").forEach(
+                node => node.classList.remove("adaptive-hide-legacy")
+            );
+        }
+    }
+    window.clearAdaptiveFirmwareState = teardownOldPanels;
 
     const el = (tag, className, value) => {
         const node = document.createElement(tag);
@@ -104,10 +132,23 @@
             available ? "Lido" : "Indisponível"));
         card.append(head);
         if (available) renderFields(section.data, card);
-        else card.append(el("p", "adaptive-empty",
-            section?.reason === "no_data_from_firmware"
-                ? "Menu disponível, mas sem dados nesta consulta."
-                : "Este recurso não respondeu neste firmware ou neste login."));
+        else {
+            const messages = {
+                no_data_from_firmware: "O menu respondeu, mas não trouxe dados nesta leitura.",
+                session_expired: "A sessão do equipamento expirou. Reconecte para continuar.",
+                unexpected_xml_object: "O firmware respondeu, mas não retornou o objeto esperado para esta função.",
+                network_timeout: "Tempo de resposta esgotado. Confira a conexão com a ONT.",
+                invalid_xml: "A resposta do equipamento não corresponde ao formato XML esperado.",
+                read_failed: "A consulta foi recusada ou falhou. Verifique permissões e mapeamento.",
+            };
+            card.append(el("p", "adaptive-empty",
+                messages[section?.reason] ||
+                "Função ainda não confirmada nesta versão de firmware."));
+            if (section?.error_type) {
+                card.append(el("small", "adaptive-choice-note",
+                    "Tipo técnico: " + String(section.error_type).slice(0, 50)));
+            }
+        }
         return card;
     }
     function renderReport(report, mount, options = {}) {
@@ -205,33 +246,63 @@
         return panel;
     }
     async function loadPage(page) {
-        if (routerWriteEnabled || !ontConnected || !PAGE_SECTIONS[page]) return;
+        if (!ontConnected || !PAGE_SECTIONS[page]) return;
+        // Consultar a sessão AUTORITATIVA antes de ocultar painéis nativos.
+        const bootstrap = await apiRequest("/discovery/bootstrap");
+        const host = currentHost || "";
+        const detected = modelKey(bootstrap?.detected_model);
+        const selected = modelKey(bootstrap?.model);
+        const model = detected && detected !== "ZTE" ? detected : selected;
+        const profile = (bootstrap?.catalog?.models || []).find(
+            item => modelKey(item.model) === model
+        );
+        const revision = bootstrap?.session_revision || "";
+        if (!bootstrap?.connected || routerWriteEnabled || nativeModels.has(model)
+            || !profile || !profile.candidate_features?.length
+            || (detected && selected && detected !== "ZTE" && detected !== selected)) {
+            teardownOldPanels();
+            return;
+        }
+        if (lastHost !== host || lastRevision !== revision) {
+            teardownOldPanels();
+            lastHost = host;
+            lastRevision = revision;
+        }
+        const epoch = renderEpoch;
         const panel = ensurePagePanel(page);
         if (!panel) return;
         const body = panel.querySelector(".adaptive-page-body");
-        const bootstrap = await apiRequest("/discovery/bootstrap");
-        const host = currentHost || "";
-        if (lastHost !== host) { cache = new Map(); lastHost = host; }
         if (!bootstrap?.connected) {
             body.replaceChildren(el("p", "adaptive-empty", "Sessão expirada. Reconecte à ONT."));
             return;
         }
-        const report = { model: bootstrap.model, firmware: bootstrap.firmware,
+        const report = { model: profile.model, firmware: bootstrap.firmware,
             sections: {}, errors: {} };
-        const ids = PAGE_SECTIONS[page];
+        const supported = new Set(profile.candidate_features);
+        const ids = requestedFeatures[page]
+            .filter(feature => supported.has(feature))
+            .map(feature => remap[feature] || feature);
+        if (!ids.length) {
+            body.replaceChildren(el("p", "adaptive-empty",
+                "Nenhum recurso cadastrado para esta aba neste modelo."));
+            return;
+        }
         for (let index = 0; index < ids.length; index++) {
-            if (!ontConnected || currentHost !== host) return;
+            if (epoch !== renderEpoch || !ontConnected || currentHost !== host)
+                return;
             const name = ids[index];
-            const key = host + ":" + name;
+            const key = revision + ":" + host + ":" + name;
             try {
                 let entry = cache.get(key);
                 if (!entry || (Date.now() - entry.at > 60000)) {
                     const data = await apiRequest("/multimodel/diagnostic", {
                         method: "POST", body: JSON.stringify({
-                            model: bootstrap.model, section: name
+                            model: profile.model, section: name
                         })
                     });
                     entry = { at: Date.now(), data: data.sections?.[name] };
+                    if (epoch !== renderEpoch || !ontConnected ||
+                        currentHost !== host) return;
                     cache.set(key, entry);
                 }
                 report.sections[name] = entry.data || { available: false };
@@ -239,11 +310,12 @@
                 report.errors[name] = "Falha na consulta";
                 report.sections[name] = { available: false, reason: "read_failed" };
             }
+            if (epoch !== renderEpoch) return;
             renderReport(report, body, {
                 progress: `Leitura ${index + 1}/${ids.length} · ${pretty(name)}`
             });
         }
-        if (page === "clients") {
+        if (page === "clients" && epoch === renderEpoch) {
             // A página de clientes é local ao atendente autorizado: aqui
             // é útil exibir dispositivos individuais. Não enviar esses
             // identificadores ao relatório/OS sanitizado.
@@ -253,6 +325,7 @@
                     available: Array.isArray(wifi),
                     data: Array.isArray(wifi) ? wifi : []
                 };
+                if (epoch !== renderEpoch) return;
                 renderReport(report, body);
             } catch (error) {
                 report.sections.wifi_devices = {
@@ -265,9 +338,10 @@
             body.append(notice);
         }
     }
+    document.addEventListener("zte:session-changed", teardownOldPanels);
     document.addEventListener("zte:page-open", event => {
         const page = event.detail?.pageName;
-        if (page && !routerWriteEnabled && PAGE_SECTIONS[page]) {
+        if (page && PAGE_SECTIONS[page] && ontConnected) {
             void loadPage(page).catch(error => {
                 const panel = ensurePagePanel(page);
                 panel?.querySelector(".adaptive-page-body")?.replaceChildren(

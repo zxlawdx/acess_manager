@@ -248,10 +248,12 @@ def connection_status(context=None):
         # Estado para recuperar a SPA após reload do WebView.
         # Nunca retornar credenciais, cookies ou token da ONT.
         "model": (
-            zte_service._device_info.get("modelo")
-            or zte_service._selected_model
+            zte_service._selected_model
+            or zte_service._device_info.get("modelo")
         ),
         "firmware": zte_service._device_info.get("firmware"),
+        "model_verified": zte_service._model_verified,
+        "session_revision": zte_service._session_revision,
         "writes_enabled": (
             bool(getattr(zte_service._zte, "writes_enabled", True))
             if zte_service.connected
@@ -736,6 +738,8 @@ def discovery_bootstrap(context=None):
                 or device.get("model")
             ),
             "detected_model": device.get("modelo") or device.get("model"),
+            "model_verified": zte_service._model_verified,
+            "session_revision": zte_service._session_revision,
             "firmware": device.get("firmware"),
             "writes_enabled": (
                 bool(getattr(zte_service._zte, "writes_enabled", False))
