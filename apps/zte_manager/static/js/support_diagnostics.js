@@ -294,6 +294,14 @@ function renderF6201BSupportDiagnostic(report, output) {
     const speed = report.sections?.speedtest
         ? renderSpeedTest(report)
         : "";
+    const lookup = report.sections?.dns_lookup;
+    const dns = lookup
+        ? '<article class="support-result-card">' +
+          '<h3>DNS Lookup — PC do atendente</h3>' +
+          '<p>Consulta do sistema operacional; não comprova o DNS da ONT.</p>' +
+          '<pre>' + supportEscape((lookup.addresses || []).join(", ")) +
+          '</pre></article>'
+        : "";
     const trace = report.sections?.traceroute
         ? '<article class="support-result-card"><h3>Traceroute</h3><pre>' +
           supportEscape(String(report.sections.traceroute.resultado || "")) +
@@ -311,7 +319,7 @@ function renderF6201BSupportDiagnostic(report, output) {
             '<p>' + total + ' seções confirmadas; ' +
             (report.performed || []).length +
             ' ações efetivamente registradas.</p>' +
-        '</article>' + cards + ping + trace + speed +
+        '</article>' + cards + ping + dns + trace + speed +
         (performed ? '<article class="support-result-card">' +
             '<h3>Operações realizadas</h3><ul>' + performed +
             '</ul></article>' : "") +
