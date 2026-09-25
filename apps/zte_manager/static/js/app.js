@@ -105,6 +105,11 @@ let routerWriteEnabled = true;
 let currentHost = null;
 let currentAttendant = null;
 let currentProfile = null;
+// The local preset belongs to the active technician/session, never the router
+// currently being inspected. One in-flight load per session prevents the
+// read-only F6201B login, page navigation and desktop restore from racing.
+let profileLoadedFor = null;
+let profileLoadPending = null;
 let cachedWan = [];
 let cachedRadios = [];
 let cachedNetworks = [];
@@ -556,6 +561,40 @@ function openPage(pageName) {
     }
 
     if (pageName === "profiles") {
+        // Render both saved radio presets for experimental/read-only ONTs too.
+        // This must not trigger a router-specific GET; editing is local.
+        if (currentAttendant) {
+            const key = sessionEpoch + ":" + currentAttendant;
+            if (profileLoadedFor !== key ||
+                !document.querySelector('[data-profile-band="2.4GHz"]') ||
+                !document.querySelector('[data-profile-band="5GHz"]')) {
+                const controls = ["saveProfileButton", "applyProfileButton"];
+                controls.forEach(id => {
+                    const btn = document.getElementById(id);
+                    if (btn) btn.disabled = true;
+                });
+                const radios = document.getElementById("profileRadios");
+                if (radios && !radios.querySelector("[data-profile-band]")) {
+                    radios.innerHTML = ["2.4GHz", "5GHz"].map(band =>
+                        '<article class="panel profile-loading-card" aria-busy="true">' +
+                        '<strong>Wi-Fi ' + band + '</strong>' +
+                        '<p>Carregando padrão salvo do atendente…</p></article>'
+                    ).join("");
+                }
+                void ensureAttendantProfile().then(() => {
+                    if (key !== sessionEpoch + ":" + currentAttendant) return;
+                    controls.forEach(id => {
+                        const btn = document.getElementById(id);
+                        if (btn) btn.disabled = false;
+                    });
+                }).catch(error => {
+                    if (key !== sessionEpoch + ":" + currentAttendant) return;
+                    renderProfileActionError("Carregar configuração padrão", error);
+                    const save = document.getElementById("saveProfileButton");
+                    if (save) save.disabled = true;
+                });
+            }
+        }
         const batch = document.getElementById("applyProfileButton");
         if (batch) {
             if (routerWriteEnabled) {
@@ -708,11 +747,22 @@ document
                     ? "Conectado no modo somente leitura. Diagnóstico por firmware disponível em Avançado."
                     : "Conectado com sucesso.";
 
-                // Não disparar rotinas de configuração/dashboard da F670L
-                // contra firmwares cujo perfil ainda está em descoberta.
+                // Each login gets its own technician preset. Do not reuse the
+                // previous ONT's draft or let a stale response replace it.
+                currentProfile = null;
+                profileLoadedFor = null;
+                profileLoadPending = null;
+                document.getElementById("profileRadios")?.replaceChildren();
+                // Read-only models still have LOCAL Wi-Fi 2.4/5 GHz defaults.
+                // Loading them must not execute native F670L router commands.
                 if (response.writes_enabled === false) {
-                    showToast("Modelo experimental: escrita desativada. Use Avançado para detectar endpoints.");
                     openPage("advanced");
+                    try {
+                        await ensureAttendantProfile();
+                    } catch (profileError) {
+                        console.warn("Falha ao carregar perfil local:", profileError);
+                        showToast("Conectado, mas não foi possível ler o perfil do atendente.");
+                    }
                     return;
                 }
 
@@ -812,6 +862,9 @@ document
             currentHost = null;
             currentAttendant = null;
             currentProfile = null;
+            profileLoadedFor = null;
+            profileLoadPending = null;
+            document.getElementById("profileRadios")?.replaceChildren();
             cachedWan = [];
             cachedRadios = [];
             cachedNetworks = [];
@@ -2379,6 +2432,27 @@ async function fillChannelSelect(
 
     select.innerHTML = '<option value="Auto">Auto</option>';
 
+    // A technician's saved default is an OFFLINE preset, not a read of
+    // whatever router happens to be connected. Never erase a manual
+    // channel because an F6201B cannot run the native /wifi/channels API.
+    if (mode === "profile") {
+        const suggested = band === "5GHz"
+            ? [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112,
+               116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165]
+            : Array.from({ length: 11 }, (_, i) => i + 1);
+        const chosen = String(selected ?? "Auto");
+        if (chosen !== "Auto" && !suggested.some(n => String(n) === chosen)) {
+            select.add(new Option(chosen + " (salvo)", chosen));
+        }
+        if (String(country || "BRI").toUpperCase() === "BRI") {
+            suggested.forEach(number => select.add(new Option(
+                String(number), String(number)
+            )));
+        }
+        select.value = chosen;
+        return;
+    }
+
     try {
         const query = new URLSearchParams({
             band,
@@ -2738,32 +2812,65 @@ function formatDiagnosticResult(data) {
 // PERFIS DO ATENDENTE
 // =========================================================
 
+// Resolve once per attendant and session. A delayed old response must not
+// change the current ONT's preset when technicians reconnect quickly.
 async function loadProfile() {
-    if (!currentAttendant) {
-        return;
+    if (!currentAttendant) return null;
+    const attendant = currentAttendant;
+    const epoch = sessionEpoch;
+    const profile = await apiRequest("/profiles/get", {
+        method: "POST",
+        body: JSON.stringify({ attendant })
+    });
+    if (epoch !== sessionEpoch || attendant !== currentAttendant) return null;
+    if (!profile || typeof profile !== "object" ||
+        !profile.wifi?.["2.4GHz"] || !profile.wifi?.["5GHz"]) {
+        throw new Error("O backend não devolveu os padrões de Wi-Fi 2.4/5 GHz.");
     }
+    currentProfile = profile;
+    document.getElementById("profileAttendant").textContent = attendant;
+    document.getElementById("dashboardProfileName").textContent = attendant;
+    await renderProfileForm(profile);
+    if (epoch === sessionEpoch && attendant === currentAttendant)
+        profileLoadedFor = epoch + ":" + attendant;
+    return profile;
+}
 
-    currentProfile = await apiRequest(
-        "/profiles/get",
-        {
-            method: "POST",
-            body: JSON.stringify({
-                attendant: currentAttendant
-            })
-        }
-    );
+async function ensureAttendantProfile() {
+    if (!currentAttendant) return null;
+    const key = sessionEpoch + ":" + currentAttendant;
+    if (profileLoadedFor === key && currentProfile &&
+        document.querySelector('[data-profile-band="2.4GHz"]') &&
+        document.querySelector('[data-profile-band="5GHz"]')) {
+        return currentProfile;
+    }
+    if (profileLoadPending?.key === key) return profileLoadPending.promise;
+    const pending = { key, promise: null };
+    pending.promise = loadProfile().finally(() => {
+        if (profileLoadPending === pending) profileLoadPending = null;
+    });
+    profileLoadPending = pending;
+    return pending.promise;
+}
 
-    document.getElementById(
-        "profileAttendant"
-    ).textContent = currentAttendant;
-
-    document.getElementById(
-        "dashboardProfileName"
-    ).textContent = currentAttendant;
-
-    await renderProfileForm(
-        currentProfile
-    );
+// Display the exact stage in the persistent result pane. A transient toast
+// used to hide the actual reason for failed captured-form previews.
+function renderProfileActionError(stage, error) {
+    const target = document.getElementById("profileApplyResult");
+    if (!target) return;
+    const box = document.createElement("div");
+    box.className = "profile-action-error";
+    box.setAttribute("role", "alert");
+    const title = document.createElement("strong");
+    title.textContent = "Falha: " + stage;
+    const detail = document.createElement("p");
+    detail.textContent = String(error?.message || error ||
+        "Falha não identificada.");
+    const hint = document.createElement("small");
+    hint.textContent = "Nenhuma etapa será repetida automaticamente. " +
+        "Confira a sessão e a configuração atual antes de gerar outra prévia.";
+    box.append(title, detail, hint);
+    target.replaceChildren(box);
 }
 
 
@@ -3141,6 +3248,12 @@ async function saveProfile(
     if (!currentAttendant) {
         return null;
     }
+    // The local draft must come from the authenticated attendant's saved
+    // preset. Avoid persisting a form populated by a previous router.
+    const owner = sessionEpoch + ":" + currentAttendant;
+    if (profileLoadedFor !== owner) {
+        await ensureAttendantProfile();
+    }
 
     // Mesma proteção para o botão Salvar, não apenas Aplicar.
     if (!document.querySelector('[data-profile-band="2.4GHz"]') ||
@@ -3166,6 +3279,7 @@ async function saveProfile(
             }
         );
 
+        profileLoadedFor = sessionEpoch + ":" + currentAttendant;
         if (!quiet) {
             showToast(
                 `Perfil de ${currentAttendant} salvo.`
@@ -3236,6 +3350,7 @@ async function captureCurrentConfiguration() {
 // exigimos confirmação humana antes do endpoint POST único de execução.
 async function applyExperimentalF6201BProfile() {
     let startEpoch = sessionEpoch;
+    let profileStage = "Validar conexão e permissões";
     const resultArea = document.getElementById("profileApplyResult");
     if (!resultArea) {
         showToast("Painel de resultado do perfil não encontrado.");
@@ -3256,17 +3371,21 @@ async function applyExperimentalF6201BProfile() {
             throw new Error("Ative ZTE_F6201B_EXPERIMENTAL_WRITES=1 para " +
                 "testar o perfil deste firmware.");
         }
-        if (!currentProfile) {
-            // O fluxo somente leitura pulava loadProfile() após login.
-            // Carregar os dados persistidos, nunca inventar um perfil vazio.
+        profileStage = "Carregar perfil Wi-Fi 2.4 e 5 GHz";
+        if (!currentProfile || profileLoadedFor !==
+                sessionEpoch + ":" + currentAttendant) {
+            // Keep the existing loadProfile() path testable: a local preset is
+            // always loaded BEFORE collecting the two radio forms.
             await loadProfile();
         }
         if (!document.querySelector('[data-profile-band="2.4GHz"]') ||
             !document.querySelector('[data-profile-band="5GHz"]')) {
             await renderProfileForm(currentProfile);
         }
+        profileStage = "Salvar o padrão selecionado";
         await saveProfile(true);
         if (startEpoch !== sessionEpoch) return;
+        profileStage = "Gerar prévia RF, DNS e hosts na ONT";
         const proposal = await apiRequest("/f6201b/profile/preview", {
             method: "POST",
             body: JSON.stringify({attendant: currentAttendant})
@@ -3368,6 +3487,7 @@ async function applyExperimentalF6201BProfile() {
                     ? "Etapas experimentais confirmadas por releitura."
                     : "Execução interrompida. Verifique o relatório e o painel original.");
             } catch (error) {
+                renderProfileActionError("Executar perfil na ONT", error);
                 showToast("Aplicação não confirmada: " + error.message +
                     ". Consulte o painel original antes de repetir.");
             } finally {
@@ -3375,6 +3495,7 @@ async function applyExperimentalF6201BProfile() {
             }
         }, {once: true});
     } catch (error) {
+        renderProfileActionError(profileStage, error);
         showToast(error.message);
     } finally {
         setBusy(false);
@@ -4601,13 +4722,20 @@ async function restoreDesktopSession() {
         openPage(destination);
         // /connection/status só recupera metadados. As informações do
         // equipamento precisam ser consultadas novamente após o reload JS.
+        // Both native and read-only F6201B desktop sessions restore the
+        // technician's radio presets, without attempting router writes.
+        currentProfile = null;
+        profileLoadedFor = null;
+        profileLoadPending = null;
+        document.getElementById("profileRadios")?.replaceChildren();
+        try {
+            await ensureAttendantProfile();
+        } catch (profileError) {
+            console.warn("Perfil local indisponível após restauração:", profileError);
+            renderProfileActionError("Restaurar configuração padrão", profileError);
+        }
+        if (restoreEpoch !== sessionEpoch || !ontConnected) return;
         if (routerWriteEnabled) {
-            try {
-                await loadProfile();
-            } catch (profileError) {
-                console.warn("Perfil local indisponível após restauração:", profileError);
-            }
-            if (restoreEpoch !== sessionEpoch || !ontConnected) return;
             const summary = await loadAll();
             if (summary?.essentialLoaded === 0) {
                 showToast("Sessão local encontrada, mas a ONT não respondeu às leituras principais.");
