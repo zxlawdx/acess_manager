@@ -562,6 +562,30 @@ async function loadMultimodelCatalog() {
 }
 
 
+async function showMultimodelMesh() {
+    const output = document.getElementById("multimodelProbeOutput");
+    const select = document.getElementById("multimodelSelect");
+    setBusy(true, "Consultando topologia Mesh...");
+    try {
+        const result = await apiRequest("/multimodel/mesh", {
+            method: "POST",
+            body: JSON.stringify({ model: select?.value || null })
+        });
+        output.textContent = JSON.stringify(result, null, 2);
+        showToast(
+            result.available
+                ? "Resumo Mesh consultado. Nenhum dado pessoal exportado."
+                : (result.reason || "Topologia não disponível neste modelo.")
+        );
+    } catch (error) {
+        output.textContent = "Topologia indisponível para este firmware.";
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
+}
+
+
 async function probeMultimodel() {
     const output = document.getElementById("multimodelProbeOutput");
     const select = document.getElementById("multimodelSelect");
@@ -1709,6 +1733,15 @@ function initAdvancedOperations() {
         ?.addEventListener(
             "click",
             probeCapabilities
+        );
+
+    document
+        .getElementById(
+            "multimodelMeshButton"
+        )
+        ?.addEventListener(
+            "click",
+            showMultimodelMesh
         );
 
     document
