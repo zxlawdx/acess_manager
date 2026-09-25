@@ -191,11 +191,9 @@ async function runSupportDiagnostic({
     }
 
     if (!routerWriteEnabled) {
-        openPage("advanced");
-        showToast("Diagnóstico específico do modelo, somente leitura.");
-        if (typeof runMultimodelDiagnostic === "function") {
-            await runMultimodelDiagnostic();
-        }
+        // Diagnóstico por modelo permanece NA aba Diagnóstico Automático.
+        // Nunca chamar o motor legado (ping/POST) num firmware experimental.
+        await runSelectedFirmwareDiagnostic();
         return;
     }
 
@@ -1452,3 +1450,273 @@ document.getElementById(
 
 
 loadSpeedtestPreference();
+
+
+// =========================================================
+// OPÇÕES DINÂMICAS POR FIRMWARE
+// O catálogo indica apenas candidatos; a sondagem GET identifica quais
+// rotas realmente responderam. Nenhuma ação de escrita é oferecida aqui.
+// =========================================================
+
+const firmwareDiagnosticState = {
+    host: null,
+    model: null,
+    options: [],
+    probeRunning: false,
+    scanComplete: false
+};
+
+const FIRMWARE_DIAGNOSTIC_SECTIONS = Object.freeze({
+    device_info: "device",
+    wan: "wan",
+    dsl: "dsl",
+    wifi_ssids: "wifi_ssids",
+    wifi_clients: "wifi_clients",
+    lan_clients: "lan_clients",
+    pon_optical: "optical"
+});
+
+const FIRMWARE_DIAGNOSTIC_LABELS = Object.freeze({
+    device_info: "Identificação e recursos",
+    wan: "Conexão WAN",
+    dsl: "Sincronismo DSL",
+    wifi_ssids: "Redes Wi-Fi",
+    wifi_clients: "Dispositivos Wi-Fi",
+    lan_clients: "Dispositivos cabeados",
+    pon_optical: "Potência óptica"
+});
+
+function firmwareDiagnosticPanel() {
+    const form = document.getElementById("supportDiagnosticForm");
+    if (!form) return null;
+    let panel = document.getElementById("firmwareDiagnosticPanel");
+    if (panel) return panel;
+    panel = document.createElement("section");
+    panel.id = "firmwareDiagnosticPanel";
+    panel.className = "panel";
+    panel.style.marginBottom = "20px";
+    panel.innerHTML = `
+        <span class="section-kicker">RECURSOS DO EQUIPAMENTO</span>
+        <h3>Diagnóstico dinâmico por firmware</h3>
+        <p id="firmwareDiagnosticStatus" aria-live="polite">
+            Conecte-se a uma ONT para consultar as opções.
+        </p>
+        <div id="firmwareDiagnosticChoices" class="advanced-switch-grid"></div>
+        <div class="form-actions" style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button id="firmwareDiagnosticDetect" type="button" class="button ghost">
+                Verificar recursos disponíveis
+            </button>
+            <button id="firmwareDiagnosticRun" type="button" class="button primary" disabled>
+                Diagnosticar seções selecionadas
+            </button>
+        </div>
+        <pre id="firmwareDiagnosticResult" style="white-space: pre-wrap; overflow-wrap: anywhere;"></pre>
+    `;
+    form.prepend(panel);
+    panel.querySelector("#firmwareDiagnosticDetect")
+        .addEventListener("click", () => void detectFirmwareDiagnosticOptions());
+    panel.querySelector("#firmwareDiagnosticRun")
+        .addEventListener("click", () => void runSelectedFirmwareDiagnostic());
+    return panel;
+}
+
+function renderFirmwareDiagnosticOptions() {
+    const panel = firmwareDiagnosticPanel();
+    if (!panel) return;
+    const grid = panel.querySelector("#firmwareDiagnosticChoices");
+    const status = panel.querySelector("#firmwareDiagnosticStatus");
+    const detected = firmwareDiagnosticState.options.filter(item => item.confirmed).length;
+    const experimental = firmwareDiagnosticState.model?.toUpperCase().includes("F6201B");
+    status.textContent = !ontConnected
+        ? "Conecte-se antes de executar qualquer diagnóstico."
+        : `${firmwareDiagnosticState.model || "Modelo desconhecido"}: ${detected} recurso(s) confirmado(s), ${firmwareDiagnosticState.options.length - detected} candidato(s) não confirmado(s).` +
+          (experimental ? " F6201B: perfil experimental, sem garantia de compatibilidade." : "");
+    const selected = new Set([...grid.querySelectorAll("input:checked")].map(input => input.value));
+    grid.replaceChildren();
+    for (const option of firmwareDiagnosticState.options) {
+        const label = document.createElement("label");
+        label.className = "advanced-switch";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = option.name;
+        input.disabled = !option.confirmed;
+        input.checked = option.confirmed && (selected.size === 0 || selected.has(option.name));
+        const text = document.createElement("span");
+        text.textContent = `${FIRMWARE_DIAGNOSTIC_LABELS[option.name] || option.name} — ${option.confirmed ? "confirmado" : "candidato (não testado/indisponível)"}`;
+        label.append(text, input);
+        grid.append(label);
+    }
+    panel.querySelector("#firmwareDiagnosticRun").disabled = !detected || firmwareDiagnosticState.probeRunning;
+    panel.querySelector("#firmwareDiagnosticDetect").disabled = !ontConnected || firmwareDiagnosticState.probeRunning;
+}
+
+async function loadFirmwareDiagnosticOptions() {
+    const panel = firmwareDiagnosticPanel();
+    if (!panel || !ontConnected) {
+        renderFirmwareDiagnosticOptions();
+        return;
+    }
+    try {
+        // Bootstrap não consulta o roteador nem disputa o RLock do diagnóstico.
+        const bootstrap = await apiRequest("/discovery/bootstrap");
+        if (!bootstrap?.connected) {
+            panel.querySelector("#firmwareDiagnosticStatus").textContent =
+                "O backend não possui uma sessão autenticada.";
+            return;
+        }
+        const model = bootstrap.model || bootstrap.detected_model || "";
+        const sameDevice = firmwareDiagnosticState.host === currentHost
+            && firmwareDiagnosticState.model === model;
+        if (sameDevice && firmwareDiagnosticState.options.length) {
+            renderFirmwareDiagnosticOptions();
+            return;
+        }
+        const normalized = model.toUpperCase().replace(/[^A-Z0-9]/g, "");
+        const entry = (bootstrap.catalog?.models || []).find(item =>
+            normalized.includes(item.model.toUpperCase())
+        );
+        firmwareDiagnosticState.host = currentHost;
+        firmwareDiagnosticState.model = model;
+        firmwareDiagnosticState.scanComplete = false;
+        firmwareDiagnosticState.options = (entry?.candidate_features || [])
+            .filter(name => FIRMWARE_DIAGNOSTIC_SECTIONS[name])
+            .map(name => ({ name, confirmed: false }));
+        renderFirmwareDiagnosticOptions();
+        if (!entry) {
+            panel.querySelector("#firmwareDiagnosticStatus").textContent =
+                `O modelo ${model || "não identificado"} ainda não possui perfil. Não serão executadas consultas por suposição.`;
+        }
+    } catch (error) {
+        panel.querySelector("#firmwareDiagnosticStatus").textContent =
+            "Falha ao obter opções locais: " + error.message;
+    }
+}
+
+async function detectFirmwareDiagnosticOptions() {
+    const panel = firmwareDiagnosticPanel();
+    if (!panel || firmwareDiagnosticState.probeRunning || !ontConnected) return;
+    await loadFirmwareDiagnosticOptions();
+    if (!firmwareDiagnosticState.options.length) {
+        showToast("Não há perfil de endpoints candidato para esta ONT.");
+        return;
+    }
+    firmwareDiagnosticState.probeRunning = true;
+    renderFirmwareDiagnosticOptions();
+    const status = panel.querySelector("#firmwareDiagnosticStatus");
+    const result = panel.querySelector("#firmwareDiagnosticResult");
+    const model = firmwareDiagnosticState.model;
+    const host = firmwareDiagnosticState.host;
+    let offset = 0;
+    let total = 0;
+    let stopped = false;
+    setBusy(true, "Validando recursos disponíveis (somente GET)...");
+    try {
+        do {
+            // Um lote por vez: o firmware compartilha contexto menuView/menuData.
+            const batch = await discoveryRequest("/multimodel/probe", {
+                method: "POST",
+                body: JSON.stringify({ model, start: offset, max_endpoints: 2 }),
+                timeoutMs: 55000
+            });
+            if (host !== currentHost || model !== firmwareDiagnosticState.model) return;
+            total = Number(batch.total_candidates || 0);
+            for (const capability of batch.capabilities || []) {
+                const option = firmwareDiagnosticState.options.find(
+                    item => item.name === capability.feature
+                );
+                if (option) {
+                    option.confirmed = capability.available === true;
+                    option.checked = true;
+                }
+            }
+            offset = Number(batch.next_offset ?? (offset + 2));
+            status.textContent =
+                `Verificando ${model}: ${Math.min(offset, total)}/${total} endpoints avaliados...`;
+            result.textContent = JSON.stringify({
+                model,
+                evaluated: Math.min(offset, total),
+                total,
+                results: (batch.capabilities || []).map(item => ({
+                    feature: item.feature,
+                    available: item.available,
+                    reason: item.reason || null
+                }))
+            }, null, 2);
+            renderFirmwareDiagnosticOptions();
+            if (batch.session_expired) {
+                stopped = true;
+                showToast("Sessão expirada durante a detecção. Reconecte a ONT.");
+                break;
+            }
+        } while (total && offset < total);
+        firmwareDiagnosticState.scanComplete = !stopped;
+        renderFirmwareDiagnosticOptions();
+        if (!firmwareDiagnosticState.options.some(item => item.confirmed)) {
+            status.textContent = "Nenhum endpoint confirmado neste firmware. Não será gerado diagnóstico fictício.";
+        }
+    } catch (error) {
+        status.textContent = "Falha na detecção: " + error.message;
+        showToast(error.message);
+    } finally {
+        firmwareDiagnosticState.probeRunning = false;
+        renderFirmwareDiagnosticOptions();
+        setBusy(false);
+    }
+}
+
+async function runSelectedFirmwareDiagnostic() {
+    const panel = firmwareDiagnosticPanel();
+    if (!panel || !ontConnected || firmwareDiagnosticState.probeRunning) return;
+    await loadFirmwareDiagnosticOptions();
+    let choices = [...panel.querySelectorAll("#firmwareDiagnosticChoices input:checked")]
+        .filter(input => !input.disabled).map(input => input.value);
+    if (!choices.length && !firmwareDiagnosticState.scanComplete) {
+        await detectFirmwareDiagnosticOptions();
+        choices = [...panel.querySelectorAll("#firmwareDiagnosticChoices input:checked")]
+            .filter(input => !input.disabled).map(input => input.value);
+    }
+    if (!choices.length) {
+        showToast("Nenhuma seção validada. Verifique recursos antes de diagnosticar.");
+        return;
+    }
+    const report = {
+        model: firmwareDiagnosticState.model,
+        read_only: true,
+        sections: {}, errors: {},
+        evidence: "Somente endpoints confirmados pela detecção GET"
+    };
+    const result = panel.querySelector("#firmwareDiagnosticResult");
+    const host = currentHost;
+    setBusy(true, "Consultando as seções verificadas...");
+    try {
+        for (const [index, feature] of choices.entries()) {
+            if (host !== currentHost) break;
+            const section = FIRMWARE_DIAGNOSTIC_SECTIONS[feature];
+            try {
+                const data = await discoveryRequest("/multimodel/diagnostic", {
+                    method: "POST",
+                    body: JSON.stringify({ model: firmwareDiagnosticState.model, section }),
+                    timeoutMs: 48000
+                });
+                Object.assign(report.sections, data.sections || {});
+                if (data.reason) report.errors[section] = data.reason;
+            } catch (error) {
+                report.errors[section] = error.message;
+                if (/passou de \\d+s/.test(error.message)) break;
+            }
+            result.textContent = `DIAGNÓSTICO POR FIRMWARE — ${index + 1}/${choices.length}\n` +
+                JSON.stringify(report, null, 2);
+        }
+        showToast(Object.values(report.sections).some(item => item.available)
+            ? "Diagnóstico por firmware concluído."
+            : "O firmware não retornou dados nas seções selecionadas.");
+    } finally {
+        setBusy(false);
+    }
+}
+
+document.addEventListener("zte:page-open", event => {
+    if (event.detail?.pageName === "supportDiagnostic") {
+        void loadFirmwareDiagnosticOptions();
+    }
+});
