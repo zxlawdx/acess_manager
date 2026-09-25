@@ -47,6 +47,7 @@ class ZTEService:
         self._capability_service = None
         self._history_session_id = None
         self._device_info = {}
+        self._selected_model = None
 
     # =========================================================
     # CONEXÃO
@@ -154,6 +155,7 @@ class ZTEService:
                 self._device_info = self._zte.device_status()
             except Exception:
                 self._device_info = {}
+                self._selected_model = None
 
             detected_model = self._device_info.get("modelo")
             if model_hint and detected_model:
@@ -161,6 +163,8 @@ class ZTEService:
                 claimed, _ = find_family(model_hint)
                 actual, _ = find_family(detected_model)
                 if claimed and actual and claimed != actual:
+                    self._zte.session.close()
+                    self._zte = None
                     raise ValueError(
                         "Modelo informado diverge do modelo retornado "
                         "pelo equipamento. Verifique o perfil selecionado."
@@ -170,6 +174,7 @@ class ZTEService:
                 detected_model or model_hint,
                 self._device_info.get("firmware"),
             )
+            self._selected_model = detected_model or model_hint
 
             self._capability_service = CapabilityService(
                 self._zte,
@@ -905,6 +910,7 @@ class ZTEService:
         with self._lock:
             selected = (
                 model
+                or self._selected_model
                 or self._device_info.get("modelo")
                 or self._device_info.get("model")
                 or ""
