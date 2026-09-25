@@ -838,6 +838,27 @@ def f6201b_write_apply(context=None):
     return _safe_call(zte_service.f6201b_write_apply, nonce, confirmation)
 
 
+@api.get("/f6201b/dns/status")
+def f6201b_dns_status(context=None):
+    return _safe_call(zte_service.f6201b_dns_status)
+
+
+@api.post("/f6201b/dns/preview")
+def f6201b_dns_preview(context=None):
+    body = _json(context)
+    return _safe_call(zte_service.f6201b_dns_preview, body.get("changes"))
+
+
+@api.post("/f6201b/dns/apply")
+def f6201b_dns_apply(context=None):
+    body = _json(context)
+    return _safe_call(
+        zte_service.f6201b_dns_apply,
+        str(body.get("nonce") or "")[:100],
+        str(body.get("confirmation") or "")[:50],
+    )
+
+
 @api.get("/multimodel/mapped-routes")
 def mapped_f6201b_routes(context=None):
     """Inventário de rotas GET do manifesto sanitizado, sem acessar ONT."""
