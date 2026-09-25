@@ -126,7 +126,7 @@
                         ${network.enabled ? "ATIVA" : "DESATIVADA"}
                     </span>
                 </div>
-                <form class="f6201b-ssid-form">
+                <form class="ssid-form f6201b-ssid-form">
                     <div class="ssid-meta">
                         <span class="meta-pill">F6201B</span>
                         <span class="meta-pill">Segurança preservada</span>
