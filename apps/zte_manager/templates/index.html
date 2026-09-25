@@ -791,6 +791,10 @@
                             <span class="material-symbols-outlined">radar</span>
                             Detectar recursos
                         </button>
+                        <button id="exportFeatureShapesButton" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">data_object</span>
+                            Mapa do firmware
+                        </button>
                         <button id="captureSnapshotButton" class="button ghost" type="button">
                             <span class="material-symbols-outlined">photo_camera</span>
                             Snapshot
@@ -812,6 +816,15 @@
                     </div>
                     <div id="capabilityGrid" class="capability-grid">
                         <div class="loading">Abra a detecção para validar os menus disponíveis neste firmware.</div>
+                    </div>
+                    <div id="firmwareShapePanel" class="with-top-space hidden">
+                        <p class="muted">
+                            Relatório estrutural: nomes dos campos e contagens, sem valores.
+                            Revise antes de compartilhar.
+                        </p>
+                        <textarea id="firmwareShapeOutput" class="selectable-output" rows="10" readonly
+                                  style="width:100%;max-width:100%;box-sizing:border-box;resize:vertical;"
+                                  aria-label="Estrutura do firmware"></textarea>
                     </div>
                 </article>
 
