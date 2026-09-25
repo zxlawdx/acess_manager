@@ -782,6 +782,7 @@ async function probeMultimodel({ quick = false } = {}) {
                 capabilities: [...verified.values()],
                 candidate_features: [...candidates.values()]
             };
+            advancedState.trackerProbe = combined;
             renderTrackerDiscovery(combined);
             offset = Number(batch.next_offset ?? (offset + 2));
             const confirmed = [...verified.values()].filter(item => item.available).length;
@@ -839,8 +840,9 @@ async function exportFeatureShapes() {
         .filter(item => item.available)
         .map(item => item.feature);
 
-    if (!available.length) {
-        showToast("Execute Detectar recursos antes de gerar o mapa.");
+    const tracker = advancedState.trackerProbe || null;
+    if (!available.length && !tracker) {
+        showToast("Detecte os menus nativos ou o modelo antes de gerar o mapa.");
         return;
     }
 
@@ -851,9 +853,20 @@ async function exportFeatureShapes() {
     const report = {
         schema: 1,
         adapter: advancedState.capabilities?.adapter || "ThinkLua",
-        notes: "Contém somente campos e contagens. Revisar antes de compartilhar.",
+        notes: "Contém apenas estrutura de menu e contagens. Revisar antes de compartilhar.",
+        tracker: tracker ? {
+            model: tracker.model,
+            family: tracker.family,
+            endpoints: tracker.endpoints,
+            features: tracker.capabilities,
+            untested: tracker.candidate_features,
+        } : null,
         features: []
     };
+    // O tracker já entregou campos/contagens sem valores pessoais. Isto
+    // também funciona quando não existe um adaptador ThinkLua nativo.
+    document.getElementById("firmwareShapeOutput").value =
+        JSON.stringify(report, null, 2);
 
     setBusy(true, "Lendo estrutura do firmware...");
 
@@ -880,7 +893,11 @@ async function exportFeatureShapes() {
             );
         }
 
-        showToast("Mapa estrutural gerado. Revise antes de compartilhar.");
+        showToast(
+            tracker && !available.length
+                ? "Mapa estrutural do modelo gerado. Revise antes de compartilhar."
+                : "Mapa estrutural gerado. Revise antes de compartilhar."
+        );
     } finally {
         setBusy(false);
     }
