@@ -1,4 +1,4 @@
-"""F6201B is a provisional GET-only profile, not an assumed supported firmware."""
+"""Owner-captured F6201B GET route and XML structure regressions."""
 import unittest
 
 from apps.zte_manager.services import multimodel_service as multimodel
@@ -37,9 +37,12 @@ class F6201BTests(unittest.TestCase):
         model, family = multimodel.find_family("ZXHN F6201B")
         self.assertEqual((model, family), ("F6201B", "f6201b_candidate"))
         self.assertEqual(multimodel.catalog()["models"][-1]["evidence"],
-                         "unverified_candidate")
-        self.assertNotIn("pon_optical",
-                         multimodel.catalog()["models"][-1]["candidate_features"])
+                         "owner_capture_V9.3.10P7N7")
+        self.assertIn("pon_optical",
+                      multimodel.catalog()["models"][-1]["candidate_features"])
+        self.assertIn("lan_ports",
+                      multimodel.catalog()["models"][-1]["candidate_features"])
+        self.assertNotIn("lan_clients", multimodel.FAMILY[family])
         adapter = select_adapter("F6201B")
         self.assertNotIn(adapter.name,
                          {"zte-f6600p-thinklua", "zte-f670l-thinklua"})
@@ -47,14 +50,22 @@ class F6201BTests(unittest.TestCase):
     def test_probe_confirms_only_matching_xml_shape(self):
         client = ReadOnlyDevice()
         result = multimodel.probe(client, "F6201B",
-                                  max_endpoints=1, start=0)
+                                  max_endpoints=1, start=1)
         self.assertTrue(result["read_only"])
         self.assertEqual(result["model"], "F6201B")
-        # The first endpoint expects WIFI XML, but device XML must not
-        # be falsely classified as Wi-Fi support.
-        self.assertFalse(result["endpoints"]["wifi_clients"]["available"])
+        # Optical XML must not be confused with the valid device XML.
+        self.assertFalse(result["endpoints"]["pon_optical"]["available"])
         self.assertFalse(result["supported"])
         self.assertTrue(all(call[0].startswith("GET") for call in client.calls))
+
+    def test_captured_routes_and_safe_field_projection(self):
+        features = multimodel.FAMILY["f6201b_candidate"]
+        self.assertEqual(features["wifi_clients"].tag, "wlan_homepage_lua.lua")
+        self.assertEqual(features["lan_ports"].tag, "status_lan_info_lua.lua")
+        self.assertEqual(features["pon_optical"].tag, "optical_info_lua.lua")
+        self.assertEqual(features["wifi_ssids"].root, "OBJ_WLANAP_ID")
+        self.assertNotIn("Username", str(diagnostic.F6201B_FIELDS))
+        self.assertNotIn("Password", str(diagnostic.F6201B_FIELDS))
 
     def test_device_diagnostic_can_use_validated_read_only_shape(self):
         client = ReadOnlyDevice()
