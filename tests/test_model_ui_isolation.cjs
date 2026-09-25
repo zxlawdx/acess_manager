@@ -70,5 +70,12 @@ async function settle() {
     await settle();
     assert.equal(mutated,0,"Contradictory device model must block experimental UI");
     assert.equal(diagnosticCalls,0);
-    console.log("Native F6600P/F670L and mismatched model UI isolation OK");
+    bootstrap={...bootstrap,model:"F6201B",detected_model:null,
+        model_verified:false, session_revision:"router-d"};
+    handlers["zte:session-changed"]();
+    handlers["zte:page-open"]({detail:{pageName:"wifi"}});
+    await settle();
+    assert.equal(mutated,0,"Manual F6201B hint without device proof must not replace UI");
+    assert.equal(diagnosticCalls,0);
+    console.log("Native F6600P/F670L and unverified experimental identity isolation OK");
 })().catch(e=>{console.error(e);process.exitCode=1});
