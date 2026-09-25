@@ -791,7 +791,8 @@ def multimodel_probe(context=None):
     model = str(body.get("model") or "")[:50].strip()
     try:
         count = min(10, max(1, int(body.get("max_endpoints", 4))))
-        start = min(10, max(0, int(body.get("start", 0))))
+        # Modelos mapeados têm mais de dez rotas; não reiniciar no offset 10.
+        start = min(1000, max(0, int(body.get("start", 0))))
     except (TypeError, ValueError):
         count, start = 4, 0
     return _safe_call(
