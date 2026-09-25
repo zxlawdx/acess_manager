@@ -120,6 +120,12 @@ def _rows():
 ALLOWED = {row["tag"]: row for row in _rows()}
 for tag, view in CAPTURED_GET_VIEWS.items():
     if tag in ALLOWED:
+        # Second capture resolves earlier unknown-XML records too.
+        root = CAPTURED_GET_ROOTS.get(tag)
+        if root and not ALLOWED[tag]["inspectable"]:
+            ALLOWED[tag]["root"] = root
+            ALLOWED[tag]["response_format"] = "XML"
+            ALLOWED[tag]["inspectable"] = True
         continue
     root = CAPTURED_GET_ROOTS.get(tag, "")
     # A segunda captura também registra vistas e tabelas novas.
