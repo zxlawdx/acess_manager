@@ -706,6 +706,24 @@ def capability_probe(context=None):
     )
 
 
+@api.get("/multimodel/catalog")
+def multimodel_catalog(context=None):
+    return _safe_call(
+        zte_service.multimodel_catalog
+    )
+
+
+@api.post("/multimodel/probe")
+def multimodel_probe(context=None):
+    # O usuário pode informar modelo quando o firmware omite a identificação.
+    # Não envia escrita ao roteador e limita o nome fornecido.
+    model = str(_json(context).get("model") or "")[:50].strip()
+    return _safe_call(
+        zte_service.multimodel_probe,
+        model or None,
+    )
+
+
 @api.get("/features/shape")
 def feature_shape(context=None):
     feature = str(
