@@ -557,6 +557,22 @@ def _encode_secrets(zte, tag: str, live: LiveRecord,
                     changes: dict[str, str]) -> tuple[dict, str]:
     values = dict(live.values)
     values.update(changes)
+    if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua":
+        fields = ("IPAddr", "MinAddress", "MaxAddress",
+                  "DNSServer1", "DNSServer2")
+        if not set(fields).issubset(live.encode_fields):
+            raise RuntimeError("O DHCP não informou os campos criptografados.")
+        if not getattr(zte, "public_key_pem", None):
+            raise RuntimeError("Não encontrei a chave do formulário DHCP.")
+        key = "".join(str(secrets.randbelow(10)) for _ in range(16))
+        iv = "".join(str(secrets.randbelow(10)) for _ in range(16))
+        for name in fields:
+            if name not in values:
+                raise RuntimeError("Campo DHCP ausente: " + name)
+            values[name] = zte_security.aes_encrypt_value(values[name], key, iv)
+        return values, zte_security.rsa_encrypt_text(
+            f"{key}+{iv}", zte.public_key_pem
+        )
     if tag == "tr069_remotemgr_lua.lua":
         changed = [key for key in PASSWORDS if key in changes]
         if changed:
