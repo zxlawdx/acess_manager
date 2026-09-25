@@ -24,6 +24,10 @@ const handler=app.slice(
 assert.ok(handler.includes("await applyExperimentalF6201BProfile()"));
 assert.ok(handler.includes('"/profiles/apply"'),
     "Preserve original native family flow");
+assert.ok(app.includes('void renderProfileForm(currentProfile || {'),
+    "Profile page must mount editable 2.4/5 GHz cards immediately");
+assert.ok(app.includes('"2.4GHz": {}') && app.includes('"5GHz": {}'),
+    "Immediate profile draft must expose both radio bands");
 assert.ok(editor.includes('"/f6201b/write/status"'),
     "Dashboard profile CTA must be opt-in gated");
 console.log("Experimental F6201B uses preflight and one-use confirmation.");
