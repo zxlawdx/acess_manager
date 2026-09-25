@@ -8,6 +8,7 @@ A família Vue exige uma implementação de autenticação separada.
 
 from __future__ import annotations
 
+import json
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -205,4 +206,59 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
         "supported": any(x["available"] for x in endpoints.values()),
         "endpoints": endpoints,
         "notes": "Somente descoberta; escrita e backup requerem validação por firmware.",
+    }
+
+
+def mesh_summary(zte, model: str) -> dict[str, Any]:
+    """Consulta agregada da topologia sem retornar MAC/IP/nomes de clientes.
+
+    O endpoint JSON só é tentado nas famílias F6640/F6600P documentadas.
+    Nenhuma persistência de resposta bruta.
+    """
+    selected, family = find_family(model)
+    if family != "f6640":
+        return {
+            "model": selected or model,
+            "available": False,
+            "reason": "Topologia JSON não documentada para esta família.",
+        }
+
+    zte.get_view("mmTopology", Menu3Location=0)
+    response = zte.session.get(
+        zte.base_url + "/",
+        params={"_type": "menuData", "_tag": "topo_lua.lua"},
+        timeout=10,
+    )
+    response.raise_for_status()
+
+    # Este endpoint responde JSON, ao contrário dos outros menus ThinkLua.
+    # Não serializar a resposta bruta: pode conter dados identificáveis.
+    raw = response.text
+    if "SessionTimeout" in raw or raw.lstrip().lower().startswith("<html"):
+        raise RuntimeError("Sessão expirada ou menu Mesh não disponível.")
+
+    data = json.loads(raw)
+    if not isinstance(data, dict) or not isinstance(data.get("ad"), dict):
+        raise RuntimeError("Formato de topologia não reconhecido.")
+
+    devices = [
+        item for item in data["ad"].values()
+        if isinstance(item, dict) and item.get("MacAddr")
+    ]
+    access = {"lan": 0, "wifi_24": 0, "wifi_5": 0, "other": 0}
+    for item in devices:
+        band = {
+            "0": "lan", "1": "wifi_24", "2": "wifi_5"
+        }.get(str(item.get("AccessType", "")), "other")
+        access[band] += 1
+
+    return {
+        "model": selected, "available": True,
+        "agents": sum(
+            1 for item in data.get("slave", []) if isinstance(item, dict)
+        ),
+        "controller": isinstance(data.get("master"), dict),
+        "connected_devices": len(devices),
+        "access": access,
+        "note": "Resumo sem IP, MAC, SSID ou hostname; somente leitura.",
     }
