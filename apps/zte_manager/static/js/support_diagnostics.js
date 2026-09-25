@@ -187,6 +187,7 @@ function diagnosticPayload({
 async function classicF6201BDiagnostic(bootstrap, {full = true, dashboard = false} = {}) {
     if (supportDiagnosticState.running) return;
     const revision = bootstrap.session_revision;
+    const connectedHost = currentHost;
     const output = document.getElementById("supportDiagnosticOutput");
     const badge = document.getElementById("supportDiagnosticBadge");
     const payload = diagnosticPayload({full});
@@ -207,7 +208,10 @@ async function classicF6201BDiagnostic(bootstrap, {full = true, dashboard = fals
             method: "POST",
             body: JSON.stringify(payload)
         });
-        if (!ontConnected || revision !== firmwareDiagnosticState.revision) {
+        // Do not display results from a previous router/session.
+        const current = await apiRequest("/discovery/bootstrap");
+        if (!ontConnected || connectedHost !== currentHost ||
+            current.session_revision !== revision) {
             return;
         }
         if (dashboard) {
