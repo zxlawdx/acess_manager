@@ -2060,6 +2060,15 @@ document.addEventListener("zte:session-changed", () => {
     firmwareDiagnosticState.scanComplete = false;
     firmwareDiagnosticState.classicMode = false;
     supportDiagnosticState.firmwareReport = null;
+    supportDiagnosticState.lastDiagnostic = null;
+    supportDiagnosticState.dashboardDiagnostic = null;
+    supportDiagnosticState.lastConfig = null;
+    const attendanceText = document.getElementById("supportAttendanceText");
+    if (attendanceText) attendanceText.value = "";
+    document.getElementById("supportAttendancePanel")?.classList.add("hidden");
+    document.getElementById("supportReportActions")?.classList.toggle(
+        "hidden", !ontConnected
+    );
     const legacyForm = document.getElementById("supportDiagnosticForm");
     if (legacyForm) {
         for (const row of legacyForm.querySelectorAll(
@@ -2086,6 +2095,9 @@ document.addEventListener("zte:session-changed", () => {
 });
 document.addEventListener("zte:page-open", event => {
     if (event.detail?.pageName === "supportDiagnostic") {
+        document.getElementById("supportReportActions")?.classList.toggle(
+            "hidden", !ontConnected
+        );
         void loadFirmwareDiagnosticOptions();
     }
 });
