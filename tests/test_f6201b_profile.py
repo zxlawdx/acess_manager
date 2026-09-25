@@ -189,6 +189,27 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(self.dns.applied, 0)
         self.assertFalse(self.zte.writes_enabled)
 
+    def test_missing_autochrange_uses_homologated_firmware_default(self):
+        del self.zte._values["AutoChRange"]
+        captured = {}
+
+        def fake_post(zte, tag, payload):
+            captured.update(dict(payload))
+            zte._values["AutoChRange"] = "0"
+            zte._values["TxPower"] = "75%"
+            return ("<ajax_response_xml_root><IF_ERRORID>0</IF_ERRORID>"
+                    "</ajax_response_xml_root>")
+
+        with patch.dict(os.environ, {OPT_IN_ENV: "1"}), patch(
+            "apps.zte_manager.services.f6201b_profile.post_menu",
+            side_effect=fake_post
+        ):
+            proposal = self.preview()
+            result = self.apply(proposal["nonce"])
+
+        self.assertTrue(result["success"], result)
+        self.assertEqual(captured["AutoChRange"], "0")
+
     def test_missing_live_form_field_fails_before_any_write(self):
         del self.zte._values["PreambleType"]
         with patch.dict(os.environ, {OPT_IN_ENV: "1"}):

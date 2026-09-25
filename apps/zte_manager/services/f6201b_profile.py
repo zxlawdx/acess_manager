@@ -36,6 +36,15 @@ CAPTURED_RF_FIELDS = tuple(
     name for name in RADIO_SCHEMA
     if name not in {"IF_ACTION", "_InstID", "_sessionTOKEN"}
 )
+
+# V9.3.10P7N7 was physically homologated with AutoChRange serialized as
+# "0". Some live menuData responses omit that hidden compatibility field,
+# even though the Apply handler still expects it. Treat ONLY this captured,
+# non-user-facing field as a firmware default; every other missing field
+# continues to fail closed before any POST.
+RF_CAPTURE_COMPAT_DEFAULTS = {
+    "AutoChRange": "0",
+}
 SKIPPED_PROFILE_FEATURES = (
     "Senhas/SSIDs: editar e confirmar por rede na aba Wi-Fi",
     "Outras opções da ONT fora do perfil do atendente",
@@ -64,7 +73,20 @@ def _read_radios(zte) -> tuple[list[dict], dict]:
     radios = parsed.get("OBJ_WLANSETTING_ID", [])
     if not radios:
         raise RuntimeError("A ONT não informou os rádios do perfil.")
-    return radios, parsed
+
+    normalized = []
+    for source in radios:
+        radio = dict(source)
+        for field, value in RF_CAPTURE_COMPAT_DEFAULTS.items():
+            if radio.get(field) in (None, ""):
+                radio[field] = value
+        normalized.append(radio)
+
+    # Keep parsed and the per-radio list consistent so channel validation
+    # and the preview compare the exact same normalized snapshot.
+    parsed = dict(parsed)
+    parsed["OBJ_WLANSETTING_ID"] = normalized
+    return normalized, parsed
 
 
 def _build_target(data: dict, radio: dict, band: str, config: dict) -> dict:

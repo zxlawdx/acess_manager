@@ -575,3 +575,132 @@ html[data-theme="light"] #profileApplyResult .profile-experiment-warning {
   html[data-theme="light"] .topbar {padding:11px 14px!important}
   #profileRadios {gap:10px}
 }
+
+/* =========================================================
+   LIGHT MODE — override dark-only high-specificity console rules.
+   telecom_console.css contains a few literal dark backgrounds with
+   selectors such as .kpi-card.cyan and .detail-tile !important.
+   Keep the light workbench visually coherent at every depth.
+========================================================= */
+html[data-theme="light"] .kpi-card.cyan,
+html[data-theme="light"] .kpi-card.violet,
+html[data-theme="light"] .kpi-card.green,
+html[data-theme="light"] .kpi-card.amber {
+  background:var(--ui-surface)!important;
+  background-image:none!important;
+  border-color:var(--ui-border)!important;
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .kpi-card::before {
+  opacity:.72!important;
+}
+html[data-theme="light"] .kpi-card > strong,
+html[data-theme="light"] .dual-metric strong,
+html[data-theme="light"] .kpi-card .material-symbols-outlined {
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .detail-tile,
+html[data-theme="light"] .metric-tile,
+html[data-theme="light"] .radio-stat,
+html[data-theme="light"] .account-row,
+html[data-theme="light"] .credential-card,
+html[data-theme="light"] .profile-host,
+html[data-theme="light"] .client-counter-row > div,
+html[data-theme="light"] .channel-score,
+html[data-theme="light"] .speed-hero-grid > div,
+html[data-theme="light"] .band-steering-metrics span,
+html[data-theme="light"] .support-mode-card,
+html[data-theme="light"] .support-check-card,
+html[data-theme="light"] .mesh-flow > div {
+  background:var(--ui-elevated)!important;
+  background-image:none!important;
+  border-color:var(--ui-border-muted)!important;
+  color:var(--ui-text)!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .detail-tile strong,
+html[data-theme="light"] .metric-tile strong,
+html[data-theme="light"] .radio-stat strong,
+html[data-theme="light"] .speed-hero-grid strong,
+html[data-theme="light"] .mesh-flow strong {
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .detail-tile span,
+html[data-theme="light"] .detail-tile small,
+html[data-theme="light"] .metric-tile span,
+html[data-theme="light"] .radio-stat span,
+html[data-theme="light"] .speed-hero-grid span,
+html[data-theme="light"] .speed-hero-grid small,
+html[data-theme="light"] .mesh-flow small {
+  color:var(--ui-text-secondary)!important;
+}
+html[data-theme="light"] .network-overview-item:hover {
+  background:var(--ui-accent-wash)!important;
+  border-color:#9ebfa6!important;
+}
+html[data-theme="light"] .network-overview-icon,
+html[data-theme="light"] .wan-icon,
+html[data-theme="light"] .feature-control-icon {
+  background:var(--ui-accent-wash)!important;
+  color:var(--ui-accent)!important;
+}
+html[data-theme="light"] .client-table th,
+html[data-theme="light"] .neighbor-table th,
+html[data-theme="light"] .management-table th {
+  background:#e9efea!important;
+  color:var(--ui-text-secondary)!important;
+  border-color:var(--ui-border)!important;
+}
+html[data-theme="light"] .client-table td,
+html[data-theme="light"] .neighbor-table td,
+html[data-theme="light"] .management-table td {
+  background:var(--ui-surface)!important;
+  color:var(--ui-text)!important;
+  border-color:var(--ui-border-muted)!important;
+}
+/* Diagnostic output remains monospaced, but no black islands in light mode. */
+html[data-theme="light"] #pingOutput.terminal-output,
+html[data-theme="light"] #tracerouteOutput.terminal-output,
+html[data-theme="light"] pre.terminal-output {
+  background:#edf4ef!important;
+  color:#173526!important;
+  border-color:#bacbc0!important;
+  box-shadow:inset 0 0 0 1px rgba(40,102,71,.035)!important;
+}
+html[data-theme="light"] .adaptive-page-panel,
+html[data-theme="light"] #firmwareDiagnosticResult,
+html[data-theme="light"] #firmwareDiagnosticChoices {
+  background:transparent!important;
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .adaptive-choice-group,
+html[data-theme="light"] .adaptive-choice,
+html[data-theme="light"] .adaptive-record {
+  background:var(--ui-surface)!important;
+  background-image:none!important;
+  color:var(--ui-text)!important;
+  border-color:var(--ui-border)!important;
+}
+html[data-theme="light"] .adaptive-choice:hover {
+  background:var(--ui-accent-wash)!important;
+}
+html[data-theme="light"] .adaptive-badge.is-muted {
+  background:var(--ui-neutral-wash)!important;
+  color:var(--ui-text-secondary)!important;
+}
+html[data-theme="light"] .adaptive-score small {
+  color:var(--ui-success)!important;
+}
+html[data-theme="light"] .profile-radio-card {
+  background:var(--ui-surface)!important;
+}
+html[data-theme="light"] .profile-radio-card .radio-card-hero {
+  background:#edf3ee!important;
+  color:var(--ui-text)!important;
+  border-color:var(--ui-border-muted)!important;
+}
+html[data-theme="light"] .profile-radio-card .profile-fields,
+html[data-theme="light"] .profile-radio-card .checkbox-container {
+  color:var(--ui-text)!important;
+}
+
