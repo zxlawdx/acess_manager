@@ -46,3 +46,6 @@ jobs:
 
       - name: Verify discovery bootstrap survives stalled capabilities
         run: node tests/test_discovery_bootstrap.cjs
+
+      - name: Verify ONT data and session restoration
+        run: node tests/test_session_restore.cjs
