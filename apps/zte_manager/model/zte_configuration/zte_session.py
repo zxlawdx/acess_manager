@@ -123,8 +123,14 @@ def login(zte):
             }
         )
 
+    # Jamais registrar token/cookie/credenciais em logs compartilhados.
     print("\nResposta do login:")
-    print(resultado)
+    print({
+        "login_need_refresh": bool(resultado.get("login_need_refresh")),
+        "lockingTime": resultado.get("lockingTime"),
+        "loginErrMsg": resultado.get("loginErrMsg") or "",
+        "session_token_received": bool(zte.session_token),
+    })
 
     if resultado.get("loginErrMsg"):
         print("\nErro de login:")
