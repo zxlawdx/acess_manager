@@ -63,6 +63,41 @@ class DhcpTests(unittest.TestCase):
         self.assertTrue(result["capabilities"]["ipv6_read"])
         self.assertFalse(result["capabilities"]["reservation_write"])
 
+    def test_captured_dhcp_get_is_decrypted_before_frontend(self):
+        from apps.zte_manager.model.zte_configuration import zte_security
+        fields = ("IPAddr", "MinAddress", "MaxAddress",
+                  "DNSServer1", "DNSServer2")
+        values = {
+            "IPAddr": "192.0.2.1", "MinAddress": "192.0.2.100",
+            "MaxAddress": "192.0.2.200",
+            "DNSServer1": "1.1.1.1", "DNSServer2": "9.9.9.9",
+        }
+        self.ont.session_tmp_token = "synthetic-dhcp-token"
+        encrypted = dict(
+            (key, zte_security.aes_encrypt_value(
+                value, self.ont.session_tmp_token,
+                self.ont.session_tmp_token[::-1],
+            )) for key,value in values.items()
+        )
+        original = self.ont.get_menu
+        def aes_menu(tag):
+            if tag != dhcp.BASIC:
+                return original(tag)
+            self.ont.last_tag = tag
+            return ("<ajax_response_xml_root><IF_ERRORID>0</IF_ERRORID>"
+                    "<encode>" + ",".join(fields) + "</encode>"
+                    "</ajax_response_xml_root>")
+        self.ont.get_menu = aes_menu
+        self.ont._parse_instances = lambda raw: {
+            "OBJ_Br0AndDhcpsHosCfg_ID": [encrypted]
+        }
+        result = dhcp._rows(
+            self.ont, "lanMgrIpv4", dhcp.BASIC,
+            "OBJ_Br0AndDhcpsHosCfg_ID",
+        )
+        self.assertEqual(result[0]["MinAddress"], "192.0.2.100")
+        self.assertEqual(result[0]["DNSServer1"], "1.1.1.1")
+
     def test_optional_lease_get_cannot_hide_ipv4_server(self):
         self.ont.fail_tag = dhcp.LEASE
         result = dhcp.status(self.ont)
