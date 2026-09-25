@@ -163,9 +163,17 @@ class AttendanceReportService:
                 detail = (f"Diagnóstico F6201B: {count} leituras confirmadas" +
                           ("; " + ", ".join(options) if options else ""))
             else:
-                detail = "Diagnóstico " + self._safe_target(
-                    str(payload.get("mode") or entry.get("summary") or "geral")
+                mode_name = {
+                    "general": "geral",
+                    "low_speed": "de velocidade",
+                    "drops": "de quedas/intermitência",
+                    "no_internet": "de ausência de Internet",
+                    "wifi": "Wi-Fi",
+                }.get(
+                    str(payload.get("mode") or ""),
+                    self._safe_target(entry.get("summary") or "geral"),
                 )
+                detail = "Diagnóstico " + mode_name
             errors = payload.get("errors") or {}
             if errors:
                 detail += ("; etapas sem confirmação: " +
