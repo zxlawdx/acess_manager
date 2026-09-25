@@ -77,7 +77,7 @@ MODEL_FAMILY = {
     "H169A": "h288a", "H288A": "h288a", "H3600P": "h288a",
     "H3640": "h288a", "H6645P": "h288a", "H6745": "h288a",
     "H388X": "h388x", "H2640": "h2640",
-    "E2631": "vue", "SR7410": "vue",
+    "E2631": "vue", "SR7410": "vue", "SR7110": "vue",
 }
 
 # Não armazenar respostas XML nem campos de clientes no relatório estrutural.
@@ -100,6 +100,24 @@ def find_family(model: str | None) -> tuple[str | None, str | None]:
     return None, None
 
 
+# Diferenças documentadas por firmware no projeto zte_tracker.
+# As aliases compartilham endpoints, mas NÃO atestam funções de escrita.
+MODEL_EXTRAS: dict[str, tuple[str, ...]] = {
+    "F6600P": ("pon_optical", "mesh_topology_candidate"),
+    "F8748": ("wan_traffic_counters",),
+    "H2640": ("dsl_sync_not_internet",),
+    "SR7410": ("vue_api",),
+    "SR7110": ("vue_api",),
+    "E2631": ("vue_api",),
+}
+
+DISCOVERY_NAMES = {
+    "wifi_clients": "Clientes Wi-Fi",
+    "lan_clients": "Clientes cabeados",
+    "wan": "Status WAN",
+    "dsl": "Sincronismo DSL",
+}
+
 def catalog() -> dict[str, Any]:
     return {
         "models": [
@@ -107,12 +125,13 @@ def catalog() -> dict[str, Any]:
                 "model": model,
                 "family": family,
                 "protocol": "vue" if family == "vue" else "thinklua",
-                "discovery": (
-                    "read_only_probe"
-                ),
+                "discovery": "read_only_probe",
+                "candidate_features": list(FAMILY[family]),
+                "firmware_differences": MODEL_EXTRAS.get(model, ()),
             }
             for model, family in MODEL_FAMILY.items()
         ],
+        "tracker_models": len(MODEL_FAMILY),
         "notes": (
             "O catálogo mostra candidatos documentados pelo zte_tracker, "
             "não valida compatibilidade de cada firmware. Probe é somente leitura."
@@ -249,6 +268,27 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
         "supported": any(x["available"] for x in endpoints.values()),
         "endpoints": endpoints,
         "notes": "Somente descoberta; escrita e backup requerem validação por firmware.",
+        "capabilities": [
+            {
+                "feature": name,
+                "label": DISCOVERY_NAMES.get(name, name),
+                "available": item["available"],
+                "writable": False,
+                "source": "zte_tracker endpoint profile",
+                "status": "detected" if item["available"] else "not_confirmed",
+            }
+            for name, item in endpoints.items()
+        ],
+        "candidate_features": [
+            {
+                "feature": name,
+                "label": DISCOVERY_NAMES.get(name, name),
+                "status": "not_tested",
+                "writable": False,
+            }
+            for name in FAMILY[family] if name not in endpoints
+        ],
+        "model_specific": list(MODEL_EXTRAS.get(selected, ())),
     }
 
 
