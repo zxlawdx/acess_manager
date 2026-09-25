@@ -13,17 +13,23 @@ class SavedProfileServiceTests(unittest.TestCase):
         self.service.current_host = "192.0.2.52"
         self.service._session_revision = "session-synthetic"
 
-    def test_checks_attendant_before_loading_saved_profile_or_writing(self):
+    def test_other_saved_presets_are_not_an_employee_permission_boundary(self):
+        fake = object()
+        expected = {"success": True, "noop": False}
         with patch.object(self.service, "_f6201b_write_firmware",
-                          return_value=EXACT_FIRMWARE), patch(
-            "apps.zte_manager.services.zte_service.profile_service.get_profile"
+                          return_value=EXACT_FIRMWARE), patch.object(
+            self.service, "get_client", return_value=fake
+        ), patch(
+            "apps.zte_manager.services.zte_service.profile_service.get_profile",
+            return_value={"wifi": {}, "dns": {}}
         ) as storage, patch.object(
-            self.service._f6201b_profile, "apply_saved"
+            self.service._f6201b_profile, "apply_saved",
+            return_value=expected
         ) as command:
-            with self.assertRaises(PermissionError):
-                self.service.f6201b_profile_apply_saved("other-tech")
-        storage.assert_not_called()
-        command.assert_not_called()
+            report = self.service.f6201b_profile_apply_saved("other-tech")
+        self.assertEqual(report, expected)
+        storage.assert_called_once_with("other-tech")
+        self.assertIs(command.call_args.args[0], fake)
 
     def test_executes_one_internal_command_from_persisted_profile(self):
         preset = {"wifi": {"2.4GHz": {"auto_channel": True}},
