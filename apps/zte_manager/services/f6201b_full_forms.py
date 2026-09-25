@@ -264,8 +264,14 @@ def _form_fields(tag: str, row: dict, index: int, rows: list,
         indexed = re.fullmatch(r"(.+)_([0-9]+)", key)
         if indexed:
             base, number = indexed.group(1), int(indexed.group(2))
-            if number < len(rows) and base in rows[number]:
-                merged[key] = str(rows[number][base])
+            # The radio schedule combines a timer object and two radio
+            # instances. Do not read RadioStatus_i from the timer row.
+            source_rows = (
+                objects.get("OBJ_WLANSETTING_ID", [])
+                if tag == "wlan_wlanbasiconoff_lua.lua" else rows
+            )
+            if number < len(source_rows) and base in source_rows[number]:
+                merged[key] = str(source_rows[number][base])
                 continue
         if tag == "wlan_wps_lua.lua":
             if key == "SSID_InstID" and row.get(ID):
@@ -333,6 +339,9 @@ def _form_fields(tag: str, row: dict, index: int, rows: list,
             # A new encode is constructed for WAN/ACS when re-encryption is
             # needed. Empty encode is the documented no-secret-change form.
             merged[key] = ""
+    # IF_ACTION is always the captured Apply, never an HTML page's
+    # unrelated default action left by an earlier form.
+    merged["IF_ACTION"] = "Apply"
     # WPS _InstID is a special fixed scope irrespective of row _InstID.
     if tag == "wlan_wps_lua.lua":
         merged[ID] = "-1"
@@ -397,7 +406,7 @@ def _load(zte, tag: str) -> list[LiveRecord]:
     for index, row in enumerate(rows):
         fields = _form_fields(tag, row, index, rows, objects, html_values)
         if tag == "tr069_remotemgr_lua.lua":
-            for name in PASSWORDS & set(fields):
+            for name in PASSWORDS & set(OBSERVED_APPLY_FIELDS[tag]):
                 # Existing TR-069 implementation uses six tabs as the
                 # browser's sentinel for preserving credentials unchanged.
                 fields[name] = "\t" * 6
