@@ -555,7 +555,10 @@
 
                 <div class="support-diagnostic-shell">
                     <article class="panel support-control-panel">
-                        <form id="supportDiagnosticForm" class="form-stack">
+                        <!-- Bloqueia submissão HTML nativa caso scripts carreguem com erro.
+                             Sem isso, o browser navega para / e a SPA parece deslogar,
+                             mesmo com a sessão Python da ONT ainda ativa. -->
+                        <form id="supportDiagnosticForm" class="form-stack" onsubmit="return false;">
                             <div class="support-form-grid">
                                 <label class="field">
                                     <span>TIPO DE QUEIXA</span>
@@ -882,7 +885,7 @@
                             <span id="automaticDiagnosticBadge" class="badge">Pronto</span>
                         </div>
 
-                        <form id="automaticDiagnosticForm" class="operations-form">
+                        <form id="automaticDiagnosticForm" class="operations-form" onsubmit="return false;">
                             <div class="operations-form-grid">
                                 <label class="field">
                                     <span>HOST DE TESTE</span>
