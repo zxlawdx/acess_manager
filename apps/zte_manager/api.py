@@ -803,6 +803,32 @@ def multimodel_probe(context=None):
     )
 
 
+# As demais APIs de escrita NÃO ficam disponíveis para perfis novos.
+# Este fluxo exige liberação explícita, preflight, nonce e confirmção.
+@api.get("/f6201b/write/status")
+def f6201b_write_status(context=None):
+    return _safe_call(zte_service.f6201b_write_status)
+
+
+@api.post("/f6201b/write/preview")
+def f6201b_write_preview(context=None):
+    body = _json(context)
+    ssid_id = str(body.get("ssid_id") or "")[:64]
+    config = body.get("config")
+    return _safe_call(
+        zte_service.f6201b_write_preview, ssid_id, config
+    )
+
+
+@api.post("/f6201b/write/apply")
+def f6201b_write_apply(context=None):
+    body = _json(context)
+    # Somente nonce e confirmação, nunca aceitar payload arbitrário no Apply.
+    nonce = str(body.get("nonce") or "")[:100]
+    confirmation = str(body.get("confirmation") or "")[:50]
+    return _safe_call(zte_service.f6201b_write_apply, nonce, confirmation)
+
+
 @api.get("/multimodel/mapped-routes")
 def mapped_f6201b_routes(context=None):
     """Inventário de rotas GET do manifesto sanitizado, sem acessar ONT."""
