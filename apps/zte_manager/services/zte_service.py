@@ -874,6 +874,10 @@ class ZTEService:
                 features
             )
 
+    def capability_shape(self, feature):
+        with self._lock:
+            return self._capabilities().shape(feature)
+
     def read_capability(
         self,
         feature
@@ -1400,10 +1404,19 @@ class ZTEService:
                 )
             )
 
+            failed_sections = [
+                name
+                for name, data in payload.items()
+                if isinstance(data, dict)
+                and data.get("_error")
+            ]
+
             return {
                 "success": True,
                 "snapshot_id": snapshot_id,
                 "payload": payload,
+                "partial": bool(failed_sections),
+                "failed_sections": failed_sections,
             }
 
     def history(

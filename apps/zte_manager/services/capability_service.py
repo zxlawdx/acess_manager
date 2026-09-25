@@ -245,5 +245,45 @@ class CapabilityService:
             "features": self.gateway.probe_many(requested),
         }
 
+    def shape(self, feature_key: str) -> dict[str, Any]:
+        """Retorna somente chaves e contagens do firmware, nunca valores.
+
+        Inspirado no conceito de support bundle estrutural do zte_tracker,
+        implementado independentemente e sem copiar seu código GPL.
+        """
+        result = self.gateway.read(feature_key)
+        if not result.get("available"):
+            return {
+                "feature": feature_key,
+                "available": False,
+                "objects": {},
+            }
+
+        shape = {}
+        for name, entries in result.get("objects", {}).items():
+            if name == "__meta__":
+                shape[name] = {
+                    "fields": sorted(entries.keys())
+                    if isinstance(entries, dict) else [],
+                }
+                continue
+
+            if isinstance(entries, list):
+                fields = set()
+                for entry in entries:
+                    if isinstance(entry, dict):
+                        fields.update(str(key) for key in entry)
+                shape[name] = {
+                    "count": len(entries),
+                    "fields": sorted(fields),
+                }
+
+        return {
+            "feature": feature_key,
+            "available": True,
+            "endpoint": result.get("endpoint"),
+            "objects": shape,
+        }
+
     def read(self, feature_key: str) -> dict[str, Any]:
         return self.gateway.read(feature_key)

@@ -1946,3 +1946,78 @@ input[type="radio"] {
     font-size: 9px;
     line-height: 1.5;
 }
+
+
+/* =========================================================
+   WINDOWS WEBVIEW / HIGH DPI / ZOOM
+   Min-width em grids e flex items fazia o topo e os cards
+   extrapolarem a largura disponível ao maximizar ou ampliar.
+   ========================================================= */
+
+html, body, .app-shell, .workspace, .main-content {
+    max-width: 100%;
+}
+
+.app-shell, .workspace, .main-content,
+.topbar, .topbar-actions, .topbar-title,
+.page, .console-ribbon {
+    min-width: 0;
+}
+
+.workspace {
+    width: calc(100% - var(--sidebar-width));
+    max-width: calc(100% - var(--sidebar-width));
+    overflow-x: auto;
+}
+
+.main-content {
+    box-sizing: border-box;
+    margin-left: 0;
+    overflow-wrap: anywhere;
+}
+
+.topbar {
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+.topbar-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.topbar-quick-actions {
+    flex-wrap: wrap;
+}
+
+.console-ribbon > *,
+.device-chip, .operations-copy {
+    min-width: 0;
+}
+
+.device-chip {
+    flex-shrink: 1;
+}
+
+/* Evita que textos/grades extensos ultrapassem o viewport do QtWebEngine.
+   Rolagem local mantém botões e tabelas acessíveis com zoom > 100%. */
+.page > *, .operation-row, .management-code-output,
+.capability-card {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+@media (max-width: 930px) {
+    .workspace {
+        width: calc(100% - var(--sidebar-width));
+        max-width: calc(100% - var(--sidebar-width));
+    }
+}
+
+@media (max-width: 680px) {
+    .workspace {
+        width: 100%;
+        max-width: 100%;
+    }
+}
