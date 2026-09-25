@@ -634,7 +634,7 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
     if (!select) return null;
     if (!refresh && select.dataset.loaded === "true"
         && discoveryCatalogHost === currentHost &&
-        discoveryCatalogRevision === window.currentZteRevision) return null;
+        discoveryCatalogRevision === globalThis.currentZteRevision) return null;
     if (discoveryBootPromise) return discoveryBootPromise;
     if (info) info.textContent = "Lendo o estado da sessão local...";
 
@@ -676,7 +676,7 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
         }
         trackerDetectedModel = detected && detected !== "ZTE"
             ? response.detected_model : response.model || null;
-        window.currentZteRevision = response.session_revision || "";
+        globalThis.currentZteRevision = response.session_revision || "";
         const normalized = String(trackerDetectedModel || "").toUpperCase()
             .replace(/[^A-Z0-9]/g, "");
         const matched = (response.catalog?.models || []).find(item =>
@@ -752,7 +752,7 @@ async function discoveryRequest(endpoint, {
 // páginas e competir com o login/diagnóstico do firmware.
 function autoDiscoverTracker() {
     if (!ontConnected || !trackerDetectedModel) return Promise.resolve();
-    const key = `${window.currentZteRevision || ""}:${currentHost || ""}:${trackerDetectedModel}`;
+    const key = `${globalThis.currentZteRevision || ""}:${currentHost || ""}:${trackerDetectedModel}`;
     if (trackerQuickScanKey === key) return trackerQuickScanPromise || Promise.resolve();
     trackerQuickScanKey = key;
     trackerQuickScanPromise = probeMultimodel({ quick: true })
@@ -933,7 +933,7 @@ document.addEventListener("zte:session-changed", () => {
     discoveryBootPromise = null;
     discoveryCatalogHost = null;
     discoveryCatalogRevision = null;
-    window.currentZteRevision = null;
+    globalThis.currentZteRevision = null;
     advancedState.capabilities = null;
     advancedState.capabilityProbe = null;
     advancedState.trackerProbe = null;
