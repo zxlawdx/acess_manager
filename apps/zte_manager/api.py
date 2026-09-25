@@ -764,10 +764,13 @@ def multimodel_catalog(context=None):
 @api.post("/multimodel/diagnostic")
 def multimodel_diagnostic(context=None):
     """Consulta por família somente leitura, sem ping/traceroute no roteador."""
-    requested = str(_json(context).get("model") or "")[:50].strip()
+    body = _json(context)
+    requested = str(body.get("model") or "")[:50].strip()
+    section = str(body.get("section") or "")[:32].strip() or None
     return _safe_call(
         zte_service.multimodel_diagnostic,
         requested or None,
+        section,
     )
 
 
