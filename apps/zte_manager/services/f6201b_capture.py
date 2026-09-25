@@ -9,7 +9,7 @@ Não faz POST para a ONT e não expõe nenhuma resposta bruta ou senha.
 from __future__ import annotations
 
 from apps.zte_manager.services import multimodel_service as mm
-from apps.zte_manager.services.f6201b_evidence import CAPTURED_GET_VIEWS, GET_PARAMS, OBSERVED_APPLY_FIELDS
+from apps.zte_manager.services.f6201b_evidence import CAPTURED_GET_VIEWS, CAPTURED_GET_ROOTS, GET_PARAMS, OBSERVED_APPLY_FIELDS
 
 
 # categoria | _tag | OBJ esperado | _type | formato observado
@@ -118,6 +118,18 @@ def _rows():
 
 
 ALLOWED = {row["tag"]: row for row in _rows()}
+for tag, view in CAPTURED_GET_VIEWS.items():
+    if tag in ALLOWED:
+        continue
+    root = CAPTURED_GET_ROOTS.get(tag, "")
+    # A segunda captura também registra vistas e tabelas novas.
+    # Nunca tratar HTML/JSON (root vazio) como XML inspecionável.
+    ALLOWED[tag] = {
+        "category": "Captura complementar", "tag": tag, "root": root,
+        "request_type": "menuData", "response_format":
+            "XML" if root else "OUTRO",
+        "inspectable": bool(root),
+    }
 
 
 def catalog() -> dict:
@@ -147,6 +159,11 @@ def inspect(zte, tag: str) -> dict:
     if not route["inspectable"]:
         return {"tag": tag, "available": False,
                 "reason": "Sem objeto XML completo na captura fornecida."}
+    if tag == "wlan_sta_wlan_profile_lua.lua":
+        # Este endpoint exige _sessionTOKEN na URL e APGetFrom:
+        # não realizar scan involuntário durante inspeção estrutural.
+        return {"tag": tag, "available": False,
+                "reason": "Wi-Fi Scan exige procedimento específico."}
     if route["request_type"] == "hiddenData":
         response = zte.session.get(zte.base_url + "/", params={
             "_type": "hiddenData", "_tag": tag
