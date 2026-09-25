@@ -88,6 +88,69 @@ def _result(name: str, reader):
         return {"available": False, "error_type": type(exc).__name__}
 
 
+def device_resource_details(zte) -> dict[str, Any]:
+    """Objetos separados, conforme devmgr_statusmgr_lua.lua no tracker."""
+    raw = models._fetch(
+        zte,
+        models.ReadEndpoint(
+            "statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID"
+        ),
+    )
+    result = {
+        "identity": _whitelist(
+            raw, "OBJ_DEVINFO_ID", HEALTH_FIELDS, limit=1
+        ),
+        "resources": _whitelist(
+            raw, "OBJ_CPUMEMUSAGE_ID",
+            {"CpuUsage1": "cpu1", "CpuUsage2": "cpu2",
+             "CpuUsage3": "cpu3", "CpuUsage4": "cpu4",
+             "MemUsage": "memory_percent"},
+            limit=1,
+        ) if "OBJ_CPUMEMUSAGE_ID" in raw else [],
+        "uptime": _whitelist(
+            raw, "OBJ_POWERONTIME_ID",
+            {"PowerOnTime": "seconds"}, limit=1,
+        ) if "OBJ_POWERONTIME_ID" in raw else [],
+    }
+    return result
+
+
+def optical_details(zte) -> dict[str, Any]:
+    """PON opt-in F6600P. Não supor unidade para campos desconhecidos."""
+    raw = models._fetch(zte, PON_OPTICAL)
+    data = {
+        "optical": _whitelist(
+            raw, PON_OPTICAL.root,
+            {"RxPower": "rx_dbm", "TxPower": "tx_dbm",
+             "Temp": "temperature_c"},
+            limit=1,
+        )
+    }
+    if "OBJ_LOS_INFO_ID" in raw:
+        los = _instances(raw, "OBJ_LOS_INFO_ID")
+        data["loss_of_signal"] = [
+            item.get("LosInfo") != "0"
+            for item in los if "LosInfo" in item
+        ][:1]
+    if "OBJ_GPONREGSTATUS_ID" in raw:
+        reg = _instances(raw, "OBJ_GPONREGSTATUS_ID")
+        data["registration"] = [
+            {"state": item["RegStatus"]}
+            for item in reg if "RegStatus" in item
+        ][:1]
+    return data
+
+
+def wifi_ssid_summary(zte, endpoint: models.ReadEndpoint) -> dict[str, Any]:
+    """Somente contagens das redes ativas por banda, sem ESSID/senhas."""
+    raw = models._fetch(zte, endpoint)
+    access_points = _instances(raw, "OBJ_WLANAP_ID")
+    return {
+        "ssid_total": len(access_points),
+        "ssid_enabled": sum(item.get("Enable") == "1" for item in access_points),
+    }
+
+
 def diagnostic(zte, model: str, *, include_clients: bool = True) -> dict[str, Any]:
     selected, family = models.find_family(model)
     if family is None:
@@ -103,13 +166,7 @@ def diagnostic(zte, model: str, *, include_clients: bool = True) -> dict[str, An
     # A ordem é intencional: o firmware depende de menu/contexto e
     # requisições consecutivas (não paralelas) dentro da sessão atual.
     if family != "vue":
-        health = models.ReadEndpoint(
-            "statusMgr", "devmgr_statusmgr_lua.lua", "OBJ_DEVINFO_ID",
-        )
-        sections["device"] = _result(
-            "device",
-            lambda: _read(zte, health, HEALTH_FIELDS, limit=1),
-        )
+        sections["device"] = _result("device", lambda: device_resource_details(zte))
 
     status_endpoint = endpoints.get("wan") or endpoints.get("dsl")
     if status_endpoint:
@@ -123,12 +180,13 @@ def diagnostic(zte, model: str, *, include_clients: bool = True) -> dict[str, An
     if selected == "F6600P":
         sections["optical"] = _result(
             "optical",
-            lambda: _read(
-                zte, PON_OPTICAL,
-                {"RxPower": "rx_power", "TxPower": "tx_power",
-                 "Temp": "temperature"},
-                limit=1,
-            ),
+            lambda: optical_details(zte),
+        )
+
+    if family == "f6640":
+        sections["wifi_ssids"] = _result(
+            "wifi_ssids",
+            lambda: wifi_ssid_summary(zte, endpoints["wifi_ssids"]),
         )
 
     if include_clients:
