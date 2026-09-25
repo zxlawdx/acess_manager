@@ -228,13 +228,18 @@ for _line in _OTHER_APPLY.strip().splitlines():
 # Raw capture also includes PingDiagnosis and TraceRouteDiagnosis. These
 # are active operations, not read-only Get and not firmware configuration.
 OBSERVED_DIAGNOSTIC_ACTIONS = {
+    # Captured ORDER of the original native PingDiagnosis form including
+    # empty controls and output placeholders. Omitting them is NOT the
+    # same as reproducing this firmware's POST.
     "networkdiag_ping_lua.lua": (
-        "IF_ACTION", "Host", "NumofRepeat", "DataBlockSize",
-        "Timeout", "_sessionTOKEN",
+        "IF_ACTION", "_InstID", "Host", "Interface", "NumofRepeat",
+        "DataBlockSize", "Timeout", "Btn_cancel_PingDiagnosis",
+        "Btn_PingDiagnosis", "PingAck", "_sessionTOKEN",
     ),
     "networkdiag_traceroute_lua.lua": (
-        "IF_ACTION", "Control", "Host", "MaxHopCount", "Timeout",
-        "Protocol", "_sessionTOKEN",
+        "IF_ACTION", "_InstID", "Control", "Host", "Interface",
+        "MaxHopCount", "Timeout", "Protocol",
+        "Btn_TraceRouteDiagnosis", "Result", "_sessionTOKEN",
     ),
 }
 
