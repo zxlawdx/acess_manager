@@ -123,7 +123,7 @@ class FullProfileTests(unittest.TestCase):
         raw='<ajax_response_xml_root><IF_ERRORID>0</IF_ERRORID></ajax_response_xml_root>'
         ap={"_InstID":"DEV.WIFI.AP1","ESSID":"lab","Enable":"1",
             "ESSIDHideEnable":"0","VapIsolationEnable":"0",
-            "MaxUserNum":"32", "BeaconType":"None"}
+            "MaxUserNum":"32", "BeaconType":"11i"}
         def inspect(_):
             return [ap],raw
         zte._parse_instances=lambda xml:{
@@ -131,7 +131,8 @@ class FullProfileTests(unittest.TestCase):
                                 "KeyPassphrase":"encrypted-placeholder"}]
         }
         with patch.dict(os.environ,{OPT_IN_ENV:"1"}),patch.object(
-            writer,"_inspect_session",side_effect=inspect):
+            writer,"_inspect_session",side_effect=inspect),patch.object(
+            writer,"_ensure_psk_preservable",return_value=None):
             report=writer.preview(zte,host="192.0.2.1",
                 firmware=EXACT_FIRMWARE,ssid_id="DEV.WIFI.AP1",
                 config={"password":"synthetic-secret9"})
