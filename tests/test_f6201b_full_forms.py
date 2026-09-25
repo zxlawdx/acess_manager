@@ -238,12 +238,19 @@ class FullFormTests(unittest.TestCase):
             captured.update(dict(fields))
             return "<synthetic-success/>"
 
-        with patch("apps.zte_manager.services.f6201b_full_forms."
-                   "zte_security.aes_encrypt_value", return_value="AES"),
-             patch("apps.zte_manager.services.f6201b_full_forms."
-                   "zte_security.rsa_encrypt_text", return_value="RSA"),
-             patch("apps.zte_manager.services.f6201b_full_forms.post_menu",
-                   side_effect=fake_post):
+        with ExitStack() as mocks:
+            mocks.enter_context(patch(
+                "apps.zte_manager.services.f6201b_full_forms."
+                "zte_security.aes_encrypt_value", return_value="AES"
+            ))
+            mocks.enter_context(patch(
+                "apps.zte_manager.services.f6201b_full_forms."
+                "zte_security.rsa_encrypt_text", return_value="RSA"
+            ))
+            mocks.enter_context(patch(
+                "apps.zte_manager.services.f6201b_full_forms.post_menu",
+                side_effect=fake_post,
+            ))
             result = self._apply(fake, preview)
         self.assertEqual(captured["encode"], "RSA")
         self.assertEqual(captured["UserPassword"], "AES")
