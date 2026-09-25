@@ -3375,172 +3375,102 @@ async function captureCurrentConfiguration() {
 // O primeiro clique nunca escreve. Mostramos o diff, as exclusões e
 // exigimos confirmação humana antes do endpoint POST único de execução.
 async function applyExperimentalF6201BProfile() {
-    let startEpoch = sessionEpoch;
-    let profileStage = "Validar conexão e permissões";
+    // One click means one operator action. The server performs its own
+    // read/compare/Apply/readback in a single locked request; no extra
+    // preview button, typed phrase or second operator confirmation.
+    const startEpoch = sessionEpoch;
+    const attendant = currentAttendant;
     const resultArea = document.getElementById("profileApplyResult");
-    if (!resultArea) {
-        showToast("Painel de resultado do perfil não encontrado.");
-        return;
-    }
-    setBusy(true, "Validando o perfil experimental...");
+    if (!resultArea || !attendant) return;
+    let stage = "Carregar configuração padrão";
+    setBusy(true, "Preparando configuração do atendente...");
     try {
         const [identity, authorization] = await Promise.all([
             apiRequest("/discovery/bootstrap"),
             apiRequest("/f6201b/write/status")
         ]);
-        if (startEpoch !== sessionEpoch) return;
+        if (startEpoch !== sessionEpoch || attendant !== currentAttendant)
+            return;
         if (identity.connected !== true || identity.model_verified !== true ||
             String(identity.detected_model || "").toUpperCase() !== "F6201B") {
             throw new Error("A sessão atual não confirmou um F6201B.");
         }
         if (!authorization.opted_in || !authorization.supported_firmware) {
-            throw new Error("Ative ZTE_F6201B_EXPERIMENTAL_WRITES=1 para " +
-                "testar o perfil deste firmware.");
+            throw new Error("Habilite o F6201B nesta instalação com " +
+                "ZTE_F6201B_EXPERIMENTAL_WRITES=1.");
         }
-        profileStage = "Carregar perfil Wi-Fi 2.4 e 5 GHz";
         if (!currentProfile || profileLoadedFor !==
-                sessionEpoch + ":" + currentAttendant) {
-            // Keep the existing loadProfile() path testable: a local preset is
-            // always loaded BEFORE collecting the two radio forms.
-            await loadProfile();
+                startEpoch + ":" + attendant) {
+            await ensureAttendantProfile();
         }
         if (!document.querySelector('[data-profile-band="2.4GHz"]') ||
             !document.querySelector('[data-profile-band="5GHz"]')) {
             await renderProfileForm(currentProfile);
         }
-        profileStage = "Salvar o padrão selecionado";
+        if (startEpoch !== sessionEpoch || attendant !== currentAttendant)
+            return;
+        stage = "Salvar o perfil selecionado";
         await saveProfile(true);
-        if (startEpoch !== sessionEpoch) return;
-        profileStage = "Gerar prévia RF, DNS e hosts na ONT";
-        const proposal = await apiRequest("/f6201b/profile/preview", {
-            method: "POST",
-            body: JSON.stringify({attendant: currentAttendant})
-        });
-        if (startEpoch !== sessionEpoch) return;
+        if (startEpoch !== sessionEpoch || attendant !== currentAttendant)
+            return;
+
+        stage = "Aplicar e conferir os parâmetros no F6201B";
         resultArea.replaceChildren();
-        if (proposal.noop === true) {
-            // A fully matching preset must not require a fake confirmation
-            // or try to POST an undefined one-use nonce.
+        const progress = document.createElement("div");
+        progress.className = "profile-action-progress";
+        progress.setAttribute("role", "status");
+        progress.textContent =
+            "Lendo configuração, aplicando diferenças e verificando por rádio/DNS…";
+        resultArea.append(progress);
+        setBusy(true, "Aplicando perfil Wi-Fi 2.4/5 GHz e DNS na ONT…");
+        const report = await apiRequest("/f6201b/profile/apply-saved", {
+            method: "POST",
+            body: JSON.stringify({attendant})
+        });
+        if (startEpoch !== sessionEpoch || attendant !== currentAttendant)
+            return;
+        if (report.noop) {
+            resultArea.replaceChildren();
             const notice = document.createElement("div");
             notice.className = "profile-action-success";
             notice.setAttribute("role", "status");
-            notice.textContent = proposal.message ||
-                "O padrão já está aplicado nesta ONT.";
+            notice.textContent = report.message ||
+                "O perfil já corresponde à configuração da ONT.";
             resultArea.append(notice);
-            showToast("Configuração padrão já corresponde à ONT.");
+        } else {
+            renderProfileApplyResult(report);
+            if (report.not_included?.length) {
+                const ignored = document.createElement("p");
+                ignored.className = "muted";
+                ignored.textContent = "Fora deste perfil: " +
+                    report.not_included.join("; ");
+                resultArea.append(ignored);
+            }
+        }
+        if (!report.success) {
+            showToast("Aplicação interrompida em " +
+                (report.failed_stage || "etapa não identificada") +
+                ". Verifique o resultado sem repetir o comando automaticamente.");
             return;
         }
-        const header = document.createElement("h3");
-        header.textContent = "Prévia do perfil F6201B";
-        resultArea.append(header);
-        for (const radio of proposal.radios || []) {
-            const title = document.createElement("strong");
-            title.textContent = "Rádio " + radio.band;
-            resultArea.append(title);
-            for (const [field, change] of Object.entries(radio.changes || {})) {
-                const row = document.createElement("p");
-                row.className = "muted";
-                row.textContent = field + ": " + change.before + " → " + change.after;
-                resultArea.append(row);
-            }
+        showToast(report.noop ?
+            "O padrão já estava aplicado." :
+            "Perfil aplicado e conferido na ONT.");
+        // A falha de atualização de um painel jamais deve ocultar o
+        // resultado real dos POSTs já executados pelo backend.
+        const refresh = await Promise.allSettled([loadWifi(), loadDns()]);
+        if (refresh.some(item => item.status === "rejected")) {
+            showToast("Perfil aplicado. Atualize a leitura dos painéis quando possível.");
         }
-        if (Object.keys(proposal.dns || {}).length) {
-            const dnsTitle = document.createElement("strong");
-            dnsTitle.textContent = "DNS IPv4/IPv6";
-            resultArea.append(dnsTitle);
-            for (const [field, change] of Object.entries(proposal.dns)) {
-                const row = document.createElement("p");
-                row.className = "muted";
-                row.textContent = field + ": " + change.before + " → " + change.after;
-                resultArea.append(row);
-            }
-        }
-        if (proposal.domain) {
-            const domainTitle = document.createElement("strong");
-            domainTitle.textContent = "Domínio DNS";
-            const domainInfo = document.createElement("p");
-            domainInfo.textContent =
-                (proposal.domain.before || "(vazio)") + " → " +
-                (proposal.domain.after || "(vazio)");
-            resultArea.append(domainTitle, domainInfo);
-        }
-        if (proposal.hosts?.length) {
-            const hostTitle = document.createElement("strong");
-            hostTitle.textContent = "Hosts DNS estáticos";
-            resultArea.append(hostTitle);
-            for (const item of proposal.hosts) {
-                const hostLine = document.createElement("p");
-                hostLine.textContent = item.name + ": " +
-                    (item.before || "(novo)") + " → " + item.after;
-                resultArea.append(hostLine);
-            }
-        }
-        const omitted = document.createElement("p");
-        omitted.className = "muted";
-        omitted.textContent = "Não incluído neste teste: " +
-            (proposal.not_included || []).join("; ") + ".";
-        resultArea.append(omitted);
-        const warning = document.createElement("p");
-        warning.className = "profile-experiment-warning";
-        warning.textContent = proposal.warning ||
-            "Mudanças sequenciais podem interromper o Wi-Fi. Sem rollback automático.";
-        const confirmation = document.createElement("input");
-        confirmation.type = "text";
-        confirmation.autocomplete = "off";
-        confirmation.placeholder = "Digite APLICAR PERFIL F6201B";
-        confirmation.setAttribute("aria-label", "Confirmação do perfil experimental");
-        const execute = document.createElement("button");
-        execute.className = "button primary";
-        execute.type = "button";
-        execute.textContent = "Confirmar e testar perfil";
-        resultArea.append(warning, confirmation, execute);
-        execute.addEventListener("click", async () => {
-            if (confirmation.value !== "APLICAR PERFIL F6201B") {
-                showToast("Digite exatamente APLICAR PERFIL F6201B.");
-                return;
-            }
-            if (startEpoch !== sessionEpoch) {
-                showToast("A sessão mudou. Gere outra prévia.");
-                return;
-            }
-            execute.disabled = true;
-            setBusy(true, "Aplicando RF e DNS e verificando cada etapa...");
-            try {
-                const report = await apiRequest("/f6201b/profile/apply", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        nonce: proposal.nonce, confirmation: confirmation.value
-                    })
-                });
-                if (startEpoch !== sessionEpoch) return;
-                renderProfileApplyResult(report);
-                if (report.not_included?.length) {
-                    const exclusions = document.createElement("p");
-                    exclusions.className = "muted";
-                    exclusions.textContent =
-                        "Não incluído: " + report.not_included.join("; ");
-                    resultArea.append(exclusions);
-                }
-                showToast(report.success
-                    ? "Etapas experimentais confirmadas por releitura."
-                    : "Etapa " + (report.failed_stage || "indeterminada") +
-                      " interrompida. Consulte o resultado antes de repetir.");
-            } catch (error) {
-                renderProfileActionError("Executar perfil na ONT", error);
-                showToast("Aplicação não confirmada: " + error.message +
-                    ". Consulte o painel original antes de repetir.");
-            } finally {
-                setBusy(false);
-            }
-        }, {once: true});
     } catch (error) {
-        renderProfileActionError(profileStage, error);
-        showToast(error.message);
+        if (startEpoch === sessionEpoch && attendant === currentAttendant) {
+            renderProfileActionError(stage, error);
+            showToast(error.message);
+        }
     } finally {
         setBusy(false);
     }
 }
-
 
 async function applyProfile() {
     if (!currentAttendant) return;
