@@ -62,17 +62,23 @@ class ExperimentalF6201BWrites:
                 "experimental": True,
                 "risk": "Alterar ou desligar SSID pode interromper sua conexão Wi-Fi.",
             }],
-            "capture_evidence": "GET observado; POST Apply NÃO observado",
+            "capture_evidence": (
+                "GET e POST Apply observados na segunda captura enviada; "
+                "a compatibilidade do adaptador deve ser verificada em "
+                "releitura do equipamento"
+            ),
             "requires": [
                 "confirmação específica após visualizar a diferença",
                 "firmware exato e autenticação administrativa",
                 "menuView e token temporário reais",
                 "mapeamento atual de SSID/PSK confirmado no dispositivo",
+                "Apply reproduz a ordem dos campos da captura validada",
                 "liberação explícita via variável de ambiente",
             ],
             "note": (
-                "Não habilita escrita geral, WAN, GPON, TR-069, DNS ou "
-                "reboot. O primeiro Apply exige homologação física."
+                "Captura inclui Apply de Wi-Fi e outras funções, mas "
+                "somente SSID foi integrado ao editor protegido. "
+                "Demais mudanças aguardam adaptadores individualizados."
             ),
         }
 
@@ -241,8 +247,8 @@ class ExperimentalF6201BWrites:
                 "firmware": firmware, "ssid_id": ssid_id,
                 "changes": changes,
                 "nonce": nonce, "expires_in_seconds": PREVIEW_TTL,
-                "warning": ("EXPERIMENTAL: POST Apply não foi observado "
-                            "na captura. Mantenha acesso local à ONT.")}
+                "warning": ("POST Apply de SSID foi documentado na captura, "
+                            "mas ainda exige verificação física e acesso local.")}
 
     def apply(self, zte, *, host: str, firmware: str,
               nonce: str, confirmation: str, original_post) -> dict:
@@ -281,7 +287,8 @@ class ExperimentalF6201BWrites:
             # Reuso da rotina atual: read-modify-write, RSA/Check quando
             # disponível, e releitura obrigatória dos campos alterados.
             result = zte_wifi.set_ssid_config(
-                zte, proposal.ssid_id, proposal.config
+                zte, proposal.ssid_id, proposal.config,
+                captured_f6201b=True
             )
         finally:
             zte.writes_enabled = prior_enabled
