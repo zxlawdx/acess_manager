@@ -110,6 +110,7 @@ let currentProfile = null;
 // read-only F6201B login, page navigation and desktop restore from racing.
 let profileLoadedFor = null;
 let profileLoadPending = null;
+let profileApplyInProgress = false;
 let cachedWan = [];
 let cachedRadios = [];
 let cachedNetworks = [];
@@ -2885,7 +2886,7 @@ function renderProfileActionError(stage, error) {
         "Falha não identificada.");
     const hint = document.createElement("small");
     hint.textContent = "Nenhuma etapa será repetida automaticamente. " +
-        "Confira a sessão e a configuração atual antes de gerar outra prévia.";
+        "Confira a sessão e a configuração atual antes de aplicar novamente.";
     box.append(title, detail, hint);
     target.replaceChildren(box);
 }
@@ -3375,6 +3376,10 @@ async function captureCurrentConfiguration() {
 // O primeiro clique nunca escreve. Mostramos o diff, as exclusões e
 // exigimos confirmação humana antes do endpoint POST único de execução.
 async function applyExperimentalF6201BProfile() {
+    if (profileApplyInProgress) return;
+    profileApplyInProgress = true;
+    const applyButton = document.getElementById("applyProfileButton");
+    if (applyButton) applyButton.disabled = true;
     // One click means one operator action. The server performs its own
     // read/compare/Apply/readback in a single locked request; no extra
     // preview button, typed phrase or second operator confirmation.
@@ -3468,6 +3473,11 @@ async function applyExperimentalF6201BProfile() {
             showToast(error.message);
         }
     } finally {
+        profileApplyInProgress = false;
+        if (applyButton && startEpoch === sessionEpoch &&
+                attendant === currentAttendant) {
+            applyButton.disabled = false;
+        }
         setBusy(false);
     }
 }
