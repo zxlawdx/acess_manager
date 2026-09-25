@@ -1154,6 +1154,14 @@ def support_diagnostic(context=None):
     )
 
 
+@api.post("/diagnostics/support/f6201b")
+def support_diagnostic_f6201b(context=None):
+    def action():
+        data = _validated(SupportDiagnosticRequest, context)
+        return zte_service.f6201b_support_diagnostic(data.model_dump())
+    return _safe_call(action)
+
+
 @api.post("/diagnostics/remediate")
 def remediate_diagnostic(context=None):
     def action():
