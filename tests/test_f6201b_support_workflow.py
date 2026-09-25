@@ -51,6 +51,24 @@ class SupportCheckboxTests(unittest.TestCase):
         self.assertEqual(result["performed"][-1]["operation"],
                          "wifi_auto_optimization")
 
+    def test_dns_lookup_is_explicitly_labelled_as_workstation(self):
+        def lookup(host):
+            self.calls.append(("dns", host))
+            return {"source": "workstation_dns", "verified": True,
+                    "addresses": ["192.0.2.7"]}
+        result = run_f6201b_support(
+            config={"mode": "general", "dns_host": "example.org"},
+            dns_lookup=lookup, **self.funcs,
+        )
+        self.assertIn(("dns", "example.org"), self.calls)
+        self.assertEqual(result["sections"]["dns_lookup"]["source"],
+                         "workstation_dns")
+        self.assertEqual(
+            next(item["target"] for item in result["performed"]
+                 if item["operation"] == "dns_lookup_pc"),
+            "PC do atendente",
+        )
+
     def test_unchecked_actions_do_not_run(self):
         result = run_f6201b_support(
             config={"mode": "wifi", "run_ping": False,
