@@ -166,12 +166,12 @@ def device_resource_details(zte) -> dict[str, Any]:
     return result
 
 
-def optical_details(zte) -> dict[str, Any]:
+def optical_details(zte, endpoint=PON_OPTICAL) -> dict[str, Any]:
     """PON opt-in F6600P. Não supor unidade para campos desconhecidos."""
-    raw = models._fetch(zte, PON_OPTICAL)
+    raw = models._fetch(zte, endpoint)
     data = {
         "optical": _whitelist(
-            raw, PON_OPTICAL.root,
+            raw, endpoint.root,
             {"RxPower": "rx_power_raw", "TxPower": "tx_power_raw",
              "Temp": "temperature_raw", "Volt": "voltage_raw",
              "Current": "current_raw"},
@@ -245,7 +245,7 @@ def diagnostic(
     if selected in {"F6600P", "F6201B"} and wants("optical"):
         sections["optical"] = _result(
             "optical",
-            lambda: optical_details(zte),
+            lambda: optical_details(zte, endpoints.get("pon_optical", PON_OPTICAL)),
         )
 
     if family in {"f6640", "f6201b_candidate"} and wants("wifi_ssids"):
