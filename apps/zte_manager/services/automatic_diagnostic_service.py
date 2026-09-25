@@ -122,6 +122,7 @@ class AutomaticDiagnosticService:
         if registration:
             registered = registration.lower() in {
                 "1",
+                "5",  # Estado GPON O5 operacional exibido numericamente na F670L
                 "registered",
                 "registration success",
                 "o5",
