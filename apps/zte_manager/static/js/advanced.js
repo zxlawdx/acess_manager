@@ -729,9 +729,12 @@ async function runMultimodelDiagnostic() {
     }
     setBusy(true, "Executando leituras por família (sem alterações)...");
     try {
-        const report = await apiRequest("/multimodel/diagnostic", {
+        // Diagnóstico não depende de detecção manual anterior.
+        // A escolha foi fixada no login e verificada pelo servidor.
+        const report = await discoveryRequest("/multimodel/diagnostic", {
             method: "POST",
-            body: JSON.stringify({ model: select?.value || null })
+            body: JSON.stringify({ model: trackerDetectedModel || null }),
+            timeoutMs: 95000
         });
         output.textContent = JSON.stringify(report, null, 2);
         showToast(
@@ -753,9 +756,10 @@ async function showMultimodelMesh() {
     const select = document.getElementById("multimodelSelect");
     setBusy(true, "Consultando topologia Mesh...");
     try {
-        const result = await apiRequest("/multimodel/mesh", {
+        const result = await discoveryRequest("/multimodel/mesh", {
             method: "POST",
-            body: JSON.stringify({ model: select?.value || null })
+            body: JSON.stringify({ model: trackerDetectedModel || null }),
+            timeoutMs: 50000
         });
         output.textContent = JSON.stringify(result, null, 2);
         showToast(
@@ -789,7 +793,19 @@ async function probeMultimodel({ quick = false } = {}) {
     const button = document.getElementById("multimodelProbeButton");
     if (button) button.disabled = true;
 
+    if (!trackerDetectedModel) {
+        await loadMultimodelCatalog();
+    }
     const model = select?.value || trackerDetectedModel || null;
+    if (!model) {
+        trackerProbeBusy = false;
+        if (button) button.disabled = false;
+        const status = document.getElementById("trackerDiscoveryStatus");
+        if (status) status.textContent =
+            "Não foi possível identificar o modelo. Reconecte escolhendo-o no login.";
+        showToast("Identifique o modelo antes da sondagem.");
+        return;
+    }
     if (!quick) setBusy(true, "Detectando endpoints documentados...");
     const status = document.getElementById("trackerDiscoveryStatus");
     if (status) status.textContent = quick
@@ -807,13 +823,14 @@ async function probeMultimodel({ quick = false } = {}) {
         // O operador consegue ver o que foi confirmado após cada lote,
         // sem aguardar o último endpoint nem interpretar candidato como real.
         do {
-            const batch = await apiRequest("/multimodel/probe", {
+            const batch = await discoveryRequest("/multimodel/probe", {
                 method: "POST",
                 body: JSON.stringify({
                     model,
                     max_endpoints: 2,
                     start: offset
-                })
+                }),
+                timeoutMs: 55000
             });
             last = batch;
             total = Number(batch.total_candidates || 0);
@@ -2023,9 +2040,9 @@ async function loadOperationsConsoleInternal() {
     }
 
     if (trackerDetectedModel) {
-        // A sondagem automática é independente do histórico e do probe
-        // legado, ambos potencialmente custosos neste firmware.
-        void autoDiscoverTracker();
+        // Não iniciar DHCP/NAT durante menuView -> menuData: todos usam
+        // a mesma sessão/contexto do firmware e devem ser serializados.
+        await autoDiscoverTracker();
     }
 
     const optionalLoaders = routerWriteEnabled
