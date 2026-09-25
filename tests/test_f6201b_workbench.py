@@ -79,9 +79,9 @@ class CapturedFormTests(unittest.TestCase):
         self.assertEqual(len(rows), 25)
         self.assertEqual({row["tag"] for row in rows}, set(OBSERVED_APPLY_FIELDS))
         states = [row["state"] for row in rows]
-        self.assertEqual(states.count("supervised_lab"), 7)
+        self.assertEqual(states.count("supervised_lab"), 21)
         self.assertEqual(states.count("existing_adapter"), 4)
-        self.assertEqual(states.count("needs_form_adapter"), 14)
+        self.assertEqual(states.count("needs_form_adapter"), 0)
         self.assertEqual(result["physical_validation"], "pending")
 
     def test_exact_payload_order_and_preserves_unmodified_values(self):
@@ -166,8 +166,8 @@ class CapturedFormTests(unittest.TestCase):
     def test_unknown_route_and_bad_values_fail_before_write(self):
         with self.assertRaises(PermissionError):
             self.workbench.preview(
-                self.zte, tag="tr069_remotemgr_lua.lua",
-                instance_id="DEV.TEST.IF1", changes={"UserPassword": "x"},
+                self.zte, tag="unlisted_route_lua.lua",
+                instance_id="DEV.TEST.IF1", changes={"UnknownField": "x"},
                 host="192.0.2.10", revision="r1", attendant="tech1")
         with self.assertRaisesRegex(ValueError, "0 ou 1"):
             self.workbench.preview(

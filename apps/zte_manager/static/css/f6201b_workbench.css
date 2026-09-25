@@ -131,6 +131,7 @@
   min-width:0;
 }
 #f6201b-workbench input[type="text"],
+#f6201b-workbench input[type="password"],
 #f6201b-workbench select {
   width:100%;
   min-height:32px;
