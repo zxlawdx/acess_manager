@@ -199,6 +199,7 @@ async function runSupportDiagnostic({
     }
 
     supportDiagnosticState.running = true;
+    supportDiagnosticState.firmwareReport = null;
 
     const payload = dashboard
         ? {
@@ -1055,7 +1056,7 @@ async function applySupportRecommendation(button) {
 
 async function generateSupportAttendance() {
     // O modo leitura não cria um history_id no motor legado.
-    if (supportDiagnosticState.firmwareReport && !routerWriteEnabled) {
+    if (supportDiagnosticState.firmwareReport) {
         const textarea = document.getElementById("supportAttendanceText");
         textarea.value = window.composeFirmwareAttendance
             ? window.composeFirmwareAttendance(supportDiagnosticState.firmwareReport)
@@ -1825,6 +1826,7 @@ async function runSelectedFirmwareDiagnostic() {
         showToast("Nenhuma seção validada. Verifique recursos antes de diagnosticar.");
         return;
     }
+    supportDiagnosticState.lastDiagnostic = null;
     const report = {
         model: firmwareDiagnosticState.model,
         firmware: firmwareDiagnosticState.firmware,
