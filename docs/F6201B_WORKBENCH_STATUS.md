@@ -18,45 +18,55 @@ redistribuído**. O catálogo de código usa somente nomes e ordem de campos.
   nonce e autorização, um POST, releitura. Ainda não homologado fisicamente.
 - **Adaptador existente**: código anterior de SSID/DNS/RF com suas próprias
   condições de prévia e confirmação, sem promessa de homologação física.
-- **Aguardando formulário**: GET catalogado, mas um POST genérico poderia
-  alterar campos condicionais ou credenciais que não podem ser preservados
-  com confiança. Não expõe botão de escrita.
+- **Formulário capturado completo**: o conjunto das outras 14 rotas
+  recebeu uma Strategy individual em f6201b_full_forms.py. A interface
+  disponibiliza leitura, formulário, prévia, confirmação e um Apply
+  completo com a ordenação da captura. Quando o firmware omitir campos
+  condicionais no GET e na menuView atual, o POST é recusado com a lista
+  exata de informações ausentes, em vez de inventar valores.
 
 | # | Tag menuData | Situação | O que ainda exige validação |
 |---|---|---|---|
 | 01 | wlan_wlansssidconf_lua.lua | Adaptador existente | Homologar senha, SSID, isolamento, criptografia e múltiplos encode em ONT |
 | 02 | dns_localdns_lua.lua | Adaptador existente | Testar separadamente servidores IPv4/IPv6 e formulário de domínio |
 | 03 | wlan_BandSteering_lua.lua | Laboratório supervisionado | Band Steering, RSSI, transição Mesh e releitura física |
-| 04 | wlan_wps_lua.lua | Aguardando formulário | Preservar SSID_InstID e WPSChoose do HTML atual |
+| 04 | wlan_wps_lua.lua | Formulário capturado | Preservar SSID_InstID e WPSChoose do HTML atual |
 | 05 | wlan_wlanbasicadconf_lua.lua | Adaptador existente | Respostas XML integrais de RF e aplicação física por banda |
-| 06 | wan_internet_lua.lua | Aguardando formulário | Branches PPPoE/IP/VLAN/IPv6, senha codificada e instância WAN |
+| 06 | wan_internet_lua.lua | Formulário capturado | Branches PPPoE/IP/VLAN/IPv6, senha codificada e instância WAN |
 | 07 | upnp_upnp_lua.lua | Laboratório supervisionado | Testar política de acesso e propagação UPnP |
 | 08 | firewall_config_lua.lua | Laboratório supervisionado | Efeitos de política firewall e recuperação de acesso |
 | 09 | dns_hostname_lua.lua | Adaptador existente | Upsert de host; duplicações e preservação das entradas |
 | 10 | bpdu_lua.lua | Laboratório supervisionado | Estado BPDU e interação com bridges |
 | 11 | route_routedefault_lua.lua | Laboratório supervisionado | Verificar índice de interface e acesso via WAN/LAN |
-| 12 | route_routestaticipv4_lua.lua | Aguardando formulário | Campo Type não exposto no GET; Add/Edit distintos |
-| 13 | Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua | Aguardando formulário | Múltiplos objetos DHCP e campo codificado; proteger IP LAN |
-| 14 | Localnet_LanDevDHCPSource_lua.lua | Aguardando formulário | Vetor completo de 12 posições ProcFlag e InstID |
+| 12 | route_routestaticipv4_lua.lua | Formulário capturado | Campo Type não exposto no GET; Add/Edit distintos |
+| 13 | Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua | Formulário capturado | Múltiplos objetos DHCP e campo codificado; proteger IP LAN |
+| 14 | Localnet_LanDevDHCPSource_lua.lua | Formulário capturado | Vetor completo de 12 posições ProcFlag e InstID |
 | 15 | addr6_lanaddr_lua.lua | Laboratório supervisionado | Configuração IPv6 LAN e possível perda de acesso |
-| 16 | dhcp6s_dhcpserver_lua.lua | Aguardando formulário | Combinar objetos DHCPv6 e DNS e botões condicionais |
-| 17 | ra_raservice_lua.lua | Aguardando formulário | S_AdvLinkMTU e regras de prefixo/atualização |
-| 18 | radhcp6s_portctrl_lua.lua | Aguardando formulário | Vetor de portas completo e seleção de instância |
-| 19 | eth_interface_config_lua.lua | Aguardando formulário | ModType ausente no GET fornecido |
-| 20 | wlan_wlanbasiconoff_lua.lua | Aguardando formulário | Dois rádios, timer e instâncias dependentes |
-| 21 | wlan_macfilteraclpolicy_lua.lua | Aguardando formulário | Vetor por SSID e instâncias ACL de múltiplas bandas |
-| 22 | Localnet_NetSphere_Mode_lua.lua | Aguardando formulário | CurrentMode, CurrentEnable e confirmação Mesh |
-| 23 | tr069_remotemgr_lua.lua | Aguardando formulário | Criptografia de duas credenciais, certificados e ACS |
+| 16 | dhcp6s_dhcpserver_lua.lua | Formulário capturado | Combinar objetos DHCPv6 e DNS e botões condicionais |
+| 17 | ra_raservice_lua.lua | Formulário capturado | S_AdvLinkMTU e regras de prefixo/atualização |
+| 18 | radhcp6s_portctrl_lua.lua | Formulário capturado | Vetor de portas completo e seleção de instância |
+| 19 | eth_interface_config_lua.lua | Formulário capturado | ModType ausente no GET fornecido |
+| 20 | wlan_wlanbasiconoff_lua.lua | Formulário capturado | Dois rádios, timer e instâncias dependentes |
+| 21 | wlan_macfilteraclpolicy_lua.lua | Formulário capturado | Vetor por SSID e instâncias ACL de múltiplas bandas |
+| 22 | Localnet_NetSphere_Mode_lua.lua | Formulário capturado | CurrentMode, CurrentEnable e confirmação Mesh |
+| 23 | tr069_remotemgr_lua.lua | Formulário capturado | Criptografia de duas credenciais, certificados e ACS |
 | 24 | firewall_alg_lua.lua | Laboratório supervisionado | Testar ALG/VoIP sem romper serviços |
-| 25 | firewall_dmz_lua.lua | Aguardando formulário | Campos MAC temporários não preserváveis no GET |
+| 25 | firewall_dmz_lua.lua | Formulário capturado | Campos MAC temporários não preserváveis no GET |
 
-**Totais:** 7 rotas novas com ciclo supervisionado implementado; 4 com
-adaptadores já existentes; 14 com catalogação e lacunas documentadas,
-sem implementação de escrita. Não foram fabricados formulários nem
-POSTs para completar artificialmente a contagem de 25.
+**Totais atuais:** 21 rotas com comandos supervisionados próprios
+(7 estratégias originais + 14 Strategies condicionais) e 4 adaptadores
+existentes, totalizando 25 rotas com implementação em código. O
+funcionamento de cada comando fica condicionado à leitura real e
+completa dos campos correspondentes ao formulário original; ausência
+de dados bloqueia a escrita, e não representa uma tentativa parcial.
 
 ## Fluxo e responsabilidades
 
+- **Strategy / catálogo:** services/f6201b_full_forms.py implementa os
+  14 formulários complexos usando os objetos XML efetivamente expostos,
+  leitura dos controles HTML atuais, seleção de instância,
+  transformação conservadora de arrays, senha/encode e preenchimento
+  obrigatório antes de gerar o body.
 - **Strategy / catálogo:** services/f6201b_workbench.py define objetos XML
   de consulta, campos editáveis exatos, risco operacional e razões para
   desabilitar fluxos incompletos. f6201b_evidence.py conserva a ordem
@@ -78,12 +88,19 @@ POSTs para completar artificialmente a contagem de 25.
   prometido para WAN/LAN/Wi-Fi.
 - **Interface:** nova seção na aba **Avançado** apenas para
   F6201B identificado no firmware conhecido. Mostra inventário
-  técnico de 25 linhas, formulários somente nas 7 estratégias,
+  técnico de 25 linhas, formulários nas 21 estratégias,
   instâncias, prévias, progresso e estados de erro. CSS usa os tokens
   BRModelo, com navegação/lista compacta, inspiração no workspace
   DockerFlow, sem alterar os componentes dos demais modelos.
 
 ## Como testar
+
+Os testes de tests/test_f6201b_full_forms.py cobrem as 14 novas
+estratégias, ordenação exata de todos os campos, falha de prévia sem
+metadados do formulário, vínculo WPS, vetores de rádio, transformação
+de DHCP/RA, recodificação AES/RSA de WAN e ACS, máscaras de senhas,
+verificação separada de credenciais, transporte bloqueado e
+ausência de repetição em falhas ambíguas.
 
 Testes automatizados tests/test_f6201b_workbench.py usam fake GET,
 mock do post_menu, valores sintéticos, nenhum roteador físico.
@@ -115,5 +132,11 @@ $env:ZTE_F6201B_EXPERIMENTAL_WRITES = "1"
 python manage.py runapp
 ~~~
 
-A integração na main depende do workflow de testes. Homologação em
-equipamento físico permanece etapa separada.
+A captura original tem homologação física informada pelo operador.
+Os testes automatizados acima verificam o **novo código**, mas uma
+reprodução na ONT deve comparar a serialização do aplicativo com a
+mesma tela, mesma instância e versão de firmware. Campos não
+observáveis em determinado login são relatados e **não** postados.
+
+Em mudanças de WAN, LAN, firewall ou ACS, conserve acesso local e backup;
+um HTTP 200/IF_ERRORID=0 não comprova que a configuração persistiu.
