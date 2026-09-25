@@ -209,13 +209,6 @@ class CPEManagementService:
         zte_service,
         data,
     ):
-        if not data.get(
-            "confirm"
-        ):
-            raise ValueError(
-                "Confirme a correção das divergências."
-            )
-
         zte_service.management_backup(
             reason="pre_config_drift"
         )
@@ -1251,13 +1244,6 @@ class CPEManagementService:
         zte_service,
         data,
     ):
-        if not data.get(
-            "confirm"
-        ):
-            raise ValueError(
-                "Confirme o provisionamento zero-touch."
-            )
-
         return zero_touch_service.run_current(
             zte_service,
             profile_id=int(
