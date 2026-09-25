@@ -1257,6 +1257,7 @@ class ZTEService:
                 self.get_client(), tag=tag, instance_id=instance_id,
                 changes=changes, host=self.current_host,
                 revision=self._session_revision,
+                attendant=self.current_attendant,
             )
 
     def captured_workbench_apply(self, nonce, confirmation, risk_ack):
@@ -1264,7 +1265,8 @@ class ZTEService:
             self._f6201b_write_firmware()
             return self._captured_workbench.apply(
                 self.get_client(), host=self.current_host,
-                revision=self._session_revision, nonce=nonce,
+                revision=self._session_revision,
+                attendant=self.current_attendant, nonce=nonce,
                 confirmation=confirmation, risk_ack=risk_ack,
                 original_post=self._readonly_original_post,
             )
