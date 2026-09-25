@@ -172,7 +172,18 @@ def wifi_ssid_summary(zte, endpoint: models.ReadEndpoint) -> dict[str, Any]:
     }
 
 
-def diagnostic(zte, model: str, *, include_clients: bool = True) -> dict[str, Any]:
+def diagnostic(
+    zte, model: str, *, include_clients: bool = True,
+    section: str | None = None,
+) -> dict[str, Any]:
+    """Consulta completa ou uma seção por requisição para UI progressiva."""
+    supported_sections = {
+        "device", "wan", "dsl", "optical", "wifi_ssids",
+        "wifi_clients", "lan_clients",
+    }
+    if section is not None and section not in supported_sections:
+        raise ValueError("Seção de diagnóstico inválida")
+    wants = lambda name: section is None or section == name
     selected, family = models.find_family(model)
     if family is None:
         return {
@@ -186,25 +197,26 @@ def diagnostic(zte, model: str, *, include_clients: bool = True) -> dict[str, An
 
     # A ordem é intencional: o firmware depende de menu/contexto e
     # requisições consecutivas (não paralelas) dentro da sessão atual.
-    if family != "vue":
+    if family != "vue" and wants("device"):
         sections["device"] = _result("device", lambda: device_resource_details(zte))
 
     status_endpoint = endpoints.get("wan") or endpoints.get("dsl")
     if status_endpoint:
-        section = "dsl" if family == "h2640" else "wan"
-        fields = DSL_FIELDS if section == "dsl" else WAN_FIELDS
-        sections[section] = _result(
-            section,
-            lambda: _read(zte, status_endpoint, fields),
-        )
+        kind = "dsl" if family == "h2640" else "wan"
+        fields = DSL_FIELDS if kind == "dsl" else WAN_FIELDS
+        if wants(kind):
+            sections[kind] = _result(
+                kind,
+                lambda: _read(zte, status_endpoint, fields),
+            )
 
-    if selected == "F6600P":
+    if selected == "F6600P" and wants("optical"):
         sections["optical"] = _result(
             "optical",
             lambda: optical_details(zte),
         )
 
-    if family == "f6640":
+    if family == "f6640" and wants("wifi_ssids"):
         sections["wifi_ssids"] = _result(
             "wifi_ssids",
             lambda: wifi_ssid_summary(zte, endpoints["wifi_ssids"]),
@@ -213,7 +225,7 @@ def diagnostic(zte, model: str, *, include_clients: bool = True) -> dict[str, An
     if include_clients:
         for name in ("wifi_clients", "lan_clients"):
             endpoint = endpoints.get(name)
-            if endpoint:
+            if endpoint and wants(name):
                 # Para o relatório geral, apenas contagens de dispositivos:
                 # hostname, SSID, IP e MAC permanecem na tela local Clientes.
                 sections[name] = _result(
