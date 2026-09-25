@@ -639,6 +639,26 @@ class FullCapturedForms:
             k: v for k, v in clean.items()
             if k in PASSWORDS or str(row.values.get(k)) != v
         }
+        # Firmware WPS requires both the toggle and WPSChoose. The captured
+        # native adapter demonstrates the Disabled/PBC coupling for Mode=0.
+        # Never infer PIN semantics, as it needs an additional branch.
+        if tag == "wlan_wps_lua.lua" and "Enable" in changed:
+            next_mode = changed.get("WPSMode", row.values.get("WPSMode"))
+            if next_mode == "0":
+                expected_choice = (
+                    "PBC" if changed["Enable"] == "1" else "Disabled"
+                )
+                if ("WPSChoose" in changed and
+                        changed["WPSChoose"] != expected_choice):
+                    raise ValueError(
+                        "WPSChoose diverge do modo WPS PBC/Disabled."
+                    )
+                if row.values.get("WPSChoose") != expected_choice:
+                    changed["WPSChoose"] = expected_choice
+            elif "WPSChoose" not in changed:
+                raise ValueError(
+                    "O firmware exige WPSChoose explícito para este modo."
+                )
         if not changed:
             raise ValueError("Nenhuma diferença detectada.")
         # Dry-run using the captured schema, never echo raw payload.
