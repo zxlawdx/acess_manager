@@ -40,6 +40,7 @@ jobs:
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/support_diagnostics.js
           node --check apps/zte_manager/static/js/management.js
+          node --check apps/zte_manager/static/js/adaptive_firmware.js
 
       - name: Verify loading overlay behavior
         run: node tests/test_loading_overlay.cjs
@@ -49,3 +50,6 @@ jobs:
 
       - name: Verify ONT data and session restoration
         run: node tests/test_session_restore.cjs
+
+      - name: Verify adaptive firmware UI and sanitized attendance
+        run: node tests/test_adaptive_firmware.cjs
