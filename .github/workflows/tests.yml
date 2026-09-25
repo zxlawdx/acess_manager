@@ -65,3 +65,6 @@ jobs:
 
       - name: Verify neutral theme and profile null guard
         run: node tests/test_neutral_theme.cjs
+
+      - name: Verify F6201B experimental profile UI
+        run: node tests/test_f6201b_profile_ui.cjs
