@@ -102,6 +102,29 @@ class ExperimentalF6201BWrites:
         return normalized
 
     @staticmethod
+    def list_ssids(zte) -> list[dict]:
+        # Leitura direta observada na captura; não executar POST, nem
+        # retornar os objetos PSK, cookies ou quaisquer credenciais.
+        raw = zte.get_menu("wlan_wlansssidconf_lua.lua")
+        if not isinstance(raw, str):
+            raise RuntimeError("Resposta de SSID não está em XML.")
+        root = ET.fromstring(raw)
+        if (root.tag != "ajax_response_xml_root" or
+                (root.findtext("IF_ERRORID") or "0").strip() != "0"):
+            raise RuntimeError("Firmware recusou a listagem de SSIDs.")
+        aps = zte._parse_instances(raw).get("OBJ_WLANAP_ID", [])
+        return [
+            {
+                "id": ap.get("_InstID"),
+                "ssid": ap.get("ESSID") or "",
+                "enabled": ap.get("Enable") == "1",
+                "broadcast": ap.get("ESSIDHideEnable") != "1",
+                "band": ap.get("WLANViewName") or "",
+            }
+            for ap in aps if ap.get("_InstID")
+        ]
+
+    @staticmethod
     def _inspect_session(zte) -> tuple[list[dict], str]:
         """GET + validação do shape; nunca envia POST no preflight."""
         html = zte.get_view("wlanBasic", Menu3Location=0)
