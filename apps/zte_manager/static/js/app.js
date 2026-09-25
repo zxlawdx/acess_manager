@@ -4335,11 +4335,17 @@ async function restoreDesktopSession() {
             topChip.classList.remove("hidden");
         }
 
+        // Não roubar o foco: se o usuário clicou Avançado enquanto
+        // /connection/status ainda respondia, restaurar deve abrir
+        // aquela página, não voltar ao Dashboard e cancelar o carregamento.
+        const active = document.querySelector(".page.active")?.id;
+        const requestedPage = active?.startsWith("page-")
+            ? active.slice(5) : null;
         setConnectionStatus(true);
-        // Evitar novo loadAll() automático: 10+ consultas seguidas
-        // disputavam a sessão com o diagnóstico anterior. O usuário
-        // pode atualizar os dados depois do restabelecimento da UI.
-        openPage(routerWriteEnabled ? "dashboard" : "advanced");
+        const destination = requestedPage && requestedPage !== "connection"
+            ? requestedPage
+            : (routerWriteEnabled ? "dashboard" : "advanced");
+        openPage(destination);
         showToast("Sessão local recuperada após atualização da interface.");
     } catch (error) {
         console.warn("Não foi possível consultar sessão local:", error);
