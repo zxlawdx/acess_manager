@@ -35,8 +35,12 @@ ou confirmação booleana adicional antes de executar uma operação solicitada.
    quatro aproveitam os adaptadores existentes e as demais possuem estratégias
    específicas, condicionadas ao formulário real recebido.
 3. **DHCP IPv4**: leitura de configuração, faixa, concessões, DNS e gateway.
-   A edição exige o formulário completo da ONT. Valida IP/máscara, intervalo,
-   gateway no segmento e tipos antes do POST; as ações não são filtradas
+   A edição exige o formulário completo da ONT. Os cinco campos IPv4
+   criptografados (IP LAN, início/fim do pool, DNS1/2) são descriptografados
+   com o token vigente do GET e recodificados em AES/RSA no POST, conforme
+   a captura original. Valida IP/máscara, intervalo e tipos; a gravação de
+   gateway só é oferecida se o GET do próprio dispositivo expuser um campo
+   verificável. As ações não são filtradas
    por atendente. Concessões e DHCPv6 são lidos independentemente. O painel
    DHCPv6 expõe alteração somente após receber todos os campos necessários
    do formulário capturado.
@@ -53,6 +57,9 @@ ou confirmação booleana adicional antes de executar uma operação solicitada.
   físico à rede privada de um cliente. A captura do operador documenta os
   métodos e parâmetros, mas os novos POSTs e readbacks precisam ser comparados
   no equipamento real.
+- A captura do DHCP F6201B apresenta `IPRouters` vazio no POST e não
+  retorna esse campo no GET; nesse formulário específico não se pode
+  declarar persistência ou liberar edição de gateway sem nova evidência.
 - O POST de *reserva DHCP F6201B* não foi comprovado na captura disponível;
   o painel não declara gravação de reservas nesse modelo, mas os adaptadores
   nativos de reservas dos modelos anteriores continuam existindo.
