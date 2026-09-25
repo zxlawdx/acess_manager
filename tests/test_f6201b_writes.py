@@ -16,7 +16,7 @@ XML = """
     <ParaName>ESSID</ParaName><ParaValue>LAB_WIFI</ParaValue>
     <ParaName>Enable</ParaName><ParaValue>1</ParaValue>
     <ParaName>ESSIDHideEnable</ParaName><ParaValue>0</ParaValue>
-    <ParaName>BeaconType</ParaName><ParaValue>11i</ParaValue>
+    <ParaName>BeaconType</ParaName><ParaValue>None</ParaValue>
   </Instance></OBJ_WLANAP_ID>
   <OBJ_WLANPSK_ID><Instance><ParaName>_InstID</ParaName>
     <ParaValue>DEV.WIFI.AP1.PSK1</ParaValue>
@@ -58,7 +58,7 @@ class Router:
         return {
             "OBJ_WLANAP_ID": [{
                 "_InstID": "DEV.WIFI.AP1", "ESSID": "LAB_WIFI",
-                "Enable": "1", "ESSIDHideEnable": "0", "BeaconType": "11i",
+                "Enable": "1", "ESSIDHideEnable": "0", "BeaconType": "None",
             }],
             "OBJ_WLANPSK_ID": [{"_InstID": "DEV.WIFI.AP1.PSK1",
                                 "KeyPassphrase": "masked-ciphertext"}],
@@ -165,6 +165,27 @@ class F6201BWriteTests(unittest.TestCase):
             self.zte.menu_valid = False
             with self.assertRaises(RuntimeError):
                 self.preview()
+
+    def test_secure_ssid_without_proven_encryption_refused(self):
+        # Não arriscar alterar a PSK inadvertidamente quando o firmware
+        # expõe a instância mas não comprova como a cifra foi construída.
+        def secure_parser(raw):
+            return {
+                "OBJ_WLANAP_ID": [{
+                    "_InstID": "DEV.WIFI.AP1", "ESSID": "LAB_WIFI",
+                    "Enable": "1", "ESSIDHideEnable": "0",
+                    "BeaconType": "11i",
+                }],
+                "OBJ_WLANPSK_ID": [{
+                    "_InstID": "DEV.WIFI.AP1.PSK1",
+                    "KeyPassphrase": "unknown-cipher",
+                }],
+            }
+        self.zte._parse_instances = secure_parser
+        with patch.dict(os.environ, {OPT_IN_ENV: "1"}):
+            with self.assertRaisesRegex(RuntimeError, "criptografia"):
+                self.preview()
+        self.assertFalse(self.zte.writes_enabled)
 
     def test_list_ssids_never_returns_password(self):
         result = Writer.list_ssids(self.zte)
