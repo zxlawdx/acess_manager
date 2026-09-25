@@ -1716,10 +1716,18 @@ function featureUnavailable(
 // LOAD / EVENTS
 // =========================================================
 
-async function loadOperationsConsole() {
-    if (!ontConnected) {
-        return;
-    }
+let operationsLoadPromise = null;
+
+function loadOperationsConsole() {
+    if (!ontConnected) return Promise.resolve();
+    if (operationsLoadPromise) return operationsLoadPromise;
+    operationsLoadPromise = loadOperationsConsoleInternal()
+        .finally(() => { operationsLoadPromise = null; });
+    return operationsLoadPromise;
+}
+
+async function loadOperationsConsoleInternal() {
+    if (!ontConnected) return;
 
     const loaders = routerWriteEnabled
         ? [
@@ -1750,15 +1758,31 @@ async function loadOperationsConsole() {
 }
 
 
+window.startQuickProbe = async function startQuickProbe() {
+    if (!ontConnected) {
+        showToast("Conecte-se ao equipamento antes de detectar recursos.");
+        return;
+    }
+    try {
+        await loadOperationsConsole();
+        if (routerWriteEnabled) {
+            await probeCapabilities();
+        } else {
+            await probeMultimodel();
+        }
+    } catch (error) {
+        console.error("Falha no atalho Probe:", error);
+        showToast(error.message);
+    }
+};
+
+
 function initAdvancedOperations() {
-    document
-        .querySelector(
-            '[data-page="advanced"]'
-        )
-        ?.addEventListener(
-            "click",
-            loadOperationsConsole
-        );
+    document.addEventListener("zte:page-open", event => {
+        if (event.detail?.pageName === "advanced" && ontConnected) {
+            void loadOperationsConsole();
+        }
+    });
 
     document
         .getElementById(
