@@ -140,7 +140,6 @@ def catalog() -> dict:
         "model": "F6201B", "firmware": EXACT_FIRMWARE,
         "total_observed_apply_routes": len(OBSERVED_APPLY_FIELDS),
         "routes": routes,
-        "writes_opted_in": ExperimentalF6201BWrites.opted_in(),
         "physical_validation": "pending",
     }
 
