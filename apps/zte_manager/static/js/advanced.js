@@ -1275,7 +1275,10 @@ function renderAutomaticDiagnostic(data) {
             ? `
                 <div class="operation-row">
                     <strong>Coletas indisponíveis</strong>
-                    <pre class="firmware-json">${escapeHtml(JSON.stringify(data.errors, null, 2))}</pre>
+                    ${Object.entries(data.errors || {}).map(([section, reason]) => `
+                        <p class="adaptive-footnote"><strong>${escapeHtml(section)}:</strong>
+                        ${escapeHtml(String(reason).slice(0, 160))}</p>
+                    `.join("")}
                 </div>
             `
             : ""
