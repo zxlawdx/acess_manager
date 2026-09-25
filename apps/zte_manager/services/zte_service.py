@@ -24,6 +24,7 @@ from apps.zte_manager.services.f6201b_writes import ExperimentalF6201BWrites, EX
 from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.f6201b_profile import ExperimentalF6201BProfile
 from apps.zte_manager.services.f6201b_diagnostics import F6201BDiagnostics, PING, TRACE
+from apps.zte_manager.services import f6201b_dhcp
 from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
@@ -902,24 +903,35 @@ class ZTEService:
     # DHCP / NAT
     # =========================================================
 
+    def _is_captured_f6201b(self):
+        detected, _ = multimodel_service.find_family(
+            self._device_info.get("modelo") or ""
+        )
+        return detected == "F6201B"
+
     def dhcp_status(self):
         with self._lock:
+            if self._is_captured_f6201b():
+                self._f6201b_write_firmware()
+                return f6201b_dhcp.status(self.get_client())
             return self.get_client().dhcp_status()
 
-    def set_dhcp_basic(
-        self,
-        config
-    ):
+    def set_dhcp_basic(self, config):
         with self._lock:
+            if self._is_captured_f6201b():
+                self._f6201b_write_firmware()
+                return f6201b_dhcp.change(
+                    self._captured_workbench, self.get_client(),
+                    config=config, host=self.current_host,
+                    revision=self._session_revision,
+                    attendant=self.current_attendant,
+                    original_post=self._readonly_original_post,
+                )
             zte = self.get_client()
-
             return self._run_change(
-                operation="dhcp_basic",
-                target="lan",
+                operation="dhcp_basic", target="lan",
                 before_reader=zte.dhcp_status,
-                action=lambda: zte.set_dhcp_basic(
-                    config
-                ),
+                action=lambda: zte.set_dhcp_basic(config),
             )
 
     def save_dhcp_reservation(
