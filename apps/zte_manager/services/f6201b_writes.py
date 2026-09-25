@@ -10,7 +10,6 @@ Não prometer rollback de Wi-Fi: mudanças podem derrubar o acesso remoto.
 """
 from __future__ import annotations
 
-import os
 import re
 import secrets
 import hashlib
@@ -47,7 +46,9 @@ class ExperimentalF6201BWrites:
 
     @staticmethod
     def opted_in() -> bool:
-        return os.environ.get(OPT_IN_ENV, "").strip().lower() == "1"
+        # Deprecated compatibility field: the connected ONT, not an app-level
+        # environment/employee gate, decides supported operations.
+        return True
 
     @staticmethod
     def capabilities(firmware: str | None = None) -> dict:
@@ -70,12 +71,10 @@ class ExperimentalF6201BWrites:
                 "releitura do equipamento"
             ),
             "requires": [
-                "confirmação específica após visualizar a diferença",
                 "firmware exato e autenticação administrativa",
                 "menuView e token temporário reais",
                 "mapeamento atual de SSID/PSK confirmado no dispositivo",
                 "Apply reproduz a ordem dos campos da captura validada",
-                "liberação explícita via variável de ambiente",
             ],
             "note": (
                 "Captura inclui Apply de Wi-Fi e outras funções, mas "
@@ -227,11 +226,6 @@ class ExperimentalF6201BWrites:
         self.clear()
         if firmware != EXACT_FIRMWARE:
             raise PermissionError("Somente F6201B firmware V9.3.10P7N7.")
-        if not self.opted_in():
-            raise PermissionError(
-                "Modo experimental bloqueado. Defina " + OPT_IN_ENV +
-                "=1 apenas em laboratório/com acesso local."
-            )
         if not isinstance(ssid_id, str) or not re.fullmatch(
             r"DEV\.WIFI\.AP\d+", ssid_id
         ):
@@ -289,10 +283,8 @@ class ExperimentalF6201BWrites:
         proposal = self._pending
         # Consome inclusive tentativa inválida: evitar replay involuntário.
         self.clear()
-        if not self.opted_in() or firmware != EXACT_FIRMWARE:
+        if firmware != EXACT_FIRMWARE:
             raise PermissionError("Escrita experimental não autorizada.")
-        if confirmation != "APLICAR F6201B":
-            raise PermissionError("Confirmação explícita obrigatória.")
         if not proposal or not secrets.compare_digest(proposal.nonce, str(nonce)):
             raise PermissionError("Prévia ausente ou inválida.")
         if (proposal.host != host or
