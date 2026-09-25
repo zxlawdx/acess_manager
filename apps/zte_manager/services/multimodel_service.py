@@ -164,7 +164,8 @@ def catalog() -> dict[str, Any]:
             }
             for model, family in MODEL_FAMILY.items()
         ],
-        "tracker_models": len(MODEL_FAMILY),
+        "tracker_models": sum(1 for name in MODEL_FAMILY if name != "F6201B"),
+        "experimental_models": ["F6201B"],
         "notes": (
             "O catálogo mostra candidatos zte_tracker, não garante compatibilidade. "
             "O perfil F6201B é uma hipótese experimental de GET ThinkLua "
