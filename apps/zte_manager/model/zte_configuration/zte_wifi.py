@@ -623,6 +623,7 @@ def set_ssid_config(
         fields["BackupAuthServerIp"] = atual.get("BackupAuthServerIp", "")
         fields["MasterAcctServerIp"] = atual.get("MasterAcctServerIp", "")
         fields["BackupAcctServerIp"] = atual.get("BackupAcctServerIp", "")
+        fields["_InstID_GUEST"] = atual.get("_InstID_GUEST", "")
         campos = [(name, fields[name]) for name in SSID_APPLY_FIELDS
                   if name != "_sessionTOKEN"]
         if len(campos) != len(SSID_APPLY_FIELDS) - 1:
