@@ -127,7 +127,7 @@ class CapturedFormTests(unittest.TestCase):
             result = self.apply(preview["nonce"])
         self.assertTrue(result["verified"])
         self.assertEqual(self.zte.post_count, 1)
-        self.assertIs(self.zte.session.post, self.zte.session.blocked)
+        self.assertEqual(self.zte.session.post, self.zte.session.blocked)
         self.assertFalse(self.zte.writes_enabled)
         with self.assertRaisesRegex(PermissionError, "Nonce"):
             self.apply(preview["nonce"])
@@ -189,7 +189,7 @@ class CapturedFormTests(unittest.TestCase):
         self.assertTrue(result["uncertain"])
         self.assertEqual(result["stage"], "post_or_response")
         mock_post.assert_called_once()
-        self.assertIs(self.zte.session.post, self.zte.session.blocked)
+        self.assertEqual(self.zte.session.post, self.zte.session.blocked)
         self.assertFalse(self.zte.writes_enabled)
 
     def test_inspection_filters_to_nonsecret_editable_fields(self):
