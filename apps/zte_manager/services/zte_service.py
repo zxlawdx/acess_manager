@@ -23,7 +23,8 @@ from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.services.f6201b_writes import ExperimentalF6201BWrites, EXACT_FIRMWARE
 from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.f6201b_profile import ExperimentalF6201BProfile
-from apps.zte_manager.services.f6201b_diagnostics import F6201BDiagnostics, PING, TRACE
+from apps.zte_manager.services.f6201b_diagnostics import F6201BDiagnostics, PING, TRACE, host_name
+from apps.zte_manager.services.f6201b_support import run_f6201b_support
 from apps.zte_manager.services import f6201b_dhcp
 from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
 from apps.zte_manager.services.profile_service import profile_service
@@ -473,6 +474,53 @@ class ZTEService:
 
         return result
 
+    def _audit_device_command(self, operation, target, command):
+        """Audit direct F6201B commands which do not use _run_change.
+
+        Record operation and confirmation status, never router data, raw
+        credentials, passwords or unfiltered exception strings.
+        """
+        try:
+            outcome = command()
+        except Exception as exc:
+            history_repository.save_change(
+                self._history_session_id, operation=operation,
+                target=target, before=None, after=None, success=False,
+                message=type(exc).__name__,
+            )
+            raise
+        ok = isinstance(outcome, dict) and outcome.get("success") is True
+        summary = {
+            "verified": outcome.get("verified", False)
+            if isinstance(outcome, dict) else False,
+            "noop": outcome.get("noop", False)
+            if isinstance(outcome, dict) else False,
+            "uncertain": outcome.get("uncertain", False)
+            if isinstance(outcome, dict) else False,
+        }
+        if isinstance(outcome, dict):
+            summary["stages"] = [
+                {"name": str(step.get("name", ""))[:80],
+                 "verified": bool(step.get("verified", step.get("success", False)))}
+                for step in outcome.get("steps", [])
+                if isinstance(step, dict)
+            ][:32]
+            summary["fields"] = [
+                str(field)[:80] for field in (
+                    outcome.get("changed_fields")
+                    or outcome.get("verified_fields")
+                    or []
+                )
+                if not any(word in str(field).lower()
+                           for word in ("pass", "secret", "token", "key"))
+            ][:64]
+        history_repository.save_change(
+            self._history_session_id, operation=operation,
+            target=target, before=None, after=summary, success=ok,
+            message=None if ok else "device_result_not_confirmed",
+        )
+        return outcome
+
     def _snapshot_payload(self):
         zte = self.get_client()
 
@@ -574,7 +622,24 @@ class ZTEService:
 
     def reboot(self):
         with self._lock:
-            resultado = self.get_client().reboot()
+            try:
+                resultado = self.get_client().reboot()
+            except Exception as error:
+                history_repository.save_change(
+                    self._history_session_id,
+                    operation="device_reboot", target="ONT", before=None,
+                    after=None, success=False,
+                    message=type(error).__name__,
+                )
+                raise
+            # The device disconnects immediately: the HTTP acknowledgement
+            # proves only that reboot was requested, not that it restarted.
+            history_repository.save_change(
+                self._history_session_id,
+                operation="device_reboot", target="ONT", before=None,
+                after={"requested": True}, success=True,
+                message="Reinicialização solicitada; conclusão não verificável.",
+            )
 
             # Depois de Restart não existe mais uma sessão útil. Não enviamos
             # logout: o equipamento está reiniciando e a conexão cairá sozinha.
@@ -910,12 +975,15 @@ class ZTEService:
         with self._lock:
             if self._is_captured_f6201b():
                 self._f6201b_write_firmware()
-                return f6201b_dhcp.change(
-                    self._captured_workbench, self.get_client(),
-                    config=config, host=self.current_host,
-                    revision=self._session_revision,
-                    attendant=self.current_attendant,
-                    original_post=self._readonly_original_post,
+                return self._audit_device_command(
+                    "dhcp_basic", "LAN / DHCP",
+                    lambda: f6201b_dhcp.change(
+                        self._captured_workbench, self.get_client(),
+                        config=config, host=self.current_host,
+                        revision=self._session_revision,
+                        attendant=self.current_attendant,
+                        original_post=self._readonly_original_post,
+                    ),
                 )
             zte = self.get_client()
             return self._run_change(
@@ -1141,10 +1209,14 @@ class ZTEService:
     def f6201b_write_apply(self, nonce, confirmation):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            return self._f6201b_writer.apply(
-                self.get_client(), host=self.current_host,
-                firmware=firmware, nonce=nonce, confirmation=confirmation,
-                original_post=self._readonly_original_post,
+            return self._audit_device_command(
+                "f6201b_ssid_update", "SSID",
+                lambda: self._f6201b_writer.apply(
+                    self.get_client(), host=self.current_host,
+                    firmware=firmware, nonce=nonce,
+                    confirmation=confirmation,
+                    original_post=self._readonly_original_post,
+                ),
             )
 
     def f6201b_wan_summary(self):
@@ -1196,11 +1268,14 @@ class ZTEService:
     def f6201b_dns_apply(self, nonce, confirmation):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            return self._f6201b_dns.apply(
-                self.get_client(), host=self.current_host,
-                firmware=firmware, nonce=nonce,
-                confirmation=confirmation,
-                original_post=self._readonly_original_post,
+            return self._audit_device_command(
+                "f6201b_dns_update", "DNS",
+                lambda: self._f6201b_dns.apply(
+                    self.get_client(), host=self.current_host,
+                    firmware=firmware, nonce=nonce,
+                    confirmation=confirmation,
+                    original_post=self._readonly_original_post,
+                ),
             )
 
     def f6201b_profile_preview(self, attendant):
@@ -1217,52 +1292,67 @@ class ZTEService:
     def f6201b_profile_apply(self, nonce, confirmation):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            return self._f6201b_profile.apply(
-                self.get_client(), host=self.current_host,
-                revision=self._session_revision, firmware=firmware,
-                nonce=nonce, confirmation=confirmation,
-                original_post=self._readonly_original_post,
-                dns_adapter=self._f6201b_dns,
+            return self._audit_device_command(
+                "f6201b_profile_apply", "Wi-Fi 2.4/5 GHz e DNS",
+                lambda: self._f6201b_profile.apply(
+                    self.get_client(), host=self.current_host,
+                    revision=self._session_revision, firmware=firmware,
+                    nonce=nonce, confirmation=confirmation,
+                    original_post=self._readonly_original_post,
+                    dns_adapter=self._f6201b_dns,
+                ),
             )
 
     def f6201b_profile_apply_saved(self, attendant):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            return self._f6201b_profile.apply_saved(
-                self.get_client(), host=self.current_host,
-                revision=self._session_revision, firmware=firmware,
-                profile=profile_service.get_profile(attendant),
-                original_post=self._readonly_original_post,
-                dns_adapter=self._f6201b_dns,
+            return self._audit_device_command(
+                "f6201b_profile_apply", "Wi-Fi 2.4/5 GHz e DNS",
+                lambda: self._f6201b_profile.apply_saved(
+                    self.get_client(), host=self.current_host,
+                    revision=self._session_revision, firmware=firmware,
+                    profile=profile_service.get_profile(attendant),
+                    original_post=self._readonly_original_post,
+                    dns_adapter=self._f6201b_dns,
+                ),
             )
 
     def f6201b_ssid_update(self, ssid_id, config):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            return self._f6201b_writer.apply_changes(
-                self.get_client(), host=self.current_host, firmware=firmware,
-                ssid_id=ssid_id, config=config,
-                original_post=self._readonly_original_post,
+            return self._audit_device_command(
+                "f6201b_ssid_update", "SSID",
+                lambda: self._f6201b_writer.apply_changes(
+                    self.get_client(), host=self.current_host, firmware=firmware,
+                    ssid_id=ssid_id, config=config,
+                    original_post=self._readonly_original_post,
+                ),
             )
 
     def f6201b_dns_update(self, changes):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            return self._f6201b_dns.apply_changes(
-                self.get_client(), host=self.current_host,
-                firmware=firmware, changes=changes,
-                original_post=self._readonly_original_post,
+            return self._audit_device_command(
+                "f6201b_dns_update", "DNS",
+                lambda: self._f6201b_dns.apply_changes(
+                    self.get_client(), host=self.current_host,
+                    firmware=firmware, changes=changes,
+                    original_post=self._readonly_original_post,
+                ),
             )
 
     def captured_workbench_update(self, tag, instance_id, changes):
         with self._lock:
             self._f6201b_write_firmware()
-            return self._captured_workbench.apply_changes(
-                self.get_client(), tag=tag, instance_id=instance_id,
-                changes=changes, host=self.current_host,
-                revision=self._session_revision,
-                attendant=self.current_attendant,
-                original_post=self._readonly_original_post,
+            return self._audit_device_command(
+                "f6201b_form_update", str(tag)[:95],
+                lambda: self._captured_workbench.apply_changes(
+                    self.get_client(), tag=tag, instance_id=instance_id,
+                    changes=changes, host=self.current_host,
+                    revision=self._session_revision,
+                    attendant=self.current_attendant,
+                    original_post=self._readonly_original_post,
+                ),
             )
 
     # Comandos capturados com Strategy específica por formulário.
@@ -1288,12 +1378,15 @@ class ZTEService:
     def captured_workbench_apply(self, nonce, confirmation, risk_ack):
         with self._lock:
             self._f6201b_write_firmware()
-            return self._captured_workbench.apply(
-                self.get_client(), host=self.current_host,
-                revision=self._session_revision,
-                attendant=self.current_attendant, nonce=nonce,
-                confirmation=confirmation, risk_ack=risk_ack,
-                original_post=self._readonly_original_post,
+            return self._audit_device_command(
+                "f6201b_form_update", "Formulário capturado",
+                lambda: self._captured_workbench.apply(
+                    self.get_client(), host=self.current_host,
+                    revision=self._session_revision,
+                    attendant=self.current_attendant, nonce=nonce,
+                    confirmation=confirmation, risk_ack=risk_ack,
+                    original_post=self._readonly_original_post,
+                ),
             )
 
     def mapped_f6201b_routes(self):
@@ -1356,23 +1449,43 @@ class ZTEService:
             self.get_client(), self._readonly_original_post, tag, config,
         )
 
+    def _manual_device_test(self, operation, command):
+        """Audit standalone diagnostic buttons without persisting IP/MAC."""
+        try:
+            result = command()
+        except Exception as exc:
+            history_repository.save_change(
+                self._history_session_id, operation=operation,
+                target="ONT", before=None, after=None, success=False,
+                message=type(exc).__name__,
+            )
+            raise
+        history_repository.save_change(
+            self._history_session_id, operation=operation, target="ONT",
+            before=None, after={"verified": result.get("verified", True)},
+            success=True,
+        )
+        return result
+
     def ping(self, config):
         with self._lock:
             detected, _ = multimodel_service.find_family(
                 self._device_info.get("modelo") or ""
             )
-            if detected == "F6201B":
-                return self._captured_diagnostic(PING, config)
-            return self.get_client().ping(config)
+            action = (lambda: self._captured_diagnostic(PING, config)
+                      if detected == "F6201B" else
+                      self.get_client().ping(config))
+            return self._manual_device_test("diagnostic_ping", action)
 
     def traceroute(self, config):
         with self._lock:
             detected, _ = multimodel_service.find_family(
                 self._device_info.get("modelo") or ""
             )
-            if detected == "F6201B":
-                return self._captured_diagnostic(TRACE, config)
-            return self.get_client().traceroute(config)
+            action = (lambda: self._captured_diagnostic(TRACE, config)
+                      if detected == "F6201B" else
+                      self.get_client().traceroute(config))
+            return self._manual_device_test("diagnostic_traceroute", action)
 
     # =========================================================
     # DIAGNÓSTICO AUTOMÁTICO / HISTÓRICO
@@ -1499,6 +1612,74 @@ class ZTEService:
                 **result,
                 "history_id": diagnostic_id,
             }
+
+    def f6201b_support_diagnostic(self, config):
+        """Run the original full support form against the actual F6201B.
+
+        Checkboxes control actual, independently measured operations;
+        unsupported firmware actions produce an explicit error, not an
+        uncheckable visual control or an invented successful result.
+        """
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            def get_section(section):
+                return model_diagnostic_service.diagnostic(
+                    self.get_client(), "F6201B", section=section
+                )
+            def active(tag, params):
+                return self._f6201b_diagnostics.execute(
+                    self.get_client(), self._readonly_original_post,
+                    tag, params,
+                )
+            def measure(payload):
+                return SpeedTestService(self.get_client()).run(
+                    provider=payload.get("speedtest_provider", "native_auto"),
+                    allow_fallback=payload.get("allow_speedtest_fallback", True),
+                    fallback_base_url=payload.get("speedtest_base_url"),
+                )
+            def optimize():
+                # Auto-channel is the mapped and captured Wi-Fi command.
+                # The operation touches neither passwords nor the saved
+                # technician preset and requires an explicit checkbox.
+                return self._audit_device_command(
+                    "wifi_auto_optimization", "Wi-Fi 2.4/5 GHz",
+                    lambda: self._f6201b_profile.apply_saved(
+                        self.get_client(), host=self.current_host,
+                        revision=self._session_revision, firmware=firmware,
+                        profile={"wifi": {
+                            "2.4GHz": {"auto_channel": True},
+                            "5GHz": {"auto_channel": True},
+                        }, "dns": {}},
+                        original_post=self._readonly_original_post,
+                        dns_adapter=self._f6201b_dns,
+                    ),
+                )
+            def resolve_on_pc(hostname):
+                # The capture did not confirm an F6201B native nslookup
+                # route. Distinguish the workstation resolver explicitly.
+                import socket
+                host = host_name(hostname)
+                answers = socket.getaddrinfo(host, None)
+                addresses = sorted({row[4][0] for row in answers})
+                if not addresses:
+                    raise RuntimeError("O PC não retornou nenhum endereço DNS.")
+                return {
+                    "source": "workstation_dns", "verified": True,
+                    "hostname": host, "addresses": addresses[:8],
+                    "address_count": len(addresses),
+                }
+            result = run_f6201b_support(
+                config=config, firmware=firmware, read_section=get_section,
+                ping=lambda opts: active(PING, opts),
+                traceroute=lambda opts: active(TRACE, opts),
+                speedtest=measure, optimize=optimize,
+                dns_lookup=resolve_on_pc,
+            )
+            run_id = history_repository.save_diagnostic(
+                self._history_session_id, result
+            )
+            # The report contains only whitelisted model diagnostic fields.
+            return {**result, "history_id": run_id}
 
     def support_diagnostic(
         self,
@@ -1794,49 +1975,37 @@ class ZTEService:
 
             return result
 
-    def generate_attendance(
-        self,
-        diagnostic_id=None
-    ):
+    def generate_attendance(self, diagnostic_id=None):
+        """Create a session-wide OS even if no full diagnostic was run.
+
+        Never allow an arbitrary diagnostic_id to cross the current
+        authenticated ONT session boundary.
+        """
         with self._lock:
-            diagnostic = (
-                history_repository.diagnostic(
-                    diagnostic_id,
-                    session_id=(
-                        self._history_session_id
-                    ),
-                )
+            if not self._history_session_id:
+                raise RuntimeError("Conecte-se ao equipamento antes de gerar a OS.")
+            timeline = history_repository.session_timeline(
+                self._history_session_id
             )
-
+            diagnostic = history_repository.diagnostic(
+                diagnostic_id, session_id=self._history_session_id
+            )
+            if diagnostic_id and (
+                not diagnostic or
+                diagnostic.get("session_id") != self._history_session_id
+            ):
+                raise ValueError("Diagnóstico não pertence à sessão atual.")
             if not diagnostic:
-                raise ValueError(
-                    "Execute um diagnóstico antes de gerar o atendimento."
-                )
-
-            session_id = (
-                diagnostic.get(
-                    "session_id"
-                )
-                or self._history_session_id
-            )
-
-            timeline = (
-                history_repository.session_timeline(
-                    session_id
-                )
-            )
-
+                diagnostic = {
+                    "mode": "general", "sections": {},
+                    "findings": [], "status": "info",
+                }
             report = AttendanceReportService().build(
-                diagnostic=diagnostic,
-                timeline=timeline,
+                diagnostic=diagnostic, timeline=timeline,
             )
-
             return {
-                **report,
-                "diagnostic_id": diagnostic.get(
-                    "history_id"
-                ),
-                "session_id": session_id,
+                **report, "diagnostic_id": diagnostic.get("history_id"),
+                "session_id": self._history_session_id,
             }
 
     def capture_snapshot(

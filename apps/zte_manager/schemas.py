@@ -203,6 +203,7 @@ class AutomaticDiagnosticRequest(BaseModel):
 
 class SupportDiagnosticRequest(BaseModel):
     mode: str = "general"
+    run_ping: bool = True
     affected_mac: str | None = None
     affected_ip: str | None = None
     ping_host: str = "1.1.1.1"
