@@ -92,6 +92,19 @@ class DiagnosticTests(unittest.TestCase):
         self.assertFalse(self.ont.writes_enabled)
         self.assertIs(self.ont.session.post, self.ont.session.blocked)
 
+    def test_diagnostic_schemas_match_full_captured_form_order(self):
+        self.assertEqual(OBSERVED_DIAGNOSTIC_ACTIONS[PING], (
+            "IF_ACTION", "_InstID", "Host", "Interface",
+            "NumofRepeat", "DataBlockSize", "Timeout",
+            "Btn_cancel_PingDiagnosis", "Btn_PingDiagnosis",
+            "PingAck", "_sessionTOKEN",
+        ))
+        self.assertEqual(OBSERVED_DIAGNOSTIC_ACTIONS[TRACE], (
+            "IF_ACTION", "_InstID", "Control", "Host", "Interface",
+            "MaxHopCount", "Timeout", "Protocol",
+            "Btn_TraceRouteDiagnosis", "Result", "_sessionTOKEN",
+        ))
+
     def test_traceroute_native_hops(self):
         result = self.diag.execute(self.ont, self.ont.transport, TRACE, {
             "host": "192.0.2.9", "max_hops": 30, "timeout": 5000
