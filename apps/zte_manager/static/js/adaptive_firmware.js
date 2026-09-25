@@ -5,6 +5,7 @@
     "use strict";
     const LABELS = {
         device: "Identificação e recursos", identity: "Identificação",
+        wifi_devices: "Dispositivos Wi-Fi identificados",
         resources: "CPU e memória", uptime: "Tempo de atividade",
         optical: "Potência óptica e GPON", loss_of_signal: "Perda de sinal",
         registration: "Registro GPON", wifi_clients: "Clientes Wi-Fi",
@@ -39,7 +40,7 @@
         dashboard: ["device", "optical", "wan", "wifi_clients"],
         wifi: ["wifi_ssids", "wifi_radios", "band_steering", "wps", "wifi_schedule"],
         wan: ["wan", "lan_ports", "dns", "dhcp"],
-        clients: ["wifi_clients", "dhcp_leases", "arp"],
+        clients: ["wifi_clients", "lan_ports", "dhcp_leases", "arp"],
         device: ["device", "optical", "voip_status", "tr069_status"]
     };
     const SENSITIVE = /password|passwd|secret|token|private|authuser|session|credential|keypassphrase/i;
@@ -243,6 +244,22 @@
             });
         }
         if (page === "clients") {
+            // A página de clientes é local ao atendente autorizado: aqui
+            // é útil exibir dispositivos individuais. Não enviar esses
+            // identificadores ao relatório/OS sanitizado.
+            try {
+                const wifi = await apiRequest("/clients/wifi");
+                report.sections.wifi_devices = {
+                    available: Array.isArray(wifi),
+                    data: Array.isArray(wifi) ? wifi : []
+                };
+                renderReport(report, body);
+            } catch (error) {
+                report.sections.wifi_devices = {
+                    available: false, reason: "read_failed"
+                };
+                renderReport(report, body);
+            }
             const notice = el("p", "adaptive-footnote",
                 "Leases DHCP e entradas ARP são históricos de rede, não prova de clientes Ethernet conectados neste momento.");
             body.append(notice);
