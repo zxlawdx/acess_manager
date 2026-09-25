@@ -159,7 +159,7 @@ class BatchTests(unittest.TestCase):
             side_effect=dynamic_post
         ):
             preview = self.preview()
-            self.assertIn("Channel", preview["radios"][0]["changes"])
+            self.assertNotIn("Channel", preview["radios"][0]["changes"])  # auto channel is live telemetry
             # A scan can occur after preview and before confirmation.
             self.zte._values["Channel"] = "1"
             report = self.apply(preview["nonce"])
