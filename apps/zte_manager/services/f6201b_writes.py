@@ -242,6 +242,11 @@ class ExperimentalF6201BWrites:
         if not current:
             raise ValueError("SSID não encontrado na leitura atual.")
         self._ensure_psk_preservable(zte, current, raw)
+        if "password" in desired and current.get("BeaconType") in ("None", "", None, "Basic"):
+            raise ValueError(
+                "Troca de senha exige SSID WPA/WPA2/WPA3 com PSK existente. "
+                "Altere primeiro o modo de segurança na interface original."
+            )
         before = {
             "ssid": current.get("ESSID", ""),
             "enabled": current.get("Enable") == "1",
