@@ -180,115 +180,140 @@ function diagnosticPayload({
 }
 
 
-// F6201B: mesma tela de atendimento dos modelos originais.
-// O formulário visual continua igual, mas ações não observadas no mapeamento
-// permanecem desabilitadas. Relatório inclui SOMENTE leituras GET confirmadas.
-async function classicF6201BDiagnostic(bootstrap) {
+// O F6201B usa o MESMO formulário visual que os modelos nativos.
+// A diferença é somente o adaptador de protocolo selecionado no backend.
+// Cada checkbox representa uma operação real; em caso de indisponibilidade
+// técnica, a ONT informa o erro de uma etapa sem bloquear as demais.
+async function classicF6201BDiagnostic(bootstrap, {full = true, dashboard = false} = {}) {
     if (supportDiagnosticState.running) return;
-    const supported = new Set(
-        (bootstrap.catalog?.models || []).find(item =>
-            item.model === "F6201B")?.candidate_features || []
-    );
-    const modes = {
-        general: ["device_info","pon_optical","wan","dns",
-                  "wifi_clients","wifi_radios","lan_ports","wifi_ssids"],
-        no_internet: ["device_info","pon_optical","wan","dns","lan_ports"],
-        wifi: ["device_info","wifi_ssids","wifi_radios",
-               "wifi_clients","band_steering","wps"],
-        drops: ["device_info","pon_optical","wan",
-                "wifi_clients","wifi_radios"],
-        low_speed: ["device_info","wan","lan_ports",
-                    "wifi_radios","wifi_clients"]
-    };
-    const mode = document.getElementById("supportDiagnosticMode")?.value || "general";
-    const fields = (modes[mode] || modes.general)
-        .filter(feature => supported.has(feature));
-    const report = {
-        model: "F6201B",
-        firmware: bootstrap.firmware,
-        read_only: true,
-        sections: {},
-        errors: {}
-    };
+    const revision = bootstrap.session_revision;
     const output = document.getElementById("supportDiagnosticOutput");
     const badge = document.getElementById("supportDiagnosticBadge");
+    const payload = diagnosticPayload({full});
+    // Um diagnóstico rápido/dashboard nunca dispara POST de Ping,
+    // Speed Test, Traceroute ou otimização sem ação explícita do atendente.
+    payload.run_ping = full;
+    payload.include_traceroute = full && payload.include_traceroute;
+    payload.include_speedtest = full && payload.include_speedtest;
+    payload.auto_optimize_wifi = full && payload.auto_optimize_wifi;
     supportDiagnosticState.running = true;
-    const revision = bootstrap.session_revision;
-    if (badge) { badge.className = "badge"; badge.textContent = "Executando"; }
-    setBusy(true, "Consultando a ONT, somente leitura...");
+    if (!dashboard) {
+        supportDiagnosticState.lastConfig = {...payload};
+        if (badge) { badge.className = "badge"; badge.textContent = "Executando"; }
+    }
+    setBusy(true, "Consultando o firmware e executando as opções selecionadas…");
     try {
-        for (const [index, feature] of fields.entries()) {
-            if (!ontConnected || routerWriteEnabled) return;
-            const section = FIRMWARE_DIAGNOSTIC_SECTIONS[feature];
-            if (!section) continue;
-            setBusy(true, "Leitura " + (index+1) + "/" + fields.length +
-                " · " + FIRMWARE_DIAGNOSTIC_LABELS[feature]);
-            try {
-                const data = await apiRequest("/multimodel/diagnostic", {
-                    method:"POST",body:JSON.stringify({
-                        model:"F6201B",section
-                    })
-                });
-                const fresh = await apiRequest("/discovery/bootstrap");
-                if (fresh.session_revision !== revision ||
-                    fresh.model_verified !== true ||
-                    String(fresh.detected_model || "").toUpperCase() !== "F6201B") return;
-                Object.assign(report.sections,data.sections || {});
-                if (data.reason) report.errors[feature] = "Não confirmado";
-            } catch (error) {
-                report.errors[feature] = "Consulta indisponível";
+        const report = await apiRequest("/diagnostics/support/f6201b", {
+            method: "POST",
+            body: JSON.stringify(payload)
+        });
+        if (!ontConnected || revision !== firmwareDiagnosticState.revision) {
+            return;
+        }
+        if (dashboard) {
+            // O dashboard usa somente GET no F6201B; deixa o operador
+            // executar o diagnóstico ativo pela tela completa.
+            supportDiagnosticState.dashboardDiagnostic = report;
+            const dashboardOutput = document.getElementById("dashboardHealthResult");
+            if (dashboardOutput) dashboardOutput.textContent =
+                report.summary || "Triagem de firmware concluída.";
+            const dashboardBadge = document.getElementById("dashboardHealthBadge");
+            if (dashboardBadge) {
+                dashboardBadge.className = "badge " +
+                    supportStatusClass(report.status);
+                dashboardBadge.textContent = supportSeverityLabel(report.status);
             }
-            const confirmed = Object.values(report.sections).filter(
-                entry=>entry?.available === true).length;
-            const cards = Object.entries(report.sections).map(([name,entry])=>{
-                const title = Object.entries(FIRMWARE_DIAGNOSTIC_SECTIONS)
-                    .find(([,value])=>value === name)?.[0] || name;
-                const details = entry?.available && entry.data
-                    ? Object.entries(
-                        Array.isArray(entry.data) ? (entry.data[0] || {}) : entry.data
-                      ).filter(([,value])=>value == null ||
-                        typeof value !== "object")
-                      .map(([key,value])=>
-                        '<span>'+supportEscape(key.replace(/_/g," "))+
-                        ' <strong>'+supportEscape(String(value ?? "-"))+
-                        '</strong></span>').join("")
-                    : "";
-                return '<article class="support-result-card">'+
-                    '<div class="support-card-head"><div>'+
-                    '<span class="section-kicker">LEITURA DO EQUIPAMENTO</span>'+
-                    '<h3>'+supportEscape(
-                        FIRMWARE_DIAGNOSTIC_LABELS[title] || name)+'</h3></div>'+
-                    '<span class="badge '+(entry?.available ?
-                        "badge-success" : "badge-warning")+'">'+
-                        (entry?.available ? "Confirmado" : "Não disponível")+
-                    '</span></div>'+
-                    (details ? '<div class="credential-meta">'+details+'</div>' :
-                        '<p>'+ (entry?.available ? "Consulta confirmada." :
-                            "Não foi possível confirmar esta função.")+'</p>')+
-                    '</article>';
-            }).join("");
-            if (output) output.innerHTML =
-                '<article class="support-result-card support-summary">'+
-                  '<div><span class="section-kicker">RESULTADO FINAL</span>'+
-                  '<h3>Diagnóstico por firmware</h3>'+
-                  '<p>'+confirmed+' de '+fields.length+
-                    ' leituras confirmadas (somente leitura).</p></div>'+
-                  '<div class="support-summary-metrics"><div><strong>'+
-                    confirmed+'</strong><span>leituras</span></div></div>'+
-                '</article>'+cards;
+            return report;
         }
         supportDiagnosticState.firmwareReport = report;
-        supportDiagnosticState.lastDiagnostic = null;
+        supportDiagnosticState.lastDiagnostic = report;
+        renderF6201BSupportDiagnostic(report, output);
         document.getElementById("supportReportActions")?.classList.remove("hidden");
         if (badge) {
-            badge.className = "badge badge-success";
-            badge.textContent = "Concluído";
+            badge.className = "badge " + supportStatusClass(report.status);
+            badge.textContent = supportSeverityLabel(report.status);
         }
-        showToast("Diagnóstico concluído; o relatório usa os GETs confirmados.");
+        showToast("Diagnóstico concluído. As operações foram registradas na sessão.");
+        return report;
+    } catch (error) {
+        if (!dashboard && output) {
+            output.replaceChildren();
+            const warning = document.createElement("p");
+            warning.className = "support-empty critical";
+            warning.textContent = "Não foi possível concluir o diagnóstico: " +
+                error.message;
+            output.append(warning);
+        }
+        showToast(error.message);
     } finally {
         supportDiagnosticState.running = false;
         setBusy(false);
     }
+}
+
+function renderF6201BSupportDiagnostic(report, output) {
+    if (!output) return;
+    const readings = Object.entries(report.firmware_readings || {});
+    const total = readings.filter(([,item]) => item?.available === true).length;
+    const cards = readings.map(([section, item]) => {
+        const records = item.data;
+        const flattened = Array.isArray(records)
+            ? records.slice(0, 2)
+            : (typeof records === "object" && records ? [records] : []);
+        const details = flattened.flatMap(record =>
+            Object.entries(record || {})
+                .filter(([,value]) => value === null ||
+                    typeof value !== "object")
+                .slice(0, 12)
+                .map(([key,value]) =>
+                    "<span>" + supportEscape(key.replace(/_/g, " ")) +
+                    " <strong>" + supportEscape(String(value ?? "-")) +
+                    "</strong></span>")
+        ).join("");
+        return '<article class="support-result-card">' +
+            '<div class="support-card-head"><h3>' +
+            supportEscape(section.replace(/_/g," ")) +
+            '</h3><span class="badge badge-success">Lido</span></div>' +
+            (details ? '<div class="credential-meta">' + details + '</div>' :
+                '<p>Leitura confirmada pela ONT.</p>') +
+            '</article>';
+    }).join("");
+    const performed = (report.performed || []).map(item =>
+        "<li>" + supportEscape(item.operation) + " · " +
+        supportEscape(item.target || "ONT") + " · " +
+        (item.verified ? "confirmado" : item.noop ? "sem alterações" :
+         "verificação pendente") + "</li>"
+    ).join("");
+    const errors = Object.entries(report.errors || {}).map(([task,reason]) =>
+        "<li>" + supportEscape(task) + ": " + supportEscape(reason) + "</li>"
+    ).join("");
+    const speed = report.sections?.speedtest
+        ? renderSpeedTest(report)
+        : "";
+    const trace = report.sections?.traceroute
+        ? '<article class="support-result-card"><h3>Traceroute</h3><pre>' +
+          supportEscape(String(report.sections.traceroute.resultado || "")) +
+          '</pre></article>' : "";
+    const ping = report.sections?.ping
+        ? '<article class="support-result-card"><h3>Ping na ONT</h3>' +
+          '<p>Perda: ' +
+          supportEscape(String(report.sections.ping.perda_percentual ?? "—")) +
+          '%</p><pre>' +
+          supportEscape(String(report.sections.ping.resultado || "")) +
+          '</pre></article>' : "";
+    output.innerHTML =
+        '<article class="support-result-card support-summary">' +
+            '<h3>Resultado do diagnóstico do equipamento</h3>' +
+            '<p>' + total + ' seções confirmadas; ' +
+            (report.performed || []).length +
+            ' ações efetivamente registradas.</p>' +
+        '</article>' + cards + ping + trace + speed +
+        (performed ? '<article class="support-result-card">' +
+            '<h3>Operações realizadas</h3><ul>' + performed +
+            '</ul></article>' : "") +
+        (errors ? '<article class="support-result-card">' +
+            '<h3>Etapas indisponíveis ou não confirmadas</h3><ul>' + errors +
+            '</ul></article>' : "");
 }
 
 async function runSupportDiagnostic({
@@ -306,7 +331,7 @@ async function runSupportDiagnostic({
         const state = await apiRequest("/discovery/bootstrap");
         if (state.model_verified === true &&
             String(state.detected_model || "").toUpperCase() === "F6201B") {
-            await classicF6201BDiagnostic(state);
+            await classicF6201BDiagnostic(state, {full, dashboard});
         } else {
             // Outros firmwares experimentais conservam o diagnóstico
             // técnico de candidatos no painel por família.
@@ -1172,29 +1197,12 @@ async function applySupportRecommendation(button) {
 
 
 async function generateSupportAttendance() {
-    // O modo leitura não cria um history_id no motor legado.
-    if (supportDiagnosticState.firmwareReport) {
-        const textarea = document.getElementById("supportAttendanceText");
-        textarea.value = window.composeFirmwareAttendance
-            ? window.composeFirmwareAttendance(supportDiagnosticState.firmwareReport)
-            : "Relatório indisponível.";
-        document.getElementById("supportAttendancePanel")?.classList.remove("hidden");
-        textarea.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        showToast("Resumo de atendimento gerado sem alterar a ONT.");
-        return;
-    }
+    // A sessão inteira é a origem do relatório. O histórico inclui as
+    // operações em outras telas, mesmo sem um diagnóstico anterior.
     const diagnosticId = (
         supportDiagnosticState.lastDiagnostic?.history_id
         || null
     );
-
-    if (!diagnosticId) {
-        showToast(
-            "Execute o diagnóstico completo primeiro."
-        );
-
-        return;
-    }
 
     setBusy(
         true,
@@ -1682,21 +1690,20 @@ function renderFirmwareDiagnosticOptions() {
     for (const legacy of form.querySelectorAll(
         ":scope > .support-form-grid, :scope > .support-check-grid, :scope > .support-action-row"
     )) legacy.classList.toggle("hidden", !routerWriteEnabled && !classic);
-    const unsupported = [
+    // Não desabilitar as opções do formulário original pelo modelo de
+    // roteador: o backend executa cada função nativamente e informa
+    // indisponibilidade técnica individual, sem bloqueio artificial.
+    for (const id of [
         "supportIncludeSpeedtest", "supportAllowSpeedFallback",
         "supportIncludeTraceroute", "supportAutoOptimizeWifi",
-        "supportStandaloneSpeedButton", "supportSpeedtestPreset",
-        "supportPingHost", "supportDnsHost",
+        "supportSpeedtestPreset", "supportPingHost", "supportDnsHost",
         "supportExpectedDownload", "supportExpectedUpload"
-    ];
-    for (const id of unsupported) {
-        const element = document.getElementById(id);
-        if (!element) continue;
-        element.disabled = classic;
-        if (classic && element.type === "checkbox") element.checked = false;
-        element.title = classic
-            ? "Este recurso depende de comandos ainda não validados para F6201B."
-            : "";
+    ]) {
+        const input = document.getElementById(id);
+        if (input && classic) {
+            input.disabled = false;
+            input.title = "";
+        }
     }
 
     const grid = panel.querySelector("#firmwareDiagnosticChoices");
