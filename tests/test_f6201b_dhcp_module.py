@@ -1,6 +1,6 @@
 """Independent DHCP feature discovery and captured server mapping tests."""
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from apps.zte_manager.services import f6201b_dhcp as dhcp
 
 
@@ -44,6 +44,14 @@ class FakeONT:
 class DhcpTests(unittest.TestCase):
     def setUp(self):
         self.ont = FakeONT()
+        from apps.zte_manager.services.f6201b_evidence import OBSERVED_APPLY_FIELDS
+        from apps.zte_manager.services.f6201b_full_forms import LiveRecord
+        data = {k: "0" for k in OBSERVED_APPLY_FIELDS[dhcp.BASIC]
+                if k != "_sessionTOKEN"}
+        adapter = patch("apps.zte_manager.services.f6201b_full_forms._load",
+                        return_value=[LiveRecord("DEV.DHCP.1", data)])
+        adapter.start()
+        self.addCleanup(adapter.stop)
 
     def test_independent_ipv4_leases_and_ipv6_discovery(self):
         result = dhcp.status(self.ont)
