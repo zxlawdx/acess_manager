@@ -256,8 +256,6 @@ def _form_fields(tag: str, row: dict, index: int, rows: list,
     merged = {k: str(v) for k, v in html.items() if k in schema}
     merged.update({k: str(v) for k, v in row.items() if k in schema})
     for key in schema:
-        if key in merged:
-            continue
         # The GET records for vector forms contain per-Instance fields, while
         # the original post uses corresponding indexed names. Zero-based,
         # exactly as the recorded form.
@@ -273,6 +271,25 @@ def _form_fields(tag: str, row: dict, index: int, rows: list,
             if number < len(source_rows) and base in source_rows[number]:
                 merged[key] = str(source_rows[number][base])
                 continue
+        # A binding in a live XML Instance overrides hidden HTML defaults.
+        if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua" and (
+                key == "IF_URL_HOST" and row.get("IPAddr")):
+            merged[key] = str(row["IPAddr"])
+            continue
+        if tag == "wlan_wps_lua.lua" and key == "SSID_InstID" and row.get(ID):
+            merged[key] = str(row[ID])
+            continue
+        if key == "_InstNum":
+            expected = {
+                "Localnet_LanDevDHCPSource_lua.lua": 12,
+                "radhcp6s_portctrl_lua.lua": 12,
+                "wlan_macfilteraclpolicy_lua.lua": 8,
+            }.get(tag)
+            if expected and len(rows) == expected:
+                merged[key] = str(expected)
+                continue
+        if key in merged:
+            continue
         if tag == "wlan_wps_lua.lua":
             if key == "SSID_InstID" and row.get(ID):
                 merged[key] = str(row[ID])
@@ -308,6 +325,14 @@ def _form_fields(tag: str, row: dict, index: int, rows: list,
         if tag == "tr069_remotemgr_lua.lua" and key == "select_CertID":
             if "CertID" in row:
                 merged[key] = str(row["CertID"])
+        if tag == "firewall_dmz_lua.lua" and key.startswith("sub_TempMacAddr"):
+            value = row.get("TempMacAddr") or row.get("MACAddr")
+            if value and re.fullmatch(
+                r"[0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}", str(value)
+            ):
+                octet = int(key[-1]) if key[-1].isdigit() else -1
+                if 0 <= octet < 6:
+                    merged[key] = str(value).split(":")[octet]
         if tag == "wan_internet_lua.lua":
             # The WAN Apply has four individual IPv4 octet inputs. Only
             # derive them when the GET returns a genuine IPv4 address.
@@ -404,13 +429,29 @@ def _load(zte, tag: str) -> list[LiveRecord]:
     rows, objects, html_values, encoded = _live_fields(xml, html, tag, zte)
     out = []
     for index, row in enumerate(rows):
-        fields = _form_fields(tag, row, index, rows, objects, html_values)
+        # Never mix a stale page's selected WAN/rule/port with a different
+        # instance returned by the firmware. Absent conditional inputs will
+        # visibly block POST until a matching page context can be obtained.
+        scoped = html_values
+        if (tag in {
+            "wan_internet_lua.lua", "route_routestaticipv4_lua.lua",
+            "eth_interface_config_lua.lua",
+        } and len(rows) > 1 and html_values.get(ID) not in {
+            None, "", str(row.get(ID)),
+        }):
+            scoped = {}
+        fields = _form_fields(tag, row, index, rows, objects, scoped)
         if tag == "tr069_remotemgr_lua.lua":
             for name in PASSWORDS & set(OBSERVED_APPLY_FIELDS[tag]):
                 # Existing TR-069 implementation uses six tabs as the
                 # browser's sentinel for preserving credentials unchanged.
                 fields[name] = "\t" * 6
         elif tag == "wan_internet_lua.lua":
+            if ("Password" in fields and "Password" not in encoded and
+                    re.fullmatch(r"[*•#]{4,}", fields["Password"] or "")):
+                raise RuntimeError(
+                    "WAN apresentou senha mascarada; não é possível preservá-la."
+                )
             token = getattr(zte, "session_tmp_token", None)
             if set(encoded) & {"UserName", "Password"} and not token:
                 raise RuntimeError("WAN criptografada sem token de leitura.")
