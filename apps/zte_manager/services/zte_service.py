@@ -23,7 +23,7 @@ from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.services.f6201b_writes import ExperimentalF6201BWrites, EXACT_FIRMWARE
 from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.f6201b_profile import ExperimentalF6201BProfile
-from apps.zte_manager.services.f6201b_diagnostics import F6201BDiagnostics, PING, TRACE
+from apps.zte_manager.services.f6201b_diagnostics import F6201BDiagnostics, PING, TRACE, host_name
 from apps.zte_manager.services.f6201b_support import run_f6201b_support
 from apps.zte_manager.services import f6201b_dhcp
 from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
@@ -1637,11 +1637,26 @@ class ZTEService:
                         dns_adapter=self._f6201b_dns,
                     ),
                 )
+            def resolve_on_pc(hostname):
+                # The capture did not confirm an F6201B native nslookup
+                # route. Distinguish the workstation resolver explicitly.
+                import socket
+                host = host_name(hostname)
+                answers = socket.getaddrinfo(host, None)
+                addresses = sorted({row[4][0] for row in answers})
+                if not addresses:
+                    raise RuntimeError("O PC não retornou nenhum endereço DNS.")
+                return {
+                    "source": "workstation_dns", "verified": True,
+                    "hostname": host, "addresses": addresses[:8],
+                    "address_count": len(addresses),
+                }
             result = run_f6201b_support(
                 config=config, firmware=firmware, read_section=get_section,
                 ping=lambda opts: active(PING, opts),
                 traceroute=lambda opts: active(TRACE, opts),
                 speedtest=measure, optimize=optimize,
+                dns_lookup=resolve_on_pc,
             )
             run_id = history_repository.save_diagnostic(
                 self._history_session_id, result
