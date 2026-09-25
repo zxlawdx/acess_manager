@@ -165,11 +165,19 @@ class ZTEService:
                         "pelo equipamento. Verifique o perfil selecionado."
                     )
 
+            # Vários firmwares retornam apenas "ZTE", sem modelo. Nesses
+            # casos respeitamos o perfil escolhido, sem fingir confirmação.
+            from apps.zte_manager.services.multimodel_service import find_family
+            known_detected, _ = find_family(detected_model)
+            selected_model = (
+                detected_model if known_detected or not model_hint
+                else model_hint
+            )
             self._adapter = select_adapter(
-                detected_model or model_hint,
+                selected_model,
                 self._device_info.get("firmware"),
             )
-            self._selected_model = detected_model or model_hint
+            self._selected_model = selected_model
             # Somente os adaptadores originais possuem rotinas de escrita
             # implementadas/testadas; os novos perfis iniciam read-only.
             from apps.zte_manager.model.device_adapters import (
@@ -944,22 +952,31 @@ class ZTEService:
 
     def _confirmed_probe_model(self, requested=None):
         """Não sondar endpoints de OUTRA família no equipamento conectado."""
-        active = (
+        detected = (
             self._device_info.get("modelo")
             or self._device_info.get("model")
-            or self._selected_model
             or ""
         )
-        actual, actual_family = multimodel_service.find_family(active)
+        confirmed, confirmed_family = multimodel_service.find_family(detected)
+        selected, selected_family = multimodel_service.find_family(
+            self._selected_model
+        )
         proposed, proposed_family = multimodel_service.find_family(requested)
-        if requested and actual and (
-            proposed != actual or proposed_family != actual_family
+        if requested and confirmed and (
+            proposed != confirmed or proposed_family != confirmed_family
         ):
             raise ValueError(
-                "Modelo informado diverge do modelo desta sessão. "
-                "Reconecte escolhendo o perfil correto."
+                "O perfil solicitado não corresponde ao modelo identificado "
+                "pelo equipamento. Reconecte escolhendo o perfil correto."
             )
-        return active or requested or ""
+        if requested and selected and (
+            proposed != selected or proposed_family != selected_family
+        ):
+            raise ValueError(
+                "O perfil solicitado difere do escolhido na conexão. "
+                "Reconecte para alterar o modelo."
+            )
+        return self._selected_model or detected or requested or ""
 
     def multimodel_mesh(self, model=None):
         with self._lock:
