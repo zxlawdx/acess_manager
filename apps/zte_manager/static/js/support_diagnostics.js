@@ -1745,6 +1745,8 @@ async function detectFirmwareDiagnosticOptions() {
             return;
         }
         do {
+            setBusy(true, "Sondando firmware: " + offset +
+                (total ? "/" + total : "") + " rotas verificadas...");
             // Um lote por vez: o firmware compartilha contexto menuView/menuData.
             const batch = await discoveryRequest("/multimodel/probe", {
                 method: "POST",
@@ -1840,6 +1842,9 @@ async function runSelectedFirmwareDiagnostic() {
     try {
         for (const [index, feature] of choices.entries()) {
             if (host !== currentHost) break;
+            setBusy(true, "Diagnóstico " + (index + 1) + "/" +
+                choices.length + ": " +
+                (FIRMWARE_DIAGNOSTIC_LABELS[feature] || feature));
             const section = FIRMWARE_DIAGNOSTIC_SECTIONS[feature];
             try {
                 if (firmwareDiagnosticState.source === "native") {
