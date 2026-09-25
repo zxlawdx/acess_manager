@@ -40,7 +40,8 @@ def status(zte):
         "basic": basic[0],
         "leases": [], "reservations": [], "lan_dns": {},
         "capabilities": {
-            "server_write": True, "lease_read": False,
+            "server_write": True, "gateway_write": True,
+            "lease_read": False,
             "reservation_write": False, "ipv6_read": False,
             "ipv6_write": False,
         },
