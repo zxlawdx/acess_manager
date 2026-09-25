@@ -7,7 +7,8 @@ const supportDiagnosticState = {
     lastDiagnostic: null,
     dashboardDiagnostic: null,
     running: false,
-    lastConfig: null
+    lastConfig: null,
+    firmwareReport: null
 };
 
 
@@ -1053,6 +1054,17 @@ async function applySupportRecommendation(button) {
 
 
 async function generateSupportAttendance() {
+    // O modo leitura não cria um history_id no motor legado.
+    if (supportDiagnosticState.firmwareReport && !routerWriteEnabled) {
+        const textarea = document.getElementById("supportAttendanceText");
+        textarea.value = window.composeFirmwareAttendance
+            ? window.composeFirmwareAttendance(supportDiagnosticState.firmwareReport)
+            : "Relatório indisponível.";
+        document.getElementById("supportAttendancePanel")?.classList.remove("hidden");
+        textarea.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        showToast("Resumo de atendimento gerado sem alterar a ONT.");
+        return;
+    }
     const diagnosticId = (
         supportDiagnosticState.lastDiagnostic?.history_id
         || null
@@ -1463,6 +1475,7 @@ const firmwareDiagnosticState = {
     model: null,
     firmware: null,
     options: [],
+    selected: new Set(),
     source: "multimodel",
     probeRunning: false,
     scanComplete: false
@@ -1475,7 +1488,15 @@ const FIRMWARE_DIAGNOSTIC_SECTIONS = Object.freeze({
     wifi_ssids: "wifi_ssids",
     wifi_clients: "wifi_clients",
     lan_clients: "lan_clients",
-    pon_optical: "optical"
+    pon_optical: "optical",
+    dhcp_leases: "dhcp_leases", wifi_radios: "wifi_radios",
+    lan_ports: "lan_ports", band_steering: "band_steering",
+    wps: "wps", mesh: "mesh", dns: "dns", dhcp: "dhcp",
+    route_table: "route_table", arp: "arp",
+    firewall: "firewall", voip_status: "voip_status",
+    tr069_status: "tr069_status", upnp: "upnp",
+    wifi_schedule: "wifi_schedule",
+    ping_history: "ping_history", traceroute_history: "traceroute_history"
 });
 
 const FIRMWARE_DIAGNOSTIC_LABELS = Object.freeze({
@@ -1485,7 +1506,15 @@ const FIRMWARE_DIAGNOSTIC_LABELS = Object.freeze({
     wifi_ssids: "Redes Wi-Fi",
     wifi_clients: "Dispositivos Wi-Fi",
     lan_clients: "Dispositivos cabeados",
-    pon_optical: "Potência óptica"
+    pon_optical: "Potência óptica",
+    dhcp_leases: "Leases DHCP (não implica dispositivo online)",
+    wifi_radios: "Rádios Wi-Fi", lan_ports: "Portas Ethernet",
+    band_steering: "Band Steering", wps: "WPS", mesh: "Mesh / roaming",
+    dns: "DNS", dhcp: "Servidor DHCP", route_table: "Tabela de rotas",
+    arp: "Tabela ARP", firewall: "Firewall", voip_status: "Telefonia",
+    tr069_status: "TR-069", upnp: "UPnP",
+    wifi_schedule: "Agendamento Wi-Fi", ping_history: "Último ping",
+    traceroute_history: "Último traceroute"
 });
 
 function firmwareDiagnosticPanel() {
@@ -1512,7 +1541,7 @@ function firmwareDiagnosticPanel() {
                 Diagnosticar seções selecionadas
             </button>
         </div>
-        <pre id="firmwareDiagnosticResult" style="white-space: pre-wrap; overflow-wrap: anywhere;"></pre>
+        <div id="firmwareDiagnosticResult" aria-live="polite"></div>
     `;
     form.prepend(panel);
     panel.querySelector("#firmwareDiagnosticDetect")
