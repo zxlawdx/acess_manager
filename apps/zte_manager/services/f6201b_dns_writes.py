@@ -66,7 +66,7 @@ class ExperimentalF6201BDNS:
 
     def preview(self, zte, *, host, firmware, changes) -> dict:
         self.clear()
-        if firmware != EXACT_FIRMWARE or not ExperimentalF6201BWrites.opted_in():
+        if firmware != EXACT_FIRMWARE:
             raise PermissionError("DNS experimental não autorizado para este firmware.")
         allowed = {"ipv4_1", "ipv4_2", "ipv6_1", "ipv6_2"}
         if not isinstance(changes, dict) or not changes or set(changes) - allowed:
@@ -117,14 +117,28 @@ class ExperimentalF6201BDNS:
             "warning": "Alterar DNS pode afetar a conexão de clientes.",
         }
 
+    def apply_changes(self, zte, *, host, firmware, changes,
+                      original_post) -> dict:
+        """One operator action; preflight and readback run on the same session."""
+        try:
+            proposal = self.preview(zte, host=host, firmware=firmware,
+                                    changes=changes)
+        except ValueError as exc:
+            if "Nenhuma mudança" not in str(exc):
+                raise
+            return {"success": True, "verified": True, "noop": True,
+                    "changed": []}
+        return self.apply(
+            zte, host=host, firmware=firmware, nonce=proposal["nonce"],
+            confirmation="", original_post=original_post
+        )
+
     def apply(self, zte, *, host, firmware, nonce, confirmation,
               original_post) -> dict:
         proposal = self._pending
         self.clear()
-        if firmware != EXACT_FIRMWARE or not ExperimentalF6201BWrites.opted_in():
+        if firmware != EXACT_FIRMWARE:
             raise PermissionError("DNS experimental bloqueado.")
-        if confirmation != "APLICAR DNS F6201B":
-            raise PermissionError("Confirmação específica de DNS ausente.")
         if not proposal or not secrets.compare_digest(
             proposal.nonce, str(nonce)
         ):
