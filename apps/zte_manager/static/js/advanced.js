@@ -1068,19 +1068,14 @@ function renderCapabilities(
                 );
 
                 const stateClass = state
-                    ? (
-                        state.available
-                            ? "available"
-                            : "unavailable"
-                    )
+                    ? (state.not_tested ? "" : (
+                        state.available ? "available" : "unavailable"
+                    ))
                     : "";
 
                 const stateText = state
-                    ? (
-                        state.available
-                            ? "Disponível"
-                            : "Indisponível"
-                    )
+                    ? (state.not_tested ? "Não concluído (timeout)" :
+                        state.available ? "Confirmado" : "Não confirmado")
                     : "Não testado";
 
                 return `
