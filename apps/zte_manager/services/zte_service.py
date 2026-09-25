@@ -23,6 +23,7 @@ from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.services.f6201b_writes import ExperimentalF6201BWrites, EXACT_FIRMWARE
 from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.f6201b_profile import ExperimentalF6201BProfile
+from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -59,6 +60,7 @@ class ZTEService:
         self._f6201b_writer = ExperimentalF6201BWrites()
         self._f6201b_dns = ExperimentalF6201BDNS()
         self._f6201b_profile = ExperimentalF6201BProfile()
+        self._captured_workbench = CapturedFormWorkbench()
         self._readonly_original_post = None
 
     # =========================================================
@@ -181,6 +183,7 @@ class ZTEService:
             self._f6201b_writer.clear()
             self._f6201b_dns.clear()
             self._f6201b_profile.clear()
+            self._captured_workbench.clear()
             self._readonly_original_post = None
             self._session_revision = uuid4().hex
             self._model_verified = False
@@ -387,6 +390,7 @@ class ZTEService:
                 self._f6201b_writer.clear()
                 self._f6201b_dns.clear()
                 self._f6201b_profile.clear()
+                self._captured_workbench.clear()
                 self._readonly_original_post = None
 
     def get_client(self) -> ZTE:
@@ -1234,6 +1238,35 @@ class ZTEService:
                 nonce=nonce, confirmation=confirmation,
                 original_post=self._readonly_original_post,
                 dns_adapter=self._f6201b_dns,
+            )
+
+    # Comandos capturados com Strategy específica por formulário.
+    # Estas rotas preservam o transporte read-only salvo na conexão.
+    def captured_workbench_catalog(self):
+        return captured_catalog()
+
+    def captured_workbench_inspect(self, tag):
+        with self._lock:
+            self._f6201b_write_firmware()
+            return self._captured_workbench.inspect(self.get_client(), tag)
+
+    def captured_workbench_preview(self, tag, instance_id, changes):
+        with self._lock:
+            self._f6201b_write_firmware()
+            return self._captured_workbench.preview(
+                self.get_client(), tag=tag, instance_id=instance_id,
+                changes=changes, host=self.current_host,
+                revision=self._session_revision,
+            )
+
+    def captured_workbench_apply(self, nonce, confirmation, risk_ack):
+        with self._lock:
+            self._f6201b_write_firmware()
+            return self._captured_workbench.apply(
+                self.get_client(), host=self.current_host,
+                revision=self._session_revision, nonce=nonce,
+                confirmation=confirmation, risk_ack=risk_ack,
+                original_post=self._readonly_original_post,
             )
 
     def mapped_f6201b_routes(self):
