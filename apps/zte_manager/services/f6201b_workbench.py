@@ -140,7 +140,6 @@ def catalog() -> dict:
         "model": "F6201B", "firmware": EXACT_FIRMWARE,
         "total_observed_apply_routes": len(OBSERVED_APPLY_FIELDS),
         "routes": routes,
-        "writes_opted_in": ExperimentalF6201BWrites.opted_in(),
         "physical_validation": "pending",
     }
 
@@ -285,8 +284,6 @@ class CapturedFormWorkbench:
         if tag not in STRATEGIES:
             raise PermissionError("Rota sem adaptador de gravação supervisionada.")
         self._active = "simple"
-        if not ExperimentalF6201BWrites.opted_in():
-            raise PermissionError("Habilite ZTE_F6201B_EXPERIMENTAL_WRITES=1.")
         if not isinstance(changes, dict) or not changes:
             raise ValueError("Escolha pelo menos um campo para alterar.")
         spec = STRATEGIES[tag]
@@ -312,10 +309,27 @@ class CapturedFormWorkbench:
         )
         return {"tag": tag, "instance_id": instance_id, "nonce": nonce,
                 "expires_in_seconds": PREVIEW_TTL,
-                "confirmation": "APLICAR ROTA F6201B",
-                "risk_ack_required": spec.dangerous, "diff": diff,
+                "impact_warning": spec.dangerous, "diff": diff,
                 "physical_validation": "pending",
                 "note": "Confirme backup e Ethernet antes de aplicar."}
+
+    def apply_changes(self, zte, *, host: str, revision: str,
+                      attendant: str, tag: str, instance_id: str,
+                      changes: dict, original_post) -> dict:
+        """One user request: all preflight checks then exactly one device Apply.
+
+        An internal one-use nonce is never an additional operator challenge.
+        The service RLock serializes GET/view/POST and prevents session races.
+        """
+        proposal = self.preview(
+            zte, tag=tag, instance_id=instance_id, changes=changes,
+            host=host, revision=revision, attendant=attendant,
+        )
+        return self.apply(
+            zte, host=host, revision=revision, attendant=attendant,
+            nonce=proposal["nonce"], confirmation="", risk_ack=True,
+            original_post=original_post,
+        )
 
     def apply(self, zte, *, host: str, revision: str,
               attendant: str, nonce: str,
@@ -329,19 +343,14 @@ class CapturedFormWorkbench:
             )
         proposal = self._pending
         self.clear()  # one-shot, including rejected attempts
-        if not ExperimentalF6201BWrites.opted_in() or original_post is None:
+        if original_post is None:
             raise PermissionError("Transporte experimental indisponível.")
-        if confirmation != "APLICAR ROTA F6201B":
-            raise PermissionError("Digite a confirmação exibida na prévia.")
         if not proposal or not secrets.compare_digest(proposal.nonce, str(nonce)):
             raise PermissionError("Nonce inválido ou já consumido.")
         if (proposal.host != host or proposal.revision != revision or
-                proposal.attendant != attendant or
                 self._clock() - proposal.created > PREVIEW_TTL):
             raise PermissionError("Prévia expirada ou sessão alterada.")
         spec = STRATEGIES[proposal.tag]
-        if spec.dangerous and risk_ack is not True:
-            raise PermissionError("Confirme o risco de perder acesso à ONT.")
         live = self._read(zte, proposal.tag, proposal.instance_id)
         if any(str(live.get(key)) != value
                for key, value in proposal.original.items()):

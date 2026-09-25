@@ -1,0 +1,36 @@
+/* DHCP module shares neutral design tokens across dark/light modes. */
+.dhcp-module {min-width:0}
+.dhcp-module .dhcp-settings {display:grid;gap:14px;margin:14px 0}
+.dhcp-module .field-grid {align-items:end}
+.dhcp-module .dhcp-lists {display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-top:20px}
+.dhcp-module .dhcp-lists>div {min-width:0;border:1px solid var(--ui-border);
+  background:var(--ui-elevated);border-radius:var(--ui-radius);padding:14px}
+.dhcp-module h4 {margin:0 0 12px;color:var(--ui-text);font-size:13px}
+.dhcp-module .table-wrap {overflow-x:auto}
+.dhcp-module table {width:100%;border-collapse:collapse;color:var(--ui-text);
+  background:var(--ui-surface);font-size:12px}
+.dhcp-module th,.dhcp-module td {padding:10px;text-align:left;
+  border-bottom:1px solid var(--ui-border)}
+.dhcp-module th {color:var(--ui-text-secondary);font-size:11px;
+  background:var(--ui-elevated);white-space:nowrap}
+.dhcp-module .dhcp-feedback {min-height:20px;padding:8px 0;
+  color:var(--ui-text-secondary);overflow-wrap:anywhere}
+.dhcp-module .dhcp-feedback[data-level="error"] {color:var(--ui-danger)}
+.dhcp-module .dhcp-feedback[data-level="ok"] {color:var(--ui-success)}
+.dhcp-module input,.dhcp-module select {background:var(--ui-field)!important;
+  color:var(--ui-text)!important;border-color:var(--ui-border)!important}
+.dhcp-module :is(button,input,select):focus-visible {
+  outline:2px solid var(--ui-accent);outline-offset:2px}
+.dhcp-module .dhcp-ipv6-field {display:grid;gap:5px;margin-bottom:9px;
+  color:var(--ui-text-secondary);font-size:11px}
+.dhcp-module .dhcp-ipv6-field input,
+.dhcp-module .dhcp-ipv6-field select {padding:8px;border:1px solid var(--ui-border);
+  border-radius:5px}
+.dhcp-module .dhcp-note {color:var(--ui-text-secondary);font-size:11px;
+  line-height:1.6;margin:9px 0}
+.dhcp-module .dhcp-reservation {display:grid;gap:9px}
+.dhcp-module .dhcp-reservation form {display:flex;flex-wrap:wrap;gap:8px}
+.dhcp-module .dhcp-reservation form>* {min-width:0;flex:1 1 110px}
+.dhcp-module button:disabled {opacity:.55;cursor:wait}
+@media(max-width:1040px){.dhcp-module .dhcp-lists{grid-template-columns:1fr}}
+@media(max-width:650px){.dhcp-module .field-grid{grid-template-columns:1fr}}

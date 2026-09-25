@@ -85,8 +85,9 @@ FORM_SPECS: dict[str, FormSpec] = {
     "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua": FormSpec(
         "OBJ_Br0AndDhcpsHosCfg_ID",
         ("ServerEnable", "MinAddress", "MaxAddress", "LeaseTime",
-         "DNSServer1", "DNSServer2", "DnsServerSource", "DomainName"),
-        additional_roots=("OBJ_LANDNS_ID",),
+         "DNSServer1", "DNSServer2", "DnsServerSource", "DomainName",
+         "IPRouters"),
+        additional_roots=("OBJ_LANDNS_ID", "OBJ_OPTTFTPSERV_ID"),
         description="DHCP IPv4: preserva IP/Submask LAN e todos os campos condicionais capturados.",
     ),
     "Localnet_LanDevDHCPSource_lua.lua": FormSpec(
@@ -259,7 +260,10 @@ def _form_fields(tag: str, row: dict, index: int, rows: list,
     # Only borrow a value when exactly ONE object provides that field.
     spec = FORM_SPECS[tag]
     for name in schema:
-        if name in merged or name.startswith(("Btn_", "_InstID")):
+        # Live XML from a dedicated secondary object is more authoritative
+        # than a template's hidden input default. Never override primary
+        # Instance data and never invent a value when objects disagree.
+        if name in row or name.startswith(("Btn_", "_InstID")):
             continue
         candidates = [
             item[name] for root in spec.additional_roots
@@ -421,7 +425,7 @@ def _validate_value(tag: str, key: str, value) -> str:
     if key == "URL" and value and not value.startswith(("http://", "https://")):
         raise ValueError("ACS URL deve usar HTTP ou HTTPS.")
     if key in {"DestIP", "DestIPMask", "GWIP", "MinAddress", "MaxAddress",
-               "DNSServer1", "DNSServer2", "InternalClient"} and value:
+               "DNSServer1", "DNSServer2", "InternalClient", "IPRouters"} and value:
         if key == "InternalClient" and value == "0.0.0.0":
             return value
         try:
@@ -450,6 +454,33 @@ def _load(zte, tag: str) -> list[LiveRecord]:
     html = zte.get_view(view, Menu3Location=0)
     xml = zte.get_menu(tag, **GET_PARAMS.get(tag, {}))
     rows, objects, html_values, encoded = _live_fields(xml, html, tag, zte)
+    if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua":
+        # This firmware encrypts FIVE ordinary IPv4 fields in GET/POST.
+        # Without decrypting with the GET view's token the UI would display
+        # ciphertext and a user edit would be rejected as invalid IPv4.
+        expected = {"IPAddr", "MinAddress", "MaxAddress",
+                    "DNSServer1", "DNSServer2"}
+        if not expected.issubset(encoded):
+            raise RuntimeError(
+                "O DHCP não expôs todos os campos AES documentados."
+            )
+        token = getattr(zte, "session_tmp_token", None)
+        if not token:
+            raise RuntimeError("O menu DHCP não forneceu token AES.")
+        rows = [dict(item) for item in rows]
+        for row in rows:
+            for name in expected:
+                raw_value = row.get(name, "")
+                if not raw_value:
+                    continue
+                value = zte_security.aes_decrypt_value(
+                    raw_value, token, token[::-1]
+                )
+                if value == raw_value:
+                    raise RuntimeError(
+                        "Não foi possível ler " + name + " do DHCP."
+                    )
+                row[name] = value
     out = []
     for index, row in enumerate(rows):
         # Never mix a stale page's selected WAN/rule/port with a different
@@ -529,6 +560,22 @@ def _encode_secrets(zte, tag: str, live: LiveRecord,
                     changes: dict[str, str]) -> tuple[dict, str]:
     values = dict(live.values)
     values.update(changes)
+    if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua":
+        fields = ("IPAddr", "MinAddress", "MaxAddress",
+                  "DNSServer1", "DNSServer2")
+        if not set(fields).issubset(live.encode_fields):
+            raise RuntimeError("O DHCP não informou os campos criptografados.")
+        if not getattr(zte, "public_key_pem", None):
+            raise RuntimeError("Não encontrei a chave do formulário DHCP.")
+        key = "".join(str(secrets.randbelow(10)) for _ in range(16))
+        iv = "".join(str(secrets.randbelow(10)) for _ in range(16))
+        for name in fields:
+            if name not in values:
+                raise RuntimeError("Campo DHCP ausente: " + name)
+            values[name] = zte_security.aes_encrypt_value(values[name], key, iv)
+        return values, zte_security.rsa_encrypt_text(
+            f"{key}+{iv}", zte.public_key_pem
+        )
     if tag == "tr069_remotemgr_lua.lua":
         changed = [key for key in PASSWORDS if key in changes]
         if changed:
@@ -618,8 +665,6 @@ class FullCapturedForms:
     def preview(self, zte, *, tag: str, instance_id: str,
                 changes: dict, host: str, revision: str, attendant: str) -> dict:
         self.clear()
-        if not ExperimentalF6201BWrites.opted_in():
-            raise PermissionError("Habilite ZTE_F6201B_EXPERIMENTAL_WRITES=1.")
         if tag not in FORM_SPECS:
             raise PermissionError("Não existe formulário capturado para esta rota.")
         if not isinstance(changes, dict) or not changes:
@@ -659,6 +704,37 @@ class FullCapturedForms:
                 )
         if not changed:
             raise ValueError("Nenhuma diferença detectada.")
+        if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua":
+            # Pool addresses must be in order, within the actual LAN subnet.
+            # No guessed gateway or subnet is silently posted.
+            target = dict(row.values)
+            target.update(changed)
+            try:
+                pool_start = ipaddress.IPv4Address(target["MinAddress"])
+                pool_end = ipaddress.IPv4Address(target["MaxAddress"])
+                network = ipaddress.IPv4Network(
+                    target["IPAddr"] + "/" + target["SubMask"],
+                    strict=False,
+                )
+            except (KeyError, ValueError, ipaddress.AddressValueError):
+                raise ValueError(
+                    "A ONT deve informar IP LAN, máscara e faixa DHCP válidos."
+                ) from None
+            if pool_start > pool_end:
+                raise ValueError("Início DHCP maior que o final da faixa.")
+            if pool_start not in network or pool_end not in network:
+                raise ValueError("A faixa DHCP está fora da rede LAN.")
+            if network.network_address in (pool_start, pool_end) or (
+                network.broadcast_address in (pool_start, pool_end)
+            ):
+                raise ValueError("A faixa inclui endereço de rede/broadcast.")
+            gateway = target.get("IPRouters") or target.get("IPAddr")
+            try:
+                gateway_ip = ipaddress.IPv4Address(gateway)
+            except ValueError:
+                raise ValueError("Gateway DHCP inválido.") from None
+            if gateway_ip not in network:
+                raise ValueError("Gateway DHCP fora da rede LAN.")
         # Dry-run using the captured schema, never echo raw payload.
         _assemble(tag, row.values, changed)
         nonce = secrets.token_urlsafe(24)
@@ -669,7 +745,7 @@ class FullCapturedForms:
         return {
             "tag": tag, "instance_id": instance_id,
             "nonce": nonce, "expires_in_seconds": PREVIEW_TTL,
-            "confirmation": "APLICAR ROTA F6201B", "risk_ack_required": True,
+            "impact_warning": spec.dangerous,
             "diff": {key: {
                 "before": _secrets_masked(spec, key, row.values.get(key, "")),
                 "after": _secrets_masked(spec, key, value) if key not in PRIVATE
@@ -684,12 +760,9 @@ class FullCapturedForms:
         self.clear()
         if not p or not secrets.compare_digest(p.nonce, str(nonce)):
             raise PermissionError("Prévia inválida ou já utilizada.")
-        if not ExperimentalF6201BWrites.opted_in() or original_post is None:
-            raise PermissionError("Transporte de laboratório não autorizado.")
-        if confirmation != "APLICAR ROTA F6201B" or risk_ack is not True:
-            raise PermissionError("Confirmação de risco obrigatória.")
+        if original_post is None:
+            raise PermissionError("Transporte da sessão da ONT indisponível.")
         if (p.host != host or p.revision != revision or
-                p.attendant != attendant or
                 self._clock() - p.created > PREVIEW_TTL):
             raise PermissionError("Sessão/atendente mudou ou prévia expirou.")
 

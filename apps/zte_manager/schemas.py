@@ -148,6 +148,9 @@ class PingRequest(BaseModel):
     host: str = "8.8.8.8"
     interface: str = ""
     ip_version: str = "IPv4"
+    count: int = Field(default=4, ge=1, le=30)
+    data_size: int = Field(default=64, ge=1, le=1400)
+    timeout: int = Field(default=5000, ge=1000, le=10000)
 
 
 class TracerouteRequest(BaseModel):

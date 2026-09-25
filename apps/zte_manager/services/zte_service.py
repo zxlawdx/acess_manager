@@ -23,6 +23,8 @@ from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.services.f6201b_writes import ExperimentalF6201BWrites, EXACT_FIRMWARE
 from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.f6201b_profile import ExperimentalF6201BProfile
+from apps.zte_manager.services.f6201b_diagnostics import F6201BDiagnostics, PING, TRACE
+from apps.zte_manager.services import f6201b_dhcp
 from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
@@ -60,6 +62,7 @@ class ZTEService:
         self._f6201b_writer = ExperimentalF6201BWrites()
         self._f6201b_dns = ExperimentalF6201BDNS()
         self._f6201b_profile = ExperimentalF6201BProfile()
+        self._f6201b_diagnostics = F6201BDiagnostics()
         self._captured_workbench = CapturedFormWorkbench()
         self._readonly_original_post = None
 
@@ -821,11 +824,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração do EasyMesh."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -844,11 +842,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme o início do pareamento EasyMesh/WPS."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -900,24 +893,35 @@ class ZTEService:
     # DHCP / NAT
     # =========================================================
 
+    def _is_captured_f6201b(self):
+        detected, _ = multimodel_service.find_family(
+            self._device_info.get("modelo") or ""
+        )
+        return detected == "F6201B"
+
     def dhcp_status(self):
         with self._lock:
+            if self._is_captured_f6201b():
+                self._f6201b_write_firmware()
+                return f6201b_dhcp.status(self.get_client())
             return self.get_client().dhcp_status()
 
-    def set_dhcp_basic(
-        self,
-        config
-    ):
+    def set_dhcp_basic(self, config):
         with self._lock:
+            if self._is_captured_f6201b():
+                self._f6201b_write_firmware()
+                return f6201b_dhcp.change(
+                    self._captured_workbench, self.get_client(),
+                    config=config, host=self.current_host,
+                    revision=self._session_revision,
+                    attendant=self.current_attendant,
+                    original_post=self._readonly_original_post,
+                )
             zte = self.get_client()
-
             return self._run_change(
-                operation="dhcp_basic",
-                target="lan",
+                operation="dhcp_basic", target="lan",
                 before_reader=zte.dhcp_status,
-                action=lambda: zte.set_dhcp_basic(
-                    config
-                ),
+                action=lambda: zte.set_dhcp_basic(config),
             )
 
     def save_dhcp_reservation(
@@ -960,11 +964,6 @@ class ZTEService:
         self,
         config
     ):
-        if not config.get("confirm"):
-            raise ValueError(
-                "Confirme explicitamente a alteração de port forwarding."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -982,11 +981,6 @@ class ZTEService:
         instance_id,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a remoção do port forwarding."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -1007,11 +1001,6 @@ class ZTEService:
         self,
         config
     ):
-        if not config.get("confirm"):
-            raise ValueError(
-                "Confirme explicitamente a alteração da DMZ."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -1105,36 +1094,33 @@ class ZTEService:
             )
 
     def _f6201b_write_firmware(self):
-        # Indicação no formulário não basta: exigir leitura real do firmware
-        # imediatamente antes do preview/POST, usando a sessão autenticada.
-        selected, _ = multimodel_service.find_family(
-            self._selected_model or ""
-        )
-        if selected != "F6201B":
-            raise PermissionError("A sessão não corresponde ao perfil F6201B.")
+        """Hardware/firmware compatibility, never an employee permissions gate.
+
+        Selection in a dropdown is not proof of capabilities; the authenticated
+        device status is authoritative and rechecked for captured POSTs.
+        """
         device = self.get_client().device_status()
         detected, _ = multimodel_service.find_family(
             device.get("modelo") or ""
         )
         if detected != "F6201B":
-            raise PermissionError(
-                "O modelo da sessão não foi confirmado pelo próprio equipamento."
+            raise ValueError(
+                "A ONT não confirmou suporte ao adaptador F6201B."
             )
         firmware = device.get("firmware")
         if firmware != EXACT_FIRMWARE:
-            raise PermissionError(
-                "Este firmware não foi homologado para o adaptador experimental."
+            raise ValueError(
+                "Este firmware requer seu próprio mapeamento de comandos."
             )
         return firmware
 
     def f6201b_write_status(self):
         with self._lock:
-            selected, _ = multimodel_service.find_family(
-                self._selected_model or ""
+            detected, _ = multimodel_service.find_family(
+                self._device_info.get("modelo") or ""
             )
-            if selected != "F6201B":
-                raise ValueError("Conecte um F6201B primeiro.")
-            # Somente metadados em memória: status não acessa o roteador.
+            if detected != "F6201B":
+                raise ValueError("A ONT conectada não foi identificada como F6201B.")
             return self._f6201b_writer.capabilities(
                 self._device_info.get("firmware")
             )
@@ -1220,8 +1206,7 @@ class ZTEService:
     def f6201b_profile_preview(self, attendant):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            if attendant != self.current_attendant:
-                raise PermissionError("O perfil deve pertencer ao atendente atual.")
+            # "attendant" chooses a saved preset; it is not a permission role.
             return self._f6201b_profile.preview(
                 self.get_client(), host=self.current_host,
                 revision=self._session_revision, firmware=firmware,
@@ -1243,14 +1228,41 @@ class ZTEService:
     def f6201b_profile_apply_saved(self, attendant):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            if attendant != self.current_attendant:
-                raise PermissionError("Perfil de outro atendente.")
             return self._f6201b_profile.apply_saved(
                 self.get_client(), host=self.current_host,
                 revision=self._session_revision, firmware=firmware,
                 profile=profile_service.get_profile(attendant),
                 original_post=self._readonly_original_post,
                 dns_adapter=self._f6201b_dns,
+            )
+
+    def f6201b_ssid_update(self, ssid_id, config):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            return self._f6201b_writer.apply_changes(
+                self.get_client(), host=self.current_host, firmware=firmware,
+                ssid_id=ssid_id, config=config,
+                original_post=self._readonly_original_post,
+            )
+
+    def f6201b_dns_update(self, changes):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            return self._f6201b_dns.apply_changes(
+                self.get_client(), host=self.current_host,
+                firmware=firmware, changes=changes,
+                original_post=self._readonly_original_post,
+            )
+
+    def captured_workbench_update(self, tag, instance_id, changes):
+        with self._lock:
+            self._f6201b_write_firmware()
+            return self._captured_workbench.apply_changes(
+                self.get_client(), tag=tag, instance_id=instance_id,
+                changes=changes, host=self.current_host,
+                revision=self._session_revision,
+                attendant=self.current_attendant,
+                original_post=self._readonly_original_post,
             )
 
     # Comandos capturados com Strategy específica por formulário.
@@ -1337,17 +1349,30 @@ class ZTEService:
     # DIAGNÓSTICOS
     # =========================================================
 
+    def _captured_diagnostic(self, tag, config):
+        if self._f6201b_write_firmware() != EXACT_FIRMWARE:
+            raise ValueError("O firmware não expôs o diagnóstico capturado.")
+        return self._f6201b_diagnostics.execute(
+            self.get_client(), self._readonly_original_post, tag, config,
+        )
+
     def ping(self, config):
         with self._lock:
-            return self.get_client().ping(
-                config
+            detected, _ = multimodel_service.find_family(
+                self._device_info.get("modelo") or ""
             )
+            if detected == "F6201B":
+                return self._captured_diagnostic(PING, config)
+            return self.get_client().ping(config)
 
     def traceroute(self, config):
         with self._lock:
-            return self.get_client().traceroute(
-                config
+            detected, _ = multimodel_service.find_family(
+                self._device_info.get("modelo") or ""
             )
+            if detected == "F6201B":
+                return self._captured_diagnostic(TRACE, config)
+            return self.get_client().traceroute(config)
 
     # =========================================================
     # DIAGNÓSTICO AUTOMÁTICO / HISTÓRICO
@@ -1891,11 +1916,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração de QoS."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -1921,11 +1941,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a remoção da regra QoS."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -1953,11 +1968,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração do firewall."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -1988,11 +1998,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração do filtro de firewall."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2018,11 +2023,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a remoção do filtro de firewall."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2043,11 +2043,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração das políticas globais de filtro."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2104,11 +2099,6 @@ class ZTEService:
         *,
         confirm=True
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração do TR-069/ACS."
-            )
-
         with self._lock:
             zte = self.get_client()
 
@@ -2142,11 +2132,6 @@ class ZTEService:
         confirm=False,
         backup=True
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a criação da WAN/VLAN/PPPoE."
-            )
-
         with self._lock:
             if backup:
                 self.management_backup(
@@ -2176,11 +2161,6 @@ class ZTEService:
         confirm=True,
         backup=True
     ):
-        if not confirm:
-            raise ValueError(
-                "Confirme explicitamente a alteração da WAN/VLAN/PPPoE."
-            )
-
         with self._lock:
             if backup:
                 self.management_backup(
@@ -2210,11 +2190,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Excluir uma WAN pode derrubar o acesso. Confirme explicitamente."
-            )
-
         with self._lock:
             self.management_backup(
                 reason="pre_wan_delete"
@@ -2262,11 +2237,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Bridge Mode pode derrubar o gerenciamento. Confirme explicitamente."
-            )
-
         with self._lock:
             backup = self.management_backup(
                 reason="pre_bridge_mode"
@@ -2419,11 +2389,6 @@ class ZTEService:
         *,
         confirm=False
     ):
-        if not confirm:
-            raise ValueError(
-                "Restauração pode reiniciar e desconectar a ONT. Confirme explicitamente."
-            )
-
         backups = management_repository.list_backups()
 
         backup = next((
@@ -2492,11 +2457,6 @@ class ZTEService:
         confirm=False,
         device_id=None
     ):
-        if not confirm:
-            raise ValueError(
-                "Upgrade de firmware pode reiniciar a ONT. Confirme explicitamente."
-            )
-
         with self._lock:
             self._assert_management_device_matches_current(
                 device_id

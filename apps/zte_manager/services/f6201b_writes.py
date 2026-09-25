@@ -1,16 +1,12 @@
-"""F6201B V9.3.10P7N7: adaptador experimental de alterações supervisionadas.
+"""F6201B captured SSID operations on a native authenticated router session.
 
-O mapeamento do proprietário documenta GETs, mas NÃO um POST Apply.
-Reaproveitamos o read-modify-write SSID existente apenas sob opt-in
-explícito do operador, com preflight/preview, nonce de uso único, verificação
-de firmware, sem habilitar os demais endpoints de escrita da aplicação.
-
-Se o menu ou o token diferirem, a operação é recusada ANTES do POST.
-Não prometer rollback de Wi-Fi: mudanças podem derrubar o acesso remoto.
+The operator action starts one internal validation and captured Apply.
+Only the identified firmware and its actual XML form permit a write.
+Router auth, credentials preservation and readback remain mandatory.
 """
+
 from __future__ import annotations
 
-import os
 import re
 import secrets
 import hashlib
@@ -47,7 +43,9 @@ class ExperimentalF6201BWrites:
 
     @staticmethod
     def opted_in() -> bool:
-        return os.environ.get(OPT_IN_ENV, "").strip().lower() == "1"
+        # Deprecated compatibility field: the connected ONT, not an app-level
+        # environment/employee gate, decides supported operations.
+        return True
 
     @staticmethod
     def capabilities(firmware: str | None = None) -> dict:
@@ -56,7 +54,6 @@ class ExperimentalF6201BWrites:
             "model": "F6201B",
             "firmware": firmware,
             "supported_firmware": eligible,
-            "opted_in": ExperimentalF6201BWrites.opted_in(),
             "operations": [{
                 "id": "ssid_basic",
                 "label": "SSID: nome, senha, ativação, isolamento e clientes",
@@ -70,17 +67,14 @@ class ExperimentalF6201BWrites:
                 "releitura do equipamento"
             ),
             "requires": [
-                "confirmação específica após visualizar a diferença",
-                "firmware exato e autenticação administrativa",
+                "firmware mapeado e sessão aceita pelo próprio equipamento",
                 "menuView e token temporário reais",
                 "mapeamento atual de SSID/PSK confirmado no dispositivo",
                 "Apply reproduz a ordem dos campos da captura validada",
-                "liberação explícita via variável de ambiente",
             ],
             "note": (
-                "Captura inclui Apply de Wi-Fi e outras funções, mas "
-                "somente SSID foi integrado ao editor protegido. "
-                "Demais mudanças aguardam adaptadores individualizados."
+                "SSID possui seu editor próprio; demais formulários capturados "
+                "usam estratégias específicas do gerenciamento avançado."
             ),
         }
 
@@ -227,11 +221,6 @@ class ExperimentalF6201BWrites:
         self.clear()
         if firmware != EXACT_FIRMWARE:
             raise PermissionError("Somente F6201B firmware V9.3.10P7N7.")
-        if not self.opted_in():
-            raise PermissionError(
-                "Modo experimental bloqueado. Defina " + OPT_IN_ENV +
-                "=1 apenas em laboratório/com acesso local."
-            )
         if not isinstance(ssid_id, str) or not re.fullmatch(
             r"DEV\.WIFI\.AP\d+", ssid_id
         ):
@@ -284,15 +273,26 @@ class ExperimentalF6201BWrites:
                 "warning": ("POST Apply de SSID foi documentado na captura, "
                             "mas ainda exige verificação física e acesso local.")}
 
+    def apply_changes(self, zte, *, host: str, firmware: str,
+                      ssid_id: str, config: dict, original_post) -> dict:
+        """Single operator click, preserving captured preflight/PSK protection."""
+        proposal = self.preview(
+            zte, host=host, firmware=firmware,
+            ssid_id=ssid_id, config=config
+        )
+        return self.apply(
+            zte, host=host, firmware=firmware,
+            nonce=proposal["nonce"], confirmation="",
+            original_post=original_post,
+        )
+
     def apply(self, zte, *, host: str, firmware: str,
               nonce: str, confirmation: str, original_post) -> dict:
         proposal = self._pending
         # Consome inclusive tentativa inválida: evitar replay involuntário.
         self.clear()
-        if not self.opted_in() or firmware != EXACT_FIRMWARE:
+        if firmware != EXACT_FIRMWARE:
             raise PermissionError("Escrita experimental não autorizada.")
-        if confirmation != "APLICAR F6201B":
-            raise PermissionError("Confirmação explícita obrigatória.")
         if not proposal or not secrets.compare_digest(proposal.nonce, str(nonce)):
             raise PermissionError("Prévia ausente ou inválida.")
         if (proposal.host != host or

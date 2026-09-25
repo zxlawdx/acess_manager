@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="{{ static('zte_manager/css/brmodelo_workbench.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/f6201b_workbench.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/light_mode_refine.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/dhcp_module.css') }}">
 
 <div class="app-shell">
 
@@ -505,6 +506,60 @@
                         <div class="loading">Carregando configuração UPnP...</div>
                     </div>
                 </article>
+                <article id="dhcpModule" class="panel with-top-space dhcp-module">
+                    <div class="panel-header">
+                        <div>
+                            <span class="section-kicker">LAN / DHCP</span>
+                            <h3>Servidor DHCP e concessões</h3>
+                        </div>
+                        <button id="dhcpRefresh" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">refresh</span>Atualizar
+                        </button>
+                    </div>
+                    <p class="muted" id="dhcpAvailability">
+                        Consultando as funcionalidades expostas pela ONT...
+                    </p>
+                    <form id="dhcpConfigForm" class="dhcp-settings" onsubmit="return false;">
+                        <label class="switch-field">
+                            <span>Servidor DHCP ativo</span>
+                            <span class="switch"><input id="dhcpEnabled" type="checkbox">
+                                <span class="switch-slider"></span></span>
+                        </label>
+                        <div class="field-grid three">
+                            <label class="field"><span>IP inicial</span>
+                                <input id="dhcpStart" type="text" inputmode="decimal"></label>
+                            <label class="field"><span>IP final</span>
+                                <input id="dhcpEnd" type="text" inputmode="decimal"></label>
+                            <label class="field"><span>Tempo de concessão (s)</span>
+                                <input id="dhcpLease" type="number" min="60"></label>
+                            <label class="field"><span>DNS IPv4 1</span>
+                                <input id="dhcpDns1" type="text" inputmode="decimal"></label>
+                            <label class="field"><span>DNS IPv4 2</span>
+                                <input id="dhcpDns2" type="text" inputmode="decimal"></label>
+                        </div>
+                        <p class="muted">A faixa DHCP deve pertencer à rede LAN. Alterações
+                            podem interromper a conectividade dos clientes.</p>
+                        <button id="dhcpApply" class="button primary" type="submit">
+                            <span class="material-symbols-outlined">save</span>
+                            Aplicar DHCP
+                        </button>
+                    </form>
+                    <p id="dhcpFeedback" class="dhcp-feedback" role="status"></p>
+                    <div class="dhcp-lists">
+                        <div>
+                            <h4>Endereços concedidos</h4>
+                            <div class="table-wrap"><table>
+                                <thead><tr><th>Dispositivo</th><th>IP</th>
+                                    <th>MAC</th><th>Concessão</th></tr></thead>
+                                <tbody id="dhcpLeases"></tbody>
+                            </table></div>
+                        </div>
+                        <div id="dhcpIpv6" class="dhcp-ipv6">
+                            <h4>DHCP IPv6</h4>
+                            <p class="muted">Verificando suporte do equipamento...</p>
+                        </div>
+                    </div>
+                </article>
             </section>
 
 
@@ -737,6 +792,14 @@
                             <div class="field-grid two">
                                 <label class="field"><span>INTERFACE</span><select id="pingInterface"><option value="">Rota padrão</option></select></label>
                                 <label class="field"><span>IP VERSION</span><select id="pingIpVersion"><option value="IPv4">IPv4</option><option value="IPv6">IPv6</option></select></label>
+                            </div>
+                            <div class="field-grid three">
+                                <label class="field"><span>PACOTES</span>
+                                    <input id="pingCount" type="number" min="1" max="30" value="4"></label>
+                                <label class="field"><span>TAMANHO (BYTES)</span>
+                                    <input id="pingSize" type="number" min="1" max="1400" value="64"></label>
+                                <label class="field"><span>TIMEOUT (MS)</span>
+                                    <input id="pingTimeout" type="number" min="1000" max="10000" value="5000"></label>
                             </div>
                             <button class="button primary" type="submit"><span class="material-symbols-outlined">play_arrow</span>Executar ping</button>
                         </form>
@@ -1656,3 +1719,4 @@
 <script src="{{ static('zte_manager/js/f6201b_editor.js') }}"></script>
 <script src="{{ static('zte_manager/js/neutral_theme.js') }}"></script>
 <script src="{{ static('zte_manager/js/f6201b_workbench.js') }}"></script>
+<script src="{{ static('zte_manager/js/dhcp_module.js') }}"></script>

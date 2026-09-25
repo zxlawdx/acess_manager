@@ -192,7 +192,7 @@ class OperationsContractTests(unittest.TestCase):
             INDEX,
         )
 
-    def test_destructive_routes_require_confirmation_fields(self):
+    def test_management_commands_have_no_extra_backend_confirm_gate(self):
         service = (
             ROOT
             / "apps"
@@ -208,14 +208,15 @@ class OperationsContractTests(unittest.TestCase):
             / "schemas.py"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(
-            "Confirme explicitamente a alteração da DMZ.",
-            service,
+        self.assertNotIn(
+            "Confirme explicitamente a alteração da DMZ.", service
         )
-        self.assertIn(
-            "confirm: bool = False",
-            schemas,
-        )
+        self.assertNotIn("if not confirm:", service)
+        # The request DTO keeps its legacy field for older clients, but it
+        # is not a second approval barrier anywhere in the service.
+        self.assertIn("confirm: bool = False", schemas)
+        self.assertIn('reason="pre_wan_delete"', service)
+        self.assertIn('reason="pre_firmware_upgrade"', service)
 
 
 if __name__ == "__main__":

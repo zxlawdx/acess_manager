@@ -152,11 +152,8 @@ class ExperimentalF6201BProfile:
 
     @staticmethod
     def _authorized(firmware):
-        if firmware != EXACT_FIRMWARE or not ExperimentalF6201BWrites.opted_in():
-            raise PermissionError(
-                "Ative ZTE_F6201B_EXPERIMENTAL_WRITES=1 e confirme o "
-                "firmware F6201B V9.3.10P7N7 para testar o perfil."
-            )
+        if firmware != EXACT_FIRMWARE:
+            raise ValueError("Formulário RF indisponível neste firmware.")
 
     def preview(self, zte, *, host, revision, firmware, profile, dns_adapter):
         self.clear()
@@ -284,8 +281,8 @@ class ExperimentalF6201BProfile:
                        "after": entry["after"]} for entry in host_changes],
             "not_included": list(SKIPPED_PROFILE_FEATURES),
             "warning": (
-                "Teste experimental: alterações sequenciais; falhas podem "
-                "deixar um perfil parcial. Use acesso local por cabo."
+                "Alterações sequenciais podem interromper a conexão; "
+                "mantenha acesso local quando possível."
             ),
         }
 
@@ -324,8 +321,6 @@ class ExperimentalF6201BProfile:
         proposal = self._pending
         self.clear()  # Even invalid attempts consume the nonce.
         self._authorized(firmware)
-        if confirmation != "APLICAR PERFIL F6201B":
-            raise PermissionError("Digite APLICAR PERFIL F6201B.")
         if (proposal is None or
                 not secrets.compare_digest(str(nonce), proposal.nonce) or
                 proposal.host != host or proposal.revision != revision or

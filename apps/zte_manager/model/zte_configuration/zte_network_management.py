@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Address, IPv4Network
 from typing import Any, Iterable
 
 from .zte_post import post_menu
@@ -326,6 +327,25 @@ def set_dhcp_basic(
             config["ipv4_dns_origin"]
         )
 
+    # Validate the router's real subnet and complete pool before writing.
+    try:
+        start = IPv4Address(basic["MinAddress"])
+        end = IPv4Address(basic["MaxAddress"])
+        lan = IPv4Network(basic["IPAddr"] + "/" + basic["SubMask"],
+                          strict=False)
+    except (KeyError, ValueError):
+        raise ValueError("LAN, máscara e intervalo DHCP inválidos.") from None
+    if (start > end or start not in lan or end not in lan or
+            start == lan.network_address or end == lan.broadcast_address):
+        raise ValueError("Faixa DHCP incompatível com a LAN.")
+    for field in ("DNSServer1", "DNSServer2"):
+        value = basic.get(field) or ""
+        if value:
+            try:
+                IPv4Address(value)
+            except ValueError:
+                raise ValueError(field + " exige endereço IPv4.") from None
+
     fields = [
         ("IF_ACTION", "Apply"),
         (
@@ -389,10 +409,20 @@ def set_dhcp_basic(
         response
     )
 
+    after = dhcp_status(zte)
+    persisted = after.get("basic") or {}
+    changed = {wire for source, wire in mapping.items() if source in config}
+    mismatch = [field for field in sorted(changed)
+                if str(persisted.get(field)) != str(basic[field])]
+    if mismatch:
+        raise RuntimeError(
+            "DHCP respondeu, mas a ONT não persistiu os campos: " +
+            ", ".join(mismatch)
+        )
     return {
-        "success": True,
-        "before": current,
-        "after": dhcp_status(zte),
+        "success": True, "verified": True,
+        "changed_fields": sorted(changed),
+        "before": current, "after": after,
     }
 
 

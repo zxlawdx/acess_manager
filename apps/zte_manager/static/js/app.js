@@ -630,13 +630,10 @@ function openPage(pageName) {
                     const verified = device.connected === true &&
                         device.model_verified === true &&
                         String(device.detected_model || "").toUpperCase() === "F6201B";
-                    batch.disabled = !(verified && flags.opted_in &&
-                        flags.supported_firmware);
+                    batch.disabled = !(verified && flags.supported_firmware);
                     batch.title = !verified
                         ? "A ONT conectada não foi confirmada como F6201B."
-                        : !flags.opted_in
-                        ? "Para o laboratório, reinicie com ZTE_F6201B_EXPERIMENTAL_WRITES=1."
-                        : "Perfil F6201B experimental: prévia e confirmação obrigatórias.";
+                        : "A alteração será aplicada diretamente ao perfil da ONT.";
                 }).catch(() => {
                     batch.disabled = true;
                     batch.title = "Identificação experimental indisponível nesta sessão.";
@@ -2703,7 +2700,10 @@ document
             const payload = {
                 host: document.getElementById("pingHost").value.trim(),
                 interface: document.getElementById("pingInterface").value,
-                ip_version: document.getElementById("pingIpVersion").value
+                ip_version: document.getElementById("pingIpVersion").value,
+                count: Number(document.getElementById("pingCount").value),
+                data_size: Number(document.getElementById("pingSize").value),
+                timeout: Number(document.getElementById("pingTimeout").value)
             };
 
             output.textContent = "Executando ping pela ONT...";
@@ -2813,7 +2813,21 @@ function formatDiagnosticResult(data) {
         lines.push(`Falha: ${data.falha ?? "-"}`);
     }
 
-    if (data.hops !== undefined) {
+    if (data.perda_percentual !== undefined &&
+        data.perda_percentual !== null) {
+        lines.push(`Perda: ${data.perda_percentual}%`);
+    }
+
+    if (Array.isArray(data.hops)) {
+        lines.push("Saltos: " + data.hops.length);
+        for (const hop of data.hops) {
+            lines.push(String(hop.numero) + "  " +
+                (hop.ip || "*") + "  " +
+                (hop.latencias_ms?.length
+                  ? hop.latencias_ms.join(" ms / ") + " ms"
+                  : hop.timeout ? "timeout" : hop.linha || ""));
+        }
+    } else if (data.hops !== undefined) {
         lines.push(`Hops: ${data.hops ?? "-"}`);
     }
 
@@ -3400,9 +3414,8 @@ async function applyExperimentalF6201BProfile() {
             String(identity.detected_model || "").toUpperCase() !== "F6201B") {
             throw new Error("A sessão atual não confirmou um F6201B.");
         }
-        if (!authorization.opted_in || !authorization.supported_firmware) {
-            throw new Error("Habilite o F6201B nesta instalação com " +
-                "ZTE_F6201B_EXPERIMENTAL_WRITES=1.");
+        if (!authorization.supported_firmware) {
+            throw new Error("Firmware sem mapeamento deste formulário F6201B.");
         }
         if (!currentProfile || profileLoadedFor !==
                 startEpoch + ":" + attendant) {

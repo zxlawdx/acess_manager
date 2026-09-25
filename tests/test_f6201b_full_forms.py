@@ -2,14 +2,16 @@
 
 No real ONT, passwords, network traffic, or capture bytes are used.
 """
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 import os
 import unittest
 from unittest.mock import patch
 
 from apps.zte_manager.services.f6201b_evidence import OBSERVED_APPLY_FIELDS
+from apps.zte_manager.model.zte_configuration import zte_security
 from apps.zte_manager.services.f6201b_full_forms import (
     FORM_SPECS, FullCapturedForms, _assemble, _form_fields, _load,
+    _encode_secrets,
 )
 from apps.zte_manager.services.f6201b_workbench import (
     CapturedFormWorkbench, catalog,
@@ -50,7 +52,21 @@ class FakeONT:
             self.current["UserName"] = "cipher-username"
             self.current["Password"] = "cipher-password"
         if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua":
-            self.current["IPAddr"] = "192.0.2.1"
+            self.current.update({
+                "IPAddr": "192.0.2.1", "SubMask": "255.255.255.0",
+                "MinAddress": "192.0.2.100",
+                "MaxAddress": "192.0.2.200", "IPRouters": "192.0.2.1",
+                "DNSServer1": "1.1.1.1", "DNSServer2": "9.9.9.9",
+            })
+            self.encoded = (
+                "IPAddr", "MinAddress", "MaxAddress",
+                "DNSServer1", "DNSServer2",
+            )
+            for field in self.encoded:
+                self.current[field] = zte_security.aes_encrypt_value(
+                    self.current[field], self.session_tmp_token,
+                    self.session_tmp_token[::-1],
+                )
         self.objects = {self.spec.root: [self.current]}
         self.objects.update(more_objects or {})
 
@@ -95,7 +111,8 @@ class FullFormTests(unittest.TestCase):
                 "confirmation", "APLICAR ROTA F6201B"
             ), risk_ack=kw.get("risk_ack", True),
             original_post=fake.original_post, host="192.0.2.10",
-            revision="syn-r1", attendant=kw.get("attendant", "synthetic-tech"),
+            revision=kw.get("revision", "syn-r1"),
+            attendant=kw.get("attendant", "synthetic-tech"),
         )
 
     def test_all_remaining_routes_have_individual_strategies(self):
@@ -128,6 +145,32 @@ class FullFormTests(unittest.TestCase):
                 )
                 self.assertEqual(dict(body)["IF_ACTION"], "Apply")
                 self.assertEqual(records[0].instance_id, "DEV.SYNTHETIC.1")
+
+    def test_native_dhcp_decodes_get_and_encodes_all_five_post_fields(self):
+        tag = "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua"
+        fake = FakeONT(tag)
+        live = _load(fake, tag)[0]
+        self.assertEqual(live.values["IPAddr"], "192.0.2.1")
+        self.assertEqual(live.values["MinAddress"], "192.0.2.100")
+        self.assertEqual(live.values["DNSServer1"], "1.1.1.1")
+        with patch(
+            "apps.zte_manager.services.f6201b_full_forms."
+            "zte_security.aes_encrypt_value",
+            side_effect=lambda value, key, iv: "AES:" + str(value),
+        ) as aes, patch(
+            "apps.zte_manager.services.f6201b_full_forms."
+            "zte_security.rsa_encrypt_text",
+            return_value="RSA-key",
+        ) as rsa:
+            values, encoded = _encode_secrets(fake, tag, live,
+                                              {"DNSServer2": "8.8.8.8"})
+        self.assertEqual(aes.call_count, 5)
+        rsa.assert_called_once()
+        self.assertEqual(encoded, "RSA-key")
+        self.assertEqual(values["IPAddr"], "AES:192.0.2.1")
+        self.assertEqual(values["DNSServer2"], "AES:8.8.8.8")
+        self.assertEqual(dict(_assemble(tag, values, {}, encoded))[
+            "encode"], "RSA-key")
 
     def test_fails_closed_if_conditional_field_missing(self):
         tag = "route_routestaticipv4_lua.lua"
@@ -218,7 +261,13 @@ class FullFormTests(unittest.TestCase):
                     zte.post_count += 1
                     return "<synthetic-success/>"
 
-                with patch(
+                rsa = (patch(
+                    "apps.zte_manager.services.f6201b_full_forms."
+                    "zte_security.rsa_encrypt_text",
+                    return_value="synthetic-rsa",
+                ) if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua"
+                    else nullcontext())
+                with rsa, patch(
                     "apps.zte_manager.services.f6201b_full_forms.post_menu",
                     side_effect=fake_post,
                 ) as mocked:
@@ -304,11 +353,11 @@ class FullFormTests(unittest.TestCase):
         self.assertEqual(captured["Password"], "aes-plain-cipher-password")
         self.assertEqual(captured["encode"], "new-RSA")
 
-    def test_attendant_switch_and_uncertain_post_no_retry(self):
+    def test_session_revision_and_uncertain_post_no_retry(self):
         fake = FakeONT("firewall_dmz_lua.lua")
         proposal = self._preview(fake, {"Enable": "1"})
         with self.assertRaisesRegex(PermissionError, "mudou"):
-            self._apply(fake, proposal, attendant="different-tech")
+            self._apply(fake, proposal, revision="different-session")
         proposal = self._preview(fake, {"Enable": "1"})
         with patch("apps.zte_manager.services.f6201b_full_forms.post_menu",
                    side_effect=TimeoutError("synthetic")) as mocked:

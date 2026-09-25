@@ -44,6 +44,7 @@ jobs:
           node --check apps/zte_manager/static/js/f6201b_editor.js
           node --check apps/zte_manager/static/js/neutral_theme.js
           node --check apps/zte_manager/static/js/f6201b_workbench.js
+          node --check apps/zte_manager/static/js/dhcp_module.js
           node --check apps/zte_manager/static/js/adaptive_firmware.js
 
       - name: Verify loading overlay behavior
@@ -83,6 +84,9 @@ jobs:
         run: |
           python -m py_compile apps/zte_manager/services/f6201b_full_forms.py
           python -m unittest tests.test_f6201b_full_forms -v
+
+      - name: Verify DHCP and native diagnostics UI contracts
+        run: node tests/test_dhcp_module_ui.cjs
 
       - name: Verify F6201B captured workbench and isolation
         run: node tests/test_f6201b_workbench_ui.cjs

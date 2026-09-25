@@ -20,10 +20,12 @@ for (const contract of [
   "zte:session-changed", "zte:page-open", "checkedModel",
   "model_verified", "writes_enabled === false", "/discovery/bootstrap",
   "/f6201b/workbench/catalog", "/f6201b/workbench/inspect",
-  "/f6201b/workbench/preview", "/f6201b/workbench/apply",
-  "risk_ack", "current.nonce", "textContent"
+  "/f6201b/workbench/update", "dangerous", "textContent",
+  "a conexão pode ser interrompida"
 ]) assert.ok(js.includes(contract), "Missing UI/session contract: " + contract);
 assert.ok(!js.includes("innerHTML"), "No firmware-controlled HTML injection");
+assert.ok(!js.includes("risk_ack") && !js.includes("requestPreview("),
+    "No artificial typed approvals or separate preview round-trip");
 assert.ok(css.includes("#f6201b-workbench"), "Scoped workbench styles");
 assert.ok(css.includes("--ui-accent") && css.includes("@media"),
     "Match BRModelo palette and responsive constraints");

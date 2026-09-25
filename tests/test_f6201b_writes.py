@@ -76,11 +76,11 @@ class F6201BWriteTests(unittest.TestCase):
             ssid_id="DEV.WIFI.AP1", config=changes or {"ssid": "LAB_WIFI_2"},
         )
 
-    def test_disabled_by_default(self):
+    def test_internal_env_toggle_does_not_block_authenticated_device(self):
         with patch.dict(os.environ, {OPT_IN_ENV: "0"}):
-            with self.assertRaises(PermissionError):
-                self.preview()
-        self.assertEqual(self.zte.calls, [])
+            proposal = self.preview()
+        self.assertEqual(proposal["changes"]["ssid"]["after"], "LAB_WIFI_2")
+        self.assertEqual(len(self.zte.calls), 2)
         self.assertFalse(self.zte.writes_enabled)
 
     def test_preview_is_get_only_and_redacted(self):
@@ -93,15 +93,14 @@ class F6201BWriteTests(unittest.TestCase):
                          ["GET_VIEW", "GET_MENU"])
         self.assertFalse(self.zte.writes_enabled)
 
-    def test_no_apply_without_exact_confirmation(self):
-        with patch.dict(os.environ, {OPT_IN_ENV: "1"}):
-            result = self.preview()
-            with self.assertRaises(PermissionError):
-                self.writer.apply(
-                    self.zte, host="192.0.2.1", firmware=EXACT_FIRMWARE,
-                    nonce=result["nonce"], confirmation="yes",
-                    original_post=lambda *a: None,
-                )
+    def test_rejects_apply_without_real_preflight_nonce(self):
+        result = self.preview()
+        with self.assertRaisesRegex(PermissionError, "Prévia"):
+            self.writer.apply(
+                self.zte, host="192.0.2.1", firmware=EXACT_FIRMWARE,
+                nonce="not-" + result["nonce"], confirmation="",
+                original_post=lambda *a: None,
+            )
         self.assertFalse(self.zte.writes_enabled)
 
     def test_apply_uses_legacy_verified_writer_once_then_relocks(self):
