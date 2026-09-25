@@ -1242,6 +1242,22 @@ window.loadDashboardSupportHealth = async function () {
 };
 
 
+// O atalho do topo faz uma primeira triagem somente leitura.
+window.runQuickSupportDiagnostic = async function runQuickSupportDiagnostic() {
+    if (!ontConnected) {
+        showToast("Conecte-se antes de iniciar o diagnóstico.");
+        return;
+    }
+    if (supportDiagnosticState.running) {
+        showToast("Um diagnóstico já está em andamento.");
+        return;
+    }
+    // full=false desativa Speed Test, traceroute e otimização de Wi-Fi:
+    // não aplicar mudanças implícitas ao clicar em um atalho.
+    await runSupportDiagnostic({ full: false, dashboard: false });
+};
+
+
 document.getElementById(
     "supportDiagnosticForm"
 )?.addEventListener(
