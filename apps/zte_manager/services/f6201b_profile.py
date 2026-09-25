@@ -69,7 +69,8 @@ def _build_target(data: dict, radio: dict, band: str, config: dict) -> dict:
     rf._apply_channel(data, target, band, config)
     rf._apply_advanced(target, config)
     missing = [name for name in CAPTURED_RF_FIELDS
-               if name not in target or target[name] is None]
+               if name not in radio or radio[name] is None
+               or name not in target or target[name] is None]
     if missing:
         raise RuntimeError(
             "O formulário deste firmware não expôs os campos capturados: "
