@@ -499,6 +499,15 @@ async function loadCapabilityCatalog() {
 
 
 async function probeCapabilities() {
+    if (!ontConnected) {
+        showToast("Conecte-se à ONT para detectar recursos.");
+        return;
+    }
+    if (!routerWriteEnabled && !advancedState.capabilities?.features) {
+        // Família Vue: a detecção menuView/menuData não se aplica.
+        await probeMultimodel();
+        return;
+    }
     setBusy(true, "Detectando recursos por etapas...");
 
     try {
@@ -510,6 +519,10 @@ async function probeCapabilities() {
 
         const catalog = advancedState.capabilities?.features || {};
         const keys = Object.keys(catalog);
+        if (!keys.length) {
+            showToast("Não há menus ThinkLua neste perfil. Use Detectar modelo.");
+            return;
+        }
         const results = [];
         const batchSize = 3;
 
@@ -1488,6 +1501,15 @@ async function readFirmwareFeature(event) {
 
 
 async function backupConfiguration() {
+    if (!ontConnected) {
+        showToast("Conecte-se ao equipamento antes de executar backup.");
+        return;
+    }
+    if (!routerWriteEnabled) {
+        // Exportar configuração não foi homologado para todos os firmwares.
+        showToast("Backup binário não homologado neste modelo. Use Diagnóstico por modelo.");
+        return;
+    }
     if (
         !window.confirm(
             "Exportar agora um backup local da configuração da ONT?"
@@ -1544,6 +1566,14 @@ async function backupConfiguration() {
 // =========================================================
 
 async function captureSnapshot() {
+    if (!ontConnected) {
+        showToast("Conecte-se ao equipamento para capturar snapshot.");
+        return;
+    }
+    if (!routerWriteEnabled) {
+        showToast("Snapshot legado indisponível neste firmware. Use Diagnóstico por modelo.");
+        return;
+    }
     setBusy(
         true,
         "Capturando snapshot operacional..."
