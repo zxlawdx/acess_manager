@@ -1524,6 +1524,12 @@ function firmwareDiagnosticPanel() {
 function renderFirmwareDiagnosticOptions() {
     const panel = firmwareDiagnosticPanel();
     if (!panel) return;
+    // Controles legados (incluindo POST de ping e otimização) não se aplicam
+    // a firmwares experimentais. Não deixar opções visíveis que serão ignoradas.
+    const form = document.getElementById("supportDiagnosticForm");
+    for (const legacy of form.querySelectorAll(":scope > .support-form-grid, :scope > .support-check-grid, :scope > .support-action-row")) {
+        legacy.classList.toggle("hidden", !routerWriteEnabled);
+    }
     const grid = panel.querySelector("#firmwareDiagnosticChoices");
     const status = panel.querySelector("#firmwareDiagnosticStatus");
     const detected = firmwareDiagnosticState.options.filter(item => item.confirmed).length;
