@@ -769,7 +769,9 @@ async function runMultimodelDiagnostic() {
         h288a: ["device", "wan", "wifi_clients", "lan_clients"],
         h388x: ["device", "wan", "wifi_clients", "lan_clients"],
         h2640: ["device", "dsl", "wifi_clients", "lan_clients"],
-        vue: ["wan", "wifi_clients", "lan_clients"]
+        vue: ["wan", "wifi_clients", "lan_clients"],
+        f6201b_candidate: ["device", "wan", "wifi_ssids",
+            "wifi_clients", "lan_clients"]
     };
     const sections = [...(profiles[family] || [
         "device", "wan", "wifi_clients", "lan_clients"
