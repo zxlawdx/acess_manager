@@ -899,6 +899,16 @@ class ZTEService:
     def multimodel_catalog(self):
         return multimodel_service.catalog()
 
+    def multimodel_mesh(self, model=None):
+        with self._lock:
+            selected = (
+                model or self._selected_model
+                or self._device_info.get("modelo") or ""
+            )
+            return multimodel_service.mesh_summary(
+                self.get_client(), selected
+            )
+
     def multimodel_probe(self, model=None):
         with self._lock:
             selected = (
