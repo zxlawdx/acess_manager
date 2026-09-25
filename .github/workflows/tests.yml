@@ -43,3 +43,6 @@ jobs:
 
       - name: Verify loading overlay behavior
         run: node tests/test_loading_overlay.cjs
+
+      - name: Verify discovery bootstrap survives stalled capabilities
+        run: node tests/test_discovery_bootstrap.cjs
