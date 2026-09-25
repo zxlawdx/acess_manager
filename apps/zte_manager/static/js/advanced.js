@@ -1871,13 +1871,18 @@ async function readFirmwareFeature(event) {
             `/features/read?feature=${encodeURIComponent(feature)}`
         );
 
-        document.getElementById(
-            "featureInspectorOutput"
-        ).textContent = JSON.stringify(
-            data,
-            null,
-            2
-        );
+        const output = document.getElementById("featureInspectorOutput");
+        if (window.renderAdaptiveDiagnostic) {
+            window.renderAdaptiveDiagnostic({
+                model: trackerDetectedModel || "ZTE",
+                sections: { [feature]: {
+                    available: data.available === true,
+                    data: data.available === true ? data : null
+                }}
+            }, output);
+        } else {
+            output.textContent = "Inspeção indisponível.";
+        }
     } catch (error) {
         document.getElementById(
             "featureInspectorOutput"
