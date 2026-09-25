@@ -91,6 +91,7 @@ class CapturedPreview:
     nonce: str
     host: str
     revision: str
+    attendant: str
     tag: str
     instance_id: str
     original: dict[str, str]
@@ -250,7 +251,8 @@ class CapturedFormWorkbench:
         }
 
     def preview(self, zte, *, tag: str, instance_id: str,
-                changes: dict, host: str, revision: str) -> dict:
+                changes: dict, host: str, revision: str,
+                attendant: str) -> dict:
         self.clear()
         if tag not in STRATEGIES:
             raise PermissionError("Rota sem adaptador de gravação supervisionada.")
@@ -274,7 +276,7 @@ class CapturedFormWorkbench:
         desired.update(clean)
         nonce = secrets.token_urlsafe(24)
         self._pending = CapturedPreview(
-            nonce, host, revision, tag, instance_id,
+            nonce, host, revision, attendant, tag, instance_id,
             {key: desired[key] if key not in diff else diff[key]["before"]
              for key in spec.editable},
             desired, self._clock(),
@@ -286,7 +288,8 @@ class CapturedFormWorkbench:
                 "physical_validation": "pending",
                 "note": "Confirme backup e Ethernet antes de aplicar."}
 
-    def apply(self, zte, *, host: str, revision: str, nonce: str,
+    def apply(self, zte, *, host: str, revision: str,
+              attendant: str, nonce: str,
               confirmation: str, risk_ack: bool, original_post) -> dict:
         proposal = self._pending
         self.clear()  # one-shot, including rejected attempts
@@ -297,6 +300,7 @@ class CapturedFormWorkbench:
         if not proposal or not secrets.compare_digest(proposal.nonce, str(nonce)):
             raise PermissionError("Nonce inválido ou já consumido.")
         if (proposal.host != host or proposal.revision != revision or
+                proposal.attendant != attendant or
                 self._clock() - proposal.created > PREVIEW_TTL):
             raise PermissionError("Prévia expirada ou sessão alterada.")
         spec = STRATEGIES[proposal.tag]
