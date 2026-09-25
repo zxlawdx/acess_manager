@@ -25,8 +25,9 @@ assert.ok(!profile.includes('panel f6201b-editor'),
 assert.ok(adaptive.includes(
     "Nunca substituir as páginas Visão geral"),
     "Read-only overlay must not hide native pages");
-assert.ok(profile.includes("preview") && profile.includes("nonce"),
-    "Guarded SSID confirmation must be preserved");
+assert.ok(profile.includes("/f6201b/write/update") &&
+    !profile.includes('"/f6201b/write/preview"'),
+    "F6201B must use the captured SSID editor without a second approval");
 
 const handlers={};
 const ctx={
