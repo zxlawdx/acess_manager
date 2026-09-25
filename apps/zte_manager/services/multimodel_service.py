@@ -179,7 +179,21 @@ def _fetch(zte, endpoint: ReadEndpoint) -> str:
         response.raise_for_status()
         return response.text
 
-    zte.get_view(endpoint.view, Menu3Location=0)
+    # No F6640/H288A, o zte_tracker documenta acesso menuData direto
+    # para clientes. Outros firmwares exigem uma menuView prévia (#75).
+    # Primeiro tentamos o fluxo conservador com contexto; se somente a
+    # VIEW não existir, uma leitura direta do MESMO tag documentado
+    # pode funcionar. Nunca repetimos em erro explícito de sessão expirada.
+    if not endpoint.view:
+        return zte.get_menu(endpoint.tag, **dict(endpoint.params))
+    try:
+        zte.get_view(endpoint.view, Menu3Location=0)
+    except Exception as error:
+        if "session" in str(error).lower() or "login" in str(error).lower():
+            raise
+        # O menuData direto aparece nos exemplos oficiais do tracker;
+        # não tentamos tags diferentes nem POST de configuração.
+        return zte.get_menu(endpoint.tag, **dict(endpoint.params))
     return zte.get_menu(endpoint.tag, **dict(endpoint.params))
 
 
@@ -233,7 +247,7 @@ def _shape(xml: str, expected_root: str) -> dict[str, Any]:
         raise RuntimeError("Resposta não é XML ThinkLua")
 
     error = (root.findtext("IF_ERRORSTR") or "").strip()
-    if error and error.upper() not in {"SUCC", "SUCCESS", "0"}:
+    if error and error.upper() not in {"SUCC", "SUCCESS", "OK", "0"}:
         raise RuntimeError("Firmware não disponibilizou este menu")
 
     result = {}
