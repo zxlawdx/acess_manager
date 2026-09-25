@@ -865,6 +865,42 @@ def f6201b_dns_apply(context=None):
     )
 
 
+# Laboratório F6201B: sete estratégias de formulário dedicadas e
+# catálogo do estado das 25 rotas. POST recebe só o nonce da prévia;
+# não aceita um body de configuração arbitrário.
+@api.get("/f6201b/workbench/catalog")
+def f6201b_workbench_catalog(context=None):
+    return zte_service.captured_workbench_catalog()
+
+
+@api.post("/f6201b/workbench/inspect")
+def f6201b_workbench_inspect(context=None):
+    tag = str(_json(context).get("tag") or "")[:100]
+    return _safe_call(zte_service.captured_workbench_inspect, tag)
+
+
+@api.post("/f6201b/workbench/preview")
+def f6201b_workbench_preview(context=None):
+    body = _json(context)
+    return _safe_call(
+        zte_service.captured_workbench_preview,
+        str(body.get("tag") or "")[:100],
+        str(body.get("instance_id") or "")[:128],
+        body.get("changes"),
+    )
+
+
+@api.post("/f6201b/workbench/apply")
+def f6201b_workbench_apply(context=None):
+    body = _json(context)
+    return _safe_call(
+        zte_service.captured_workbench_apply,
+        str(body.get("nonce") or "")[:100],
+        str(body.get("confirmation") or "")[:50],
+        body.get("risk_ack") is True,
+    )
+
+
 @api.get("/multimodel/mapped-routes")
 def mapped_f6201b_routes(context=None):
     """Inventário de rotas GET do manifesto sanitizado, sem acessar ONT."""
