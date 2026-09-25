@@ -1,6 +1,7 @@
 const API_BASE = "/api";
 
 let ontConnected = false;
+let routerWriteEnabled = true;
 let currentHost = null;
 let currentAttendant = null;
 let currentProfile = null;
@@ -505,6 +506,7 @@ document
                     modelHint
                 );
 
+                routerWriteEnabled = response.writes_enabled !== false;
                 currentHost = response.host || ip;
                 currentAttendant = response.attendant || attendant || "default";
 
@@ -630,6 +632,7 @@ document
 
             await disconnectONT();
 
+            routerWriteEnabled = true;
             currentHost = null;
             currentAttendant = null;
             currentProfile = null;
