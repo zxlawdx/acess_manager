@@ -121,6 +121,8 @@ class ExperimentalF6201BDNS:
         fields = {
             "IF_ACTION": "Apply", "_InstID": proposal.instance_id,
             **proposal.desired,
+            "Btn_cancel_LocalDnsServer": "",
+            "Btn_apply_LocalDnsServer": "",
         }
         schema = OBSERVED_APPLY_FIELDS["dns_localdns_lua.lua"]
         payload = [(key, fields[key]) for key in schema
