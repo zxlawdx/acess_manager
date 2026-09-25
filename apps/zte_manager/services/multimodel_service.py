@@ -298,6 +298,11 @@ def _shape(xml: str, expected_root: str) -> dict[str, Any]:
     if root.tag != "ajax_response_xml_root":
         raise RuntimeError("Resposta não é XML ThinkLua")
 
+    # Alguns firmwares incluem objeto válido junto com IF_ERRORID != 0.
+    # Não interpretar XML estrutural de uma requisição rejeitada como prova.
+    error_id = (root.findtext("IF_ERRORID") or "").strip()
+    if error_id and error_id not in {"0", "0000"}:
+        raise RuntimeError("O firmware rejeitou a consulta.")
     error = (root.findtext("IF_ERRORSTR") or "").strip()
     if error and error.upper() not in {"SUCC", "SUCCESS", "OK", "0"}:
         raise RuntimeError("Firmware não disponibilizou este menu")
