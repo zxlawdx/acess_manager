@@ -3255,9 +3255,13 @@ async function saveProfile(
     }
     // The local draft must come from the authenticated attendant's saved
     // preset. Avoid persisting a form populated by a previous router.
-    const owner = sessionEpoch + ":" + currentAttendant;
+    const attendant = currentAttendant;
+    const owner = sessionEpoch + ":" + attendant;
     if (profileLoadedFor !== owner) {
         await ensureAttendantProfile();
+    }
+    if (owner !== sessionEpoch + ":" + currentAttendant) {
+        throw new Error("A sessão mudou durante a leitura do perfil.");
     }
 
     // Mesma proteção para o botão Salvar, não apenas Aplicar.
@@ -3273,18 +3277,23 @@ async function saveProfile(
     );
 
     try {
-        currentProfile = await apiRequest(
+        const saved = await apiRequest(
             "/profiles/save",
             {
                 method: "POST",
                 body: JSON.stringify({
-                    attendant: currentAttendant,
+                    attendant,
                     ...profile
                 })
             }
         );
-
-        profileLoadedFor = sessionEpoch + ":" + currentAttendant;
+        if (owner !== sessionEpoch + ":" + currentAttendant) {
+            // A former attendant's asynchronous save cannot replace the
+            // freshly connected technician's draft in this WebView.
+            return null;
+        }
+        currentProfile = saved;
+        profileLoadedFor = owner;
         if (!quiet) {
             showToast(
                 `Perfil de ${currentAttendant} salvo.`
