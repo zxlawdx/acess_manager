@@ -50,7 +50,7 @@
   function rowFor(tag) { return catalog?.routes?.find(row => row.tag === tag); }
   function stateLabel(state) {
     return ({
-      supervised_lab: "Formulário supervisionado",
+      supervised_lab: "Formulário capturado",
       existing_adapter: "Adaptador existente",
       needs_form_adapter: "Captura complementar"
     })[state] || "Não verificado";
@@ -191,24 +191,23 @@
         "O XML não devolveu todos os campos exigidos: " +
         [...missing].join(", ") + ". Nenhuma escrita será permitida."));
     }
-    const preButton = makeButton("Revisar alterações", () => {
-      void requestPreview(root);
+    const preButton = makeButton("Aplicar alterações", () => {
+      void requestApply(root);
     }, "button primary");
-    preButton.disabled = missing.size > 0 || !catalog.writes_opted_in;
+    preButton.disabled = missing.size > 0;
     destination.append(preButton);
-    if (!catalog.writes_opted_in) {
-      destination.append(el("p", "f6201b-wb-hint",
-        "Escrita experimental desativada no processo. Para testes autorizados, " +
-        "defina ZTE_F6201B_EXPERIMENTAL_WRITES=1 antes de abrir o aplicativo."));
+    if (rowFor(selected)?.dangerous) {
+      destination.append(el("p", "f6201b-wb-alert",
+        "Esta alteração pode interromper a conectividade. " +
+        "Mantenha acesso local sempre que possível."));
     }
   }
-  async function requestPreview(root) {
+  async function requestApply(root) {
     if (working || !activeInstance || !selected) return;
     const fields = root.querySelector(".f6201b-wb-fields");
     const changes = {};
     for (const input of fields.querySelectorAll("[name][data-original]")) {
-      if (input.disabled) return;
-      // An empty secret input means preserve the current server-side value.
+      if (input.disabled) continue;
       if (input.dataset.secret === "true") {
         if (input.value.length) changes[input.name] = input.value;
       } else if (input.value !== input.dataset.original) {
@@ -216,105 +215,45 @@
       }
     }
     if (!Object.keys(changes).length) {
-      status(root, "Nenhuma diferença: altere um campo antes da prévia.", "error");
+      status(root, "Os valores já estão iguais aos selecionados.", "ok");
       return;
     }
     const tag = selected, requestGeneration = generation;
     working = true;
-    status(root, "Gerando prévia: releitura, preservação e comparação…", "progress");
+    root.querySelectorAll(".f6201b-wb-fields button")
+      .forEach(button => { button.disabled = true; });
+    status(root, "Validando formulário e aplicando na ONT; " +
+      "a conexão pode ser interrompida. Aguarde a releitura…", "progress");
     try {
-      proposal = await api("/f6201b/workbench/preview", {
+      const result = await api("/f6201b/workbench/update", {
         tag, instance_id: activeInstance, changes
       });
+      // The server keeps the original token, live form validation and
+      // one-use nonce internally, without a second user confirmation.
+      for (const input of fields.querySelectorAll('[data-secret="true"]'))
+        input.value = "";
       if (requestGeneration !== generation || tag !== selected) return;
-      renderPreview(root);
-      status(root, "Prévia pronta. Revise as diferenças e confirme explicitamente.", "ok");
-    } catch (e) {
-      if (requestGeneration !== generation || tag !== selected) return;
-      proposal = null;
-      clear(root.querySelector(".f6201b-wb-preview"));
-      status(root, "Prévia rejeitada: " + e.message, "error");
-    } finally { working = false; }
-  }
-  function renderPreview(root) {
-    const area = root.querySelector(".f6201b-wb-preview");
-    clear(area);
-    if (!proposal) return;
-    header(area, "Prévia sem aplicação");
-    area.append(el("small", "", "Válida por até " +
-      proposal.expires_in_seconds + " segundos · sem repetição automática"));
-    const table = el("table", "f6201b-wb-table");
-    const thead = el("thead"); const tr = el("tr");
-    ["Campo", "Atual", "Proposto"].forEach(x => tr.append(el("th", "", x)));
-    thead.append(tr); table.append(thead);
-    const tbody = el("tbody");
-    for (const [key, delta] of Object.entries(proposal.diff || {})) {
-      const r = el("tr");
-      [key, delta.before, delta.after].forEach(x => r.append(el("td", "", x)));
-      tbody.append(r);
-    }
-    table.append(tbody); area.append(table);
-    if (proposal.risk_ack_required) {
-      const risk = el("label", "f6201b-wb-risk");
-      const box = el("input"); box.type = "checkbox"; box.id = "f6201b-wb-risk";
-      risk.append(box, el("span", "",
-        "Há risco de perder conectividade. Confirmo backup e acesso físico/local."));
-      area.append(risk);
-    }
-    const confirm = el("label", "f6201b-wb-field");
-    confirm.append(el("span", "", "Digite " + proposal.confirmation));
-    const typed = el("input"); typed.type = "text";
-    typed.id = "f6201b-wb-confirm"; typed.autocomplete = "off";
-    confirm.append(typed); area.append(confirm);
-    area.append(makeButton("Aplicar esta prévia", () => {
-      void requestApply(root);
-    }, "button primary"));
-  }
-  async function requestApply(root) {
-    if (working || !proposal) return;
-    const riskAck = !proposal.risk_ack_required ||
-      root.querySelector("#f6201b-wb-risk")?.checked === true;
-    if (!riskAck) {
-      status(root, "Confirme o risco operacional antes do POST.", "error");
-      return;
-    }
-    if (root.querySelector("#f6201b-wb-confirm")?.value !== proposal.confirmation) {
-      status(root, "A frase de confirmação está incorreta.", "error");
-      return;
-    }
-    const current = proposal, tag = selected, requestGeneration = generation;
-    proposal = null; // consume locally before network I/O
-    working = true;
-    root.querySelectorAll(".f6201b-wb-preview button").forEach(b => b.disabled = true);
-    status(root, "Enviando comando único; aguardando releitura de verificação…", "progress");
-    try {
-      const result = await api("/f6201b/workbench/apply", {
-        nonce: current.nonce, confirmation: current.confirmation,
-        risk_ack: riskAck
-      });
-      if (requestGeneration !== generation || tag !== selected) return;
-      clear(root.querySelector(".f6201b-wb-preview"));
       if (result.success) {
         const verified = result.changed_fields || result.verified_fields || [];
-        status(root, result.partial ?
-          "Configuração aplicada. Campos legíveis verificados (" +
-          verified.join(", ") + "). Confirme credenciais por autenticação funcional: " +
-          (result.manual_verification_fields || []).join(", ") + "." :
-          "Aplicado e confirmado por releitura: " + verified.join(", ") + ".", "ok");
-        // GET again only after a positively verified POST.
+        status(root, result.partial
+          ? "POST executado. Campos conferidos: " + verified.join(", ") +
+            ". Senhas exigem validação funcional no equipamento."
+          : "Aplicado e verificado: " + verified.join(", "), "ok");
         working = false;
         await fetchInspect(root);
       } else {
-        status(root, "Resultado incerto na etapa " + (result.stage || "desconhecida") +
-          ". Confira a ONT original antes de uma nova prévia. " +
+        status(root, "Resultado incerto na etapa " +
+          (result.stage || "indefinida") + ". Não repetir automaticamente. " +
           (result.detail || ""), "error");
       }
-    } catch (e) {
+    } catch (error) {
       if (requestGeneration !== generation || tag !== selected) return;
-      clear(root.querySelector(".f6201b-wb-preview"));
-      status(root, "Comando interrompido: " + e.message +
-        ". Verifique o estado da ONT antes de tentar novamente.", "error");
-    } finally { working = false; }
+      status(root, "Alteração não confirmada: " + error.message, "error");
+    } finally {
+      working = false;
+      root.querySelectorAll(".f6201b-wb-fields button")
+        .forEach(button => { button.disabled = false; });
+    }
   }
   function renderDetails(root, retainStatus = false) {
     const detail = root.querySelector(".f6201b-wb-details");
@@ -342,7 +281,6 @@
     else detail.append(el("p", "f6201b-wb-hint",
       "Use a leitura GET para identificar a instância antes da prévia."));
     detail.append(el("div", "f6201b-wb-preview"));
-    if (proposal) renderPreview(root);
   }
   async function open() {
     const requestGeneration = generation;
@@ -357,7 +295,7 @@
       const root = el("section", "f6201b-wb");
       root.id = ID;
       root.append(el("div", "f6201b-wb-head",
-        "LABORATÓRIO F6201B · V9.3.10P7N7"));
+        "GERENCIAMENTO F6201B · V9.3.10P7N7"));
       root.append(el("p", "f6201b-wb-count", "Carregando inventário…"));
       const layout = el("div", "f6201b-wb-layout");
       layout.append(el("nav", "f6201b-wb-routes"));
@@ -383,7 +321,7 @@
     if (event.detail?.pageName === "advanced")
       void open().catch(error => {
         const root = document.getElementById(ID);
-        if (root) status(root, "Falha ao abrir laboratório: " + error.message, "error");
+        if (root) status(root, "Falha ao abrir gerenciamento: " + error.message, "error");
       });
   });
 })();
