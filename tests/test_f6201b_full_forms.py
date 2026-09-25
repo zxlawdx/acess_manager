@@ -2,7 +2,7 @@
 
 No real ONT, passwords, network traffic, or capture bytes are used.
 """
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 import os
 import unittest
 from unittest.mock import patch
@@ -261,7 +261,13 @@ class FullFormTests(unittest.TestCase):
                     zte.post_count += 1
                     return "<synthetic-success/>"
 
-                with patch(
+                rsa = (patch(
+                    "apps.zte_manager.services.f6201b_full_forms."
+                    "zte_security.rsa_encrypt_text",
+                    return_value="synthetic-rsa",
+                ) if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua"
+                    else nullcontext())
+                with rsa, patch(
                     "apps.zte_manager.services.f6201b_full_forms.post_menu",
                     side_effect=fake_post,
                 ) as mocked:
