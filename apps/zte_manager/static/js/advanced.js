@@ -778,6 +778,11 @@ function renderCapabilities(
 
 async function runAutomaticDiagnostic(event) {
     event.preventDefault();
+    if (!routerWriteEnabled) {
+        showToast("Use Diagnóstico por modelo: não há comandos de diagnóstico certificados para esta família.");
+        await runMultimodelDiagnostic();
+        return;
+    }
 
     const payload = {
         ping_host: document.getElementById(
