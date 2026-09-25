@@ -585,7 +585,10 @@ function openPage(pageName) {
                     if (key !== sessionEpoch + ":" + currentAttendant) return;
                     controls.forEach(id => {
                         const btn = document.getElementById(id);
-                        if (btn) btn.disabled = false;
+                        // For read-only F6201B, /write/status alone decides
+                        // if Apply is allowed; local profile GET never does.
+                        if (btn && (id !== "applyProfileButton" ||
+                                routerWriteEnabled)) btn.disabled = false;
                     });
                 }).catch(error => {
                     if (key !== sessionEpoch + ":" + currentAttendant) return;
