@@ -73,5 +73,10 @@ jobs:
       - name: Verify F6201B experimental profile UI
         run: node tests/test_f6201b_profile_ui.cjs
 
+      - name: Verify captured full form strategy syntax and contracts
+        run: |
+          python -m py_compile apps/zte_manager/services/f6201b_full_forms.py
+          python -m unittest tests.test_f6201b_full_forms -v
+
       - name: Verify F6201B captured workbench and isolation
         run: node tests/test_f6201b_workbench_ui.cjs
