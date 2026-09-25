@@ -357,7 +357,7 @@ def select_adapter(
 
     key, family = find_family(normalized)
     if family:
-        # Vue exige login e parser separados. Não anunciar menus ThinkLua.
+        # Vue usa endpoints vueData; declarar leitura, nunca escrita.
         return MultiFamilyReadOnlyAdapter(model, firmware)
 
     # Fallback conservador: os recursos continuam dependendo de probe.
