@@ -9,6 +9,7 @@ Não faz POST para a ONT e não expõe nenhuma resposta bruta ou senha.
 from __future__ import annotations
 
 from apps.zte_manager.services import multimodel_service as mm
+from apps.zte_manager.services.f6201b_evidence import CAPTURED_GET_VIEWS, GET_PARAMS, OBSERVED_APPLY_FIELDS
 
 
 # categoria | _tag | OBJ esperado | _type | formato observado
@@ -120,11 +121,18 @@ ALLOWED = {row["tag"]: row for row in _rows()}
 
 
 def catalog() -> dict:
+    updated_routes = []
+    for original in ALLOWED.values():
+        route = dict(original)
+        route["view"] = CAPTURED_GET_VIEWS.get(route["tag"])
+        route["observed_apply"] = route["tag"] in OBSERVED_APPLY_FIELDS
+        route["parameters"] = sorted(GET_PARAMS.get(route["tag"], {}))
+        updated_routes.append(route)
     return {
         "model": "F6201B", "firmware": "V9.3.10P7N7",
         "origin": "owner_sanitized_capture",
         "total_get_routes": len(ALLOWED),
-        "routes": list(ALLOWED.values()),
+        "routes": updated_routes,
         "note": (
             "Inventário estrutural da captura; opções sem OBJ XML validável "
             "aparecem como referência. Inspeção somente GET sob demanda."
@@ -146,7 +154,12 @@ def inspect(zte, tag: str) -> dict:
         response.raise_for_status()
         raw = response.text
     else:
-        raw = zte.get_menu(tag)
+        view = CAPTURED_GET_VIEWS.get(tag)
+        if not view:
+            return {"tag": tag, "available": False,
+                    "reason": "Captura não confirmou menuView da rota."}
+        zte.get_view(view, Menu3Location=0)
+        raw = zte.get_menu(tag, **GET_PARAMS.get(tag, {}))
     # Modelo comum sanitiza nomes de campo e não retorna ParaValue.
     try:
         structure = mm._shape(raw, route["root"])
