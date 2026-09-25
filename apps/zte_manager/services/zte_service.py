@@ -146,11 +146,17 @@ class ZTEService:
             # DeviceAdapter é escolhido uma vez por sessão. Se uma leitura de
             # status não estiver disponível para esse login, o fallback
             # ThinkLua continua funcional e o probe decide recurso por recurso.
-            try:
-                self._device_info = self._zte.device_status()
-            except Exception:
-                self._device_info = {}
-                self._selected_model = None
+            # Vue (AX3000/BE7200) não responde menuView/statusMgr como os
+            # firmwares ThinkLua. Não trocar o contexto da sessão recém
+            # autenticada antes da primeira consulta vueData.
+            _, hinted_family = multimodel_service.find_family(model_hint)
+            if hinted_family == "vue":
+                self._device_info = {"modelo": model_hint}
+            else:
+                try:
+                    self._device_info = self._zte.device_status()
+                except Exception:
+                    self._device_info = {}
 
             detected_model = self._device_info.get("modelo")
             if model_hint and detected_model:
