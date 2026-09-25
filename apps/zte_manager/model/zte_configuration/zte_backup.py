@@ -64,6 +64,29 @@ def export_user_configuration(
             "A ONT respondeu ao backup sem conteúdo."
         )
 
+    # Alguns firmwares devolvem HTTP 200 com a página de login quando o
+    # download token expira. Nunca salvar esse HTML como backup válido.
+    head = response.content[:1024].lstrip().lower()
+    content_type = response.headers.get("Content-Type", "").lower()
+
+    if (
+        head.startswith((b"<!doctype html", b"<html"))
+        or (
+            "text/html" in content_type
+            and (
+                b"<html" in head
+                or b"<form" in head
+                or b"login" in head
+            )
+        )
+    ):
+        raise RuntimeError(
+            "A ONT retornou uma página HTML no lugar do backup. "
+            "A sessão pode ter expirado ou o firmware F670L "
+            "pode exigir um fluxo de download diferente. "
+            "Reconecte e verifique o endpoint antes de tentar novamente."
+        )
+
     info = device or {}
     identity = (
         info.get("serial")
