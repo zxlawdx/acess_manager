@@ -622,7 +622,24 @@ class ZTEService:
 
     def reboot(self):
         with self._lock:
-            resultado = self.get_client().reboot()
+            try:
+                resultado = self.get_client().reboot()
+            except Exception as error:
+                history_repository.save_change(
+                    self._history_session_id,
+                    operation="device_reboot", target="ONT", before=None,
+                    after=None, success=False,
+                    message=type(error).__name__,
+                )
+                raise
+            # The device disconnects immediately: the HTTP acknowledgement
+            # proves only that reboot was requested, not that it restarted.
+            history_repository.save_change(
+                self._history_session_id,
+                operation="device_reboot", target="ONT", before=None,
+                after={"requested": True}, success=True,
+                message="Reinicialização solicitada; conclusão não verificável.",
+            )
 
             # Depois de Restart não existe mais uma sessão útil. Não enviamos
             # logout: o equipamento está reiniciando e a conexão cairá sozinha.
