@@ -838,6 +838,12 @@ def f6201b_write_apply(context=None):
     return _safe_call(zte_service.f6201b_write_apply, nonce, confirmation)
 
 
+@api.get("/f6201b/wan/summary")
+def f6201b_wan_summary(context=None):
+    """Local read only; credentials are explicitly excluded."""
+    return _safe_call(zte_service.f6201b_wan_summary)
+
+
 @api.get("/f6201b/dns/status")
 def f6201b_dns_status(context=None):
     return _safe_call(zte_service.f6201b_dns_status)
