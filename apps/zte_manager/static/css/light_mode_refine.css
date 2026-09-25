@@ -525,6 +525,15 @@ html[data-theme="light"] #f6201b-workbench .f6201b-wb-table th {
 #profileRadios .profile-loading-card {
   min-height:112px;
 }
+#profileApplyResult .profile-action-success {
+  padding:13px 15px;
+  border-radius:5px;
+  border:1px solid var(--ui-success);
+  background:var(--ui-success-wash);
+  color:var(--ui-text);
+  font-size:12px;
+  line-height:1.55;
+}
 #profileApplyResult .profile-action-error {
   padding:13px 15px;
   border-radius:5px;
