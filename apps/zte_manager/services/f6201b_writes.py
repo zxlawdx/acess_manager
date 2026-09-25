@@ -278,6 +278,19 @@ class ExperimentalF6201BWrites:
                 "warning": ("POST Apply de SSID foi documentado na captura, "
                             "mas ainda exige verificação física e acesso local.")}
 
+    def apply_changes(self, zte, *, host: str, firmware: str,
+                      ssid_id: str, config: dict, original_post) -> dict:
+        """Single operator click, preserving captured preflight/PSK protection."""
+        proposal = self.preview(
+            zte, host=host, firmware=firmware,
+            ssid_id=ssid_id, config=config
+        )
+        return self.apply(
+            zte, host=host, firmware=firmware,
+            nonce=proposal["nonce"], confirmation="",
+            original_post=original_post,
+        )
+
     def apply(self, zte, *, host: str, firmware: str,
               nonce: str, confirmation: str, original_post) -> dict:
         proposal = self._pending
