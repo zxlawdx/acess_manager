@@ -147,6 +147,9 @@ GET_PARAMS = {
 # Newly recovered XML objects from second capture. View-only HTML and JSON
 # routes are intentionally excluded from generic XML inspection.
 CAPTURED_GET_ROOTS: dict[str, str] = {
+    # HTTP capture truncated this >30KB response; production GET must
+    # return complete well-formed XML before any parsing.
+    "wlan_wlanbasicadconf_lua.lua": "OBJ_WLANSETTING_ID",
     "wan_internetstatus_lua.lua": "ID_WAN_COMFIG",
     "wan_internet_lua.lua": "ID_WAN_COMFIG",
     "dns_hostname_lua.lua": "",  # ALLDNSHOST is not OBJ XML
