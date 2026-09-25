@@ -190,6 +190,15 @@ async function runSupportDiagnostic({
         return;
     }
 
+    if (!routerWriteEnabled) {
+        openPage("advanced");
+        showToast("Diagnóstico específico do modelo, somente leitura.");
+        if (typeof runMultimodelDiagnostic === "function") {
+            await runMultimodelDiagnostic();
+        }
+        return;
+    }
+
     supportDiagnosticState.running = true;
 
     const payload = dashboard
@@ -1239,6 +1248,22 @@ window.loadDashboardSupportHealth = async function () {
         full: false,
         dashboard: true
     });
+};
+
+
+// O atalho do topo faz uma primeira triagem somente leitura.
+window.runQuickSupportDiagnostic = async function runQuickSupportDiagnostic() {
+    if (!ontConnected) {
+        showToast("Conecte-se antes de iniciar o diagnóstico.");
+        return;
+    }
+    if (supportDiagnosticState.running) {
+        showToast("Um diagnóstico já está em andamento.");
+        return;
+    }
+    // full=false desativa Speed Test, traceroute e otimização de Wi-Fi:
+    // não aplicar mudanças implícitas ao clicar em um atalho.
+    await runSupportDiagnostic({ full: false, dashboard: false });
 };
 
 

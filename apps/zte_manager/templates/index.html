@@ -822,6 +822,10 @@
                             <span class="material-symbols-outlined">router</span>
                             Detectar modelo
                         </button>
+                        <button id="multimodelDiagnosticButton" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">fact_check</span>
+                            Diagnóstico por modelo
+                        </button>
                         <button id="multimodelMeshButton" class="button ghost" type="button">
                             <span class="material-symbols-outlined">hub</span>
                             Resumo Mesh
@@ -1609,6 +1613,7 @@
 </div>
 
 <div id="toast" class="toast"></div>
+<div id="requestStatusIndicator" class="request-status-indicator hidden" role="status" aria-live="polite"></div>
 
 <div id="busyOverlay" class="busy-overlay hidden">
     <div class="busy-card">

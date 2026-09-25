@@ -499,6 +499,15 @@ async function loadCapabilityCatalog() {
 
 
 async function probeCapabilities() {
+    if (!ontConnected) {
+        showToast("Conecte-se à ONT para detectar recursos.");
+        return;
+    }
+    if (!routerWriteEnabled && !advancedState.capabilities?.features) {
+        // Família Vue: a detecção menuView/menuData não se aplica.
+        await probeMultimodel();
+        return;
+    }
     setBusy(true, "Detectando recursos por etapas...");
 
     try {
@@ -510,6 +519,10 @@ async function probeCapabilities() {
 
         const catalog = advancedState.capabilities?.features || {};
         const keys = Object.keys(catalog);
+        if (!keys.length) {
+            showToast("Não há menus ThinkLua neste perfil. Use Detectar modelo.");
+            return;
+        }
         const results = [];
         const batchSize = 3;
 
@@ -559,6 +572,34 @@ async function loadMultimodelCatalog() {
         select.appendChild(option);
     }
     select.dataset.loaded = "true";
+}
+
+
+async function runMultimodelDiagnostic() {
+    const output = document.getElementById("multimodelProbeOutput");
+    const select = document.getElementById("multimodelSelect");
+    if (!ontConnected) {
+        showToast("Conecte ao equipamento antes do diagnóstico.");
+        return;
+    }
+    setBusy(true, "Executando leituras por família (sem alterações)...");
+    try {
+        const report = await apiRequest("/multimodel/diagnostic", {
+            method: "POST",
+            body: JSON.stringify({ model: select?.value || null })
+        });
+        output.textContent = JSON.stringify(report, null, 2);
+        showToast(
+            report.supported
+                ? "Diagnóstico por família concluído. Seções não confirmadas estão sinalizadas."
+                : (report.reason || "Não foi possível confirmar endpoints deste firmware.")
+        );
+    } catch (error) {
+        output.textContent = "Diagnóstico indisponível; a sessão não foi encerrada.";
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
 }
 
 
@@ -737,6 +778,11 @@ function renderCapabilities(
 
 async function runAutomaticDiagnostic(event) {
     event.preventDefault();
+    if (!routerWriteEnabled) {
+        showToast("Use Diagnóstico por modelo: não há comandos de diagnóstico certificados para esta família.");
+        await runMultimodelDiagnostic();
+        return;
+    }
 
     const payload = {
         ping_host: document.getElementById(
@@ -1460,6 +1506,15 @@ async function readFirmwareFeature(event) {
 
 
 async function backupConfiguration() {
+    if (!ontConnected) {
+        showToast("Conecte-se ao equipamento antes de executar backup.");
+        return;
+    }
+    if (!routerWriteEnabled) {
+        // Exportar configuração não foi homologado para todos os firmwares.
+        showToast("Backup binário não homologado neste modelo. Use Diagnóstico por modelo.");
+        return;
+    }
     if (
         !window.confirm(
             "Exportar agora um backup local da configuração da ONT?"
@@ -1516,6 +1571,14 @@ async function backupConfiguration() {
 // =========================================================
 
 async function captureSnapshot() {
+    if (!ontConnected) {
+        showToast("Conecte-se ao equipamento para capturar snapshot.");
+        return;
+    }
+    if (!routerWriteEnabled) {
+        showToast("Snapshot legado indisponível neste firmware. Use Diagnóstico por modelo.");
+        return;
+    }
     setBusy(
         true,
         "Capturando snapshot operacional..."
@@ -1688,10 +1751,18 @@ function featureUnavailable(
 // LOAD / EVENTS
 // =========================================================
 
-async function loadOperationsConsole() {
-    if (!ontConnected) {
-        return;
-    }
+let operationsLoadPromise = null;
+
+function loadOperationsConsole() {
+    if (!ontConnected) return Promise.resolve();
+    if (operationsLoadPromise) return operationsLoadPromise;
+    operationsLoadPromise = loadOperationsConsoleInternal()
+        .finally(() => { operationsLoadPromise = null; });
+    return operationsLoadPromise;
+}
+
+async function loadOperationsConsoleInternal() {
+    if (!ontConnected) return;
 
     const loaders = routerWriteEnabled
         ? [
@@ -1722,15 +1793,31 @@ async function loadOperationsConsole() {
 }
 
 
+window.startQuickProbe = async function startQuickProbe() {
+    if (!ontConnected) {
+        showToast("Conecte-se ao equipamento antes de detectar recursos.");
+        return;
+    }
+    try {
+        await loadOperationsConsole();
+        if (routerWriteEnabled) {
+            await probeCapabilities();
+        } else {
+            await probeMultimodel();
+        }
+    } catch (error) {
+        console.error("Falha no atalho Probe:", error);
+        showToast(error.message);
+    }
+};
+
+
 function initAdvancedOperations() {
-    document
-        .querySelector(
-            '[data-page="advanced"]'
-        )
-        ?.addEventListener(
-            "click",
-            loadOperationsConsole
-        );
+    document.addEventListener("zte:page-open", event => {
+        if (event.detail?.pageName === "advanced" && ontConnected) {
+            void loadOperationsConsole();
+        }
+    });
 
     document
         .getElementById(
@@ -1739,6 +1826,15 @@ function initAdvancedOperations() {
         ?.addEventListener(
             "click",
             probeCapabilities
+        );
+
+    document
+        .getElementById(
+            "multimodelDiagnosticButton"
+        )
+        ?.addEventListener(
+            "click",
+            runMultimodelDiagnostic
         );
 
     document

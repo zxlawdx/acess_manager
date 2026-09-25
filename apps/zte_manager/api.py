@@ -726,6 +726,16 @@ def multimodel_catalog(context=None):
     )
 
 
+@api.post("/multimodel/diagnostic")
+def multimodel_diagnostic(context=None):
+    """Consulta por família somente leitura, sem ping/traceroute no roteador."""
+    requested = str(_json(context).get("model") or "")[:50].strip()
+    return _safe_call(
+        zte_service.multimodel_diagnostic,
+        requested or None,
+    )
+
+
 @api.post("/multimodel/mesh")
 def multimodel_mesh(context=None):
     model = str(_json(context).get("model") or "")[:50].strip()

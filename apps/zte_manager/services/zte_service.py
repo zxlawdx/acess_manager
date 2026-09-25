@@ -17,6 +17,7 @@ from apps.zte_manager.services.attendance_report_service import (
 )
 from apps.zte_manager.services.capability_service import CapabilityService
 from apps.zte_manager.services import multimodel_service
+from apps.zte_manager.services import model_diagnostic_service
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -145,11 +146,17 @@ class ZTEService:
             # DeviceAdapter é escolhido uma vez por sessão. Se uma leitura de
             # status não estiver disponível para esse login, o fallback
             # ThinkLua continua funcional e o probe decide recurso por recurso.
-            try:
-                self._device_info = self._zte.device_status()
-            except Exception:
-                self._device_info = {}
-                self._selected_model = None
+            # Vue (AX3000/BE7200) não responde menuView/statusMgr como os
+            # firmwares ThinkLua. Não trocar o contexto da sessão recém
+            # autenticada antes da primeira consulta vueData.
+            _, hinted_family = multimodel_service.find_family(model_hint)
+            if hinted_family == "vue":
+                self._device_info = {"modelo": model_hint}
+            else:
+                try:
+                    self._device_info = self._zte.device_status()
+                except Exception:
+                    self._device_info = {}
 
             detected_model = self._device_info.get("modelo")
             if model_hint and detected_model:
@@ -164,20 +171,29 @@ class ZTEService:
                         "pelo equipamento. Verifique o perfil selecionado."
                     )
 
+            # Vários firmwares retornam apenas "ZTE", sem modelo. Nesses
+            # casos respeitamos o perfil escolhido, sem fingir confirmação.
+            from apps.zte_manager.services.multimodel_service import find_family
+            known_detected, _ = find_family(detected_model)
+            selected_model = (
+                detected_model if known_detected or not model_hint
+                else model_hint
+            )
             self._adapter = select_adapter(
-                detected_model or model_hint,
+                selected_model,
                 self._device_info.get("firmware"),
             )
-            self._selected_model = detected_model or model_hint
+            self._selected_model = selected_model
             # Somente os adaptadores originais possuem rotinas de escrita
             # implementadas/testadas; os novos perfis iniciam read-only.
             from apps.zte_manager.model.device_adapters import (
                 F6600PAdapter, F670LAdapter,
             )
+            # Modelos sem identificação confirmada permanecem READ ONLY.
             self._zte.writes_enabled = isinstance(
                 self._adapter,
                 (F6600PAdapter, F670LAdapter),
-            )
+            ) and bool(detected_model or model_hint)
 
             if not self._zte.writes_enabled:
                 # Defesa em profundidade: as APIs de alguns firmwares
@@ -940,28 +956,62 @@ class ZTEService:
     def multimodel_catalog(self):
         return multimodel_service.catalog()
 
+    def _confirmed_probe_model(self, requested=None):
+        """Não sondar endpoints de OUTRA família no equipamento conectado."""
+        detected = (
+            self._device_info.get("modelo")
+            or self._device_info.get("model")
+            or ""
+        )
+        confirmed, confirmed_family = multimodel_service.find_family(detected)
+        selected, selected_family = multimodel_service.find_family(
+            self._selected_model
+        )
+        proposed, proposed_family = multimodel_service.find_family(requested)
+        if requested and confirmed and (
+            proposed != confirmed or proposed_family != confirmed_family
+        ):
+            raise ValueError(
+                "O perfil solicitado não corresponde ao modelo identificado "
+                "pelo equipamento. Reconecte escolhendo o perfil correto."
+            )
+        if requested and (
+            (
+                selected and (
+                    proposed != selected or proposed_family != selected_family
+                )
+            )
+            or (
+                not selected and self._selected_model
+                and multimodel_service.normalize_model(requested)
+                != multimodel_service.normalize_model(self._selected_model)
+            )
+        ):
+            raise ValueError(
+                "O perfil solicitado difere do escolhido na conexão. "
+                "Reconecte para alterar o modelo."
+            )
+        return self._selected_model or detected or requested or ""
+
     def multimodel_mesh(self, model=None):
         with self._lock:
-            selected = (
-                model or self._selected_model
-                or self._device_info.get("modelo") or ""
-            )
+            selected = self._confirmed_probe_model(model)
             return multimodel_service.mesh_summary(
                 self.get_client(), selected
             )
 
     def multimodel_probe(self, model=None):
         with self._lock:
-            selected = (
-                model
-                or self._selected_model
-                or self._device_info.get("modelo")
-                or self._device_info.get("model")
-                or ""
-            )
+            selected = self._confirmed_probe_model(model)
             return multimodel_service.probe(
-                self.get_client(),
-                selected,
+                self.get_client(), selected,
+            )
+
+    def multimodel_diagnostic(self, model=None):
+        with self._lock:
+            selected = self._confirmed_probe_model(model)
+            return model_diagnostic_service.diagnostic(
+                self.get_client(), selected,
             )
 
     def capability_shape(self, feature):

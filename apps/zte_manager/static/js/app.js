@@ -1,5 +1,36 @@
 const API_BASE = "/api";
 
+// Indicador independente do overlay: a operação continua visível quando
+// uma consulta demora ou quando o handler original não usava setBusy().
+let pendingApiRequests = 0;
+let requestStatusTimer = null;
+
+function updateRequestStatus(errorMessage = null) {
+    const indicator = document.getElementById("requestStatusIndicator");
+    if (!indicator) return;
+    clearTimeout(requestStatusTimer);
+    if (errorMessage) {
+        indicator.textContent = "Falha na operação: " + errorMessage;
+        indicator.classList.add("is-error");
+        indicator.classList.remove("hidden");
+        requestStatusTimer = setTimeout(() => {
+            if (!pendingApiRequests) indicator.classList.add("hidden");
+        }, 5500);
+        return;
+    }
+    indicator.classList.remove("is-error");
+    if (pendingApiRequests) {
+        indicator.textContent = `Carregando... ${pendingApiRequests} requisição(ões)`;
+        indicator.classList.remove("hidden");
+    } else {
+        indicator.textContent = "Operação finalizada";
+        requestStatusTimer = setTimeout(
+            () => indicator.classList.add("hidden"), 1350
+        );
+    }
+}
+
+
 let ontConnected = false;
 let routerWriteEnabled = true;
 let currentHost = null;
@@ -23,6 +54,9 @@ async function apiRequest(
     endpoint,
     options = {}
 ) {
+    pendingApiRequests++;
+    const slowTimer = setTimeout(updateRequestStatus, 180);
+    try {
     const config = {
         method: "GET",
         headers: {
@@ -91,6 +125,20 @@ async function apiRequest(
     }
 
     return data;
+    } catch (error) {
+        updateRequestStatus(error?.message || "Erro desconhecido");
+        throw error;
+    } finally {
+        clearTimeout(slowTimer);
+        pendingApiRequests = Math.max(0, pendingApiRequests - 1);
+        // Preserve a mensagem de falha até expirar, mesmo após finalizar.
+        if (!pendingApiRequests) {
+            const badge = document.getElementById("requestStatusIndicator");
+            if (!badge?.classList.contains("is-error")) {
+                updateRequestStatus();
+            }
+        }
+    }
 }
 
 
@@ -437,6 +485,11 @@ function openPage(pageName) {
             "pageSubtitle"
         ).textContent = info.subtitle;
     }
+
+    // Todas as entradas (sidebar, cartões, topo e restore) carregam dados.
+    document.dispatchEvent(new CustomEvent(
+        "zte:page-open", { detail: { pageName } }
+    ));
 }
 
 
@@ -3703,11 +3756,14 @@ function applyUiZoom(
         value
     );
 
-    // CSS zoom é suportado pelos engines Chromium/QtWebEngine usados
-    // pelo Vela e escala a UI inteira, inclusive componentes com px fixos.
-    document.documentElement.style.zoom = String(
-        uiZoom
-    );
+    // Não aplicar zoom ao elemento raiz: no QtWebEngine o viewport
+    // também é ampliado e os botões da direita ficam fora da janela.
+    // Compensar largura do body mantém a aparência do console intacta.
+    document.documentElement.style.zoom = "";
+    document.body.style.zoom = String(uiZoom);
+    document.body.style.width = `${100 / uiZoom}%`;
+    document.body.style.maxWidth = `${100 / uiZoom}%`;
+    document.documentElement.style.setProperty("--app-zoom", String(uiZoom));
 
     const level = document.getElementById(
         "zoomLevel"
@@ -4015,9 +4071,41 @@ document.addEventListener(
             return;
         }
 
-        openPage(
-            target.dataset.jump
-        );
+        const jump = target.dataset.jump;
+        // Famílias ainda não homologadas não executam diagnóstico F670L,
+        // que pode solicitar comandos via POST e desconectar a sessão.
+        const destination = (
+            jump === "supportDiagnostic" && !routerWriteEnabled
+        ) ? "advanced" : jump;
+        openPage(destination);
+
+        // Os atalhos do topo são ações, não apenas links invisíveis.
+        if (target.closest(".topbar-quick-actions")) {
+            if (!ontConnected && jump !== "management") {
+                showToast("Conecte-se ao equipamento primeiro.");
+                return;
+            }
+            if (jump === "advanced") {
+                // O loader da página inicia pelo evento zte:page-open.
+                // A probe só começa após catálogo ter sido carregado.
+                window.setTimeout(() => {
+                    if (typeof window.startQuickProbe === "function") {
+                        void window.startQuickProbe();
+                    }
+                }, 0);
+            } else if (jump === "supportDiagnostic") {
+                if (!routerWriteEnabled) {
+                    showToast("Este firmware exige diagnóstico por modelo, somente leitura.");
+                    if (typeof runMultimodelDiagnostic === "function") {
+                        void runMultimodelDiagnostic();
+                    }
+                } else if (typeof window.runQuickSupportDiagnostic === "function") {
+                    void window.runQuickSupportDiagnostic();
+                }
+            } else if (jump === "management") {
+                showToast("Atualizando plataforma de gerenciamento...");
+            }
+        }
     }
 );
 

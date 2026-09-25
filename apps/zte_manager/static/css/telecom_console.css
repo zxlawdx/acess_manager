@@ -2021,3 +2021,119 @@ html, body, .app-shell, .workspace, .main-content {
         max-width: 100%;
     }
 }
+
+
+/* =========================================================
+   QTWEBENGINE / WINDOWS: ZOOM E FEEDBACK DE OPERAÇÕES
+   O JS compensa a largura do body para cada nível de zoom.
+   Mantemos a aparência do console, mas nenhum botão do cabeçalho
+   fica fora da região clicável ao ampliar.
+   ========================================================= */
+html {
+    overflow-x: hidden;
+}
+body {
+    margin: 0;
+    min-width: 0;
+    box-sizing: border-box;
+}
+.app-shell {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+}
+.workspace {
+    box-sizing: border-box;
+    min-width: 0;
+    width: calc(100% - var(--sidebar-width));
+    max-width: calc(100% - var(--sidebar-width));
+    overflow-x: clip;
+}
+.main-content, .topbar {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.main-content {
+    width: 100%;
+    margin-left: 0;
+}
+.topbar {
+    height: auto;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.topbar-title {
+    flex: 1 1 180px;
+    min-width: 0;
+}
+.topbar-actions {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+}
+.topbar-quick-actions {
+    display: flex;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+}
+.device-chip {
+    min-width: 0;
+    max-width: min(220px, 100%);
+}
+.management-pane, .panel, .page, .operations-output,
+.management-code-output, .support-output, .operation-row,
+.advanced-grid, .kpi-grid, .support-diagnostic-shell {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+pre, textarea, .management-code-output {
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+@media (max-width: 1340px) {
+    .topbar-quick-actions {
+        display: flex;
+    }
+}
+@media (max-width: 930px) {
+    .topbar-actions { justify-content: flex-start; }
+    .device-chip { flex: 0 1 170px; }
+}
+@media (max-width: 680px) {
+    .workspace {
+        width: 100%;
+        max-width: 100%;
+    }
+    .topbar-actions { flex: 1 1 100%; }
+    .topbar-quick-actions { max-width: 100%; }
+}
+.request-status-indicator {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 800;
+    max-width: min(400px, calc(100vw - 32px));
+    padding: 11px 14px;
+    border: 1px solid rgba(0, 229, 153, .5);
+    border-radius: 6px;
+    background: #151b1a;
+    color: #a6ffe0;
+    font: 500 11px var(--font-mono);
+    box-shadow: 0 12px 40px rgba(0,0,0,.5);
+    pointer-events: none;
+}
+.request-status-indicator.is-error {
+    border-color: rgba(239, 68, 68, .6);
+    color: #ffb4b4;
+}
+.request-status-indicator.hidden {
+    display: none !important;
+}
