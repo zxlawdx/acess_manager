@@ -562,6 +562,34 @@ async function loadMultimodelCatalog() {
 }
 
 
+async function runMultimodelDiagnostic() {
+    const output = document.getElementById("multimodelProbeOutput");
+    const select = document.getElementById("multimodelSelect");
+    if (!ontConnected) {
+        showToast("Conecte ao equipamento antes do diagnóstico.");
+        return;
+    }
+    setBusy(true, "Executando leituras por família (sem alterações)...");
+    try {
+        const report = await apiRequest("/multimodel/diagnostic", {
+            method: "POST",
+            body: JSON.stringify({ model: select?.value || null })
+        });
+        output.textContent = JSON.stringify(report, null, 2);
+        showToast(
+            report.supported
+                ? "Diagnóstico por família concluído. Seções não confirmadas estão sinalizadas."
+                : (report.reason || "Não foi possível confirmar endpoints deste firmware.")
+        );
+    } catch (error) {
+        output.textContent = "Diagnóstico indisponível; a sessão não foi encerrada.";
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
+}
+
+
 async function showMultimodelMesh() {
     const output = document.getElementById("multimodelProbeOutput");
     const select = document.getElementById("multimodelSelect");
@@ -1739,6 +1767,15 @@ function initAdvancedOperations() {
         ?.addEventListener(
             "click",
             probeCapabilities
+        );
+
+    document
+        .getElementById(
+            "multimodelDiagnosticButton"
+        )
+        ?.addEventListener(
+            "click",
+            runMultimodelDiagnostic
         );
 
     document
