@@ -1,5 +1,36 @@
 const API_BASE = "/api";
 
+// Indicador independente do overlay: a operação continua visível quando
+// uma consulta demora ou quando o handler original não usava setBusy().
+let pendingApiRequests = 0;
+let requestStatusTimer = null;
+
+function updateRequestStatus(errorMessage = null) {
+    const indicator = document.getElementById("requestStatusIndicator");
+    if (!indicator) return;
+    clearTimeout(requestStatusTimer);
+    if (errorMessage) {
+        indicator.textContent = "Falha na operação: " + errorMessage;
+        indicator.classList.add("is-error");
+        indicator.classList.remove("hidden");
+        requestStatusTimer = setTimeout(() => {
+            if (!pendingApiRequests) indicator.classList.add("hidden");
+        }, 5500);
+        return;
+    }
+    indicator.classList.remove("is-error");
+    if (pendingApiRequests) {
+        indicator.textContent = `Carregando... ${pendingApiRequests} requisição(ões)`;
+        indicator.classList.remove("hidden");
+    } else {
+        indicator.textContent = "Operação finalizada";
+        requestStatusTimer = setTimeout(
+            () => indicator.classList.add("hidden"), 1350
+        );
+    }
+}
+
+
 let ontConnected = false;
 let routerWriteEnabled = true;
 let currentHost = null;
@@ -23,6 +54,9 @@ async function apiRequest(
     endpoint,
     options = {}
 ) {
+    pendingApiRequests++;
+    const slowTimer = setTimeout(updateRequestStatus, 180);
+    try {
     const config = {
         method: "GET",
         headers: {
@@ -91,6 +125,14 @@ async function apiRequest(
     }
 
     return data;
+    } catch (error) {
+        updateRequestStatus(error?.message || "Erro desconhecido");
+        throw error;
+    } finally {
+        clearTimeout(slowTimer);
+        pendingApiRequests = Math.max(0, pendingApiRequests - 1);
+        if (!pendingApiRequests) updateRequestStatus();
+    }
 }
 
 
@@ -3703,11 +3745,14 @@ function applyUiZoom(
         value
     );
 
-    // CSS zoom é suportado pelos engines Chromium/QtWebEngine usados
-    // pelo Vela e escala a UI inteira, inclusive componentes com px fixos.
-    document.documentElement.style.zoom = String(
-        uiZoom
-    );
+    // Não aplicar zoom ao elemento raiz: no QtWebEngine o viewport
+    // também é ampliado e os botões da direita ficam fora da janela.
+    // Compensar largura do body mantém a aparência do console intacta.
+    document.documentElement.style.zoom = "";
+    document.body.style.zoom = String(uiZoom);
+    document.body.style.width = `${100 / uiZoom}%`;
+    document.body.style.maxWidth = `${100 / uiZoom}%`;
+    document.documentElement.style.setProperty("--app-zoom", String(uiZoom));
 
     const level = document.getElementById(
         "zoomLevel"
