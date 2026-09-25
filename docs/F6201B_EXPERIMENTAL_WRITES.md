@@ -1,44 +1,104 @@
-# F6201B — implementação experimental de configuração
+# F6201B V9.3.10P7N7 — segunda captura e adaptadores específicos
 
-## O que o mapeamento realmente demonstra
+## Evidência nova e proteção de segredos
 
-O mapeamento fornecido para F6201B V9.3.10P7N7 descreve 93 combinações de rota, mas uma única requisição POST, com IF_ACTION=Cancel em wan_internet_lua.lua. Não há POST Apply de Wi-Fi, WAN ou DNS. Portanto nenhuma alteração real nesses subsistemas está homologada para o firmware, e GETs bem-sucedidos não demonstram capacidade de escrita.
+O proprietário forneceu **209 eventos HTTP**, sendo **179 GETs** e
+**30 POSTs**: **28 Apply**, 1 PingDiagnosis, 1 TraceRouteDiagnosis. As
+respostas registradas dos 30 POSTs incluem `IF_ERRORID=0` além de
+HTTP 200. Isso demonstra que o firmware reconheceu aqueles comandos
+nas circunstâncias da captura; não garante que o código os reproduzirá
+com sucesso em qualquer outra configuração.
 
-## O que foi implementado neste PR
+**Nunca versionar o JSON de captura bruto**: ele pode conter senha de
+Wi-Fi, credenciais PPPoE/ACS, cookies, tokens temporários, dados de
+clientes e configuração administrativa. Este PR contém somente
+`f6201b_evidence.py`, com tags, vistas, nomes e ordenação de campos,
+sem os valores originais.
 
-- Adaptador experimental de edição supervisionada de SSID: renomear, habilitar/desabilitar e transmitir/ocultar nome.
-- Modo desligado por padrão. A liberação exige ZTE_F6201B_EXPERIMENTAL_WRITES=1 definida antes de abrir o Vela.
-- Bloqueio das demais operações: o transporte inteiro continua somente leitura fora do breve Apply autorizado, protegido pelo lock da sessão.
-- Identificação e firmware exatos confirmados pelo equipamento, preflight do formulário, token, estrutura XML, criptografia de PSK e chave de assinatura quando exigida.
-- Prévia de diferenças sem POST, nonce descartável com validade de 120 segundos e confirmação digitada APLICAR F6201B.
-- Reutilização da rotina existente ThinkLua de read-modify-write, assinatura e verificação por releitura. Em caso de erro, bloqueio de transporte é restaurado mesmo quando o firmware recusa a operação.
-- Interface na aba Wi-Fi e SSIDs; testes unitários com roteador simulado.
+A segunda captura corrigiu detalhes concretos do mapeamento:
+- MenuView obrigatória por rota, incluindo `ethWanConfig`,
+  `ethWanStatus`, `wlanBasic`, `wifibandsteer`, `dns` etc.
+- `wan_internetstatus_lua.lua`: `TypeUplink=2&pageType=1` e objeto
+  `ID_WAN_COMFIG` validado; `wan_internet_lua.lua` configuração usa
+  `pageType=0` em outra vista.
+- `wlan_wlansssidconf_lua.lua`: o XML possui **três blocos
+  `<encode>` separados**. O primeiro contém parâmetros administrativos;
+  o último contém `KeyPassphrase`. O parser anterior descartava os
+  últimos, impedindo descriptografia/preservação correta da senha.
+- Dois `Apply` SSID observados; serialização segue a **ordem exata**
+  de campos do formulário capturado e exclui botões sintéticos de
+  outras versões do firmware.
+- Respostas de RF avançado podem exceder o limite de coleta de 30 KB.
+  Um XML truncado no arquivo de captura NÃO autoriza fabricar valores;
+  as informações são lidas e validadas diretamente na ONT autenticada.
 
-IMPORTANTE: isso é infraestrutura experimental para obter a primeira evidência controlada. O mecanismo POST Apply pode diferir do adaptador já suportado e falhar no preflight. Não remova as validações para fazê-lo passar. Faça o primeiro teste em ONT própria/autorizada com acesso local, preferencialmente conectado por cabo; renomear SSID pode derrubar o acesso remoto.
+## Escopo integrado
 
-## Testar separadamente na branch
+### Leituras
+- Catálogo complementar de rotas, menuView/GET com parâmetros corretos
+  e identificação real de WAN status (inclusive cards antigos com
+  VLAN, IP, MTU e DNS, somente na interface local, sem credenciais).
+- Radio avançado: canal, largura, padrão, potência, SGI e AutoChannel
+  apenas se resposta XML atual estiver completa.
+- Mesmas telas antigas de Wi-Fi, WAN, Clientes, Dashboard e Diagnóstico;
+  a interface não muda para outros modelos.
 
-No Windows PowerShell, na raiz do repositório:
+### Gravações controladas
+O opt-in permanece **desligado por padrão**. Quando habilitado
+(`ZTE_F6201B_EXPERIMENTAL_WRITES=1`), o F6201B com firmware e modelo
+revalidados na sessão atual expõe:
 
-    git fetch origin
-    git switch -c teste-f6201b-write --track origin/feat/f6201b-guarded-write-adapter
-    .\.venv\Scripts\Activate.ps1
-    pip install -r requirements.txt
-    $env:ZTE_F6201B_EXPERIMENTAL_WRITES = "1"
-    python manage.py runserver
+1. **SSID**: nome, habilitar e broadcast; prévia sem POST, nonce único
+   de 120 segundos, confirmação `APLICAR F6201B`, replay bloqueado,
+   leitura PSK com os 3 blocos `<encode>`, serialização igual à captura
+   e verificação pós-POST.
+2. **DNS IPv4**: somente servidores principal/secundário; captura
+   comprova um Apply com o body de 7 campos. A função preserva o DNS
+   IPv6 atual, valida IP, exige prévia/nonce/confirmação específica
+   `APLICAR DNS F6201B`, envia o body na ordem original e confirma
+   releitura. Não repete automaticamente um POST cuja resposta foi
+   ambígua.
 
-Conecte ao F6201B e abra a aba Wi-Fi e SSIDs. A seção independente de edição experimental oferece Consultar SSIDs, Visualizar alterações e Aplicar alterações. Faça a prévia primeiro. Se ela recusar o firmware/menu/tokens/PSK, pare e confira o fluxo original.
+As gravações permanecem protegidas pelo lock da sessão. Fora de um
+Apply específico, `session.post` continua bloqueado. Falhas também
+restauram o bloqueio.
 
-## Obter evidência do Apply real sem divulgar dados pessoais
+Outros Apply foram **mapeados, não executados automaticamente**:
+WAN/PPPoE, DHCP/IPv6, WPS, Band Steering, Mesh, RF completo,
+firewall/DMZ, UPnP e TR-069. Exigem adaptadores e testes dedicados:
+um corpo capturado não demonstra preservação segura de todos os
+campos em qualquer estado da ONT.
 
-1. Abra no navegador a interface original de um F6201B sob sua autorização, com acesso local e backup.
-2. No Console do navegador cole o conteúdo de tools/f6201b_apply_capture.js. Ele captura somente rota, ordem dos nomes de campos, presença de token/Check e nomes de objetos XML, nunca os valores.
-3. No painel ORIGINAL da ONT, faça voluntariamente uma mudança pequena em um SSID de teste e clique no botão Aplicar.
-4. Execute window.exportF6201BApplyMap() e revise o JSON gerado. Para parar, execute window.stopF6201BApplyMap().
-5. Compare o mapa sanitizado com o adaptador experimental. A captura do Apply é necessária antes de declarar a funcionalidade compatível ou expandir escrita para DNS/WAN/radio.
+## Testar sem alterar a ONT
 
-NÃO COMPARTILHE HAR bruto, cookies, headers completos, tokens, valores dos formulários, credenciais PPPoE/ACS ou XML integral.
+```powershell
+git switch main
+git pull --ff-only origin main
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Remove-Item Env:ZTE_F6201B_EXPERIMENTAL_WRITES -ErrorAction SilentlyContinue
+python manage.py runserver
+```
 
-## Limites
+Confirme identificação do F6201B, leituras, cartões nativos, RF,
+WAN e diagnóstico. Teste também F6600P após desconectar, garantindo
+que nenhum card experimental persista.
 
-Sem POST Apply validado ainda NÃO é possível afirmar que escrita foi comprovada. O inventário GET e diagnóstico do PR #28 são separados e permanecem operacionais. As áreas não cobertas por POST (WAN, GPON, DNS, gerenciamento etc.) continuam somente leitura.
+## Primeiro teste de escrita, SOMENTE em ONT própria/autorizada
+
+Com backup e acesso local **preferencialmente via cabo**:
+
+```powershell
+$env:ZTE_F6201B_EXPERIMENTAL_WRITES = "1"
+python manage.py runserver
+```
+
+Na aba Wi-Fi, altere um SSID de laboratório com prévia e confirmação.
+No formulário **Configuração padrão**, a ação específica de DNS aparece
+somente no F6201B confirmado. Evite alterar SSID da própria conexão
+usada para acessar a ONT; mudanças podem desconectar o atendente.
+
+A validação automatizada usa fakes: **a aplicação física dos comandos
+permanece pendente até confirmação no seu equipamento**. Em resposta
+ambígua, consulte a interface original antes de reenviar; nunca
+remova os bloqueios para contornar erros.
