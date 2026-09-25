@@ -66,6 +66,27 @@ class FakeZTE:
 
 
 class AutomaticDiagnosticTests(unittest.TestCase):
+    def test_f670l_numeric_o5_is_registered(self):
+        class NumericO5ZTE(FakeZTE):
+            def optical_status(self):
+                return {
+                    "registration_status": "5",
+                    "rx_power_dbm": -21.87,
+                }
+
+        result = AutomaticDiagnosticService(
+            NumericO5ZTE()
+        ).run()
+
+        pon = next(
+            item
+            for item in result["findings"]
+            if item["code"] == "pon_registration"
+        )
+
+        self.assertEqual(pon["severity"], "ok")
+        self.assertIn("registrado", pon["message"])
+
     def test_finds_lan_and_wifi_warnings(self):
         result = AutomaticDiagnosticService(
             FakeZTE()
