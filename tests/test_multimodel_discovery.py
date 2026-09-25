@@ -7,6 +7,7 @@ from apps.zte_manager.services.multimodel_service import (
     catalog,
     find_family,
     probe,
+    mesh_summary,
 )
 
 
@@ -81,6 +82,42 @@ class MultiModelDiscoveryTests(unittest.TestCase):
         self.assertEqual(client.calls[0]["_type"], "vueData")
         self.assertEqual(client.calls[1]["_tag"], "vue_client_data")
         self.assertEqual(result["read_only"], True)
+
+    def test_mesh_summary_contains_counts_but_no_client_identifiers(self):
+        class FakeMeshResponse:
+            status_code = 200
+            def raise_for_status(self):
+                pass
+            text = (
+                '{"master":{"instID":"controller"},'
+                '"slave":[{"instID":"agent1"}],'
+                '"ad":{"1":{"MacAddr":"AA:BB:CC:DD:EE:FF",'
+                '"IpAddr":"192.168.1.7","HostName":"particular",'
+                '"AccessType":"1"},"MGET_INST_NUM":1}}'
+            )
+
+        class MeshClient:
+            base_url = "http://local"
+            def __init__(self):
+                self.calls = []
+                self.session = self
+            def get_view(self, name, **kwargs):
+                self.calls.append(name)
+            def get(self, *args, **kwargs):
+                return FakeMeshResponse()
+
+        client = MeshClient()
+        report = mesh_summary(client, "F6600P")
+        self.assertTrue(report["available"])
+        self.assertEqual(report["agents"], 1)
+        self.assertEqual(report["connected_devices"], 1)
+        self.assertEqual(report["access"]["wifi_24"], 1)
+        self.assertNotIn("particular", str(report))
+        self.assertNotIn("AA:BB:CC", str(report))
+
+    def test_mesh_unknown_family_never_queries(self):
+        report = mesh_summary(FakeClient(xml()), "H388X")
+        self.assertFalse(report["available"])
 
     def test_unknown_does_not_guess_endpoints(self):
         client = FakeClient(xml())
