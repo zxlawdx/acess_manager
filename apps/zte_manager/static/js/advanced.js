@@ -585,9 +585,18 @@ function renderTrackerDiscovery(data) {
     grid.innerHTML = features.length ? features.map(item => {
         const confirmed = item.status === "detected";
         const unconfirmed = item.status === "not_confirmed";
+        const reasonLabels = {
+            session_expired: "Sessão expirada — reconecte",
+            login_page_instead_of_data: "Firmware retornou página de login",
+            invalid_xml: "Resposta do menu em formato inesperado",
+            unexpected_firmware_response: "Objeto esperado não retornado",
+            network_timeout: "O equipamento não respondeu a tempo",
+            not_exposed_or_permission_denied: "Menu ausente ou permissão insuficiente"
+        };
         const label = confirmed ? "Confirmado neste equipamento"
-            : unconfirmed ? "Endpoint não confirmado"
-            : "Documentado, ainda não testado";
+            : unconfirmed
+                ? (reasonLabels[item.reason] || "Endpoint não confirmado")
+                : "Documentado, ainda não testado";
         return `<article class="capability-card">
             <div class="capability-head"><div>
                 <strong>${escapeHtml(item.label || item.feature)}</strong>
@@ -787,6 +796,11 @@ async function probeMultimodel({ quick = false } = {}) {
                     progress: `${Math.min(offset, total)}/${total}`,
                     endpoints
                 }, null, 2);
+            }
+            if (batch.session_expired) {
+                if (status) status.textContent =
+                    "Sessão expirada durante a leitura. Reconecte à ONT antes de continuar.";
+                break;
             }
             if (quick || !total) break;
         } while (offset < total);
