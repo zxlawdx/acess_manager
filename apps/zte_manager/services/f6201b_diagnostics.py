@@ -100,7 +100,7 @@ class F6201BDiagnostics:
             row = baseline[0] if baseline else {}
             return {
                 "IF_ACTION": "PingDiagnosis",
-                "Host": destination,
+                "_InstID": "", "Host": destination, "Interface": "",
                 "NumofRepeat": bounded(config.get("count", 4), "Pacotes", 1, 30),
                 "DataBlockSize": bounded(
                     config.get("data_size", row.get("DataBlockSize") or 64),
@@ -108,17 +108,20 @@ class F6201BDiagnostics:
                 ),
                 "Timeout": bounded(config.get("timeout", 5000),
                                    "Timeout", 1000, 10000),
+                "Btn_cancel_PingDiagnosis": "", "Btn_PingDiagnosis": "",
+                "PingAck": "",
             }
         proto = config.get("protocol", "ICMP")
         if proto not in ("ICMP", "UDP"):
             raise ValueError("Protocolo inválido.")
         return {
-            "IF_ACTION": "TraceRouteDiagnosis", "Control": "0",
-            "Host": destination,
+            "IF_ACTION": "TraceRouteDiagnosis", "_InstID": "",
+            "Control": "0", "Host": destination, "Interface": "",
             "MaxHopCount": bounded(config.get("max_hops", 30), "Saltos", 1, 64),
             "Timeout": bounded(config.get("timeout", 5000),
                                "Timeout", 2000, 10000),
             "Protocol": proto,
+            "Btn_TraceRouteDiagnosis": "", "Result": "",
         }
 
     def execute(self, zte, original_post, tag, config):
@@ -139,7 +142,8 @@ class F6201BDiagnostics:
                     row.get(key) != before.get(key)
                     for key in ("PingAck", "SuccessCount", "FailureCount",
                                 "MinimumResponseTime", "MaximumResponseTime",
-                                "AverageResponseTime", "Flag", "Result",
+                                "AverageResponseTime", "DiagnosticsState",
+                                "Flag", "Result",
                                 "NumberOfPRouteHops", "ResponseTime")
                 )
                 if tag == PING and changed and row.get("PingAck") not in (
