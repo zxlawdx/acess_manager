@@ -607,48 +607,99 @@ function renderTrackerDiscovery(data) {
     }).join("") : '<p class="muted">Nenhum endpoint documentado confirmado para este perfil.</p>';
 }
 
-async function loadMultimodelCatalog() {
+let discoveryBootPromise = null;
+
+// O bootstrap não consulta a ONT: a lista de modelos precisa aparecer mesmo
+// se outro diagnóstico estiver segurando o contexto HTTP do equipamento.
+async function loadMultimodelCatalog({ refresh = false } = {}) {
     const select = document.getElementById("multimodelSelect");
-    if (!select) return;
-    if (select.dataset.loaded === "true") return;
-    const [catalog, status] = await Promise.all([
-        apiRequest("/multimodel/catalog"),
-        apiRequest("/connection/status")
-    ]);
-    for (const item of catalog.models || []) {
-        const option = document.createElement("option");
-        option.value = item.model;
-        option.textContent = `${item.model} • ${item.protocol.toUpperCase()}`;
-        select.appendChild(option);
-    }
+    const info = document.getElementById("trackerDiscoveryStatus");
+    if (!select) return null;
+    if (!refresh && select.dataset.loaded === "true") return null;
+    if (discoveryBootPromise) return discoveryBootPromise;
+    if (info) info.textContent = "Lendo o estado da sessão local...";
 
-    trackerDetectedModel = status.model || null;
-    // Campo opcional é somente uma forma de *visualizar* o modelo já
-    // identificado. Nunca alterar família numa sessão autenticada.
-    const matched = (catalog.models || []).find(
-        item => (trackerDetectedModel || "").toUpperCase().includes(item.model)
-    );
-    if (matched) select.value = matched.model;
-    select.dataset.loaded = "true";
-    const badge = document.getElementById("adapterBadge");
-    if (badge) badge.textContent = trackerDetectedModel
-        ? `PERFIL ${trackerDetectedModel}` : "IDENTIFICAÇÃO PENDENTE";
-
-    if (matched) {
-        const candidates = (matched.candidate_features || []).map(feature => ({
-            feature,
-            label: feature.replace(/_/g, " "),
-            status: "not_tested"
-        }));
-        renderTrackerDiscovery({
-            model: matched.model, family: matched.family,
-            candidate_features: candidates
+    discoveryBootPromise = (async () => {
+        // O servidor não realiza I/O com o roteador nesta rota.
+        const response = await discoveryRequest("/discovery/bootstrap", {
+            timeoutMs: 10000
         });
-    } else {
-        document.getElementById("trackerDiscoveryStatus").textContent =
-            trackerDetectedModel
-                ? "Modelo não consta nos perfis do zte_tracker; menus nativos continuam disponíveis."
-                : "Firmware não informou modelo. Escolha o modelo no login para fazer descoberta.";
+        if (response.error) throw new Error(response.error);
+        if (!response.connected) {
+            if (info) info.textContent =
+                response.reason || "Conecte-se ao equipamento primeiro.";
+            return response;
+        }
+
+        // Recriar options impede duplicatas após reconexão/troca de ONT.
+        select.replaceChildren(new Option("Usar identificação automática", ""));
+        for (const item of response.catalog?.models || []) {
+            select.add(new Option(
+                `${item.model} · ${item.protocol.toUpperCase()}`,
+                item.model
+            ));
+        }
+
+        // O backend conhece o modelo selecionado no LOGIN. Nunca mudar
+        // silenciosamente o perfil de uma sessão já autenticada.
+        trackerDetectedModel = response.model || response.detected_model || null;
+        const normalized = String(trackerDetectedModel || "").toUpperCase();
+        const matched = (response.catalog?.models || []).find(item =>
+            normalized.includes(item.model.toUpperCase())
+        );
+        if (matched) select.value = matched.model;
+        select.dataset.loaded = "true";
+
+        const badge = document.getElementById("adapterBadge");
+        if (badge) badge.textContent = trackerDetectedModel
+            ? `PERFIL ${trackerDetectedModel}` : "MODELO NÃO INFORMADO";
+
+        if (matched) {
+            const candidates = (matched.candidate_features || []).map(feature => ({
+                feature,
+                label: feature.replace(/_/g, " "),
+                status: "not_tested"
+            }));
+            renderTrackerDiscovery({
+                model: matched.model, family: matched.family,
+                candidate_features: candidates
+            });
+        } else if (info) {
+            info.textContent = trackerDetectedModel
+                ? "Este modelo não tem perfil no zte_tracker. Menus nativos ainda podem funcionar."
+                : "O login não identificou o modelo. Reconecte informando o modelo.";
+        }
+        return response;
+    })().catch(error => {
+        if (info) info.textContent =
+            "Falha ao carregar catálogo: " + String(error.message || error);
+        throw error;
+    }).finally(() => { discoveryBootPromise = null; });
+    return discoveryBootPromise;
+}
+
+// Timeout somente nas rotas de descoberta. Não encerra a sessão da ONT:
+// uma falha ou diagnóstico prolongado é exibido e os outros botões
+// permanecem operacionais no QtWebEngine.
+async function discoveryRequest(endpoint, {
+    method = "GET", body = undefined, timeoutMs = 55000
+} = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await apiRequest(endpoint, { method, body,
+            signal: controller.signal
+        });
+    } catch (error) {
+        if (error?.name === "AbortError") {
+            throw new Error(
+                `A consulta ${endpoint} passou de ${Math.round(timeoutMs / 1000)}s. ` +
+                "A conexão local continua ativa; aguarde antes de repetir."
+            );
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
     }
 }
 
@@ -1962,36 +2013,44 @@ function loadOperationsConsole() {
 async function loadOperationsConsoleInternal() {
     if (!ontConnected) return;
 
-    const loaders = routerWriteEnabled
-        ? [
-            loadCapabilityCatalog,
-            loadMultimodelCatalog,
-            loadDhcpOperations,
-            loadNatOperations,
-            loadHistory
-        ]
-        : [
-            loadCapabilityCatalog,
-            loadMultimodelCatalog,
-            loadHistory
-        ];
-
-    for (const loader of loaders) {
-        try {
-            await loader();
-            // Mostrar resultado de detecção antes de carregamentos de NAT
-            // ou histórico, que são opcionais e podem demorar neste firmware.
-            if (loader === loadMultimodelCatalog) {
-                await autoDiscoverTracker();
-            }
-        } catch (error) {
-            console.warn(
-                "Operations suite:",
-                error
-            );
-        }
+    // Prioridade absoluta: bootstrap e recursos visíveis. A versão anterior
+    // aguardava /device/capabilities e depois DHCP/NAT/histórico;
+    // qualquer leitura demorada impedia que o modelo aparecesse na UI.
+    try {
+        await loadMultimodelCatalog();
+    } catch (error) {
+        console.warn("Bootstrap de descoberta:", error);
     }
 
+    if (trackerDetectedModel) {
+        // A sondagem automática é independente do histórico e do probe
+        // legado, ambos potencialmente custosos neste firmware.
+        void autoDiscoverTracker();
+    }
+
+    const optionalLoaders = routerWriteEnabled
+        ? [loadCapabilityCatalog, loadDhcpOperations, loadNatOperations, loadHistory]
+        : [loadCapabilityCatalog, loadHistory];
+
+    // Rodar sequencialmente no equipamento, mas não atrasar a UI.
+    // A falha de um módulo não interrompe os demais.
+    for (const loader of optionalLoaders) {
+        try {
+            await loader();
+        } catch (error) {
+            console.warn("Módulo opcional:", loader.name, error);
+            if (loader === loadCapabilityCatalog) {
+                const grid = document.getElementById("capabilityGrid");
+                if (grid) grid.textContent =
+                    "Inspeção nativa indisponível: " + error.message;
+            }
+            if (loader === loadHistory) {
+                const history = document.getElementById("historyOutput");
+                if (history) history.textContent =
+                    "Histórico não carregado: " + error.message;
+            }
+        }
+    }
     advancedState.loaded = true;
 }
 
