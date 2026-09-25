@@ -618,8 +618,6 @@ class FullCapturedForms:
     def preview(self, zte, *, tag: str, instance_id: str,
                 changes: dict, host: str, revision: str, attendant: str) -> dict:
         self.clear()
-        if not ExperimentalF6201BWrites.opted_in():
-            raise PermissionError("Habilite ZTE_F6201B_EXPERIMENTAL_WRITES=1.")
         if tag not in FORM_SPECS:
             raise PermissionError("Não existe formulário capturado para esta rota.")
         if not isinstance(changes, dict) or not changes:
@@ -669,7 +667,7 @@ class FullCapturedForms:
         return {
             "tag": tag, "instance_id": instance_id,
             "nonce": nonce, "expires_in_seconds": PREVIEW_TTL,
-            "confirmation": "APLICAR ROTA F6201B", "risk_ack_required": True,
+            "impact_warning": spec.dangerous,
             "diff": {key: {
                 "before": _secrets_masked(spec, key, row.values.get(key, "")),
                 "after": _secrets_masked(spec, key, value) if key not in PRIVATE
@@ -684,12 +682,9 @@ class FullCapturedForms:
         self.clear()
         if not p or not secrets.compare_digest(p.nonce, str(nonce)):
             raise PermissionError("Prévia inválida ou já utilizada.")
-        if not ExperimentalF6201BWrites.opted_in() or original_post is None:
-            raise PermissionError("Transporte de laboratório não autorizado.")
-        if confirmation != "APLICAR ROTA F6201B" or risk_ack is not True:
-            raise PermissionError("Confirmação de risco obrigatória.")
+        if original_post is None:
+            raise PermissionError("Transporte da sessão da ONT indisponível.")
         if (p.host != host or p.revision != revision or
-                p.attendant != attendant or
                 self._clock() - p.created > PREVIEW_TTL):
             raise PermissionError("Sessão/atendente mudou ou prévia expirou.")
 
