@@ -131,7 +131,13 @@ async function apiRequest(
     } finally {
         clearTimeout(slowTimer);
         pendingApiRequests = Math.max(0, pendingApiRequests - 1);
-        if (!pendingApiRequests) updateRequestStatus();
+        // Preserve a mensagem de falha até expirar, mesmo após finalizar.
+        if (!pendingApiRequests) {
+            const badge = document.getElementById("requestStatusIndicator");
+            if (!badge?.classList.contains("is-error")) {
+                updateRequestStatus();
+            }
+        }
     }
 }
 
@@ -479,6 +485,11 @@ function openPage(pageName) {
             "pageSubtitle"
         ).textContent = info.subtitle;
     }
+
+    // Todas as entradas (sidebar, cartões, topo e restore) carregam dados.
+    document.dispatchEvent(new CustomEvent(
+        "zte:page-open", { detail: { pageName } }
+    ));
 }
 
 
@@ -4060,9 +4071,31 @@ document.addEventListener(
             return;
         }
 
-        openPage(
-            target.dataset.jump
-        );
+        const jump = target.dataset.jump;
+        openPage(jump);
+
+        // Os atalhos do topo são ações, não apenas links invisíveis.
+        if (target.closest(".topbar-quick-actions")) {
+            if (!ontConnected && jump !== "management") {
+                showToast("Conecte-se ao equipamento primeiro.");
+                return;
+            }
+            if (jump === "advanced") {
+                // O loader da página inicia pelo evento zte:page-open.
+                // A probe só começa após catálogo ter sido carregado.
+                window.setTimeout(() => {
+                    if (typeof window.startQuickProbe === "function") {
+                        void window.startQuickProbe();
+                    }
+                }, 0);
+            } else if (jump === "supportDiagnostic") {
+                if (typeof window.runQuickSupportDiagnostic === "function") {
+                    void window.runQuickSupportDiagnostic();
+                }
+            } else if (jump === "management") {
+                showToast("Atualizando plataforma de gerenciamento...");
+            }
+        }
     }
 );
 
