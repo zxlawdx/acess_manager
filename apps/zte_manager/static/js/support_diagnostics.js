@@ -180,6 +180,117 @@ function diagnosticPayload({
 }
 
 
+// F6201B: mesma tela de atendimento dos modelos originais.
+// O formulário visual continua igual, mas ações não observadas no mapeamento
+// permanecem desabilitadas. Relatório inclui SOMENTE leituras GET confirmadas.
+async function classicF6201BDiagnostic(bootstrap) {
+    if (supportDiagnosticState.running) return;
+    const supported = new Set(
+        (bootstrap.catalog?.models || []).find(item =>
+            item.model === "F6201B")?.candidate_features || []
+    );
+    const modes = {
+        general: ["device_info","pon_optical","wan","dns",
+                  "wifi_clients","wifi_radios","lan_ports","wifi_ssids"],
+        no_internet: ["device_info","pon_optical","wan","dns","lan_ports"],
+        wifi: ["device_info","wifi_ssids","wifi_radios",
+               "wifi_clients","band_steering","wps"],
+        drops: ["device_info","pon_optical","wan",
+                "wifi_clients","wifi_radios"],
+        low_speed: ["device_info","wan","lan_ports",
+                    "wifi_radios","wifi_clients"]
+    };
+    const mode = document.getElementById("supportDiagnosticMode")?.value || "general";
+    const fields = (modes[mode] || modes.general)
+        .filter(feature => supported.has(feature));
+    const report = {
+        model: "F6201B",
+        firmware: bootstrap.firmware,
+        read_only: true,
+        sections: {},
+        errors: {}
+    };
+    const output = document.getElementById("supportDiagnosticOutput");
+    const badge = document.getElementById("supportDiagnosticBadge");
+    supportDiagnosticState.running = true;
+    const revision = bootstrap.session_revision;
+    if (badge) { badge.className = "badge"; badge.textContent = "Executando"; }
+    setBusy(true, "Consultando a ONT, somente leitura...");
+    try {
+        for (const [index, feature] of fields.entries()) {
+            if (!ontConnected || routerWriteEnabled) return;
+            const section = FIRMWARE_DIAGNOSTIC_SECTIONS[feature];
+            if (!section) continue;
+            setBusy(true, "Leitura " + (index+1) + "/" + fields.length +
+                " · " + FIRMWARE_DIAGNOSTIC_LABELS[feature]);
+            try {
+                const data = await apiRequest("/multimodel/diagnostic", {
+                    method:"POST",body:JSON.stringify({
+                        model:"F6201B",section
+                    })
+                });
+                const fresh = await apiRequest("/discovery/bootstrap");
+                if (fresh.session_revision !== revision ||
+                    fresh.model_verified !== true ||
+                    String(fresh.detected_model || "").toUpperCase() !== "F6201B") return;
+                Object.assign(report.sections,data.sections || {});
+                if (data.reason) report.errors[feature] = "Não confirmado";
+            } catch (error) {
+                report.errors[feature] = "Consulta indisponível";
+            }
+            const confirmed = Object.values(report.sections).filter(
+                entry=>entry?.available === true).length;
+            const cards = Object.entries(report.sections).map(([name,entry])=>{
+                const title = Object.entries(FIRMWARE_DIAGNOSTIC_SECTIONS)
+                    .find(([,value])=>value === name)?.[0] || name;
+                const details = entry?.available && entry.data
+                    ? Object.entries(
+                        Array.isArray(entry.data) ? (entry.data[0] || {}) : entry.data
+                      ).filter(([,value])=>value == null ||
+                        typeof value !== "object")
+                      .map(([key,value])=>
+                        '<span>'+supportEscape(key.replace(/_/g," "))+
+                        ' <strong>'+supportEscape(String(value ?? "-"))+
+                        '</strong></span>').join("")
+                    : "";
+                return '<article class="support-result-card">'+
+                    '<div class="support-card-head"><div>'+
+                    '<span class="section-kicker">LEITURA DO EQUIPAMENTO</span>'+
+                    '<h3>'+supportEscape(
+                        FIRMWARE_DIAGNOSTIC_LABELS[title] || name)+'</h3></div>'+
+                    '<span class="badge '+(entry?.available ?
+                        "badge-success" : "badge-warning")+'">'+
+                        (entry?.available ? "Confirmado" : "Não disponível")+
+                    '</span></div>'+
+                    (details ? '<div class="credential-meta">'+details+'</div>' :
+                        '<p>'+ (entry?.available ? "Consulta confirmada." :
+                            "Não foi possível confirmar esta função.")+'</p>')+
+                    '</article>';
+            }).join("");
+            if (output) output.innerHTML =
+                '<article class="support-result-card support-summary">'+
+                  '<div><span class="section-kicker">RESULTADO FINAL</span>'+
+                  '<h3>Diagnóstico por firmware</h3>'+
+                  '<p>'+confirmed+' de '+fields.length+
+                    ' leituras confirmadas (somente leitura).</p></div>'+
+                  '<div class="support-summary-metrics"><div><strong>'+
+                    confirmed+'</strong><span>leituras</span></div></div>'+
+                '</article>'+cards;
+        }
+        supportDiagnosticState.firmwareReport = report;
+        supportDiagnosticState.lastDiagnostic = null;
+        document.getElementById("supportReportActions")?.classList.remove("hidden");
+        if (badge) {
+            badge.className = "badge badge-success";
+            badge.textContent = "Concluído";
+        }
+        showToast("Diagnóstico concluído; o relatório usa os GETs confirmados.");
+    } finally {
+        supportDiagnosticState.running = false;
+        setBusy(false);
+    }
+}
+
 async function runSupportDiagnostic({
     full = true,
     dashboard = false
@@ -192,9 +303,15 @@ async function runSupportDiagnostic({
     }
 
     if (!routerWriteEnabled) {
-        // Diagnóstico por modelo permanece NA aba Diagnóstico Automático.
-        // Nunca chamar o motor legado (ping/POST) num firmware experimental.
-        await runSelectedFirmwareDiagnostic();
+        const state = await apiRequest("/discovery/bootstrap");
+        if (state.model_verified === true &&
+            String(state.detected_model || "").toUpperCase() === "F6201B") {
+            await classicF6201BDiagnostic(state);
+        } else {
+            // Outros firmwares experimentais conservam o diagnóstico
+            // técnico de candidatos no painel por família.
+            await runSelectedFirmwareDiagnostic();
+        }
         return;
     }
 
