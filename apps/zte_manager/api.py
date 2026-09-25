@@ -706,6 +706,24 @@ def capability_probe(context=None):
     )
 
 
+@api.get("/features/shape")
+def feature_shape(context=None):
+    feature = str(
+        _query(context).get("feature") or ""
+    ).strip()
+
+    if not feature:
+        return {
+            "error": "Informe ?feature=.",
+            "type": "validation",
+        }
+
+    return _safe_call(
+        zte_service.capability_shape,
+        feature,
+    )
+
+
 @api.get("/features/read")
 def read_feature(context=None):
     query = _query(
