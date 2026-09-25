@@ -575,11 +575,23 @@ function openPage(pageName) {
                 });
                 const radios = document.getElementById("profileRadios");
                 if (radios && !radios.querySelector("[data-profile-band]")) {
-                    radios.innerHTML = ["2.4GHz", "5GHz"].map(band =>
-                        '<article class="panel profile-loading-card" aria-busy="true">' +
-                        '<strong>Wi-Fi ' + band + '</strong>' +
-                        '<p>Carregando padrão salvo do atendente…</p></article>'
-                    ).join("");
+                    // Mount the actual 2.4/5 GHz editor immediately. The
+                    // saved attendant profile will replace these defaults as
+                    // soon as /profiles/get returns; Save/Apply stay disabled
+                    // meanwhile, so a temporary draft can never be persisted.
+                    void renderProfileForm(currentProfile || {
+                        wifi: {
+                            "2.4GHz": {},
+                            "5GHz": {}
+                        },
+                        dns: {}
+                    }).catch(error => {
+                        if (key !== sessionEpoch + ":" + currentAttendant) return;
+                        renderProfileActionError(
+                            "Montar editor Wi-Fi do perfil",
+                            error
+                        );
+                    });
                 }
                 void ensureAttendantProfile().then(() => {
                     if (key !== sessionEpoch + ":" + currentAttendant) return;
