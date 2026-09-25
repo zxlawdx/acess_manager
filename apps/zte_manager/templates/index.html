@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="{{ static('zte_manager/css/telecom_console.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/adaptive_firmware.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/f6201b_editor.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/neutral_console.css') }}">
 
 <div class="app-shell">
 
@@ -171,6 +172,7 @@
                     </button>
                 </div>
 
+                <button id="themeToggle" class="console-action" type="button" aria-label="Alternar modo de aparência" aria-pressed="true"><span aria-hidden="true">☀</span><span class="theme-label">Modo escuro</span></button>
                 <div class="zoom-control" title="Zoom da interface: Ctrl + / Ctrl - / Ctrl 0">
                     <button id="zoomOutButton" class="zoom-button" type="button" aria-label="Diminuir interface">A−</button>
                     <span id="zoomLevel" class="zoom-level">100%</span>
@@ -1649,3 +1651,4 @@
 <script src="{{ static('zte_manager/js/management.js') }}"></script>
 <script src="{{ static('zte_manager/js/adaptive_firmware.js') }}"></script>
 <script src="{{ static('zte_manager/js/f6201b_editor.js') }}"></script>
+<script src="{{ static('zte_manager/js/neutral_theme.js') }}"></script>
