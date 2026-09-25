@@ -23,6 +23,7 @@ from apps.zte_manager.services import f6201b_capture
 from apps.zte_manager.services.f6201b_writes import ExperimentalF6201BWrites, EXACT_FIRMWARE
 from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.f6201b_profile import ExperimentalF6201BProfile
+from apps.zte_manager.services.f6201b_diagnostics import F6201BDiagnostics, PING, TRACE
 from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
@@ -60,6 +61,7 @@ class ZTEService:
         self._f6201b_writer = ExperimentalF6201BWrites()
         self._f6201b_dns = ExperimentalF6201BDNS()
         self._f6201b_profile = ExperimentalF6201BProfile()
+        self._f6201b_diagnostics = F6201BDiagnostics()
         self._captured_workbench = CapturedFormWorkbench()
         self._readonly_original_post = None
 
@@ -1361,17 +1363,30 @@ class ZTEService:
     # DIAGNÓSTICOS
     # =========================================================
 
+    def _captured_diagnostic(self, tag, config):
+        if self._f6201b_write_firmware() != EXACT_FIRMWARE:
+            raise ValueError("O firmware não expôs o diagnóstico capturado.")
+        return self._f6201b_diagnostics.execute(
+            self.get_client(), self._readonly_original_post, tag, config,
+        )
+
     def ping(self, config):
         with self._lock:
-            return self.get_client().ping(
-                config
+            detected, _ = multimodel_service.find_family(
+                self._device_info.get("modelo") or ""
             )
+            if detected == "F6201B":
+                return self._captured_diagnostic(PING, config)
+            return self.get_client().ping(config)
 
     def traceroute(self, config):
         with self._lock:
-            return self.get_client().traceroute(
-                config
+            detected, _ = multimodel_service.find_family(
+                self._device_info.get("modelo") or ""
             )
+            if detected == "F6201B":
+                return self._captured_diagnostic(TRACE, config)
+            return self.get_client().traceroute(config)
 
     # =========================================================
     # DIAGNÓSTICO AUTOMÁTICO / HISTÓRICO
