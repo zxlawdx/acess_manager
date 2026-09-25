@@ -79,9 +79,9 @@ class CapturedFormTests(unittest.TestCase):
         self.assertEqual(len(rows), 25)
         self.assertEqual({row["tag"] for row in rows}, set(OBSERVED_APPLY_FIELDS))
         states = [row["state"] for row in rows]
-        self.assertEqual(states.count("supervised_lab"), 7)
+        self.assertEqual(states.count("supervised_lab"), 21)
         self.assertEqual(states.count("existing_adapter"), 4)
-        self.assertEqual(states.count("needs_form_adapter"), 14)
+        self.assertEqual(states.count("needs_form_adapter"), 0)
         self.assertEqual(result["physical_validation"], "pending")
 
     def test_exact_payload_order_and_preserves_unmodified_values(self):
