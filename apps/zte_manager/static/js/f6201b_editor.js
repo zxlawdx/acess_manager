@@ -210,7 +210,8 @@
         // A escolha anterior não autoriza exibir editor noutro modelo.
         const actual = String(bootstrap?.detected_model || "").toUpperCase();
         const selected = String(bootstrap?.model || "").toUpperCase();
-        if (selected.replace(/[^A-Z0-9]/g, "") !== "F6201B" ||
+        if (bootstrap.model_verified !== true ||
+            selected.replace(/[^A-Z0-9]/g, "") !== "F6201B" ||
             (actual && actual !== "ZTE" &&
              actual.replace(/[^A-Z0-9]/g, "") !== "F6201B")) {
             document.querySelectorAll(".f6201b-editor").forEach(
