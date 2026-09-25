@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class ConnectRequest(BaseModel):
     ip: str
+    model_hint: str | None = None
     username: str
     password: str
     https: bool = False
