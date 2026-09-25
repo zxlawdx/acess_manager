@@ -4,6 +4,7 @@
     "use strict";
     let currentPreview = null;
     let activeHost = null;
+    let activeEpoch = -1;
     const make = (tag, className, textValue) => {
         const node = document.createElement(tag);
         if (className) node.className = className;
@@ -215,13 +216,17 @@
             panel = make("section", "panel f6201b-editor");
             page.append(panel);
         }
-        if (activeHost === currentHost && panel.hasChildNodes()) return;
+        if (activeHost === currentHost && activeEpoch === sessionEpoch &&
+                panel.hasChildNodes()) return;
         activeHost = currentHost;
+        activeEpoch = sessionEpoch;
+        currentPreview = null;
         try {
             const capability = await apiRequest("/f6201b/write/status");
             render(panel, capability);
         } catch (error) {
-            message(panel, error.message, "error");
+            panel.append(make("p", "f6201b-message error",
+                "Editor indisponível: " + error.message));
         }
     }
     document.addEventListener("zte:page-open", event => {
