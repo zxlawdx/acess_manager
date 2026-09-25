@@ -51,7 +51,7 @@ function startActionFeedback(button) {
         )
     ) return;
 
-    const rawLabel = button.textContent.replace(/\\s+/g, " ").trim();
+    const rawLabel = button.textContent.replace(/\s+/g, " ").trim();
     const label = rawLabel.slice(0, 85) || "Executando ação";
     lastActionText = label + "...";
     clickFeedbackUntil = Date.now() + ACTION_FEEDBACK_MS;
@@ -121,6 +121,9 @@ async function apiRequest(
     endpoint,
     options = {}
 ) {
+    if (!pendingApiRequests && !explicitBusy && Date.now() >= clickFeedbackUntil) {
+        lastActionText = "Consultando equipamento...";
+    }
     pendingApiRequests++;
     lastActionText = explicitBusy ? explicitBusyText : lastActionText;
     renderBusyOverlay();
