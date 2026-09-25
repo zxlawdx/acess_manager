@@ -459,9 +459,7 @@ def _load(zte, tag: str) -> list[LiveRecord]:
         if (tag in {
             "wan_internet_lua.lua", "route_routestaticipv4_lua.lua",
             "eth_interface_config_lua.lua",
-        } and len(rows) > 1 and html_values.get(ID) not in {
-            None, "", str(row.get(ID)),
-        }):
+        } and len(rows) > 1 and html_values.get(ID) != str(row.get(ID))):
             scoped = {}
         fields = _form_fields(tag, row, index, rows, objects, scoped)
         if tag == "tr069_remotemgr_lua.lua":
