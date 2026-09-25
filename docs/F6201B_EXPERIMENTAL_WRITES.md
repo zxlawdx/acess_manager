@@ -48,11 +48,11 @@ O opt-in permanece **desligado por padrão**. Quando habilitado
 (`ZTE_F6201B_EXPERIMENTAL_WRITES=1`), o F6201B com firmware e modelo
 revalidados na sessão atual expõe:
 
-1. **SSID**: nome, habilitar e broadcast; prévia sem POST, nonce único
+1. **SSID**: nome, senha PSK quando verificável, habilitar, broadcast, isolamento e limite de clientes; prévia sem POST, nonce único
    de 120 segundos, confirmação `APLICAR F6201B`, replay bloqueado,
    leitura PSK com os 3 blocos `<encode>`, serialização igual à captura
    e verificação pós-POST.
-2. **DNS IPv4**: somente servidores principal/secundário; captura
+2. **DNS IPv4/IPv6**: servidores principais/secundários; captura
    comprova um Apply com o body de 7 campos. A função preserva o DNS
    IPv6 atual, valida IP, exige prévia/nonce/confirmação específica
    `APLICAR DNS F6201B`, envia o body na ordem original e confirma
@@ -102,3 +102,34 @@ A validação automatizada usa fakes: **a aplicação física dos comandos
 permanece pendente até confirmação no seu equipamento**. Em resposta
 ambígua, consulte a interface original antes de reenviar; nunca
 remova os bloqueios para contornar erros.
+
+
+## Atualização do laboratório: perfil DNS completo e senha Wi-Fi
+
+O perfil experimental do atendente agora prepara separadamente as
+alterações de rádio, servidores DNS IPv4 e IPv6, domínio DNS e nomes
+estáticos de DNS (somente inclusão/atualização, sem apagar entradas
+externas). Cada formulário corresponde a uma requisição capturada
+diferente. A prévia informa todas as diferenças; a execução confirma
+a releitura de cada etapa e PARA após a primeira inconsistência.
+
+Na aba Wi-Fi, o editor próprio de cada SSID passou a permitir também
+trocar senha PSK, isolamento de clientes e limite de clientes. A senha
+não é devolvida pelo preview nem impressa em logs. A troca exige que
+o firmware exponha a PSK anterior com formato de criptografia
+comprovado; redes abertas ou WEP exigem configuração manual prévia
+do modo de segurança.
+
+**Não existe botão seguro de "liberar todo e qualquer POST"**: as 25
+rotas Apply registradas têm formatos, dependências e efeitos diferentes.
+WAN/PPPoE, TR-069/ACS, DHCPv6, firewall/DMZ e outras rotas permanecem
+disponíveis para inspeção via catálogo capturado, mas não são
+executadas como parte do perfil de atendente; isso exigiria que o
+usuário fornecesse um formulário de configuração próprio para cada
+recurso, com backup e validação de todos os campos.
+
+Antes de validar em hardware, fazer backup da ONT e conectar por
+Ethernet. Mudanças de rádio, senha ou DNS podem perder a conexão.
+Nenhum POST ambíguo é repetido automaticamente; **não há rollback
+geral**. Se o relatório indicar aplicação parcial, confira o estado
+atual no painel original antes de executar outra tentativa.
