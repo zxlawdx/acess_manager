@@ -485,12 +485,29 @@ class ZTEService:
     # CLIENTES
     # =========================================================
 
+    def _multimodel_client_family(self):
+        _, family = multimodel_service.find_family(
+            self._selected_model
+        )
+        # A família F6640 reutiliza os mesmos menus da F6600P/F670L.
+        return family if family in {"h288a", "h388x", "h2640", "vue"} else None
+
     def wifi_clients(self):
         with self._lock:
+            family = self._multimodel_client_family()
+            if family:
+                return multimodel_service.read_clients(
+                    self.get_client(), self._selected_model, "wifi_clients"
+                )
             return self.get_client().wifi_clients()
 
     def lan_clients(self):
         with self._lock:
+            family = self._multimodel_client_family()
+            if family:
+                return multimodel_service.read_clients(
+                    self.get_client(), self._selected_model, "lan_clients"
+                )
             return self.get_client().lan_clients()
 
     def lan_ports(self):
@@ -502,8 +519,8 @@ class ZTEService:
             zte = self.get_client()
 
             return {
-                "wifi": zte.wifi_clients(),
-                "lan": zte.lan_clients()
+                "wifi": self.wifi_clients(),
+                "lan": self.lan_clients()
             }
 
     # =========================================================
