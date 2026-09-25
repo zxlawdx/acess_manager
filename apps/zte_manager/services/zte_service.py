@@ -19,6 +19,7 @@ from apps.zte_manager.services.capability_service import CapabilityService
 from apps.zte_manager.services import multimodel_service
 from apps.zte_manager.services import model_diagnostic_service
 from apps.zte_manager.services import f6201b_capture
+from apps.zte_manager.services.f6201b_writes import ExperimentalF6201BWrites, EXACT_FIRMWARE
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -50,6 +51,8 @@ class ZTEService:
         self._history_session_id = None
         self._device_info = {}
         self._selected_model = None
+        self._f6201b_writer = ExperimentalF6201BWrites()
+        self._readonly_original_post = None
 
     # =========================================================
     # CONEXÃO
@@ -120,6 +123,8 @@ class ZTEService:
                 except Exception:
                     pass
 
+            self._f6201b_writer.clear()
+            self._readonly_original_post = None
             self._zte = ZTE(
                 ip=ip,
                 username=username,
@@ -207,6 +212,7 @@ class ZTEService:
                         "POST bloqueado até existir adaptador de escrita validado."
                     )
 
+                self._readonly_original_post = self._zte.session.post
                 self._zte.session.post = read_only_post
 
             self._capability_service = CapabilityService(
@@ -310,6 +316,9 @@ class ZTEService:
                 self._capability_service = None
                 self._history_session_id = None
                 self._device_info = {}
+                self._selected_model = None
+                self._f6201b_writer.clear()
+                self._readonly_original_post = None
 
     def get_client(self) -> ZTE:
         if self._zte is None:
@@ -1020,6 +1029,58 @@ class ZTEService:
             selected = self._confirmed_probe_model(model)
             return model_diagnostic_service.diagnostic(
                 self.get_client(), selected, section=section,
+            )
+
+    def _f6201b_write_firmware(self):
+        # Indicação no formulário não basta: exigir leitura real do firmware
+        # imediatamente antes do preview/POST, usando a sessão autenticada.
+        selected, _ = multimodel_service.find_family(
+            self._selected_model or ""
+        )
+        if selected != "F6201B":
+            raise PermissionError("A sessão não corresponde ao perfil F6201B.")
+        device = self.get_client().device_status()
+        detected, _ = multimodel_service.find_family(
+            device.get("modelo") or ""
+        )
+        if detected != "F6201B":
+            raise PermissionError(
+                "O modelo da sessão não foi confirmado pelo próprio equipamento."
+            )
+        firmware = device.get("firmware")
+        if firmware != EXACT_FIRMWARE:
+            raise PermissionError(
+                "Este firmware não foi homologado para o adaptador experimental."
+            )
+        return firmware
+
+    def f6201b_write_status(self):
+        with self._lock:
+            selected, _ = multimodel_service.find_family(
+                self._selected_model or ""
+            )
+            if selected != "F6201B":
+                raise ValueError("Conecte um F6201B primeiro.")
+            # Somente metadados em memória: status não acessa o roteador.
+            return self._f6201b_writer.capabilities(
+                self._device_info.get("firmware")
+            )
+
+    def f6201b_write_preview(self, ssid_id, config):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            return self._f6201b_writer.preview(
+                self.get_client(), host=self.current_host,
+                firmware=firmware, ssid_id=ssid_id, config=config,
+            )
+
+    def f6201b_write_apply(self, nonce, confirmation):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            return self._f6201b_writer.apply(
+                self.get_client(), host=self.current_host,
+                firmware=firmware, nonce=nonce, confirmation=confirmation,
+                original_post=self._readonly_original_post,
             )
 
     def mapped_f6201b_routes(self):
