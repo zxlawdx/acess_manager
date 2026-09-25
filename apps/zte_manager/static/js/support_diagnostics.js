@@ -1540,7 +1540,8 @@ function renderFirmwareDiagnosticOptions() {
         input.type = "checkbox";
         input.value = option.name;
         input.disabled = !option.confirmed;
-        input.checked = option.confirmed && (selected.size === 0 || selected.has(option.name));
+        input.checked = option.confirmed && (option.justConfirmed || selected.size === 0 || selected.has(option.name));
+        option.justConfirmed = false;
         const text = document.createElement("span");
         text.textContent = `${FIRMWARE_DIAGNOSTIC_LABELS[option.name] || option.name} — ${option.confirmed ? "confirmado" : "candidato (não testado/indisponível)"}`;
         label.append(text, input);
@@ -1625,8 +1626,8 @@ async function detectFirmwareDiagnosticOptions() {
                     item => item.name === capability.feature
                 );
                 if (option) {
+                    option.justConfirmed = !option.confirmed && capability.available === true;
                     option.confirmed = capability.available === true;
-                    option.checked = true;
                 }
             }
             offset = Number(batch.next_offset ?? (offset + 2));
