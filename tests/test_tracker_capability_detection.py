@@ -101,7 +101,7 @@ class TrackerCapabilityDetectionTests(unittest.TestCase):
         self.assertIn("max_endpoints: 2", js)
         self.assertIn("start: offset", js)
         self.assertIn("offset < total", js)
-        self.assertIn("renderTrackerDiscovery(result)", js)
+        self.assertIn("renderTrackerDiscovery(combined)", js)
         self.assertIn('id="trackerCapabilityGrid"', template)
         self.assertIn('id="capabilityGrid"', template)
 
