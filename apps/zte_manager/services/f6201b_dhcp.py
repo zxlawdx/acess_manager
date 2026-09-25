@@ -94,7 +94,9 @@ def status(zte):
             not _required_fields(BASIC, forms[0].values)
         )
         result["capabilities"]["server_write"] = bool(ready)
-        result["capabilities"]["gateway_write"] = bool(ready)
+        result["capabilities"]["gateway_write"] = bool(
+            ready and basic[0].get("IPRouters")
+        )
         if not ready:
             result["warnings"].append(
                 "A ONT não retornou o formulário completo para editar DHCP."
@@ -136,6 +138,14 @@ def change(workbench, zte, *, config, host, revision, attendant,
                     "OBJ_Br0AndDhcpsHosCfg_ID")
     if len(current) != 1 or not current[0].get("_InstID"):
         raise RuntimeError("Não foi possível selecionar o objeto DHCP real.")
+    # IPRouters was blank in the operator's captured Apply and absent
+    # from its GET. Do not advertise or apply an unobservable gateway
+    # write unless the authenticated firmware really returns the field.
+    if "gateway" in config and not current[0].get("IPRouters"):
+        raise ValueError(
+            "A ONT não expôs a leitura do gateway DHCP; "
+            "a alteração não pode ser verificada neste formulário."
+        )
     changes = {}
     for external, internal in UPDATE_MAPPING.items():
         if external not in config:
