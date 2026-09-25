@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import re
 import secrets
+import hashlib
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ from apps.zte_manager.model.zte_configuration import zte_wifi, zte_security
 
 EXACT_FIRMWARE = "V9.3.10P7N7"
 OPT_IN_ENV = "ZTE_F6201B_EXPERIMENTAL_WRITES"
-SAFE_FIELDS = frozenset({"ssid", "enabled", "broadcast"})
+SAFE_FIELDS = frozenset({"ssid", "enabled", "broadcast", "password", "isolation", "max_clients"})
 PREVIEW_TTL = 120
 
 
@@ -35,6 +36,7 @@ class Preview:
     config: dict[str, Any]
     previous: dict[str, Any]
     created_at: float
+    psk_hash: str | None = None
 
 
 class ExperimentalF6201BWrites:
@@ -57,7 +59,7 @@ class ExperimentalF6201BWrites:
             "opted_in": ExperimentalF6201BWrites.opted_in(),
             "operations": [{
                 "id": "ssid_basic",
-                "label": "SSID: nome, ativação e visibilidade",
+                "label": "SSID: nome, senha, ativação, isolamento e clientes",
                 "fields": sorted(SAFE_FIELDS),
                 "experimental": True,
                 "risk": "Alterar ou desligar SSID pode interromper sua conexão Wi-Fi.",
@@ -100,6 +102,16 @@ class ExperimentalF6201BWrites:
                     raise ValueError("O nome da rede precisa ter 1 a 32 caracteres.")
                 if any(ord(char) < 32 for char in value):
                     raise ValueError("O SSID contém caracteres de controle.")
+                normalized[key] = value
+            elif key == "password":
+                if not isinstance(value, str) or not 8 <= len(value) <= 63:
+                    raise ValueError("A senha Wi-Fi deve ter 8 a 63 caracteres.")
+                if not value.isascii() or any(ord(char) < 32 for char in value):
+                    raise ValueError("A senha Wi-Fi contém caracteres inválidos.")
+                normalized[key] = value
+            elif key == "max_clients":
+                if type(value) is not int or not 1 <= value <= 64:
+                    raise ValueError("Número de clientes deve estar entre 1 e 64.")
                 normalized[key] = value
             else:
                 if type(value) is not bool:
@@ -232,16 +244,31 @@ class ExperimentalF6201BWrites:
             "ssid": current.get("ESSID", ""),
             "enabled": current.get("Enable") == "1",
             "broadcast": current.get("ESSIDHideEnable") != "1",
+            "isolation": current.get("VapIsolationEnable") == "1",
+            "max_clients": int(current.get("MaxUserNum") or 32),
         }
-        changes = {key: {"before": before[key], "after": value}
-                   for key, value in desired.items()
-                   if value != before[key]}
+        changes = {
+            key: ({"before": "********", "after": "********"}
+                  if key == "password" else
+                  {"before": before[key], "after": value})
+            for key, value in desired.items()
+            if key == "password" or value != before[key]
+        }
         if not changes:
             raise ValueError("Nenhuma diferença encontrada.")
         # Não colocar credenciais em cache, logs ou preview.
         nonce = secrets.token_urlsafe(24)
+        fingerprint = None
+        if "password" in desired:
+            psks = zte._parse_instances(raw).get("OBJ_WLANPSK_ID", [])
+            psk = zte_wifi._map_psk_by_ap(psks).get(ssid_id)
+            if not psk or not psk.get("KeyPassphrase"):
+                raise RuntimeError("A rede não retornou PSK para troca de senha.")
+            fingerprint = hashlib.sha256(
+                psk["KeyPassphrase"].encode("utf-8")
+            ).hexdigest()
         self._pending = Preview(
-            nonce, host, ssid_id, desired, before, time.monotonic()
+            nonce, host, ssid_id, desired, before, time.monotonic(), fingerprint
         )
         return {"operation": "ssid_basic", "model": "F6201B",
                 "firmware": firmware, "ssid_id": ssid_id,
@@ -274,7 +301,17 @@ class ExperimentalF6201BWrites:
         self._ensure_psk_preservable(zte, current, raw)
         now = {"ssid": current.get("ESSID", ""),
                "enabled": current.get("Enable") == "1",
-               "broadcast": current.get("ESSIDHideEnable") != "1"}
+               "broadcast": current.get("ESSIDHideEnable") != "1",
+               "isolation": current.get("VapIsolationEnable") == "1",
+               "max_clients": int(current.get("MaxUserNum") or 32)}
+        if proposal.psk_hash:
+            psks = zte._parse_instances(raw).get("OBJ_WLANPSK_ID", [])
+            psk = zte_wifi._map_psk_by_ap(psks).get(proposal.ssid_id)
+            fingerprint = hashlib.sha256(
+                (psk or {}).get("KeyPassphrase", "").encode("utf-8")
+            ).hexdigest()
+            if not secrets.compare_digest(fingerprint, proposal.psk_hash):
+                raise RuntimeError("A PSK foi alterada após a prévia.")
         if now != proposal.previous:
             raise RuntimeError("Estado da rede mudou após a prévia. Refaça.")
         # Lock pertence ao service principal. Nunca habilitar globalmente:
