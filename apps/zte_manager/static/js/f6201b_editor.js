@@ -110,8 +110,7 @@
                 "Nenhuma rede foi retornada pelo firmware neste login.");
             return;
         }
-        const canEdit = capabilities?.opted_in === true &&
-            capabilities?.supported_firmware === true;
+        const canEdit = capabilities?.supported_firmware === true;
         root.innerHTML = ssids.map(network => `
             <article class="panel ssid-card ${network.enabled ? "ssid-online" : "ssid-offline"}"
                      data-f6201b-id="${safe(network.id)}">
@@ -130,7 +129,7 @@
                     <div class="ssid-meta">
                         <span class="meta-pill">F6201B</span>
                         <span class="meta-pill">Segurança preservada</span>
-                        <span class="meta-pill">${canEdit ? "EDIÇÃO EXPERIMENTAL" : "LEITURA"}</span>
+                        <span class="meta-pill">${canEdit ? "CONFIGURAÇÃO DISPONÍVEL" : "FORMULÁRIO INCOMPATÍVEL"}</span>
                     </div>
                     <div class="form-grid two-fields">
                         <div class="form-group"><label>Nome da rede</label>
@@ -165,9 +164,9 @@
                     <div class="f6201b-inline-result" aria-live="polite"></div>
                     <div class="form-footer">
                         <span class="ssid-footnote"><span class="material-symbols-outlined">shield_lock</span>
-                            ${canEdit ? "Prévia e confirmação obrigatórias." : "Somente leitura; nenhuma alteração será enviada."}
+                            ${canEdit ? "A aplicação pode desconectar o Wi-Fi." : "O firmware não expôs este formulário."}
                         </span>
-                        ${canEdit ? '<button class="button primary" type="submit"><span class="material-symbols-outlined">save</span>Prévia / Aplicar SSID</button>' : ""}
+                        ${canEdit ? '<button class="button primary" type="submit"><span class="material-symbols-outlined">save</span>Aplicar SSID</button>' : ""}
                     </div>
                 </form>
             </article>`).join("");
@@ -177,78 +176,57 @@
     }
     async function submitSsid(event, form) {
         event.preventDefault();
+        if (form.dataset.applying === "true") return;
         const root = form.closest(".ssid-card");
         const id = root?.dataset.f6201bId;
         const original = ssids.find(item => item.id === id);
-        if (!original || !capabilities?.opted_in) return;
+        if (!original || !capabilities?.supported_firmware) return;
         const message = form.querySelector(".f6201b-inline-result");
         const name = form.querySelector('[data-field="ssid"]').value;
         const enabled = form.querySelector('[data-field="enabled"]').checked;
         const broadcast = form.querySelector('[data-field="broadcast"]').checked;
         const isolation = form.querySelector('[data-field="isolation"]').checked;
         const maxClients = Number(form.querySelector('[data-field="max_clients"]').value);
-        const password = form.querySelector('[data-field="password"]').value;
+        const passwordInput = form.querySelector('[data-field="password"]');
         const config = {};
-        if (password) config.password = password;
-        if (isolation !== Boolean(original.isolation))
-            config.isolation = isolation;
+        if (passwordInput.value) config.password = passwordInput.value;
+        if (isolation !== Boolean(original.isolation)) config.isolation = isolation;
         if (maxClients !== Number(original.max_clients || 32))
             config.max_clients = maxClients;
         if (name !== original.ssid) config.ssid = name;
         if (enabled !== original.enabled) config.enabled = enabled;
         if (broadcast !== original.broadcast) config.broadcast = broadcast;
         if (!Object.keys(config).length) {
-            message.textContent = "Nenhuma alteração informada.";
+            message.textContent = "A ONT já possui as configurações selecionadas.";
             return;
         }
-        setBusy(true,"Conferindo formulário da ONT...");
+        // One click is the operator's authorization; server-side reads
+        // preserve all untouched fields and protect encrypted Wi-Fi keys.
+        form.dataset.applying = "true";
+        const submit = form.querySelector('[type="submit"]');
+        if (submit) submit.disabled = true;
+        message.textContent = "Aplicando SSID e verificando por releitura… " +
+            "A conexão Wi-Fi pode ser interrompida.";
+        setBusy(true, "Aplicando SSID na ONT…");
         try {
-            const proposal = await apiRequest("/f6201b/write/preview", {
-                method:"POST",body:JSON.stringify({ssid_id:id,config})
+            const result = await apiRequest("/f6201b/write/update", {
+                method: "POST", body: JSON.stringify({ssid_id: id, config})
             });
-            // Never leave new Wi-Fi password in the live form after preflight.
-            form.querySelector('[data-field="password"]').value = "";
-            const actual = Object.entries(proposal.changes || {}).map(
-                ([name,item]) => name + ": " + item.before + " → " + item.after
-            ).join("\n");
-            message.replaceChildren();
-            const summary = document.createElement("p");
-            summary.textContent = actual;
-            const warning = document.createElement("p");
-            warning.textContent = "A alteração pode interromper o Wi-Fi. Requer acesso local; sem rollback automático.";
-            const confirm = document.createElement("input");
-            confirm.type = "text";
-            confirm.placeholder = "Digite APLICAR F6201B";
-            confirm.autocomplete = "off";
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "button primary";
-            button.textContent = "Confirmar alterações";
-            button.addEventListener("click",async () => {
-                if(confirm.value !== "APLICAR F6201B") {
-                    showToast("Confirmação inválida.");
-                    return;
-                }
-                button.disabled = true;
-                setBusy(true,"Aplicando e verificando SSID...");
-                try {
-                    const result = await apiRequest("/f6201b/write/apply",{
-                        method:"POST",body:JSON.stringify({
-                            nonce:proposal.nonce,confirmation:confirm.value
-                        })
-                    });
-                    message.textContent = result.verified
-                        ? "Configuração confirmada por releitura."
-                        : "A ONT não confirmou a aplicação; confira o painel original.";
-                    if(result.verified) await renderWifi();
-                }catch(error) {
-                    message.textContent = "Aplicação não confirmada: " + error.message;
-                }finally {setBusy(false);}
-            },{once:true});
-            message.append(summary,warning,confirm,button);
-        }catch(error){
-            message.textContent = "Não foi possível validar o comando: "+error.message;
-        }finally{setBusy(false);}
+            passwordInput.value = "";
+            message.textContent = result.verified
+                ? "SSID aplicado e confirmado pela ONT."
+                : "Resultado não confirmado. Confira a configuração da ONT " +
+                  "antes de repetir.";
+            if (result.verified) await renderWifi();
+        } catch (error) {
+            passwordInput.value = "";
+            message.textContent = "Não foi possível confirmar a alteração: " +
+                error.message + ". Confira a ONT antes de repetir.";
+        } finally {
+            form.dataset.applying = "false";
+            if (submit) submit.disabled = false;
+            setBusy(false);
+        }
     }
     async function renderWifi() {
         const run = epoch;
@@ -448,7 +426,7 @@
             try {
                 const flags = await apiRequest("/f6201b/write/status");
                 if (run !== epoch) return;
-                operations.disabled = !(flags.opted_in && flags.supported_firmware);
+                operations.disabled = !(flags.supported_firmware);
                 operations.title = operations.disabled
                     ? "Ative a escrita experimental para testar o perfil F6201B."
                     : "Perfil experimental: abrir prévia e confirmar RF/DNS.";
@@ -510,7 +488,7 @@
             // The technician's saved profile must NEVER be silently
             // replaced with values of whichever ONT was just connected.
             // DNS from the router is read-only comparison information here.
-            action.disabled = !status.opted_in || !status.supported_firmware;
+            action.disabled = !status.supported_firmware;
             report.textContent = action.disabled
                 ? "DNS atual consultado; o padrão salvo acima foi preservado."
                 : "Padrão do atendente preservado. Compare com o DNS da ONT ao criar prévia.";
@@ -541,56 +519,25 @@
                     report.textContent = "Nenhuma alteração de DNS.";
                     return;
                 }
-                setBusy(true,"Validando servidores DNS...");
+                setBusy(true,"Aplicando DNS e verificando a ONT…");
+                action.disabled = true;
+                report.textContent = "Enviando os servidores DNS. " +
+                    "A alteração pode interromper a resolução de nomes.";
                 try {
-                    const preview = await apiRequest("/f6201b/dns/preview",{
-                        method:"POST", body:JSON.stringify({changes})
+                    const result = await apiRequest("/f6201b/dns/update", {
+                        method: "POST", body: JSON.stringify({changes})
                     });
                     if (run !== epoch) return;
-                    report.replaceChildren();
-                    const diff = document.createElement("p");
-                    diff.textContent = Object.entries(preview.changes)
-                        .map(([field,item])=>field+": "+
-                            item.before+" → "+item.after).join("\n");
-                    const warn = document.createElement("p");
-                    warn.textContent = "O DNS de clientes pode mudar. "
-                        +"Prévia válida por 120 segundos; exige acesso local.";
-                    const confirmation = document.createElement("input");
-                    confirmation.type="text";
-                    confirmation.placeholder="Digite APLICAR DNS F6201B";
-                    confirmation.autocomplete="off";
-                    const submit=document.createElement("button");
-                    submit.type="button";
-                    submit.className="button primary";
-                    submit.textContent="Confirmar DNS";
-                    submit.addEventListener("click",async()=>{
-                        if(confirmation.value!=="APLICAR DNS F6201B"){
-                            showToast("Confirmação de DNS incorreta.");
-                            return;
-                        }
-                        submit.disabled=true;
-                        setBusy(true,"Aplicando DNS e confirmando releitura...");
-                        try{
-                            const result=await apiRequest("/f6201b/dns/apply",{
-                                method:"POST",body:JSON.stringify({
-                                    nonce:preview.nonce,
-                                    confirmation:confirmation.value
-                                })
-                            });
-                            if(run!==epoch)return;
-                            report.textContent=result.verified
-                                ? "DNS confirmado pela releitura da ONT."
-                                : "DNS não confirmado. Confira o painel original.";
-                        }catch(error){
-                            if(run===epoch)report.textContent=
-                                "DNS não confirmado: "+error.message;
-                        }finally{setBusy(false);}
-                    });
-                    report.append(diff,warn,confirmation,submit);
-                }catch(error){
-                    if(run===epoch)report.textContent=
-                        "Falha na prévia: "+error.message;
-                }finally{setBusy(false);}
+                    report.textContent = result.verified
+                        ? "DNS aplicado e confirmado pela releitura."
+                        : "DNS não confirmado. Confira o equipamento antes de repetir.";
+                } catch(error) {
+                    if(run === epoch) report.textContent =
+                        "Aplicação de DNS não confirmada: " + error.message;
+                } finally {
+                    if (run === epoch) action.disabled = false;
+                    setBusy(false);
+                }
             };
         } catch(error){
             if(run===epoch)report.textContent=
