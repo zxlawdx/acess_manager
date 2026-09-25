@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .base import DeviceAdapter, EndpointSpec, FeatureSpec
+from apps.zte_manager.services.multimodel_service import find_family, FAMILY
 
 
 def _endpoint(
@@ -305,6 +306,48 @@ class F670LAdapter(ThinkLuaAdapter):
     name = "zte-f670l-thinklua"
 
 
+class MultiFamilyReadOnlyAdapter(ThinkLuaAdapter):
+    """Novos modelos: só declarar os endpoints verificados como candidatos.
+
+    Os recursos legados de configuração da F670L não são automaticamente
+    habilitados em firmwares de outras famílias.
+    """
+
+    name = "zte-multimodel-discovery"
+
+    @property
+    def features(self) -> dict[str, FeatureSpec]:
+        _, family = find_family(self.model)
+        # Gateway de capabilities trabalha com menuView/menuData; Vue usa
+        # vueData e deve ser detectado apenas pela rota multimodel/probe.
+        if family == "vue":
+            return {}
+
+        endpoints = FAMILY.get(family or "", {})
+        labels = {
+            "wifi_clients": "Clientes Wi-Fi (inspeção)",
+            "lan_clients": "Clientes cabeados (inspeção)",
+            "wan": "Estado WAN (inspeção)",
+            "dsl": "Linha DSL (inspeção)",
+        }
+        return {
+            key: FeatureSpec(
+                key, labels.get(key, key),
+                (
+                    EndpointSpec(
+                        view=spec.view,
+                        tag=spec.tag,
+                        query=dict(spec.params),
+                        object_keys=(spec.root,),
+                    ),
+                ),
+                writable=False,
+                notes="Somente leitura; funcionalidade depende de prova no firmware.",
+            )
+            for key, spec in endpoints.items()
+        }
+
+
 def select_adapter(
     model: str | None,
     firmware: str | None = None,
@@ -316,6 +359,11 @@ def select_adapter(
 
     if "F6600P" in normalized:
         return F6600PAdapter(model, firmware)
+
+    key, family = find_family(normalized)
+    if family:
+        # Vue usa endpoints vueData; declarar leitura, nunca escrita.
+        return MultiFamilyReadOnlyAdapter(model, firmware)
 
     # Fallback conservador: os recursos continuam dependendo de probe.
     return ThinkLuaAdapter(model, firmware)

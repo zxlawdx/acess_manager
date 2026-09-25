@@ -16,6 +16,7 @@ from apps.zte_manager.services.attendance_report_service import (
     AttendanceReportService,
 )
 from apps.zte_manager.services.capability_service import CapabilityService
+from apps.zte_manager.services import multimodel_service
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -46,6 +47,7 @@ class ZTEService:
         self._capability_service = None
         self._history_session_id = None
         self._device_info = {}
+        self._selected_model = None
 
     # =========================================================
     # CONEXÃO
@@ -58,8 +60,13 @@ class ZTEService:
         password: str,
         https: bool = False,
         attendant: str | None = None,
+        model_hint: str | None = None,
     ):
         with self._lock:
+            # O zte_tracker documenta o mesmo desafio loginData para a
+            # família Vue, porém seus endpoints de leitura usam vueData.
+            # Nunca assumir que os menus de escrita ThinkLua sejam compatíveis.
+
             protocolo = "https" if https else "http"
             base_url = f"{protocolo}://{ip}"
 
@@ -84,6 +91,7 @@ class ZTEService:
 
                 return {
                     "success": True,
+                    "writes_enabled": getattr(self._zte, "writes_enabled", True),
                     "attendant": self.current_attendant,
                     "host": self.current_host,
                     "reused_session": True,
@@ -141,11 +149,48 @@ class ZTEService:
                 self._device_info = self._zte.device_status()
             except Exception:
                 self._device_info = {}
+                self._selected_model = None
+
+            detected_model = self._device_info.get("modelo")
+            if model_hint and detected_model:
+                from apps.zte_manager.services.multimodel_service import find_family
+                claimed, _ = find_family(model_hint)
+                actual, _ = find_family(detected_model)
+                if claimed and actual and claimed != actual:
+                    self._zte.session.close()
+                    self._zte = None
+                    raise ValueError(
+                        "Modelo informado diverge do modelo retornado "
+                        "pelo equipamento. Verifique o perfil selecionado."
+                    )
 
             self._adapter = select_adapter(
-                self._device_info.get("modelo"),
+                detected_model or model_hint,
                 self._device_info.get("firmware"),
             )
+            self._selected_model = detected_model or model_hint
+            # Somente os adaptadores originais possuem rotinas de escrita
+            # implementadas/testadas; os novos perfis iniciam read-only.
+            from apps.zte_manager.model.device_adapters import (
+                F6600PAdapter, F670LAdapter,
+            )
+            self._zte.writes_enabled = isinstance(
+                self._adapter,
+                (F6600PAdapter, F670LAdapter),
+            )
+
+            if not self._zte.writes_enabled:
+                # Defesa em profundidade: as APIs de alguns firmwares
+                # usam POST direto fora de post_menu (backup, reboot etc.).
+                # Bloquear no transporte evita que um botão antigo faça
+                # alterações por acidente no equipamento recém-cadastrado.
+                def read_only_post(*args, **kwargs):
+                    raise PermissionError(
+                        "Sessão de descoberta somente leitura. "
+                        "POST bloqueado até existir adaptador de escrita validado."
+                    )
+
+                self._zte.session.post = read_only_post
 
             self._capability_service = CapabilityService(
                 self._zte,
@@ -219,6 +264,7 @@ class ZTEService:
                 "attendant": self.current_attendant,
                 "host": self.current_host,
                 "reused_session": False,
+                "writes_enabled": self._zte.writes_enabled,
                 "device": self._device_info,
                 "adapter": self._adapter.name,
             }
@@ -463,12 +509,29 @@ class ZTEService:
     # CLIENTES
     # =========================================================
 
+    def _multimodel_client_family(self):
+        _, family = multimodel_service.find_family(
+            self._selected_model
+        )
+        # A família F6640 reutiliza os mesmos menus da F6600P/F670L.
+        return family if family in {"h288a", "h388x", "h2640", "vue"} else None
+
     def wifi_clients(self):
         with self._lock:
+            family = self._multimodel_client_family()
+            if family:
+                return multimodel_service.read_clients(
+                    self.get_client(), self._selected_model, "wifi_clients"
+                )
             return self.get_client().wifi_clients()
 
     def lan_clients(self):
         with self._lock:
+            family = self._multimodel_client_family()
+            if family:
+                return multimodel_service.read_clients(
+                    self.get_client(), self._selected_model, "lan_clients"
+                )
             return self.get_client().lan_clients()
 
     def lan_ports(self):
@@ -480,8 +543,8 @@ class ZTEService:
             zte = self.get_client()
 
             return {
-                "wifi": zte.wifi_clients(),
-                "lan": zte.lan_clients()
+                "wifi": self.wifi_clients(),
+                "lan": self.lan_clients()
             }
 
     # =========================================================
@@ -872,6 +935,33 @@ class ZTEService:
         with self._lock:
             return self._capabilities().probe(
                 features
+            )
+
+    def multimodel_catalog(self):
+        return multimodel_service.catalog()
+
+    def multimodel_mesh(self, model=None):
+        with self._lock:
+            selected = (
+                model or self._selected_model
+                or self._device_info.get("modelo") or ""
+            )
+            return multimodel_service.mesh_summary(
+                self.get_client(), selected
+            )
+
+    def multimodel_probe(self, model=None):
+        with self._lock:
+            selected = (
+                model
+                or self._selected_model
+                or self._device_info.get("modelo")
+                or self._device_info.get("model")
+                or ""
+            )
+            return multimodel_service.probe(
+                self.get_client(),
+                selected,
             )
 
     def capability_shape(self, feature):

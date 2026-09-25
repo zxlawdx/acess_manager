@@ -251,6 +251,30 @@
                                 </div>
                             </label>
 
+                            <label class="field">
+                                <span>MODELO (OPCIONAL)</span>
+                                <select id="zteModelHint">
+                                    <option value="">Detectar automaticamente</option>
+                                    <option value="F6640">F6640</option>
+                                    <option value="F6645P">F6645P</option>
+                                    <option value="F680">F680</option>
+                                    <option value="F6600P">F6600P</option>
+                                    <option value="F8748">F8748</option>
+                                    <option value="F670L">F670L</option>
+                                    <option value="H169A">H169A</option>
+                                    <option value="H2640">H2640</option>
+                                    <option value="H288A">H288A</option>
+                                    <option value="H388X">H388X</option>
+                                    <option value="H3600P">H3600P</option>
+                                    <option value="H3640">H3640</option>
+                                    <option value="H6645P">H6645P</option>
+                                    <option value="H6745">H6745</option>
+                                    <option value="E2631">E2631 (Vue: descoberta experimental)</option>
+                                    <option value="SR7410">SR7410 (Vue: descoberta experimental)</option>
+                                </select>
+                                <small class="muted">Outros modelos usam descoberta de recursos em modo leitura. Vue ainda requer adaptador de login.</small>
+                            </label>
+
                             <label class="check-row">
                                 <input id="zteHttps" type="checkbox">
                                 <span>Usar HTTPS neste equipamento</span>
@@ -791,6 +815,14 @@
                             <span class="material-symbols-outlined">radar</span>
                             Detectar recursos
                         </button>
+                        <button id="multimodelProbeButton" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">router</span>
+                            Detectar modelo
+                        </button>
+                        <button id="multimodelMeshButton" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">hub</span>
+                            Resumo Mesh
+                        </button>
                         <button id="exportFeatureShapesButton" class="button ghost" type="button">
                             <span class="material-symbols-outlined">data_object</span>
                             Mapa do firmware
@@ -813,6 +845,18 @@
                             <h3>Recursos detectados</h3>
                         </div>
                         <span id="adapterBadge" class="badge">Não detectado</span>
+                    </div>
+                    <div class="operation-row with-top-space" style="margin-bottom:14px;">
+                        <label class="field">
+                            <span>MODELO / PERFIL DO EQUIPAMENTO (opcional)</span>
+                            <select id="multimodelSelect" aria-label="Modelo para detecção multi-firmware">
+                                <option value="">Usar identificação automática</option>
+                            </select>
+                        </label>
+                        <p class="muted">Detecção somente leitura. Não libera alterações nos outros modelos.</p>
+                        <pre id="multimodelProbeOutput" class="selectable-output"
+                             style="max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;"
+                             aria-live="polite">Selecione um modelo e clique em Detectar modelo.</pre>
                     </div>
                     <div id="capabilityGrid" class="capability-grid">
                         <div class="loading">Abra a detecção para validar os menus disponíveis neste firmware.</div>

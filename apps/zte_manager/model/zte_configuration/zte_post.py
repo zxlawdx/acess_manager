@@ -22,6 +22,14 @@ def post_menu(
     - enviamos a string pronta para requests não reserializar o formulário.
     """
 
+    # Perfis de outros roteadores começam em modo leitura. Um endpoint
+    # parecido não é evidência de que os POSTs sejam compatíveis.
+    if getattr(zte, "writes_enabled", True) is False:
+        raise PermissionError(
+            "Escrita bloqueada neste modelo/firmware. "
+            "Valide o fluxo específico do aparelho antes de habilitar alterações."
+        )
+
     token = getattr(
         zte,
         "session_tmp_token",

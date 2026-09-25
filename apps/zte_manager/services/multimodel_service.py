@@ -1,0 +1,307 @@
+"""Descoberta conservadora e somente leitura para famílias ZTE.
+
+Perfis inspirados na documentação pública do juacas/zte_tracker; esta é uma
+implementação independente. O nome do modelo sugere candidatos, mas somente
+uma resposta XML válida confirma o endpoint e nenhum POST é feito aqui.
+A família Vue exige uma implementação de autenticação separada.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True)
+class ReadEndpoint:
+    view: str
+    tag: str
+    root: str
+    params: tuple[tuple[str, str], ...] = ()
+    request_type: str = "menuData"
+
+
+# Protocolos conhecidos por família, não garantias por firmware/operadora.
+FAMILY: dict[str, dict[str, ReadEndpoint]] = {
+    "f6640": {
+        "wifi_clients": ReadEndpoint("localNetStatus", "wlan_client_stat_lua.lua", "OBJ_WLAN_AD_ID"),
+        "lan_clients": ReadEndpoint("localNetStatus", "accessdev_landevs_lua.lua", "OBJ_ACCESSDEV_ID"),
+        "wan": ReadEndpoint(
+            "ethWanStatus", "wan_internetstatus_lua.lua", "ID_WAN_COMFIG",
+            (("TypeUplink", "2"), ("pageType", "1")),
+        ),
+    },
+    "h288a": {
+        "wifi_clients": ReadEndpoint("localNetStatus", "accessdev_ssiddev_lua.lua", "OBJ_ACCESSDEV_ID"),
+        "lan_clients": ReadEndpoint("localNetStatus", "accessdev_landevs_lua.lua", "OBJ_ACCESSDEV_ID"),
+        "wan": ReadEndpoint(
+            "ethWanStatus", "wan_internetstatus_lua.lua", "ID_WAN_COMFIG",
+            (("TypeUplink", "2"), ("pageType", "1")),
+        ),
+    },
+    "h388x": {
+        "wifi_clients": ReadEndpoint("localNetStatus", "accessdev_ssiddev_lua.lua", "OBJ_ACCESSDEV_ID"),
+        "lan_clients": ReadEndpoint("localNetStatus", "accessdev_landevs_lua.lua", "OBJ_ACCESSDEV_ID"),
+        "wan": ReadEndpoint(
+            "ethWanStatus", "wan_internet_lua.lua", "ID_WAN_COMFIG",
+            (("TypeUplink", "2"), ("pageType", "1")),
+        ),
+    },
+    "h2640": {
+        "wifi_clients": ReadEndpoint("localNetStatus", "accessdev_ssiddev_lua.lua", "OBJ_ACCESSDEV_ID"),
+        "lan_clients": ReadEndpoint("localNetStatus", "accessdev_landevs_lua.lua", "OBJ_ACCESSDEV_ID"),
+        "dsl": ReadEndpoint("dslWanStatus", "dsl_interface_status_lua.lua", "OBJ_DSLINTERFACE_ID"),
+    },
+    "vue": {
+        "wifi_clients": ReadEndpoint(
+            "", "vue_client_data", "OBJ_CLIENTS_ID",
+            request_type="vueData",
+        ),
+        "lan_clients": ReadEndpoint(
+            "localNetStatus", "localnet_lan_info_lua", "OBJ_LAN_INFO_ID",
+            request_type="vueData",
+        ),
+        "wan": ReadEndpoint(
+            "vue_home_device_data_no_update_sess", "vue_mainwan_data",
+            "ID_WAN_COMFIG", request_type="vueData",
+        ),
+    },
+}
+
+MODEL_FAMILY = {
+    "F6640": "f6640", "F6645P": "f6640", "F680": "f6640",
+    "F6600P": "f6640", "F8748": "f6640",
+    "H169A": "h288a", "H288A": "h288a", "H3600P": "h288a",
+    "H3640": "h288a", "H6645P": "h288a", "H6745": "h288a",
+    "H388X": "h388x", "H2640": "h2640",
+    "E2631": "vue", "SR7410": "vue",
+}
+
+# Não armazenar respostas XML nem campos de clientes no relatório estrutural.
+SENSITIVE_NAME = re.compile(
+    r"(password|passwd|secret|token|credential|key|serial|mac|ssid|"
+    r"host|ipaddress|imei|username|name)", re.I
+)
+
+
+def normalize_model(value: str | None) -> str:
+    return re.sub(r"[^A-Z0-9]", "", (value or "").upper())
+
+
+def find_family(model: str | None) -> tuple[str | None, str | None]:
+    candidate = normalize_model(model)
+    # Mais específico primeiro: H6645P antes de outros nomes parciais.
+    for key in sorted(MODEL_FAMILY, key=len, reverse=True):
+        if key in candidate:
+            return key, MODEL_FAMILY[key]
+    return None, None
+
+
+def catalog() -> dict[str, Any]:
+    return {
+        "models": [
+            {
+                "model": model,
+                "family": family,
+                "protocol": "vue" if family == "vue" else "thinklua",
+                "discovery": (
+                    "read_only_probe"
+                ),
+            }
+            for model, family in MODEL_FAMILY.items()
+        ],
+        "notes": (
+            "O catálogo mostra candidatos documentados pelo zte_tracker, "
+            "não valida compatibilidade de cada firmware. Probe é somente leitura."
+        ),
+    }
+
+
+def _fetch(zte, endpoint: ReadEndpoint) -> str:
+    """Executa o fluxo correto de GET para a família escolhida."""
+    if endpoint.request_type == "vueData":
+        if endpoint.view:
+            first = zte.session.get(
+                zte.base_url + "/",
+                params={"_type": "vueData", "_tag": endpoint.view},
+                timeout=10,
+            )
+            first.raise_for_status()
+        response = zte.session.get(
+            zte.base_url + "/",
+            params={"_type": "vueData", "_tag": endpoint.tag},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.text
+
+    zte.get_view(endpoint.view, Menu3Location=0)
+    return zte.get_menu(endpoint.tag, **dict(endpoint.params))
+
+
+def read_clients(zte, model: str, kind: str) -> list[dict[str, Any]]:
+    """Leitura de dispositivos normalizada para as telas existentes.
+
+    Esta função é local ao atendimento: não registra/salva IP, MAC, hostname
+    ou SSID em relatórios estruturais de suporte público.
+    """
+    if kind not in {"wifi_clients", "lan_clients"}:
+        raise ValueError("Tipo de cliente desconhecido")
+
+    selected, family = find_family(model)
+    if not family:
+        raise ValueError("O modelo não possui perfil de clientes.")
+
+    endpoint = FAMILY[family].get(kind)
+    if not endpoint:
+        raise RuntimeError("Endpoint não documentado nesta família.")
+
+    raw = _fetch(zte, endpoint)
+    _shape(raw, endpoint.root)  # valida XML e objeto esperado antes de ler.
+    root = ET.fromstring(raw)
+    clients = []
+    for entry in root.findall(f"{endpoint.root}/Instance"):
+        children = list(entry)
+        values = {}
+        for pos in range(len(children) - 1):
+            if children[pos].tag == "ParaName" and children[pos+1].tag == "ParaValue":
+                values[(children[pos].text or "").strip()] = (
+                    children[pos+1].text or ""
+                )
+        clients.append({
+            "hostname": values.get("HostName") or values.get("DeviceName") or "Desconhecido",
+            "ip": values.get("IPAddress") or values.get("IPAddr"),
+            "mac": values.get("MACAddress") or values.get("MacAddr"),
+            "ssid": values.get("ESSID") or values.get("AliasName") if kind == "wifi_clients" else None,
+            "interface": values.get("Interface") or values.get("AliasName") if kind == "lan_clients" else None,
+            "rssi": values.get("RSSI") if kind == "wifi_clients" else None,
+            "tempo_conectado": values.get("LinkTime"),
+        })
+    return clients
+
+
+def _shape(xml: str, expected_root: str) -> dict[str, Any]:
+    if not xml or "SessionTimeout" in xml or "login_need_refresh" in xml:
+        raise RuntimeError("Sessão expirada ou resposta vazia")
+
+    root = ET.fromstring(xml)
+    if root.tag != "ajax_response_xml_root":
+        raise RuntimeError("Resposta não é XML ThinkLua")
+
+    error = (root.findtext("IF_ERRORSTR") or "").strip()
+    if error and error.upper() not in {"SUCC", "SUCCESS", "0"}:
+        raise RuntimeError("Firmware não disponibilizou este menu")
+
+    result = {}
+    for node in root:
+        if not (node.tag.startswith(("OBJ_", "ID_"))):
+            continue
+        instances = node.findall("Instance")
+        fields = set()
+        for instance in instances:
+            children = list(instance)
+            for i, child in enumerate(children[:-1]):
+                if child.tag == "ParaName":
+                    field = (child.text or "").strip()
+                    if field and not SENSITIVE_NAME.search(field):
+                        fields.add(field)
+        result[node.tag] = {"records": len(instances), "fields": sorted(fields)}
+
+    # Menus podem retornar 0 clientes: objeto vazio ainda é evidência de suporte.
+    if expected_root not in result:
+        raise RuntimeError("Objeto esperado não encontrado no firmware")
+
+    return result
+
+
+def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
+    selected, family = find_family(model)
+    if family is None:
+        return {
+            "model": model, "supported": False, "read_only": True,
+            "reason": "Modelo sem perfil cadastrado; sem tentativa às cegas.",
+            "endpoints": {},
+        }
+
+    endpoints = {}
+    for name, endpoint in list(FAMILY[family].items())[:max(1, min(max_endpoints, 4))]:
+        try:
+            xml = _fetch(zte, endpoint)
+            # Faz a validação local mesmo quando implementação de ZTE mudar.
+            endpoints[name] = {
+                "available": True,
+                "structure": _shape(xml, endpoint.root),
+                "tag": endpoint.tag,
+            }
+        except Exception as exc:
+            # Não expor HTML, tokens ou payloads fornecidos pelo firmware.
+            endpoints[name] = {
+                "available": False,
+                "error_type": type(exc).__name__,
+                "tag": endpoint.tag,
+            }
+
+    return {
+        "model": selected, "family": family, "read_only": True,
+        "supported": any(x["available"] for x in endpoints.values()),
+        "endpoints": endpoints,
+        "notes": "Somente descoberta; escrita e backup requerem validação por firmware.",
+    }
+
+
+def mesh_summary(zte, model: str) -> dict[str, Any]:
+    """Consulta agregada da topologia sem retornar MAC/IP/nomes de clientes.
+
+    O endpoint JSON só é tentado nas famílias F6640/F6600P documentadas.
+    Nenhuma persistência de resposta bruta.
+    """
+    selected, family = find_family(model)
+    if family != "f6640":
+        return {
+            "model": selected or model,
+            "available": False,
+            "reason": "Topologia JSON não documentada para esta família.",
+        }
+
+    zte.get_view("mmTopology", Menu3Location=0)
+    response = zte.session.get(
+        zte.base_url + "/",
+        params={"_type": "menuData", "_tag": "topo_lua.lua"},
+        timeout=10,
+    )
+    response.raise_for_status()
+
+    # Este endpoint responde JSON, ao contrário dos outros menus ThinkLua.
+    # Não serializar a resposta bruta: pode conter dados identificáveis.
+    raw = response.text
+    if "SessionTimeout" in raw or raw.lstrip().lower().startswith("<html"):
+        raise RuntimeError("Sessão expirada ou menu Mesh não disponível.")
+
+    data = json.loads(raw)
+    if not isinstance(data, dict) or not isinstance(data.get("ad"), dict):
+        raise RuntimeError("Formato de topologia não reconhecido.")
+
+    devices = [
+        item for item in data["ad"].values()
+        if isinstance(item, dict) and item.get("MacAddr")
+    ]
+    access = {"lan": 0, "wifi_24": 0, "wifi_5": 0, "other": 0}
+    for item in devices:
+        band = {
+            "0": "lan", "1": "wifi_24", "2": "wifi_5"
+        }.get(str(item.get("AccessType", "")), "other")
+        access[band] += 1
+
+    return {
+        "model": selected, "available": True,
+        "agents": sum(
+            1 for item in data.get("slave", []) if isinstance(item, dict)
+        ),
+        "controller": isinstance(data.get("master"), dict),
+        "connected_devices": len(devices),
+        "access": access,
+        "note": "Resumo sem IP, MAC, SSID ou hostname; somente leitura.",
+    }

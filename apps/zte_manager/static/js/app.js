@@ -1,6 +1,7 @@
 const API_BASE = "/api";
 
 let ontConnected = false;
+let routerWriteEnabled = true;
 let currentHost = null;
 let currentAttendant = null;
 let currentProfile = null;
@@ -102,7 +103,8 @@ async function connectONT(
     username,
     password,
     https,
-    attendant
+    attendant,
+    modelHint = null
 ) {
     return apiRequest(
         "/connect",
@@ -113,7 +115,8 @@ async function connectONT(
                 username,
                 password,
                 https,
-                attendant
+                attendant,
+                model_hint: modelHint
             })
         }
     );
@@ -470,6 +473,10 @@ document
                 "attendantName"
             ).value.trim();
 
+            const modelHint = document.getElementById(
+                "zteModelHint"
+            )?.value || null;
+
             const button = document.getElementById(
                 "connectButton"
             );
@@ -495,9 +502,11 @@ document
                     username,
                     password,
                     https,
-                    attendant
+                    attendant,
+                    modelHint
                 );
 
+                routerWriteEnabled = response.writes_enabled !== false;
                 currentHost = response.host || ip;
                 currentAttendant = response.attendant || attendant || "default";
 
@@ -525,9 +534,17 @@ document
                     "connection-result connection-success"
                 );
 
-                result.textContent = (
-                    "Conectado com sucesso."
-                );
+                result.textContent = response.writes_enabled === false
+                    ? "Conectado no modo somente leitura. Diagnóstico por firmware disponível em Avançado."
+                    : "Conectado com sucesso.";
+
+                // Não disparar rotinas de configuração/dashboard da F670L
+                // contra firmwares cujo perfil ainda está em descoberta.
+                if (response.writes_enabled === false) {
+                    showToast("Modelo experimental: escrita desativada. Use Avançado para detectar endpoints.");
+                    openPage("advanced");
+                    return;
+                }
 
                 await loadProfile();
                 await loadAll();
@@ -615,6 +632,7 @@ document
 
             await disconnectONT();
 
+            routerWriteEnabled = true;
             currentHost = null;
             currentAttendant = null;
             currentProfile = null;

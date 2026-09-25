@@ -548,6 +548,69 @@ async function probeCapabilities() {
     }
 }
 
+async function loadMultimodelCatalog() {
+    const select = document.getElementById("multimodelSelect");
+    if (!select || select.dataset.loaded === "true") return;
+    const data = await apiRequest("/multimodel/catalog");
+    for (const item of data.models || []) {
+        const option = document.createElement("option");
+        option.value = item.model;
+        option.textContent = `${item.model} • ${item.protocol.toUpperCase()}`;
+        select.appendChild(option);
+    }
+    select.dataset.loaded = "true";
+}
+
+
+async function showMultimodelMesh() {
+    const output = document.getElementById("multimodelProbeOutput");
+    const select = document.getElementById("multimodelSelect");
+    setBusy(true, "Consultando topologia Mesh...");
+    try {
+        const result = await apiRequest("/multimodel/mesh", {
+            method: "POST",
+            body: JSON.stringify({ model: select?.value || null })
+        });
+        output.textContent = JSON.stringify(result, null, 2);
+        showToast(
+            result.available
+                ? "Resumo Mesh consultado. Nenhum dado pessoal exportado."
+                : (result.reason || "Topologia não disponível neste modelo.")
+        );
+    } catch (error) {
+        output.textContent = "Topologia indisponível para este firmware.";
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+async function probeMultimodel() {
+    const output = document.getElementById("multimodelProbeOutput");
+    const select = document.getElementById("multimodelSelect");
+    setBusy(true, "Identificando família do equipamento...");
+    try {
+        output.textContent = "Consultando endpoints somente leitura...";
+        const result = await apiRequest("/multimodel/probe", {
+            method: "POST",
+            body: JSON.stringify({ model: select?.value || null })
+        });
+        output.textContent = JSON.stringify(result, null, 2);
+        showToast(
+            result.supported
+                ? "Endpoint confirmado. Recursos de escrita exigem validação adicional."
+                : (result.reason || "Nenhum endpoint disponível para este firmware.")
+        );
+    } catch (error) {
+        output.textContent = "Não foi possível identificar o protocolo.";
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
+}
+
+
 async function exportFeatureShapes() {
     const results = advancedState.capabilityProbe?.features || [];
     const available = results
@@ -1630,12 +1693,19 @@ async function loadOperationsConsole() {
         return;
     }
 
-    const loaders = [
-        loadCapabilityCatalog,
-        loadDhcpOperations,
-        loadNatOperations,
-        loadHistory
-    ];
+    const loaders = routerWriteEnabled
+        ? [
+            loadCapabilityCatalog,
+            loadMultimodelCatalog,
+            loadDhcpOperations,
+            loadNatOperations,
+            loadHistory
+        ]
+        : [
+            loadCapabilityCatalog,
+            loadMultimodelCatalog,
+            loadHistory
+        ];
 
     for (const loader of loaders) {
         try {
@@ -1669,6 +1739,24 @@ function initAdvancedOperations() {
         ?.addEventListener(
             "click",
             probeCapabilities
+        );
+
+    document
+        .getElementById(
+            "multimodelMeshButton"
+        )
+        ?.addEventListener(
+            "click",
+            showMultimodelMesh
+        );
+
+    document
+        .getElementById(
+            "multimodelProbeButton"
+        )
+        ?.addEventListener(
+            "click",
+            probeMultimodel
         );
 
     document
