@@ -147,6 +147,8 @@ GET_PARAMS = {
 # Newly recovered XML objects from second capture. View-only HTML and JSON
 # routes are intentionally excluded from generic XML inspection.
 CAPTURED_GET_ROOTS: dict[str, str] = {
+    "wan_internetstatus_lua.lua": "ID_WAN_COMFIG",
+    "wan_internet_lua.lua": "ID_WAN_COMFIG",
     "dns_hostname_lua.lua": "",  # ALLDNSHOST is not OBJ XML
     "upnp_portmap_lua.lua": "OBJ_UPNPPORTMAP_ID",
     "route_routestaticipv4_lua.lua": "OBJ_ROUTESTATIC_ID",
