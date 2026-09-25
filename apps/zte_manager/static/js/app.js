@@ -4149,6 +4149,57 @@ document.addEventListener(
 // INIT
 // =========================================================
 
+async function restoreDesktopSession() {
+    // Navegação inesperada do WebView recria o estado JS, mas o singleton
+    // Python pode continuar conectado. Nunca pedir login novamente sem
+    // consultar a sessão local; não armazenar senha no navegador.
+    try {
+        const status = await apiRequest("/connection/status");
+        if (!status?.connected) {
+            openPage("connection");
+            return;
+        }
+
+        currentHost = status.host || null;
+        currentAttendant = status.attendant || "default";
+        routerWriteEnabled = status.writes_enabled !== false;
+
+        document.getElementById("connectedHost").textContent =
+            currentHost || "-";
+        document.getElementById("connectedAttendant").textContent =
+            `Atendente: ${currentAttendant}`;
+        document.getElementById("connectedModel").textContent =
+            status.model || "ZTE";
+        document.getElementById("dashboardProfileName").textContent =
+            currentAttendant;
+        document.getElementById("profileAttendant").textContent =
+            currentAttendant;
+
+        const topChip = document.getElementById("topDeviceChip");
+        if (topChip) {
+            topChip.classList.remove("hidden");
+        }
+
+        setConnectionStatus(true);
+        // Evitar novo loadAll() automático: 10+ consultas seguidas
+        // disputavam a sessão com o diagnóstico anterior. O usuário
+        // pode atualizar os dados depois do restabelecimento da UI.
+        openPage(routerWriteEnabled ? "dashboard" : "advanced");
+        showToast("Sessão local recuperada após atualização da interface.");
+    } catch (error) {
+        console.warn("Não foi possível consultar sessão local:", error);
+        // Erro temporário da API não equivale a logout remoto.
+        const message = document.getElementById("connectionResult");
+        if (message) {
+            message.className = "connection-result connection-error";
+            message.textContent =
+                "Servidor local indisponível. Aguarde e tente atualizar a interface.";
+        }
+        openPage("connection");
+    }
+}
+
+
 function initZteAutomatic() {
     if (window.__zteAutomaticInitialized) {
         return;
@@ -4158,13 +4209,12 @@ function initZteAutomatic() {
 
     loadUiZoom();
 
-    setConnectionStatus(
-        false
-    );
+    setConnectionStatus(false);
+    openPage("connection");
 
-    openPage(
-        "connection"
-    );
+    // O listener executa depois que todos os scripts foram avaliados:
+    // outra aba/rota do Vela não deve zerar uma sessão Python ativa.
+    void restoreDesktopSession();
 }
 
 
