@@ -71,72 +71,42 @@ async function managementCopyText(
     text,
     successMessage = "Conteúdo copiado."
 ) {
-    const value = String(
-        text ?? ""
-    );
-
+    const value = String(text ?? "");
     if (!value) {
-        showToast(
-            "Não há conteúdo para copiar."
-        );
-
+        showToast("Não há conteúdo para copiar.");
         return false;
     }
 
     try {
-        if (
-            navigator.clipboard
-            && window.isSecureContext
-        ) {
-            await navigator.clipboard.writeText(
-                value
-            );
+        // O execCommand/copy do QtWebEngine no Windows pode encerrar a
+        // janela nativa; usar o mesmo endpoint seguro do atendimento.
+        if (/Windows/i.test(navigator.userAgent)) {
+            await apiRequest("/desktop/clipboard", {
+                method: "POST",
+                body: JSON.stringify({ text: value })
+            });
+        } else if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
         } else {
-            throw new Error(
-                "Clipboard API indisponível."
-            );
+            throw new Error("API de clipboard indisponível.");
         }
+        showToast(successMessage);
+        return true;
     } catch (error) {
-        // Fallback importante para WebView/Qt e HTTP local, onde a
-        // Clipboard API pode ser bloqueada mesmo com interação do usuário.
-        const textarea = document.createElement(
-            "textarea"
-        );
-
-        textarea.value = value;
-        textarea.setAttribute(
-            "readonly",
-            ""
-        );
-        textarea.style.position = "fixed";
-        textarea.style.left = "-9999px";
-        textarea.style.top = "0";
-
-        document.body.appendChild(
-            textarea
-        );
-
-        textarea.focus();
-        textarea.select();
-
-        const copied = document.execCommand(
-            "copy"
-        );
-
-        textarea.remove();
-
-        if (!copied) {
-            throw error;
-        }
+        console.warn("Falha ao copiar no painel:", error);
+        // Não usar execCommand no Windows nem forçar o WebView a
+        // fechar. Seleção manual segura se não houver clipboard nativo.
+        const output = document.createElement("textarea");
+        output.value = value;
+        output.setAttribute("readonly", "");
+        output.style.cssText = "position:fixed;left:10px;bottom:10px;width:360px;max-width:90vw;height:90px;z-index:10000";
+        document.body.appendChild(output);
+        output.focus();
+        output.select();
+        showToast("Área de transferência indisponível. Pressione Ctrl+C no texto selecionado.");
+        return false;
     }
-
-    showToast(
-        successMessage
-    );
-
-    return true;
 }
-
 
 function managementRelevantNetworkResult() {
     const result = managementState.networkResult;
