@@ -99,6 +99,8 @@ function updateRequestStatus(errorMessage = null) {
 
 
 let ontConnected = false;
+// Impede que uma resposta antiga de restauração sobrescreva login/logout recente.
+let sessionEpoch = 0;
 let routerWriteEnabled = true;
 let currentHost = null;
 let currentAttendant = null;
@@ -572,6 +574,8 @@ document
         "submit",
         async event => {
             event.preventDefault();
+            sessionEpoch++;
+            let authenticated = false;
 
             const ip = document.getElementById(
                 "zteIp"
@@ -626,6 +630,10 @@ document
                     modelHint
                 );
 
+                if (!response || typeof response !== "object" || response.success !== true) {
+                    throw new Error("A API não confirmou a autenticação na ONT.");
+                }
+                authenticated = true;
                 routerWriteEnabled = response.writes_enabled !== false;
                 currentHost = response.host || ip;
                 currentAttendant = response.attendant || attendant || "default";
@@ -666,30 +674,35 @@ document
                     return;
                 }
 
-                await loadProfile();
-                await loadAll();
-
-                showToast(
-                    "ONT conectada com sucesso."
-                );
-
-                openPage(
-                    "dashboard"
-                );
+                openPage("dashboard");
+                // Falha em um perfil local não pode transformar login válido em logout.
+                try {
+                    await loadProfile();
+                } catch (profileError) {
+                    console.warn("Não foi possível carregar perfil local:", profileError);
+                    showToast("Conectado, mas o perfil do atendente não foi carregado.");
+                }
+                const summary = await loadAll();
+                if (summary.essentialLoaded === 0) {
+                    result.className = "connection-result connection-error";
+                    result.textContent = "Autenticado, mas as leituras principais não retornaram dados. Verifique a sessão e os erros das consultas.";
+                    showToast("Login efetuado, porém os dados da ONT não foram carregados.");
+                } else {
+                    showToast("ONT conectada com sucesso.");
+                }
             } catch (error) {
                 console.error(
                     error
                 );
 
-                setConnectionStatus(
-                    false
-                );
-
-                result.className = (
-                    "connection-result connection-error"
-                );
-
-                result.textContent = error.message;
+                // Uma falha de leitura posterior não desfaz o login no backend.
+                if (!authenticated) {
+                    setConnectionStatus(false);
+                }
+                result.className = "connection-result connection-error";
+                result.textContent = authenticated
+                    ? `Conectado, mas não foi possível carregar os dados: ${error.message}`
+                    : error.message;
             } finally {
                 setBusy(
                     false
@@ -745,6 +758,7 @@ document
     .addEventListener(
         "click",
         async () => {
+            sessionEpoch++;
             setBusy(
                 true,
                 "Encerrando sessão..."
@@ -804,6 +818,9 @@ async function loadDevice() {
         "/device/status"
     );
 
+    if (!data || typeof data !== "object" || !Object.keys(data).length || data.error) {
+        throw new Error(data?.error || "O equipamento não retornou dados de identificação.");
+    }
     document.getElementById(
         "deviceModel"
     ).textContent = data.modelo ?? "-";
@@ -914,6 +931,9 @@ async function loadOptical() {
             "/device/optical"
         );
 
+        if (!data || typeof data !== "object" || !Object.keys(data).length || data.error) {
+            throw new Error(data?.error || "A ONT não retornou dados ópticos.");
+        }
         const rx = normalizeOpticalPower(
             data.rx_power_dbm
         );
@@ -3952,10 +3972,14 @@ async function loadAll() {
         ];
 
         const failed = [];
+        let essentialLoaded = 0;
 
         for (const [name, loader] of loaders) {
             try {
                 await loader();
+                if (["equipamento", "óptico", "WAN"].includes(name)) {
+                    essentialLoaded++;
+                }
             } catch (error) {
                 failed.push({
                     name,
@@ -3985,15 +4009,14 @@ async function loadAll() {
             }
         }
 
-        if (!failed.length) {
-            showToast(
-                "Dados atualizados."
-            );
+        if (essentialLoaded === 0) {
+            showToast("Nenhuma leitura principal retornou dados. Verifique a sessão da ONT.");
+        } else if (!failed.length) {
+            showToast("Dados atualizados.");
         } else {
-            showToast(
-                `${failed.length} consulta(s) falharam. Veja o console.`
-            );
+            showToast(`${failed.length} consulta(s) falharam. Veja o console.`);
         }
+        return { essentialLoaded, failed: failed.map(item => item.name) };
     } finally {
         setRefreshBusy(
             false
@@ -4305,11 +4328,13 @@ document.addEventListener(
 // =========================================================
 
 async function restoreDesktopSession() {
+    const restoreEpoch = sessionEpoch;
     // Navegação inesperada do WebView recria o estado JS, mas o singleton
     // Python pode continuar conectado. Nunca pedir login novamente sem
     // consultar a sessão local; não armazenar senha no navegador.
     try {
         const status = await apiRequest("/connection/status");
+        if (restoreEpoch !== sessionEpoch) return;
         if (!status?.connected) {
             openPage("connection");
             return;
@@ -4346,9 +4371,27 @@ async function restoreDesktopSession() {
             ? requestedPage
             : (routerWriteEnabled ? "dashboard" : "advanced");
         openPage(destination);
-        showToast("Sessão local recuperada após atualização da interface.");
+        // /connection/status só recupera metadados. As informações do
+        // equipamento precisam ser consultadas novamente após o reload JS.
+        if (routerWriteEnabled) {
+            try {
+                await loadProfile();
+            } catch (profileError) {
+                console.warn("Perfil local indisponível após restauração:", profileError);
+            }
+            if (restoreEpoch !== sessionEpoch || !ontConnected) return;
+            const summary = await loadAll();
+            if (summary?.essentialLoaded === 0) {
+                showToast("Sessão local encontrada, mas a ONT não respondeu às leituras principais.");
+            } else {
+                showToast("Sessão e informações da ONT restauradas.");
+            }
+        } else {
+            showToast("Sessão somente leitura recuperada. Use Avançado para consultar o equipamento.");
+        }
     } catch (error) {
-        console.warn("Não foi possível consultar sessão local:", error);
+        if (restoreEpoch !== sessionEpoch) return;
+        console.warn("Falha ao recuperar sessão ou dados da ONT:", error);
         // Erro temporário da API não equivale a logout remoto.
         const message = document.getElementById("connectionResult");
         if (message) {
