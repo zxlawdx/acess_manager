@@ -60,12 +60,14 @@ class CapturedFormTests(unittest.TestCase):
         return self.workbench.preview(
             self.zte, tag="bpdu_lua.lua", instance_id="DEV.TEST.IF1",
             changes={"BPDUEnable": "1"}, host="192.0.2.10", revision="r1",
+            attendant="tech1",
         )
 
     def apply(self, nonce, **kwargs):
         return self.workbench.apply(
             self.zte, host=kwargs.get("host", "192.0.2.10"),
-            revision=kwargs.get("revision", "r1"), nonce=nonce,
+            revision=kwargs.get("revision", "r1"),
+            attendant=kwargs.get("attendant", "tech1"), nonce=nonce,
             confirmation=kwargs.get("confirmation", "APLICAR ROTA F6201B"),
             risk_ack=kwargs.get("risk_ack", True),
             original_post=self.zte.original_post,
@@ -132,6 +134,14 @@ class CapturedFormTests(unittest.TestCase):
         with self.assertRaisesRegex(PermissionError, "Nonce"):
             self.apply(preview["nonce"])
 
+    def test_attendant_switch_consumes_nonce_without_post(self):
+        preview = self.preview()
+        with self.assertRaisesRegex(PermissionError, "expirada"):
+            self.apply(preview["nonce"], attendant="tech2")
+        self.assertEqual(self.zte.post_count, 0)
+        with self.assertRaises(PermissionError):
+            self.apply(preview["nonce"], attendant="tech1")
+
     def test_risk_ack_is_mandatory_and_consumes_nonce(self):
         preview = self.preview()
         with self.assertRaisesRegex(PermissionError, "risco"):
@@ -158,12 +168,12 @@ class CapturedFormTests(unittest.TestCase):
             self.workbench.preview(
                 self.zte, tag="tr069_remotemgr_lua.lua",
                 instance_id="DEV.TEST.IF1", changes={"UserPassword": "x"},
-                host="192.0.2.10", revision="r1")
+                host="192.0.2.10", revision="r1", attendant="tech1")
         with self.assertRaisesRegex(ValueError, "0 ou 1"):
             self.workbench.preview(
                 self.zte, tag="bpdu_lua.lua",
                 instance_id="DEV.TEST.IF1", changes={"BPDUEnable": "2"},
-                host="192.0.2.10", revision="r1")
+                host="192.0.2.10", revision="r1", attendant="tech1")
 
     def test_opt_in_required_for_preview_and_apply(self):
         with patch.dict(os.environ, {"ZTE_F6201B_EXPERIMENTAL_WRITES": "0"}):
