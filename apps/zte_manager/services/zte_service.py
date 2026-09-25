@@ -1105,25 +1105,23 @@ class ZTEService:
             )
 
     def _f6201b_write_firmware(self):
-        # Indicação no formulário não basta: exigir leitura real do firmware
-        # imediatamente antes do preview/POST, usando a sessão autenticada.
-        selected, _ = multimodel_service.find_family(
-            self._selected_model or ""
-        )
-        if selected != "F6201B":
-            raise PermissionError("A sessão não corresponde ao perfil F6201B.")
+        """Hardware/firmware compatibility, never an employee permissions gate.
+
+        Selection in a dropdown is not proof of capabilities; the authenticated
+        device status is authoritative and rechecked for captured POSTs.
+        """
         device = self.get_client().device_status()
         detected, _ = multimodel_service.find_family(
             device.get("modelo") or ""
         )
         if detected != "F6201B":
-            raise PermissionError(
-                "O modelo da sessão não foi confirmado pelo próprio equipamento."
+            raise ValueError(
+                "A ONT não confirmou suporte ao adaptador F6201B."
             )
         firmware = device.get("firmware")
         if firmware != EXACT_FIRMWARE:
-            raise PermissionError(
-                "Este firmware não foi homologado para o adaptador experimental."
+            raise ValueError(
+                "Este firmware requer seu próprio mapeamento de comandos."
             )
         return firmware
 
@@ -1220,8 +1218,7 @@ class ZTEService:
     def f6201b_profile_preview(self, attendant):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            if attendant != self.current_attendant:
-                raise PermissionError("O perfil deve pertencer ao atendente atual.")
+            # "attendant" chooses a saved preset; it is not a permission role.
             return self._f6201b_profile.preview(
                 self.get_client(), host=self.current_host,
                 revision=self._session_revision, firmware=firmware,
@@ -1243,14 +1240,41 @@ class ZTEService:
     def f6201b_profile_apply_saved(self, attendant):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            if attendant != self.current_attendant:
-                raise PermissionError("Perfil de outro atendente.")
             return self._f6201b_profile.apply_saved(
                 self.get_client(), host=self.current_host,
                 revision=self._session_revision, firmware=firmware,
                 profile=profile_service.get_profile(attendant),
                 original_post=self._readonly_original_post,
                 dns_adapter=self._f6201b_dns,
+            )
+
+    def f6201b_ssid_update(self, ssid_id, config):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            return self._f6201b_writer.apply_changes(
+                self.get_client(), host=self.current_host, firmware=firmware,
+                ssid_id=ssid_id, config=config,
+                original_post=self._readonly_original_post,
+            )
+
+    def f6201b_dns_update(self, changes):
+        with self._lock:
+            firmware = self._f6201b_write_firmware()
+            return self._f6201b_dns.apply_changes(
+                self.get_client(), host=self.current_host,
+                firmware=firmware, changes=changes,
+                original_post=self._readonly_original_post,
+            )
+
+    def captured_workbench_update(self, tag, instance_id, changes):
+        with self._lock:
+            self._f6201b_write_firmware()
+            return self._captured_workbench.apply_changes(
+                self.get_client(), tag=tag, instance_id=instance_id,
+                changes=changes, host=self.current_host,
+                revision=self._session_revision,
+                attendant=self.current_attendant,
+                original_post=self._readonly_original_post,
             )
 
     # Comandos capturados com Strategy específica por formulário.
