@@ -255,6 +255,18 @@ def _form_fields(tag: str, row: dict, index: int, rows: list,
     schema = OBSERVED_APPLY_FIELDS[tag]
     merged = {k: str(v) for k, v in html.items() if k in schema}
     merged.update({k: str(v) for k, v in row.items() if k in schema})
+    # Some screens expose DNS/roaming settings in an additional object.
+    # Only borrow a value when exactly ONE object provides that field.
+    spec = FORM_SPECS[tag]
+    for name in schema:
+        if name in merged or name.startswith(("Btn_", "_InstID")):
+            continue
+        candidates = [
+            item[name] for root in spec.additional_roots
+            for item in objects.get(root, []) if name in item
+        ]
+        if len(candidates) == 1:
+            merged[name] = str(candidates[0])
     for key in schema:
         # The GET records for vector forms contain per-Instance fields, while
         # the original post uses corresponding indexed names. Zero-based,
@@ -279,6 +291,17 @@ def _form_fields(tag: str, row: dict, index: int, rows: list,
         if tag == "wlan_wps_lua.lua" and key == "SSID_InstID" and row.get(ID):
             merged[key] = str(row[ID])
             continue
+        if tag == "wan_internet_lua.lua":
+            # Prefer the actual WAN Instance over a placeholder in the
+            # page's initial form (the browser normally rewrites these).
+            match = re.fullmatch(
+                r"(IPAddress|SubnetMask|GateWay|DNS1|DNS2|DNS3)([0-3])", key
+            )
+            if match and match.group(1) in row:
+                octets = _split_ipv4(str(row[match.group(1)]))
+                if octets:
+                    merged[key] = octets[int(match.group(2))]
+                    continue
         if key == "_InstNum":
             expected = {
                 "Localnet_LanDevDHCPSource_lua.lua": 12,
