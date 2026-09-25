@@ -179,6 +179,19 @@ class ZTEService:
                 (F6600PAdapter, F670LAdapter),
             )
 
+            if not self._zte.writes_enabled:
+                # Defesa em profundidade: as APIs de alguns firmwares
+                # usam POST direto fora de post_menu (backup, reboot etc.).
+                # Bloquear no transporte evita que um botão antigo faça
+                # alterações por acidente no equipamento recém-cadastrado.
+                def read_only_post(*args, **kwargs):
+                    raise PermissionError(
+                        "Sessão de descoberta somente leitura. "
+                        "POST bloqueado até existir adaptador de escrita validado."
+                    )
+
+                self._zte.session.post = read_only_post
+
             self._capability_service = CapabilityService(
                 self._zte,
                 self._adapter,
