@@ -50,7 +50,11 @@ class FakeONT:
             self.current["UserName"] = "cipher-username"
             self.current["Password"] = "cipher-password"
         if tag == "Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua":
-            self.current["IPAddr"] = "192.0.2.1"
+            self.current.update({
+                "IPAddr": "192.0.2.1", "SubMask": "255.255.255.0",
+                "MinAddress": "192.0.2.100",
+                "MaxAddress": "192.0.2.200", "IPRouters": "192.0.2.1",
+            })
         self.objects = {self.spec.root: [self.current]}
         self.objects.update(more_objects or {})
 
