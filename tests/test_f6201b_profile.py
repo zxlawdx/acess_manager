@@ -2,6 +2,7 @@
 import os
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qsl
 
 from apps.zte_manager.services.f6201b_profile import (
     ExperimentalF6201BProfile, RADIO_SCHEMA,
@@ -209,6 +210,88 @@ class BatchTests(unittest.TestCase):
 
         self.assertTrue(result["success"], result)
         self.assertEqual(captured["AutoChRange"], "0")
+
+    def test_oneclick_profile_executes_real_form_post_and_readback(self):
+        """Exercise actual post_menu encoding, fake network and readback."""
+        self.profile = {
+            "wifi": {"2.4GHz": {"tx_power": "75%"}},
+            "dns": {"ipv4_1": "1.1.1.1", "ipv4_2": "9.9.9.9"},
+        }
+        self.zte.base_url = "http://192.0.2.31"
+        self.zte.session_tmp_token = "session-test"
+        self.zte.integrity_check = False
+        self.zte.public_key_pem = None
+        self.zte._validar_resposta = lambda body: self.assertIn(
+            "<IF_ERRORID>0</IF_ERRORID>", body
+        )
+        transport_log = []
+
+        def original_transport(url, *, params, data, headers, timeout):
+            fields = parse_qsl(data, keep_blank_values=True)
+            transport_log.append((params, fields))
+            self.assertEqual(params["_tag"], "wlan_wlanbasicadconf_lua.lua")
+            self.assertEqual(tuple(key for key, _ in fields), RADIO_SCHEMA)
+            self.assertEqual(dict(fields)["_sessionTOKEN"], "session-test")
+            self.assertEqual(dict(fields)["TxPower"], "75%")
+            self.zte._values["TxPower"] = dict(fields)["TxPower"]
+
+            class Response:
+                status_code = 200
+                text = ("<ajax_response_xml_root><IF_ERRORID>0</IF_ERRORID>"
+                        "</ajax_response_xml_root>")
+                url = "http://192.0.2.31/"
+                reason = "OK"
+
+            return Response()
+
+        with patch.dict(os.environ, {OPT_IN_ENV: "1"}):
+            report = self.engine.apply_saved(
+                self.zte, profile=self.profile,
+                original_post=original_transport, **self.kw
+            )
+        self.assertTrue(report["success"], report)
+        self.assertTrue(report["verified"])
+        self.assertFalse(report["noop"])
+        self.assertEqual(len(transport_log), 1)
+        self.assertIs(self.zte.session.post, self.zte.session.blocked)
+        self.assertFalse(self.zte.writes_enabled)
+
+    def test_oneclick_auto_channel_already_configured_is_noop(self):
+        self.zte._values["Channel"] = "1"
+        self.profile = {
+            "wifi": {"2.4GHz": {"auto_channel": True, "tx_power": "50%"}},
+            "dns": {"ipv4_1": "1.1.1.1", "ipv4_2": "9.9.9.9"},
+        }
+        with patch.dict(os.environ, {OPT_IN_ENV: "1"}), patch(
+            "apps.zte_manager.services.f6201b_profile.post_menu"
+        ) as post:
+            report = self.engine.apply_saved(
+                self.zte, profile=self.profile,
+                original_post=self.zte.session.blocked, **self.kw
+            )
+        self.assertTrue(report["success"])
+        self.assertTrue(report["noop"])
+        self.assertTrue(report["verified"])
+        post.assert_not_called()
+
+    def test_oneclick_stops_without_second_network_post_on_uncertain_write(self):
+        self.profile = {
+            "wifi": {"2.4GHz": {"tx_power": "75%"}},
+            "dns": {"ipv4_1": "1.1.1.1", "ipv4_2": "9.9.9.9"},
+        }
+        with patch.dict(os.environ, {OPT_IN_ENV: "1"}), patch(
+            "apps.zte_manager.services.f6201b_profile.post_menu",
+            side_effect=TimeoutError("synthetic timeout")
+        ) as post:
+            report = self.engine.apply_saved(
+                self.zte, profile=self.profile,
+                original_post=self.zte.session.blocked, **self.kw
+            )
+        self.assertFalse(report["success"])
+        self.assertEqual(report["failed_stage"], "Wi-Fi 2.4GHz")
+        post.assert_called_once()
+        self.assertIs(self.zte.session.post, self.zte.session.blocked)
+        self.assertFalse(self.zte.writes_enabled)
 
     def test_missing_live_form_field_fails_before_any_write(self):
         del self.zte._values["PreambleType"]
