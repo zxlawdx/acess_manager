@@ -17,6 +17,7 @@ from apps.zte_manager.services.attendance_report_service import (
 )
 from apps.zte_manager.services.capability_service import CapabilityService
 from apps.zte_manager.services import multimodel_service
+from apps.zte_manager.services import model_diagnostic_service
 from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -174,10 +175,11 @@ class ZTEService:
             from apps.zte_manager.model.device_adapters import (
                 F6600PAdapter, F670LAdapter,
             )
+            # Modelos sem identificação confirmada permanecem READ ONLY.
             self._zte.writes_enabled = isinstance(
                 self._adapter,
                 (F6600PAdapter, F670LAdapter),
-            )
+            ) and bool(detected_model or model_hint)
 
             if not self._zte.writes_enabled:
                 # Defesa em profundidade: as APIs de alguns firmwares
@@ -940,28 +942,44 @@ class ZTEService:
     def multimodel_catalog(self):
         return multimodel_service.catalog()
 
+    def _confirmed_probe_model(self, requested=None):
+        """Não sondar endpoints de OUTRA família no equipamento conectado."""
+        active = (
+            self._device_info.get("modelo")
+            or self._device_info.get("model")
+            or self._selected_model
+            or ""
+        )
+        actual, actual_family = multimodel_service.find_family(active)
+        proposed, proposed_family = multimodel_service.find_family(requested)
+        if requested and actual and (
+            proposed != actual or proposed_family != actual_family
+        ):
+            raise ValueError(
+                "Modelo informado diverge do modelo desta sessão. "
+                "Reconecte escolhendo o perfil correto."
+            )
+        return active or requested or ""
+
     def multimodel_mesh(self, model=None):
         with self._lock:
-            selected = (
-                model or self._selected_model
-                or self._device_info.get("modelo") or ""
-            )
+            selected = self._confirmed_probe_model(model)
             return multimodel_service.mesh_summary(
                 self.get_client(), selected
             )
 
     def multimodel_probe(self, model=None):
         with self._lock:
-            selected = (
-                model
-                or self._selected_model
-                or self._device_info.get("modelo")
-                or self._device_info.get("model")
-                or ""
-            )
+            selected = self._confirmed_probe_model(model)
             return multimodel_service.probe(
-                self.get_client(),
-                selected,
+                self.get_client(), selected,
+            )
+
+    def multimodel_diagnostic(self, model=None):
+        with self._lock:
+            selected = self._confirmed_probe_model(model)
+            return model_diagnostic_service.diagnostic(
+                self.get_client(), selected,
             )
 
     def capability_shape(self, feature):
