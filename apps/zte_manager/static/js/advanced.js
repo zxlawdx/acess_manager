@@ -1899,6 +1899,11 @@ async function loadOperationsConsoleInternal() {
     for (const loader of loaders) {
         try {
             await loader();
+            // Mostrar resultado de detecção antes de carregamentos de NAT
+            // ou histórico, que são opcionais e podem demorar neste firmware.
+            if (loader === loadMultimodelCatalog) {
+                await autoDiscoverTracker();
+            }
         } catch (error) {
             console.warn(
                 "Operations suite:",
@@ -1908,10 +1913,6 @@ async function loadOperationsConsoleInternal() {
     }
 
     advancedState.loaded = true;
-
-    // O usuário não deve precisar adivinhar que é preciso clicar para
-    // detectar modelo. O levantamento completo permanece sob demanda.
-    await autoDiscoverTracker();
 }
 
 
