@@ -136,8 +136,10 @@
                         <div class="form-group"><label>Nome da rede</label>
                             <input data-field="ssid" maxlength="32" value="${safe(network.ssid || "")}"
                                    ${canEdit ? "" : "readonly"} required></div>
-                        <div class="form-group"><label>Segurança</label>
-                            <input value="Preservada pelo firmware" disabled></div>
+                        <div class="form-group"><label>Nova senha Wi-Fi</label>
+                            <input data-field="password" type="password" autocomplete="new-password"
+                                   minlength="8" maxlength="63" placeholder="Vazio = manter a senha atual"
+                                   ${canEdit ? "" : "disabled"}></div>
                     </div>
                     <div class="switch-row">
                         <label class="switch-field"><span>SSID ativo</span>
@@ -148,6 +150,17 @@
                             <span class="switch"><input data-field="broadcast" type="checkbox"
                                 ${network.broadcast ? "checked" : ""} ${canEdit ? "" : "disabled"}>
                                 <span class="switch-slider"></span></span></label>
+                    </div>
+                    <div class="form-grid two-fields f6201b-extra-fields">
+                        <label class="switch-field"><span>Isolamento de clientes</span>
+                          <span class="switch"><input data-field="isolation" type="checkbox"
+                            ${network.isolation ? "checked" : ""} ${canEdit ? "" : "disabled"}>
+                          <span class="switch-slider"></span></span>
+                        </label>
+                        <div class="form-group"><label>Máximo de clientes</label>
+                          <input data-field="max_clients" type="number" min="1" max="64"
+                            value="${safe(network.max_clients || 32)}" ${canEdit ? "" : "disabled"}>
+                        </div>
                     </div>
                     <div class="f6201b-inline-result" aria-live="polite"></div>
                     <div class="form-footer">
@@ -172,7 +185,15 @@
         const name = form.querySelector('[data-field="ssid"]').value;
         const enabled = form.querySelector('[data-field="enabled"]').checked;
         const broadcast = form.querySelector('[data-field="broadcast"]').checked;
+        const isolation = form.querySelector('[data-field="isolation"]').checked;
+        const maxClients = Number(form.querySelector('[data-field="max_clients"]').value);
+        const password = form.querySelector('[data-field="password"]').value;
         const config = {};
+        if (password) config.password = password;
+        if (isolation !== Boolean(original.isolation))
+            config.isolation = isolation;
+        if (maxClients !== Number(original.max_clients || 32))
+            config.max_clients = maxClients;
         if (name !== original.ssid) config.ssid = name;
         if (enabled !== original.enabled) config.enabled = enabled;
         if (broadcast !== original.broadcast) config.broadcast = broadcast;
@@ -185,6 +206,8 @@
             const proposal = await apiRequest("/f6201b/write/preview", {
                 method:"POST",body:JSON.stringify({ssid_id:id,config})
             });
+            // Never leave new Wi-Fi password in the live form after preflight.
+            form.querySelector('[data-field="password"]').value = "";
             const actual = Object.entries(proposal.changes || {}).map(
                 ([name,item]) => name + ": " + item.before + " → " + item.after
             ).join("\n");
