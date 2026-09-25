@@ -245,6 +245,18 @@ def connection_status(context=None):
         "connected": zte_service.connected,
         "attendant": zte_service.current_attendant,
         "host": zte_service.current_host,
+        # Estado para recuperar a SPA após reload do WebView.
+        # Nunca retornar credenciais, cookies ou token da ONT.
+        "model": (
+            zte_service._device_info.get("modelo")
+            or zte_service._selected_model
+        ),
+        "firmware": zte_service._device_info.get("firmware"),
+        "writes_enabled": (
+            bool(getattr(zte_service._zte, "writes_enabled", True))
+            if zte_service.connected
+            else False
+        ),
     }
 
 
