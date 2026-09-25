@@ -623,6 +623,8 @@ function renderTrackerDiscovery(data) {
 
 let discoveryBootPromise = null;
 let discoveryCatalogHost = null;
+let discoveryCatalogRevision = null;
+let trackerSessionGeneration = 0;
 
 // O bootstrap não consulta a ONT: a lista de modelos precisa aparecer mesmo
 // se outro diagnóstico estiver segurando o contexto HTTP do equipamento.
@@ -631,15 +633,18 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
     const info = document.getElementById("trackerDiscoveryStatus");
     if (!select) return null;
     if (!refresh && select.dataset.loaded === "true"
-        && discoveryCatalogHost === currentHost) return null;
+        && discoveryCatalogHost === currentHost &&
+        discoveryCatalogRevision === window.currentZteRevision) return null;
     if (discoveryBootPromise) return discoveryBootPromise;
     if (info) info.textContent = "Lendo o estado da sessão local...";
 
+    const startGeneration = trackerSessionGeneration;
     discoveryBootPromise = (async () => {
         // O servidor não realiza I/O com o roteador nesta rota.
         const response = await discoveryRequest("/discovery/bootstrap", {
             timeoutMs: 10000
         });
+        if (startGeneration !== trackerSessionGeneration) return response;
         if (response.error) throw new Error(response.error);
         if (!response.connected) {
             if (info) info.textContent =
@@ -658,15 +663,30 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
 
         // O backend conhece o modelo selecionado no LOGIN. Nunca mudar
         // silenciosamente o perfil de uma sessão já autenticada.
-        trackerDetectedModel = response.model || response.detected_model || null;
-        const normalized = String(trackerDetectedModel || "").toUpperCase();
+        const detected = String(response.detected_model || "").toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+        const selected = String(response.model || "").toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+        if (detected && detected !== "ZTE" && selected && selected !== detected) {
+            trackerDetectedModel = null;
+            trackerSelectedFamily = null;
+            if (info) info.textContent =
+                "Modelo escolhido diferente do detectado. Reconecte para corrigir.";
+            return response;
+        }
+        trackerDetectedModel = detected && detected !== "ZTE"
+            ? response.detected_model : response.model || null;
+        window.currentZteRevision = response.session_revision || "";
+        const normalized = String(trackerDetectedModel || "").toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
         const matched = (response.catalog?.models || []).find(item =>
-            normalized.includes(item.model.toUpperCase())
+            normalized === item.model.toUpperCase().replace(/[^A-Z0-9]/g, "")
         );
         trackerSelectedFamily = matched?.family || null;
         if (matched) select.value = matched.model;
         select.dataset.loaded = "true";
         discoveryCatalogHost = currentHost;
+        discoveryCatalogRevision = response.session_revision || null;
 
         const badge = document.getElementById("adapterBadge");
         if (badge) badge.textContent = trackerDetectedModel
@@ -732,7 +752,7 @@ async function discoveryRequest(endpoint, {
 // páginas e competir com o login/diagnóstico do firmware.
 function autoDiscoverTracker() {
     if (!ontConnected || !trackerDetectedModel) return Promise.resolve();
-    const key = `${currentHost || ""}:${trackerDetectedModel}`;
+    const key = `${window.currentZteRevision || ""}:${currentHost || ""}:${trackerDetectedModel}`;
     if (trackerQuickScanKey === key) return trackerQuickScanPromise || Promise.resolve();
     trackerQuickScanKey = key;
     trackerQuickScanPromise = probeMultimodel({ quick: true })
@@ -759,8 +779,32 @@ async function runMultimodelDiagnostic() {
     }
     modelDiagnosticRunning = true;
     if (button) button.disabled = true;
-    const family = advancedState.trackerProbe?.family
-        || trackerSelectedFamily;
+    // Reconsultar identificação autoritativa nesta sessão. Não usar o
+    // trackerProbe possivelmente carregado antes de trocar de ONT.
+    let bootstrap;
+    try {
+        bootstrap = await discoveryRequest("/discovery/bootstrap");
+        if (!bootstrap.connected) throw new Error("Sessão não conectada");
+        const detected = String(bootstrap.detected_model || "").toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+        const selected = String(bootstrap.model || "").toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+        if (detected && detected !== "ZTE" && selected !== detected)
+            throw new Error("Perfil divergente do modelo detectado");
+        trackerDetectedModel = detected && detected !== "ZTE"
+            ? bootstrap.detected_model : bootstrap.model;
+    } catch (error) {
+        modelDiagnosticRunning = false;
+        if (button) button.disabled = false;
+        showToast("Identificação atual indisponível: " + error.message);
+        return;
+    }
+    const normalized = String(trackerDetectedModel || "").toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+    const profile = (bootstrap.catalog?.models || []).find(
+        item => item.model.toUpperCase().replace(/[^A-Z0-9]/g, "") === normalized
+    );
+    const family = profile?.family || null;
     // Consultar somente páginas documentadas para a família, em vez de
     // gastar 10-20 segundos em cada menu que não existe na F6600P.
     const profiles = {
@@ -876,6 +920,31 @@ async function showMultimodelMesh() {
     }
 }
 
+
+document.addEventListener("zte:session-changed", () => {
+    trackerSessionGeneration++;
+    trackerQuickScanKey = null;
+    trackerQuickScanPromise = null;
+    trackerDetectedModel = null;
+    trackerSelectedFamily = null;
+    discoveryBootPromise = null;
+    discoveryCatalogHost = null;
+    discoveryCatalogRevision = null;
+    window.currentZteRevision = null;
+    advancedState.capabilities = null;
+    advancedState.capabilityProbe = null;
+    advancedState.trackerProbe = null;
+    const select = document.getElementById("multimodelSelect");
+    if (select) {
+        select.dataset.loaded = "false";
+        select.replaceChildren(new Option("Detectar automaticamente", ""));
+    }
+    for (const id of ["trackerCapabilityGrid", "multimodelProbeOutput"]) {
+        document.getElementById(id)?.replaceChildren();
+    }
+    const status = document.getElementById("trackerDiscoveryStatus");
+    if (status) status.textContent = "Aguardando identificação da ONT conectada.";
+});
 
 let trackerProbeBusy = false;
 
