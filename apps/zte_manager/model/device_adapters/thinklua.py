@@ -318,6 +318,11 @@ class MultiFamilyReadOnlyAdapter(ThinkLuaAdapter):
     @property
     def features(self) -> dict[str, FeatureSpec]:
         _, family = find_family(self.model)
+        # Gateway de capabilities trabalha com menuView/menuData; Vue usa
+        # vueData e deve ser detectado apenas pela rota multimodel/probe.
+        if family == "vue":
+            return {}
+
         endpoints = FAMILY.get(family or "", {})
         labels = {
             "wifi_clients": "Clientes Wi-Fi (inspeção)",
