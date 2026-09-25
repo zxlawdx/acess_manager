@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from apps.zte_manager.services.f6201b_evidence import OBSERVED_APPLY_FIELDS
+from apps.zte_manager.model.zte_configuration import zte_security
 from apps.zte_manager.services.f6201b_full_forms import (
     FORM_SPECS, FullCapturedForms, _assemble, _form_fields, _load,
 )
@@ -54,7 +55,17 @@ class FakeONT:
                 "IPAddr": "192.0.2.1", "SubMask": "255.255.255.0",
                 "MinAddress": "192.0.2.100",
                 "MaxAddress": "192.0.2.200", "IPRouters": "192.0.2.1",
+                "DNSServer1": "1.1.1.1", "DNSServer2": "9.9.9.9",
             })
+            self.encoded = (
+                "IPAddr", "MinAddress", "MaxAddress",
+                "DNSServer1", "DNSServer2",
+            )
+            for field in self.encoded:
+                self.current[field] = zte_security.aes_encrypt_value(
+                    self.current[field], self.session_tmp_token,
+                    self.session_tmp_token[::-1],
+                )
         self.objects = {self.spec.root: [self.current]}
         self.objects.update(more_objects or {})
 
