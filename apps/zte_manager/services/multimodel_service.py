@@ -57,7 +57,7 @@ FAMILY: dict[str, dict[str, ReadEndpoint]] = {
     },
     "vue": {
         "wifi_clients": ReadEndpoint(
-            "localNetStatus", "vue_client_data", "OBJ_CLIENTS_ID",
+            "", "vue_client_data", "OBJ_CLIENTS_ID",
             request_type="vueData",
         ),
         "lan_clients": ReadEndpoint(
