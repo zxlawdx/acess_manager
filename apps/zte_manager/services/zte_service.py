@@ -969,8 +969,17 @@ class ZTEService:
                 "O perfil solicitado não corresponde ao modelo identificado "
                 "pelo equipamento. Reconecte escolhendo o perfil correto."
             )
-        if requested and selected and (
-            proposed != selected or proposed_family != selected_family
+        if requested and (
+            (
+                selected and (
+                    proposed != selected or proposed_family != selected_family
+                )
+            )
+            or (
+                not selected and self._selected_model
+                and multimodel_service.normalize_model(requested)
+                != multimodel_service.normalize_model(self._selected_model)
+            )
         ):
             raise ValueError(
                 "O perfil solicitado difere do escolhido na conexão. "
