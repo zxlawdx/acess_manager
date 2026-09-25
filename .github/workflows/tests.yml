@@ -41,6 +41,7 @@ jobs:
           node --check apps/zte_manager/static/js/support_diagnostics.js
           node --check apps/zte_manager/static/js/management.js
           node --check apps/zte_manager/static/js/adaptive_firmware.js
+          node --check apps/zte_manager/static/js/f6201b_editor.js
 
       - name: Verify loading overlay behavior
         run: node tests/test_loading_overlay.cjs
