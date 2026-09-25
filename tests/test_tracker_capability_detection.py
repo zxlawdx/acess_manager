@@ -34,6 +34,20 @@ class FakeONT:
 
 
 class TrackerCapabilityDetectionTests(unittest.TestCase):
+    def test_probe_pagination_keeps_candidate_status(self):
+        response = (
+            "<ajax_response_xml_root><IF_ERRORSTR>SUCC</IF_ERRORSTR>"
+            "<OBJ_ACCESSDEV_ID><Instance /></OBJ_ACCESSDEV_ID>"
+            "</ajax_response_xml_root>"
+        )
+        result = probe(FakeONT(response), "H288A", max_endpoints=2, start=1)
+        self.assertEqual(result["next_offset"], 3)
+        self.assertEqual(result["total_candidates"], len(FAMILY["h288a"]))
+        self.assertNotIn("wifi_clients", result["endpoints"])
+        self.assertIn("wifi_clients", {
+            item["feature"] for item in result["candidate_features"]
+        })
+
     def test_full_tracker_inventory_including_sr7110(self):
         expected = {
             "F6640", "F6645P", "F680", "F6600P", "F8748",
@@ -84,7 +98,9 @@ class TrackerCapabilityDetectionTests(unittest.TestCase):
         js = (ROOT / "apps/zte_manager/static/js/advanced.js").read_text("utf8")
         template = (ROOT / "apps/zte_manager/templates/index.html").read_text("utf8")
         self.assertIn("autoDiscoverTracker()", js)
-        self.assertIn("max_endpoints: quick ? 2 : 10", js)
+        self.assertIn("max_endpoints: 2", js)
+        self.assertIn("start: offset", js)
+        self.assertIn("offset < total", js)
         self.assertIn("renderTrackerDiscovery(result)", js)
         self.assertIn('id="trackerCapabilityGrid"', template)
         self.assertIn('id="capabilityGrid"', template)
