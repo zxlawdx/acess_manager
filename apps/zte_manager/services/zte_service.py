@@ -1141,12 +1141,11 @@ class ZTEService:
 
     def f6201b_write_status(self):
         with self._lock:
-            selected, _ = multimodel_service.find_family(
-                self._selected_model or ""
+            detected, _ = multimodel_service.find_family(
+                self._device_info.get("modelo") or ""
             )
-            if selected != "F6201B":
-                raise ValueError("Conecte um F6201B primeiro.")
-            # Somente metadados em memória: status não acessa o roteador.
+            if detected != "F6201B":
+                raise ValueError("A ONT conectada não foi identificada como F6201B.")
             return self._f6201b_writer.capabilities(
                 self._device_info.get("firmware")
             )
