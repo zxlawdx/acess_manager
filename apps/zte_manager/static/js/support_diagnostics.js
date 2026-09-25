@@ -1462,6 +1462,7 @@ const firmwareDiagnosticState = {
     host: null,
     model: null,
     options: [],
+    source: "multimodel",
     probeRunning: false,
     scanComplete: false
 };
@@ -1543,7 +1544,7 @@ function renderFirmwareDiagnosticOptions() {
         input.checked = option.confirmed && (option.justConfirmed || selected.size === 0 || selected.has(option.name));
         option.justConfirmed = false;
         const text = document.createElement("span");
-        text.textContent = `${FIRMWARE_DIAGNOSTIC_LABELS[option.name] || option.name} — ${option.confirmed ? "confirmado" : "candidato (não testado/indisponível)"}`;
+        text.textContent = `${option.label || FIRMWARE_DIAGNOSTIC_LABELS[option.name] || option.name} — ${option.confirmed ? "confirmado" : "candidato (não testado/indisponível)"}`;
         label.append(text, input);
         grid.append(label);
     }
@@ -1579,9 +1580,22 @@ async function loadFirmwareDiagnosticOptions() {
         firmwareDiagnosticState.host = currentHost;
         firmwareDiagnosticState.model = model;
         firmwareDiagnosticState.scanComplete = false;
+        firmwareDiagnosticState.source = "multimodel";
         firmwareDiagnosticState.options = (entry?.candidate_features || [])
             .filter(name => FIRMWARE_DIAGNOSTIC_SECTIONS[name])
             .map(name => ({ name, confirmed: false }));
+        // Para a F670L, consultar o adaptador nativo; nunca declarar
+        // operações perigosas como opções de diagnóstico.
+        if (!entry && bootstrap.writes_enabled) {
+            const nativeCatalog = await apiRequest("/device/capabilities");
+            firmwareDiagnosticState.source = "native";
+            firmwareDiagnosticState.options = Object.entries(nativeCatalog?.features || {})
+                .filter(([name, meta]) => !meta.dangerous
+                    && !["native_speedtest", "dns_lookup"].includes(name))
+                .map(([name, meta]) => ({
+                    name, label: meta.label || name, confirmed: false
+                }));
+        }
         renderFirmwareDiagnosticOptions();
         if (!entry) {
             panel.querySelector("#firmwareDiagnosticStatus").textContent =
@@ -1612,6 +1626,35 @@ async function detectFirmwareDiagnosticOptions() {
     let stopped = false;
     setBusy(true, "Validando recursos disponíveis (somente GET)...");
     try {
+        if (firmwareDiagnosticState.source === "native") {
+            // O adaptador nativo oferece recursos próprios da F670L.
+            // Limitar a 12 consultas por ação, em lotes de dois.
+            const features = firmwareDiagnosticState.options.slice(0, 12);
+            for (let index = 0; index < features.length; index += 2) {
+                const batch = await discoveryRequest("/device/capabilities/probe", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        features: features.slice(index, index + 2).map(item => item.name)
+                    }),
+                    timeoutMs: 55000
+                });
+                for (const item of batch.features || []) {
+                    const option = firmwareDiagnosticState.options.find(
+                        entry => entry.name === item.feature
+                    );
+                    if (option) {
+                        option.justConfirmed = !option.confirmed && item.available;
+                        option.confirmed = item.available === true;
+                    }
+                }
+                renderFirmwareDiagnosticOptions();
+            }
+            firmwareDiagnosticState.scanComplete = true;
+            const confirmed = features.filter(item => item.confirmed).length;
+            status.textContent = "Adaptador nativo: " + confirmed + " recursos confirmados."; 
+            result.textContent = "Selecione os recursos confirmados para consultar sua estrutura.";
+            return;
+        }
         do {
             // Um lote por vez: o firmware compartilha contexto menuView/menuData.
             const batch = await discoveryRequest("/multimodel/probe", {
@@ -1694,13 +1737,24 @@ async function runSelectedFirmwareDiagnostic() {
             if (host !== currentHost) break;
             const section = FIRMWARE_DIAGNOSTIC_SECTIONS[feature];
             try {
-                const data = await discoveryRequest("/multimodel/diagnostic", {
-                    method: "POST",
-                    body: JSON.stringify({ model: firmwareDiagnosticState.model, section }),
-                    timeoutMs: 48000
-                });
-                Object.assign(report.sections, data.sections || {});
-                if (data.reason) report.errors[section] = data.reason;
+                if (firmwareDiagnosticState.source === "native") {
+                    // Shape não retorna valores de clientes ou credenciais.
+                    const data = await apiRequest(
+                        "/features/shape?feature=" + encodeURIComponent(feature)
+                    );
+                    report.sections[feature] = {
+                        available: data.available === true,
+                        objects: data.objects || {}
+                    };
+                } else {
+                    const data = await discoveryRequest("/multimodel/diagnostic", {
+                        method: "POST",
+                        body: JSON.stringify({ model: firmwareDiagnosticState.model, section }),
+                        timeoutMs: 48000
+                    });
+                    Object.assign(report.sections, data.sections || {});
+                    if (data.reason) report.errors[section] = data.reason;
+                }
             } catch (error) {
                 report.errors[section] = error.message;
                 if (String(error.message).includes("passou de")) break;
