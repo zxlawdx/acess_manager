@@ -141,6 +141,8 @@ class ExperimentalF6201BWrites:
                 "ssid": ap.get("ESSID") or "",
                 "enabled": ap.get("Enable") == "1",
                 "broadcast": ap.get("ESSIDHideEnable") != "1",
+                "isolation": ap.get("VapIsolationEnable") == "1",
+                "max_clients": int(ap.get("MaxUserNum") or 32),
                 "band": ap.get("WLANViewName") or "",
             }
             for ap in aps if ap.get("_InstID")
