@@ -6,6 +6,7 @@
 - O botão **Copiar atendimento** usa área de transferência nativa Win32 no Windows, evitando duas chamadas de clipboard do QtWebEngine envolvidas no encerramento reportado. Outros sistemas continuam com o caminho web/fallback.
 - O workspace da interface limita sua largura à área disponível, com cabeçalho flexível em DPI/zoom altos.
 - Probe de recursos ocorre em lotes de 3 e preserva recursos já detectados se outro lote falhar. Isso **não** significa que cada endpoint ThinkLua foi verificado para o firmware V9.
+- **Mapa do firmware** executa leituras somente dos recursos detectados e mostra apenas nomes de campos, nomes dos objetos e contagens (não valores); inspirado no conceito de suporte estrutural do zte_tracker. Revise os nomes antes de compartilhar.
 - Backup rejeita respostas HTML de sessão expirada com HTTP 200; o erro explica que um fluxo específico do firmware pode ser necessário. NÃO há restauração automática.
 - Mensagens de backup e snapshot não passam a indicar falha apenas por problemas de atualização do histórico.
 
