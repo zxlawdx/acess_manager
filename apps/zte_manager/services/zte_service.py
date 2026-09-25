@@ -1419,23 +1419,43 @@ class ZTEService:
             self.get_client(), self._readonly_original_post, tag, config,
         )
 
+    def _manual_device_test(self, operation, command):
+        """Audit standalone diagnostic buttons without persisting IP/MAC."""
+        try:
+            result = command()
+        except Exception as exc:
+            history_repository.save_change(
+                self._history_session_id, operation=operation,
+                target="ONT", before=None, after=None, success=False,
+                message=type(exc).__name__,
+            )
+            raise
+        history_repository.save_change(
+            self._history_session_id, operation=operation, target="ONT",
+            before=None, after={"verified": result.get("verified", True)},
+            success=True,
+        )
+        return result
+
     def ping(self, config):
         with self._lock:
             detected, _ = multimodel_service.find_family(
                 self._device_info.get("modelo") or ""
             )
-            if detected == "F6201B":
-                return self._captured_diagnostic(PING, config)
-            return self.get_client().ping(config)
+            action = (lambda: self._captured_diagnostic(PING, config)
+                      if detected == "F6201B" else
+                      self.get_client().ping(config))
+            return self._manual_device_test("diagnostic_ping", action)
 
     def traceroute(self, config):
         with self._lock:
             detected, _ = multimodel_service.find_family(
                 self._device_info.get("modelo") or ""
             )
-            if detected == "F6201B":
-                return self._captured_diagnostic(TRACE, config)
-            return self.get_client().traceroute(config)
+            action = (lambda: self._captured_diagnostic(TRACE, config)
+                      if detected == "F6201B" else
+                      self.get_client().traceroute(config))
+            return self._manual_device_test("diagnostic_traceroute", action)
 
     # =========================================================
     # DIAGNÓSTICO AUTOMÁTICO / HISTÓRICO
@@ -1910,49 +1930,37 @@ class ZTEService:
 
             return result
 
-    def generate_attendance(
-        self,
-        diagnostic_id=None
-    ):
+    def generate_attendance(self, diagnostic_id=None):
+        """Create a session-wide OS even if no full diagnostic was run.
+
+        Never allow an arbitrary diagnostic_id to cross the current
+        authenticated ONT session boundary.
+        """
         with self._lock:
-            diagnostic = (
-                history_repository.diagnostic(
-                    diagnostic_id,
-                    session_id=(
-                        self._history_session_id
-                    ),
-                )
+            if not self._history_session_id:
+                raise RuntimeError("Conecte-se ao equipamento antes de gerar a OS.")
+            timeline = history_repository.session_timeline(
+                self._history_session_id
             )
-
+            diagnostic = history_repository.diagnostic(
+                diagnostic_id, session_id=self._history_session_id
+            )
+            if diagnostic_id and (
+                not diagnostic or
+                diagnostic.get("session_id") != self._history_session_id
+            ):
+                raise ValueError("Diagnóstico não pertence à sessão atual.")
             if not diagnostic:
-                raise ValueError(
-                    "Execute um diagnóstico antes de gerar o atendimento."
-                )
-
-            session_id = (
-                diagnostic.get(
-                    "session_id"
-                )
-                or self._history_session_id
-            )
-
-            timeline = (
-                history_repository.session_timeline(
-                    session_id
-                )
-            )
-
+                diagnostic = {
+                    "mode": "general", "sections": {},
+                    "findings": [], "status": "info",
+                }
             report = AttendanceReportService().build(
-                diagnostic=diagnostic,
-                timeline=timeline,
+                diagnostic=diagnostic, timeline=timeline,
             )
-
             return {
-                **report,
-                "diagnostic_id": diagnostic.get(
-                    "history_id"
-                ),
-                "session_id": session_id,
+                **report, "diagnostic_id": diagnostic.get("history_id"),
+                "session_id": self._history_session_id,
             }
 
     def capture_snapshot(
