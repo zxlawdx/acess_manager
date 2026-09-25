@@ -44,6 +44,27 @@ class MultiModelDiscoveryTests(unittest.TestCase):
         self.assertTrue(names.issubset(MODEL_FAMILY))
         self.assertEqual(len(catalog()["models"]), len(MODEL_FAMILY))
 
+    def test_new_model_adapters_do_not_advertise_writes(self):
+        from apps.zte_manager.model.device_adapters import select_adapter
+        for name in MODEL_FAMILY:
+            if name == "F6600P":
+                # Compatibilidade anterior com serviços completos mantida.
+                continue
+            adapter = select_adapter(name)
+            self.assertTrue(
+                all(not spec.writable for spec in adapter.features.values()),
+                name,
+            )
+        self.assertEqual(select_adapter("E2631").features, {})
+
+    def test_post_menu_blocks_new_models_even_with_token(self):
+        from apps.zte_manager.model.zte_configuration.zte_post import post_menu
+        class ReadOnly:
+            writes_enabled = False
+            session_tmp_token = "fake"
+        with self.assertRaises(PermissionError):
+            post_menu(ReadOnly(), "unsafe.lua", [("IF_ACTION", "Apply")])
+
     def test_firmware_suffix_and_variant_map_correctly(self):
         self.assertEqual(find_family("ZTE H3640 V10"), ("H3640", "h288a"))
         self.assertEqual(find_family("H6645P V2"), ("H6645P", "h288a"))
