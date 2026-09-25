@@ -719,6 +719,41 @@ def capability_probe(context=None):
     )
 
 
+@api.get("/discovery/bootstrap")
+def discovery_bootstrap(context=None):
+    """Estado de UI sem chamadas HTTP ao roteador ou bloqueio de RLock.
+
+    Retornar catálogo e modelo em uma única operação evita que uma leitura
+    lenta do firmware bloqueie a exibição dos controles no QtWebEngine.
+    """
+    try:
+        device = zte_service._device_info or {}
+        return {
+            "connected": zte_service.connected,
+            "model": (
+                zte_service._selected_model
+                or device.get("modelo")
+                or device.get("model")
+            ),
+            "detected_model": device.get("modelo") or device.get("model"),
+            "firmware": device.get("firmware"),
+            "writes_enabled": (
+                bool(getattr(zte_service._zte, "writes_enabled", False))
+                if zte_service.connected else False
+            ),
+            "catalog": zte_service.multimodel_catalog(),
+            "reason": (
+                None if zte_service.connected
+                else "Nenhum equipamento autenticado no servidor local"
+            ),
+        }
+    except Exception:
+        return {
+            "connected": False,
+            "error": "Não foi possível obter o estado da descoberta local.",
+        }
+
+
 @api.get("/multimodel/catalog")
 def multimodel_catalog(context=None):
     return _safe_call(
