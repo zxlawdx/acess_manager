@@ -276,3 +276,133 @@
         }
     });
 })();
+
+
+/* Catalog explorer: the 92 GET routes observed in the supplied F6201B
+   capture are available ON DEMAND. XML values never reach this interface. */
+(() => {
+    "use strict";
+    let catalogLoaded = false;
+    let activeHost = null;
+
+    function make(tag, cls, value) {
+        const node = document.createElement(tag);
+        if (cls) node.className = cls;
+        if (value != null) node.textContent = String(value);
+        return node;
+    }
+
+    async function loadCapturedRoutes() {
+        if (routerWriteEnabled || !ontConnected) return;
+        const bootstrap = await apiRequest("/discovery/bootstrap");
+        if (!String(bootstrap?.model || "").toUpperCase().includes("F6201B")) return;
+        const parent = document.getElementById("page-advanced");
+        if (!parent) return;
+        if (activeHost !== currentHost) catalogLoaded = false;
+        if (catalogLoaded) return;
+        activeHost = currentHost;
+        const data = await apiRequest("/multimodel/mapped-routes");
+        if (!data?.routes?.length) return;
+
+        let panel = document.getElementById("capturedRouteExplorer");
+        if (!panel) {
+            panel = make("section", "panel adaptive-route-explorer");
+            panel.id = "capturedRouteExplorer";
+            parent.append(panel);
+        }
+        panel.replaceChildren();
+        const header = make("div", "adaptive-route-head");
+        const copy = make("div");
+        copy.append(make("span", "adaptive-eyebrow",
+            "MAPEAMENTO CAPTURADO · SOMENTE LEITURA"));
+        copy.append(make("h2", "", "Explorador de endpoints do F6201B"));
+        copy.append(make("p", "adaptive-empty",
+            data.total_get_routes + " rotas GET catalogadas. " +
+            "Consultas opcionais mostram somente estrutura e contagens; " +
+            "a presença no catálogo não confirma disponibilidade atual."));
+        header.append(copy);
+        panel.append(header);
+        const search = make("input", "adaptive-search");
+        search.type = "search";
+        search.placeholder = "Filtrar por tag ou categoria…";
+        search.setAttribute("aria-label", "Buscar rotas capturadas");
+        panel.append(search);
+        const groups = make("div", "adaptive-route-groups");
+        panel.append(groups);
+        const result = make("div", "adaptive-route-result");
+        panel.append(result);
+        const rebuild = () => {
+            groups.replaceChildren();
+            const filtered = data.routes.filter(route => (
+                route.tag + " " + route.category).toLowerCase()
+                .includes(search.value.toLowerCase().trim()));
+            const categories = new Map();
+            filtered.forEach(route => {
+                if (!categories.has(route.category)) categories.set(route.category, []);
+                categories.get(route.category).push(route);
+            });
+            categories.forEach((routes, category) => {
+                const details = make("details", "adaptive-route-category");
+                const summary = make("summary", "", category +
+                    " · " + routes.length + " rota(s)");
+                details.append(summary);
+                const list = make("div", "adaptive-route-list");
+                routes.forEach(route => {
+                    const row = make("div", "adaptive-route-row");
+                    const desc = make("div");
+                    desc.append(make("strong", "", route.tag));
+                    desc.append(make("small", "", route.inspectable
+                        ? "Objeto observado: " + route.root
+                        : "Sem XML estrutural completo na captura"));
+                    const button = make("button", "button ghost compact",
+                        route.inspectable ? "Inspecionar GET" : "Sem leitura");
+                    button.type = "button";
+                    button.disabled = !route.inspectable;
+                    button.addEventListener("click", async () => {
+                        if (!ontConnected) return;
+                        button.disabled = true;
+                        setBusy(true, "Inspecionando " + route.tag + "...");
+                        try {
+                            const response = await apiRequest(
+                                "/multimodel/mapped-inspect", {
+                                    method: "POST",
+                                    body: JSON.stringify({ tag: route.tag })
+                                });
+                            window.renderAdaptiveDiagnostic({
+                                model: "F6201B",
+                                sections: { [route.tag]: {
+                                    available: response.available === true,
+                                    data: response.available
+                                        ? { objects: response.structure } : null,
+                                    reason: response.reason
+                                }}
+                            }, result);
+                            result.scrollIntoView({
+                                behavior: "smooth", block: "nearest"
+                            });
+                        } catch (error) {
+                            result.replaceChildren(make("p", "adaptive-empty",
+                                "Consulta indisponível: " + error.message));
+                        } finally {
+                            button.disabled = false;
+                            setBusy(false);
+                        }
+                    });
+                    row.append(desc, button);
+                    list.append(row);
+                });
+                details.append(list);
+                groups.append(details);
+            });
+        };
+        search.addEventListener("input", rebuild);
+        rebuild();
+        catalogLoaded = true;
+    }
+    document.addEventListener("zte:page-open", event => {
+        if (event.detail?.pageName === "advanced") {
+            void loadCapturedRoutes().catch(error =>
+                console.warn("Catálogo capturado indisponível:", error));
+        }
+    });
+})();
