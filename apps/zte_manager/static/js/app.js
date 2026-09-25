@@ -2444,10 +2444,12 @@ async function fillChannelSelect(
                116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165]
             : Array.from({ length: 11 }, (_, i) => i + 1);
         const chosen = String(selected ?? "Auto");
-        if (chosen !== "Auto" && !suggested.some(n => String(n) === chosen)) {
+        const showSuggestions = String(country || "BRI").toUpperCase() === "BRI";
+        if (chosen !== "Auto" && (!showSuggestions ||
+                !suggested.some(n => String(n) === chosen))) {
             select.add(new Option(chosen + " (salvo)", chosen));
         }
-        if (String(country || "BRI").toUpperCase() === "BRI") {
+        if (showSuggestions) {
             suggested.forEach(number => select.add(new Option(
                 String(number), String(number)
             )));
