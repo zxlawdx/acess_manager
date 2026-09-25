@@ -874,6 +874,10 @@ class ZTEService:
                 features
             )
 
+    def capability_shape(self, feature):
+        with self._lock:
+            return self._capabilities().shape(feature)
+
     def read_capability(
         self,
         feature
