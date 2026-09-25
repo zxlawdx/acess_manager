@@ -712,6 +712,8 @@ async function showMultimodelMesh() {
 }
 
 
+let trackerProbeBusy = false;
+
 async function probeMultimodel({ quick = false } = {}) {
     const output = document.getElementById("multimodelProbeOutput");
     const select = document.getElementById("multimodelSelect");
@@ -719,53 +721,100 @@ async function probeMultimodel({ quick = false } = {}) {
         showToast("Conecte-se ao equipamento primeiro.");
         return;
     }
+    if (trackerProbeBusy) {
+        if (!quick) showToast("Uma detecção já está em andamento.");
+        return;
+    }
+    trackerProbeBusy = true;
+    const button = document.getElementById("multimodelProbeButton");
+    if (button) button.disabled = true;
 
-    // O perfil selecionado na UI NÃO altera a família da sessão.
-    // O serviço valida divergências antes de qualquer GET.
     const model = select?.value || trackerDetectedModel || null;
-    if (!quick) setBusy(true, "Procurando recursos reais no firmware...");
+    if (!quick) setBusy(true, "Detectando endpoints documentados...");
     const status = document.getElementById("trackerDiscoveryStatus");
     if (status) status.textContent = quick
-        ? "Leitura inicial automática de recursos em andamento..."
-        : "Verificando endpoints documentados para este modelo...";
+        ? "Iniciando leitura automática do firmware..."
+        : "Verificando recursos reais, por etapas...";
+    const verified = new Map();
+    const candidates = new Map();
+    const endpoints = {};
+    let total = 0;
+    let offset = 0;
+    let last = null;
 
     try {
-        if (output) output.textContent = "Inspecionando endpoints somente leitura...";
-        const result = await apiRequest("/multimodel/probe", {
-            method: "POST",
-            body: JSON.stringify({
-                model,
-                max_endpoints: quick ? 2 : 10
-            })
-        });
-        renderTrackerDiscovery(result);
-        if (output) {
-            // Mostrar status resumido; não despejar dados de clientes
-            // ou tokens da sessão em uma janela operacional.
-            output.textContent = JSON.stringify({
-                model: result.model,
-                family: result.family,
-                endpoints: result.endpoints,
-                notes: result.notes
-            }, null, 2);
-        }
+        // Requisições sequenciais: os menus ZTE compartilham o contexto.
+        // O operador consegue ver o que foi confirmado após cada lote,
+        // sem aguardar o último endpoint nem interpretar candidato como real.
+        do {
+            const batch = await apiRequest("/multimodel/probe", {
+                method: "POST",
+                body: JSON.stringify({
+                    model,
+                    max_endpoints: 2,
+                    start: offset
+                })
+            });
+            last = batch;
+            total = Number(batch.total_candidates || 0);
+            for (const item of batch.capabilities || []) {
+                verified.set(item.feature, item);
+                candidates.delete(item.feature);
+            }
+            for (const item of batch.candidate_features || []) {
+                if (!verified.has(item.feature)) {
+                    candidates.set(item.feature, item);
+                }
+            }
+            Object.assign(endpoints, batch.endpoints || {});
+            const combined = {
+                ...batch,
+                endpoints,
+                capabilities: [...verified.values()],
+                candidate_features: [...candidates.values()]
+            };
+            renderTrackerDiscovery(combined);
+            offset = Number(batch.next_offset ?? (offset + 2));
+            const confirmed = [...verified.values()].filter(item => item.available).length;
+            if (status && total) {
+                status.textContent =
+                    `${batch.model || model}: ${Math.min(offset, total)}/${total} verificações · ${confirmed} confirmado(s)`;
+            }
+            if (output) {
+                output.textContent = JSON.stringify({
+                    model: batch.model,
+                    family: batch.family,
+                    progress: `${Math.min(offset, total)}/${total}`,
+                    endpoints
+                }, null, 2);
+            }
+            if (quick || !total) break;
+        } while (offset < total);
+
+        const confirmed = [...verified.values()].filter(item => item.available).length;
         const badge = document.getElementById("adapterBadge");
-        const confirmed = (result.capabilities || []).filter(
-            item => item.available
-        ).length;
-        if (badge) badge.textContent = `${confirmed} RECURSO(S) CONFIRMADO(S)`;
+        if (badge) badge.textContent = `${confirmed} CONFIRMADO(S)`;
         if (!quick) showToast(
             confirmed
-                ? `${confirmed} recursos comprovados no firmware. Outros podem exigir outro login.`
-                : "Nenhum endpoint confirmado. Verifique o login e firmware."
+                ? `${confirmed} recurso(s) de leitura validado(s) neste firmware.`
+                : "Não foi possível confirmar endpoints. Verifique as permissões."
         );
-        return result;
+        return {
+            ...last,
+            endpoints,
+            capabilities: [...verified.values()],
+            candidate_features: [...candidates.values()],
+        };
     } catch (error) {
-        if (status) status.textContent = "Não foi possível completar a leitura: " + error.message;
-        if (output) output.textContent = "Falha: " + error.message;
+        if (status) {
+            status.textContent = "Leitura parcial ou falhou: " + error.message;
+        }
+        if (output) output.textContent += "\nFalha: " + error.message;
         if (!quick) showToast(error.message);
         throw error;
     } finally {
+        trackerProbeBusy = false;
+        if (button) button.disabled = false;
         if (!quick) setBusy(false);
     }
 }
