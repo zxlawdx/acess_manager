@@ -3395,6 +3395,18 @@ async function applyExperimentalF6201BProfile() {
         });
         if (startEpoch !== sessionEpoch) return;
         resultArea.replaceChildren();
+        if (proposal.noop === true) {
+            // A fully matching preset must not require a fake confirmation
+            // or try to POST an undefined one-use nonce.
+            const notice = document.createElement("div");
+            notice.className = "profile-action-success";
+            notice.setAttribute("role", "status");
+            notice.textContent = proposal.message ||
+                "O padrão já está aplicado nesta ONT.";
+            resultArea.append(notice);
+            showToast("Configuração padrão já corresponde à ONT.");
+            return;
+        }
         const header = document.createElement("h3");
         header.textContent = "Prévia do perfil F6201B";
         resultArea.append(header);
@@ -3488,7 +3500,8 @@ async function applyExperimentalF6201BProfile() {
                 }
                 showToast(report.success
                     ? "Etapas experimentais confirmadas por releitura."
-                    : "Execução interrompida. Verifique o relatório e o painel original.");
+                    : "Etapa " + (report.failed_stage || "indeterminada") +
+                      " interrompida. Consulte o resultado antes de repetir.");
             } catch (error) {
                 renderProfileActionError("Executar perfil na ONT", error);
                 showToast("Aplicação não confirmada: " + error.message +
