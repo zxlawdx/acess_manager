@@ -828,6 +828,7 @@ async function runMultimodelDiagnostic() {
         String(trackerDetectedModel || "").toUpperCase().includes("F6600P")) {
         sections.splice(2, 0, "optical");
     }
+    const diagnosticGeneration = trackerSessionGeneration;
     const report = {
         model: trackerDetectedModel || "Sessão atual",
         read_only: true, sections: {}, errors: {}
@@ -858,6 +859,8 @@ async function runMultimodelDiagnostic() {
                     body: JSON.stringify({ section }),
                     timeoutMs: 48000
                 });
+                if (diagnosticGeneration !== trackerSessionGeneration ||
+                    !ontConnected) return;
                 report.model = data.model || report.model;
                 report.family = data.family;
                 Object.assign(report.sections, data.sections || {});
@@ -960,6 +963,7 @@ async function probeMultimodel({ quick = false } = {}) {
         return;
     }
     trackerProbeBusy = true;
+    const scanGeneration = trackerSessionGeneration;
     const button = document.getElementById("multimodelProbeButton");
     if (button) button.disabled = true;
 
@@ -1011,6 +1015,8 @@ async function probeMultimodel({ quick = false } = {}) {
                 }),
                 timeoutMs: 55000
             });
+            if (scanGeneration !== trackerSessionGeneration ||
+                !ontConnected) return;
             last = batch;
             total = Number(batch.total_candidates || 0);
             for (const item of batch.capabilities || []) {
