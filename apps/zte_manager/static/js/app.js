@@ -555,6 +555,17 @@ function openPage(pageName) {
         ).textContent = info.subtitle;
     }
 
+    if (pageName === "profiles") {
+        const batch = document.getElementById("applyProfileButton");
+        if (batch) {
+            batch.disabled = !routerWriteEnabled;
+            batch.title = routerWriteEnabled
+                ? "Aplica o perfil completo nesta família validada."
+                : "O firmware conectado suporta alterações F6201B " +
+                  "somente pelos editores individuais validados.";
+        }
+    }
+
     // Todas as entradas (sidebar, cartões, topo e restore) carregam dados.
     document.dispatchEvent(new CustomEvent(
         "zte:page-open", { detail: { pageName } }
@@ -3048,6 +3059,24 @@ function collectProfileForm() {
             `[data-profile-band="${band}"]`
         );
 
+        // Perfil visual pode ainda não ter sido montado (página aberta
+        // diretamente após conectar ou reconectar no Vela). Nunca
+        // chamar querySelector() sobre null e nunca enviar payload vazio.
+        if (!card) {
+            throw new Error(
+                "Os campos Wi-Fi do perfil ainda não foram carregados. " +
+                "Aguarde a tela terminar ou clique novamente em Configuração padrão."
+            );
+        }
+        const required = ["channel", "standard", "country", "bandwidth",
+            "sgi", "beacon_interval", "tx_power"];
+        const absent = required.filter(field =>
+            !card.querySelector('[data-field="' + field + '"]')
+        );
+        if (absent.length) {
+            throw new Error("Perfil " + band + " incompleto: " +
+                absent.join(", ") + ". Reabra Configuração padrão.");
+        }
         const channel = card.querySelector(
             '[data-field="channel"]'
         ).value;
@@ -3089,6 +3118,11 @@ async function saveProfile(
         return null;
     }
 
+    // Mesma proteção para o botão Salvar, não apenas Aplicar.
+    if (!document.querySelector('[data-profile-band="2.4GHz"]') ||
+        !document.querySelector('[data-profile-band="5GHz"]')) {
+        await renderProfileForm(currentProfile || { wifi: {}, dns: {} });
+    }
     const profile = collectProfileForm();
 
     setBusy(
@@ -3173,11 +3207,26 @@ async function captureCurrentConfiguration() {
 
 
 async function applyProfile() {
-    if (!currentAttendant) {
+    if (!currentAttendant) return;
+
+    // O perfil genérico usa comandos da família F6600P/F670L.
+    // O F6201B não pode receber esse batch: apenas seus fluxos
+    // capturados e validados de SSID/DNS são liberados individualmente.
+    if (!routerWriteEnabled) {
+        showToast(
+            "Aplicação em lote indisponível para este firmware. " +
+            "Use Prévia / Aplicar DNS ou cada cartão SSID."
+        );
         return;
     }
 
     try {
+        // A execução pode começar antes de loadProfile() concluir.
+        // Inicialize os campos ANTES de coletar e persistir o formulário.
+        if (!document.querySelector('[data-profile-band="2.4GHz"]') ||
+            !document.querySelector('[data-profile-band="5GHz"]')) {
+            await renderProfileForm(currentProfile || { wifi: {}, dns: {} });
+        }
         // Salva primeiro o conteúdo atual da tela para o botão sempre aplicar
         // exatamente o perfil que o atendente está vendo.
         await saveProfile(

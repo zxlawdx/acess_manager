@@ -42,6 +42,7 @@ jobs:
           node --check apps/zte_manager/static/js/management.js
           node --check apps/zte_manager/static/js/adaptive_firmware.js
           node --check apps/zte_manager/static/js/f6201b_editor.js
+          node --check apps/zte_manager/static/js/neutral_theme.js
           node --check apps/zte_manager/static/js/adaptive_firmware.js
 
       - name: Verify loading overlay behavior
@@ -61,3 +62,6 @@ jobs:
           node tests/test_model_ui_isolation.cjs
           node tests/test_native_ui_preserved.cjs
           node tests/test_classic_support_ui.cjs
+
+      - name: Verify neutral theme and profile null guard
+        run: node tests/test_neutral_theme.cjs
