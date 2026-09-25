@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any
 
-from apps.zte_manager.model.zte_configuration import zte_wifi
+from apps.zte_manager.model.zte_configuration import zte_wifi, zte_security
 
 
 EXACT_FIRMWARE = "V9.3.10P7N7"
@@ -155,18 +155,48 @@ class ExperimentalF6201BWrites:
         aps = zte._parse_instances(raw).get("OBJ_WLANAP_ID", [])
         if not aps or any("_InstID" not in item for item in aps):
             raise RuntimeError("A ONT não retornou IDs de SSID verificáveis.")
-        # PSK deve permanecer preservada no POST legado. Um firmware que
-        # oculte as instâncias PSK precisa ter um adaptador específico.
-        secure_ids = {item["_InstID"] for item in aps
-                      if item.get("BeaconType") not in ("None", "", None)}
-        if secure_ids:
-            psks = zte._parse_instances(raw).get("OBJ_WLANPSK_ID", [])
-            if not psks:
-                raise RuntimeError(
-                    "O firmware não forneceu metadados PSK. "
-                    "Não arriscar limpar a segurança das redes."
-                )
         return aps, raw
+
+    @staticmethod
+    def _ensure_psk_preservable(zte, ap: dict, raw: str):
+        """Não tocar SSID protegido se o segredo atual não for legível.
+
+        O método de escrita legado reconstrói o formulário incluindo a PSK,
+        mesmo ao modificar apenas ESSID/Enable. Sem esta prova específica
+        há risco de gravar string vazia ou ciphertext como nova senha.
+        """
+        if ap.get("BeaconType") in ("None", "", None):
+            return
+        psks = zte._parse_instances(raw).get("OBJ_WLANPSK_ID", [])
+        psk = zte_wifi._map_psk_by_ap(psks).get(ap["_InstID"])
+        if not psk or not psk.get("KeyPassphrase"):
+            raise RuntimeError(
+                "Senha atual indisponível; não alterar rede protegida."
+            )
+        # Para este caminho experimental, exigir o formato criptografado
+        # conhecido do adaptador existente em vez de supor plaintext.
+        if "KeyPassphrase" not in zte_wifi._get_encode_fields(raw):
+            raise RuntimeError(
+                "A resposta não confirmou o formato de criptografia da PSK. "
+                "Capture somente o metadado encode e o fluxo Apply."
+            )
+        token = getattr(zte, "session_tmp_token", None)
+        if not token:
+            raise RuntimeError("Token de descriptografia não encontrado.")
+        try:
+            clear = zte_security.aes_decrypt_value(
+                psk["KeyPassphrase"], token, token[::-1]
+            )
+            if (not isinstance(clear, str)
+                    or not 8 <= len(clear) <= 63
+                    or not clear.isascii()):
+                raise ValueError("PSK inválida")
+        except Exception as exc:
+            raise RuntimeError(
+                "Não foi possível confirmar a preservação da senha atual."
+            ) from None
+        # Não registrar, persistir nem retornar o valor descriptografado.
+        del clear
 
     def preview(self, zte, *, host: str, firmware: str,
                 ssid_id: str, config: dict) -> dict:
@@ -183,10 +213,11 @@ class ExperimentalF6201BWrites:
         ):
             raise ValueError("ID de SSID inválido.")
         desired = self._validate_config(config)
-        aps, _ = self._inspect_session(zte)
+        aps, raw = self._inspect_session(zte)
         current = next((ap for ap in aps if ap.get("_InstID") == ssid_id), None)
         if not current:
             raise ValueError("SSID não encontrado na leitura atual.")
+        self._ensure_psk_preservable(zte, current, raw)
         before = {
             "ssid": current.get("ESSID", ""),
             "enabled": current.get("Enable") == "1",
@@ -225,11 +256,12 @@ class ExperimentalF6201BWrites:
             raise PermissionError("Sessão ou prévia expirou; refaça o diagnóstico.")
         if original_post is None:
             raise PermissionError("Transporte de escrita não foi preservado.")
-        aps, _ = self._inspect_session(zte)
+        aps, raw = self._inspect_session(zte)
         current = next((ap for ap in aps
                         if ap.get("_InstID") == proposal.ssid_id), None)
         if current is None:
             raise RuntimeError("SSID não está mais disponível.")
+        self._ensure_psk_preservable(zte, current, raw)
         now = {"ssid": current.get("ESSID", ""),
                "enabled": current.get("Enable") == "1",
                "broadcast": current.get("ESSIDHideEnable") != "1"}
