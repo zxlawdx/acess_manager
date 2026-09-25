@@ -190,6 +190,15 @@ async function runSupportDiagnostic({
         return;
     }
 
+    if (!routerWriteEnabled) {
+        openPage("advanced");
+        showToast("Diagnóstico específico do modelo, somente leitura.");
+        if (typeof runMultimodelDiagnostic === "function") {
+            await runMultimodelDiagnostic();
+        }
+        return;
+    }
+
     supportDiagnosticState.running = true;
 
     const payload = dashboard
