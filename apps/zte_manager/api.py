@@ -810,6 +810,11 @@ def f6201b_write_status(context=None):
     return _safe_call(zte_service.f6201b_write_status)
 
 
+@api.get("/f6201b/write/ssids")
+def f6201b_write_ssids(context=None):
+    return _safe_call(zte_service.f6201b_write_ssids)
+
+
 @api.post("/f6201b/write/preview")
 def f6201b_write_preview(context=None):
     body = _json(context)
