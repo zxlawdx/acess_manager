@@ -1192,10 +1192,14 @@ class ZTEService:
     def f6201b_write_apply(self, nonce, confirmation):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            return self._f6201b_writer.apply(
-                self.get_client(), host=self.current_host,
-                firmware=firmware, nonce=nonce, confirmation=confirmation,
-                original_post=self._readonly_original_post,
+            return self._audit_device_command(
+                "f6201b_ssid_update", "SSID",
+                lambda: self._f6201b_writer.apply(
+                    self.get_client(), host=self.current_host,
+                    firmware=firmware, nonce=nonce,
+                    confirmation=confirmation,
+                    original_post=self._readonly_original_post,
+                ),
             )
 
     def f6201b_wan_summary(self):
@@ -1247,11 +1251,14 @@ class ZTEService:
     def f6201b_dns_apply(self, nonce, confirmation):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            return self._f6201b_dns.apply(
-                self.get_client(), host=self.current_host,
-                firmware=firmware, nonce=nonce,
-                confirmation=confirmation,
-                original_post=self._readonly_original_post,
+            return self._audit_device_command(
+                "f6201b_dns_update", "DNS",
+                lambda: self._f6201b_dns.apply(
+                    self.get_client(), host=self.current_host,
+                    firmware=firmware, nonce=nonce,
+                    confirmation=confirmation,
+                    original_post=self._readonly_original_post,
+                ),
             )
 
     def f6201b_profile_preview(self, attendant):
@@ -1268,12 +1275,15 @@ class ZTEService:
     def f6201b_profile_apply(self, nonce, confirmation):
         with self._lock:
             firmware = self._f6201b_write_firmware()
-            return self._f6201b_profile.apply(
-                self.get_client(), host=self.current_host,
-                revision=self._session_revision, firmware=firmware,
-                nonce=nonce, confirmation=confirmation,
-                original_post=self._readonly_original_post,
-                dns_adapter=self._f6201b_dns,
+            return self._audit_device_command(
+                "f6201b_profile_apply", "Wi-Fi 2.4/5 GHz e DNS",
+                lambda: self._f6201b_profile.apply(
+                    self.get_client(), host=self.current_host,
+                    revision=self._session_revision, firmware=firmware,
+                    nonce=nonce, confirmation=confirmation,
+                    original_post=self._readonly_original_post,
+                    dns_adapter=self._f6201b_dns,
+                ),
             )
 
     def f6201b_profile_apply_saved(self, attendant):
@@ -1351,12 +1361,15 @@ class ZTEService:
     def captured_workbench_apply(self, nonce, confirmation, risk_ack):
         with self._lock:
             self._f6201b_write_firmware()
-            return self._captured_workbench.apply(
-                self.get_client(), host=self.current_host,
-                revision=self._session_revision,
-                attendant=self.current_attendant, nonce=nonce,
-                confirmation=confirmation, risk_ack=risk_ack,
-                original_post=self._readonly_original_post,
+            return self._audit_device_command(
+                "f6201b_form_update", "Formulário capturado",
+                lambda: self._captured_workbench.apply(
+                    self.get_client(), host=self.current_host,
+                    revision=self._session_revision,
+                    attendant=self.current_attendant, nonce=nonce,
+                    confirmation=confirmation, risk_ack=risk_ack,
+                    original_post=self._readonly_original_post,
+                ),
             )
 
     def mapped_f6201b_routes(self):
