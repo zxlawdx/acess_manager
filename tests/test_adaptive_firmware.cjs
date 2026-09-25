@@ -64,8 +64,8 @@ assert.ok(!body.includes("do-not-display"), "Nunca renderizar credenciais");
 assert.ok(!body.includes('"sections"'), "Não despejar JSON bruto");
 
 const attendance = win.composeFirmwareAttendance(report);
-assert.match(attendance, /Clientes Wi-Fi: connected=1/);
-assert.match(attendance, /Leases DHCP: leases=3/);
+assert.match(attendance, /Clientes Wi-Fi: Conectados=1/);
+assert.match(attendance, /Dispositivos com DHCP: Leases DHCP=3/);
 assert.ok(!attendance.includes("do-not-display"));
 assert.ok(!attendance.includes("password"));
 console.log("UI adaptativa e atendimento: cards, zero de dados e sigilo OK");
