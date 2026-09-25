@@ -107,16 +107,16 @@ OBSERVED_APPLY_FIELDS: dict[str, tuple[str, ...]] = {
     "wlan_BandSteering_lua.lua": (
         "IF_ACTION", "_InstID", "BsEnable", "BsRssiLmt24G",
         "BsRssiLmt5G", "BsBounceDwellTimeLmt", "BsTPLimit",
-        "_sessionTOKEN",
+        "Btn_cancel_Mode", "Btn_apply_Mode", "_sessionTOKEN",
     ),
     "wlan_wps_lua.lua": (
         "IF_ACTION", "_InstID", "SSID_InstID", "Enable",
-        "WPSMode", "WPSChoose", "_sessionTOKEN",
+        "WPSMode", "WPSChoose", "Btn_apply_WPS", "_sessionTOKEN",
     ),
     "wlan_wlanbasicadconf_lua.lua": (
         "IF_ACTION", "_InstID", "BasicDataRates", "OpDataRates",
         "11nMode", "GreenField", "AutoChannelEnabled", "Band",
-        "Channel", "Standard", "BandWidth", "MUMIMOEnable",
+        "Channel", "Standard", "BandWidth", "AutoChRange", "MUMIMOEnable",
         "UPLinkOFDMA", "SSIDIsolationEnable", "CountryCode",
         "SGIEnabled", "BeaconInterval", "TxPower", "PreambleType",
         "_sessionTOKEN",
@@ -137,7 +137,8 @@ OBSERVED_APPLY_FIELDS: dict[str, tuple[str, ...]] = {
         "TTL", "_sessionTOKEN",
     ),
     "firewall_config_lua.lua": (
-        "IF_ACTION", "_InstID", "Enable", "Level", "_sessionTOKEN",
+        "IF_ACTION", "_InstID", "Enable", "Level",
+        "Btn_cancel_FirewallConf", "Btn_apply_FirewallConf", "_sessionTOKEN",
     ),
 }
 
@@ -193,3 +194,41 @@ DNS_DOMAIN_APPLY_FIELDS = (
     "Btn_cancel_instCfgArea", "Btn_apply_instCfgArea",
     "_sessionTOKEN",
 )
+
+# Full KEY LISTS for the remaining successful Apply routes. No values,
+# tokens, passwords or endpoint addresses are recorded.
+_OTHER_APPLY = """
+dns_hostname_lua.lua|IF_ACTION _InstID OBJID LeaseTime HostName IPAddress _sessionTOKEN
+bpdu_lua.lua|IF_ACTION _InstID BPDUEnable Btn_cancel_instCfgArea Btn_apply_instCfgArea _sessionTOKEN
+route_routedefault_lua.lua|IF_ACTION _InstID DefRTInterface Btn_cancel_RouteDefault Btn_apply_RouteDefault _sessionTOKEN
+route_routestaticipv4_lua.lua|IF_ACTION _InstID DestIP DestIPMask GWIP Type Enable Alias Interface _sessionTOKEN
+Localnet_LanMgrIpv4_DHCPBasicCfg_lua.lua|IF_ACTION IF_URL_HOST _InstID IPAddr SubMask OptEnable OptCode SubnetMask MinAddress MaxAddress IPRouters DNSServer1 DNSServer2 LeaseTime ServerEnable DnsServerSource OptValue DomainName Btn_cancel_DHCPBasicCfg Btn_apply_DHCPBasicCfg encode _sessionTOKEN
+Localnet_LanDevDHCPSource_lua.lua|IF_ACTION _InstNum _InstID_0 ProcFlag_0 _InstID_1 ProcFlag_1 _InstID_2 ProcFlag_2 _InstID_3 ProcFlag_3 _InstID_4 ProcFlag_4 _InstID_5 ProcFlag_5 _InstID_6 ProcFlag_6 _InstID_7 ProcFlag_7 _InstID_8 ProcFlag_8 _InstID_9 ProcFlag_9 _InstID_10 ProcFlag_10 _InstID_11 ProcFlag_11 _InstID Btn_cancel_LanDevDHCPSource Btn_apply_LanDevDHCPSource _sessionTOKEN
+addr6_lanaddr_lua.lua|IF_ACTION _InstID IPAddress Btn_cancel_IPv6LANAddr Btn_apply_IPv6LANAddr _sessionTOKEN
+dhcp6s_dhcpserver_lua.lua|IF_ACTION _InstID _InstID_DNS IANAEnable IsPrefixAutoMode Enable ManualDNSEnable DNSAddr1 DNSAddr2 DNSAddr3 Ipv6DnsOrigin DnsRefreshTime Btn_cancel_IPv6DHCPServer Btn_apply_IPv6DHCPServer Btn_PrefixUpd_IPv6DHCPServer Btn_SelfUpd_IPv6DHCPServer _sessionTOKEN
+ra_raservice_lua.lua|IF_ACTION _InstID IsPrefixAutoMode Enable AdvLinkMTUEnable S_AdvLinkMTU AdvPreferredRouterFlag MinRtrAdvInterval MaxRtrAdvInterval AdvManagedFlag AdvOtherConfigFlag PrefixMode Btn_cancel_RAService Btn_apply_RAService Btn_PrefixUpd_RAService Btn_SelfUpd_RAService _sessionTOKEN
+radhcp6s_portctrl_lua.lua|IF_ACTION _InstNum _InstID_0 PortID_0 AllowDHCP6S_0 AllowRA_0 _InstID_1 PortID_1 AllowDHCP6S_1 AllowRA_1 _InstID_2 PortID_2 AllowDHCP6S_2 AllowRA_2 _InstID_3 PortID_3 AllowDHCP6S_3 AllowRA_3 _InstID_4 PortID_4 AllowDHCP6S_4 AllowRA_4 _InstID_5 PortID_5 AllowDHCP6S_5 AllowRA_5 _InstID_6 PortID_6 AllowDHCP6S_6 AllowRA_6 _InstID_7 PortID_7 AllowDHCP6S_7 AllowRA_7 _InstID_8 PortID_8 AllowDHCP6S_8 AllowRA_8 _InstID_9 PortID_9 AllowDHCP6S_9 AllowRA_9 _InstID_10 PortID_10 AllowDHCP6S_10 AllowRA_10 _InstID_11 PortID_11 AllowDHCP6S_11 AllowRA_11 _InstID PortID AllowDHCP6S AllowRA Btn_cancel_IPv6DHCPPortCtl Btn_apply_IPv6DHCPPortCtl _sessionTOKEN
+eth_interface_config_lua.lua|IF_ACTION _InstID Autoneg MaxBitRate DuplexMode ModType Btn_cancel_lanInterface Btn_apply_lanInterface _sessionTOKEN
+wlan_wlanbasiconoff_lua.lua|IF_ACTION RadioStatus TimerEnable _InstID_0 Band_0 RadioStatus_0 _InstID_1 Band_1 RadioStatus_1 _InstID Band TimeStartHour TimeStartMin TimeEndHour TimeEndMin Btn_cancel_WlanBasicAdConf Btn_apply_WlanBasicAdConf _sessionTOKEN
+wlan_macfilteraclpolicy_lua.lua|IF_ACTION _InstNum _InstID_0 ACLPolicy_0 _InstID_1 ACLPolicy_1 _InstID_2 ACLPolicy_2 _InstID_3 ACLPolicy_3 _InstID_4 ACLPolicy_4 _InstID_5 ACLPolicy_5 _InstID_6 ACLPolicy_6 _InstID_7 ACLPolicy_7 _InstID Btn_cancel_MACFilterACLPolicy Btn_apply_MACFilterACLPolicy _sessionTOKEN
+Localnet_NetSphere_Mode_lua.lua|IF_ACTION _InstID CurrentMode CurrentEnable Enable EnLegacyStaRoam RoamRssiLmt24G RoamRssiLmt5G Btn_cancel_Mode Btn_apply_Mode Btn_apply_Mode_Confirm _sessionTOKEN
+tr069_remotemgr_lua.lua|IF_ACTION CertList DefaultWan URL UserName UserPassword ConnectionRequestUsername ConnectionRequestPassword PeriodicInformEnable PeriodicInformInterval SupportCertAuth select_CertID RemoteUpgradeCertAuth Btn_cancel_TR069BasicConf Btn_apply_TR069BasicConf encode _sessionTOKEN
+firewall_alg_lua.lua|IF_ACTION _InstID IsFTPAlg IsH323Alg IsIPSECAlg IsL2TPAlg IsPPTPAlg IsRTSPAlg IsSIPAlg IsTFTPAlg Btn_cancel_Alg Btn_apply_Alg _sessionTOKEN
+firewall_dmz_lua.lua|IF_ACTION _InstID Enable WANCViewName InternalClient sub_TempMacAddr0 sub_TempMacAddr1 sub_TempMacAddr2 sub_TempMacAddr3 sub_TempMacAddr4 sub_TempMacAddr5 Btn_cancel_Ipv4Dmz Btn_apply_Ipv4Dmz _sessionTOKEN
+"""
+for _line in _OTHER_APPLY.strip().splitlines():
+    _tag, _fields = _line.split("|", 1)
+    OBSERVED_APPLY_FIELDS[_tag] = tuple(_fields.split())
+
+# Raw capture also includes PingDiagnosis and TraceRouteDiagnosis. These
+# are active operations, not read-only Get and not firmware configuration.
+OBSERVED_DIAGNOSTIC_ACTIONS = {
+    "networkdiag_ping_lua.lua": (
+        "IF_ACTION", "Host", "NumofRepeat", "DataBlockSize",
+        "Timeout", "_sessionTOKEN",
+    ),
+    "networkdiag_traceroute_lua.lua": (
+        "IF_ACTION", "Control", "Host", "MaxHopCount", "Timeout",
+        "Protocol", "_sessionTOKEN",
+    ),
+}
