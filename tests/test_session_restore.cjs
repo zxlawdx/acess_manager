@@ -37,7 +37,8 @@ function harness(status, isReadOnly = false) {
             ctx.ontConnected = connected;
             calls.push("connected:" + connected);
         },
-        loadProfile: async () => { calls.push("profile"); },
+        ensureAttendantProfile: async () => { calls.push("profile"); },
+        renderProfileActionError: () => {},
         loadAll: async () => {
             calls.push("data");
             return { essentialLoaded: 3, failed: [] };
@@ -61,6 +62,8 @@ function harness(status, isReadOnly = false) {
     const readonly = harness({ connected: true, host: "192.0.2.31" }, true);
     await vm.runInContext("restoreDesktopSession()", readonly.ctx);
     assert.ok(readonly.calls.includes("page:advanced"));
+    assert.ok(readonly.calls.includes("profile"),
+        "F6201B must restore saved 2.4/5 GHz technician presets");
     assert.ok(!readonly.calls.includes("data"),
         "Firmware experimental não executa leituras ThinkLua tradicionais");
 

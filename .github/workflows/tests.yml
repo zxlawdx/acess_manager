@@ -73,6 +73,12 @@ jobs:
       - name: Verify F6201B experimental profile UI
         run: node tests/test_f6201b_profile_ui.cjs
 
+      - name: Verify read-only profile loading and manual channels
+        run: node tests/test_readonly_profile_regression.cjs
+
+      - name: Verify accessible neutral light theme across all legacy sections
+        run: node tests/test_light_mode_refine.cjs
+
       - name: Verify captured full form strategy syntax and contracts
         run: |
           python -m py_compile apps/zte_manager/services/f6201b_full_forms.py

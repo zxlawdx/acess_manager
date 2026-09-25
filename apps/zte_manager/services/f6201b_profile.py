@@ -149,7 +149,14 @@ class ExperimentalF6201BProfile:
                 continue
             found = [item for item in candidates if item.get("Band") == band]
             if len(found) != 1 or not found[0].get("_InstID"):
-                raise RuntimeError("Rádio " + band + " não identificado de modo único.")
+                available = ", ".join(sorted({
+                    str(item.get("Band") or "?") for item in candidates
+                }))
+                raise RuntimeError(
+                    "O perfil requer o rádio " + band +
+                    ", mas a leitura avançada retornou: " + available +
+                    ". Verifique o firmware e a sessão antes de aplicar."
+                )
             before = found[0]
             target = _build_target(parsed, before, band, config)
             delta = {
@@ -217,10 +224,16 @@ class ExperimentalF6201BProfile:
                     "instance_id": before.get("id") if before else "-1",
                 })
         if not proposals and not dns_delta and not domain_pending and not host_changes:
-            raise ValueError(
-                "O equipamento já possui os valores suportados pelo perfil. "
-                "Nenhuma alteração experimental necessária."
-            )
+            # Identical configuration is a SUCCESSFUL preflight/no-op, not a
+            # failed Apply; do not create a nonce or send a POST.
+            return {
+                "model": "F6201B", "operation": "profile_captured",
+                "noop": True, "radios": [], "dns": {},
+                "domain": None, "hosts": [],
+                "not_included": list(SKIPPED_PROFILE_FEATURES),
+                "message": "O padrão do atendente já está aplicado. "
+                           "Nenhum POST é necessário.",
+            }
         nonce = secrets.token_urlsafe(24)
         self._pending = BatchPreview(
             nonce, host, revision, time.monotonic(), proposals, dns_nonce,
@@ -259,16 +272,27 @@ class ExperimentalF6201BProfile:
         if original_post is None:
             raise PermissionError("Transporte de escrita original ausente.")
         steps = []
+        stage = "Pré-validação"
         # No retries and no automatic rollback. Stop at first uncertainty.
         try:
             for item in proposal.radios:
+                stage = "Wi-Fi " + item["band"]
                 radios, _ = _read_radios(zte)
                 found = [r for r in radios
                          if r.get("_InstID") == item["instance_id"] and
                          r.get("Band") == item["band"]]
+                # When AutoChannelEnabled=1 the actual operating Channel is
+                # volatile: a channel scan may change it while preview is
+                # waiting for confirmation. The mode itself is still checked.
+                volatile = (
+                    {"Channel"}
+                    if item["original"].get("AutoChannelEnabled") == "1"
+                    else set()
+                )
                 if len(found) != 1 or any(
                     str(found[0].get(key)) != value
                     for key, value in item["original"].items()
+                    if key not in volatile
                 ):
                     raise RuntimeError(
                         "Rádio " + item["band"] + " mudou após a prévia."
@@ -293,18 +317,30 @@ class ExperimentalF6201BProfile:
                 verified, _ = _read_radios(zte)
                 actual = next((r for r in verified
                     if r.get("_InstID") == item["instance_id"]), None)
-                if actual is None or any(
-                    str(actual.get(name)) != expected["after"]
-                    for name, expected in changed.items()
-                ):
+                # Channel may be selected asynchronously by the firmware;
+                # verify AutoChannelEnabled but never require Channel=NULL
+                # once automatic mode has been enabled successfully.
+                verify_changes = {
+                    name: delta for name, delta in changed.items()
+                    if not (name == "Channel" and
+                            item["desired"].get("AutoChannelEnabled") == "1")
+                }
+                mismatch = [
+                    name for name, expected in verify_changes.items()
+                    if actual is None or
+                       str(actual.get(name)) != expected["after"]
+                ]
+                if mismatch:
                     raise RuntimeError(
-                        "A releitura não confirmou o rádio " + item["band"]
+                        "A releitura de " + item["band"] +
+                        " divergiu nos campos: " + ", ".join(mismatch)
                     )
                 steps.append({
                     "name": "Wi-Fi " + item["band"], "success": True,
                     "detail": "Aplicado e confirmado por releitura.",
                 })
             if proposal.domain:
+                stage = "Domínio DNS"
                 from apps.zte_manager.services.f6201b_dns_writes import _read as _read_dns
                 domain = proposal.domain
                 live = _read_dns(zte)
@@ -331,6 +367,7 @@ class ExperimentalF6201BProfile:
                 })
 
             for host_item in proposal.hosts:
+                stage = "Host DNS " + host_item["name"]
                 current_hosts = _read_hosts(zte)
                 matching = [row for row in current_hosts
                             if row.get("nome") == host_item["name"]]
@@ -365,6 +402,7 @@ class ExperimentalF6201BProfile:
                 })
 
             if proposal.dns_nonce:
+                stage = "Servidores DNS IPv4/IPv6"
                 result = dns_adapter.apply(
                     zte, host=host, firmware=firmware,
                     nonce=proposal.dns_nonce,
@@ -379,12 +417,13 @@ class ExperimentalF6201BProfile:
                 })
         except Exception as exc:
             steps.append({
-                "name": "Etapa interrompida", "success": False,
+                "name": stage, "success": False,
                 # No raw XML or request bodies are returned.
                 "detail": type(exc).__name__ + ": " + str(exc)[:240],
             })
             return {
                 "success": False, "partial": bool(steps[:-1]),
+                "failed_stage": stage,
                 "steps": steps,
                 "not_included": list(SKIPPED_PROFILE_FEATURES),
             }

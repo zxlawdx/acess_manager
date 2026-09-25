@@ -507,25 +507,35 @@
             const status = await apiRequest("/f6201b/write/status");
             const current = await apiRequest("/f6201b/dns/status");
             if(run !== epoch) return;
-            primary.value = current.ipv4_1 || "";
-            secondary.value = current.ipv4_2 || "";
-            // O novo adaptador expõe os mesmos 4 campos capturados no
-            // formulário original, sem inventar outra interface.
-            $("profileDns6_1").value = current.ipv6_1 || "";
-            $("profileDns6_2").value = current.ipv6_2 || "";
+            // The technician's saved profile must NEVER be silently
+            // replaced with values of whichever ONT was just connected.
+            // DNS from the router is read-only comparison information here.
             action.disabled = !status.opted_in || !status.supported_firmware;
             report.textContent = action.disabled
-                ? "DNS atual consultado. Alterações experimentais desativadas."
-                : "DNS atual consultado. Para alterar, gere uma prévia.";
+                ? "DNS atual consultado; o padrão salvo acima foi preservado."
+                : "Padrão do atendente preservado. Compare com o DNS da ONT ao criar prévia.";
             action.onclick = async () => {
+                setBusy(true, "Comparando DNS salvo com a ONT...");
+                let latest;
+                try {
+                    // Fresh GET prevents stale comparison when the technician
+                    // changed networks or another user edited router DNS.
+                    latest = await apiRequest("/f6201b/dns/status");
+                } catch(error) {
+                    report.textContent = "Erro na leitura do DNS da ONT: " + error.message;
+                    setBusy(false);
+                    return;
+                }
+                setBusy(false);
+                if (run !== epoch) return;
                 const changes = {};
-                if (primary.value !== current.ipv4_1)
+                if (primary.value !== latest.ipv4_1)
                     changes.ipv4_1 = primary.value;
-                if (secondary.value !== current.ipv4_2)
+                if (secondary.value !== latest.ipv4_2)
                     changes.ipv4_2 = secondary.value;
-                if ($("profileDns6_1").value !== current.ipv6_1)
+                if ($("profileDns6_1").value !== latest.ipv6_1)
                     changes.ipv6_1 = $("profileDns6_1").value;
-                if ($("profileDns6_2").value !== current.ipv6_2)
+                if ($("profileDns6_2").value !== latest.ipv6_2)
                     changes.ipv6_2 = $("profileDns6_2").value;
                 if (!Object.keys(changes).length) {
                     report.textContent = "Nenhuma alteração de DNS.";

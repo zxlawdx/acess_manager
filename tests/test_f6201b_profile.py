@@ -126,6 +126,45 @@ class BatchTests(unittest.TestCase):
                 self.apply(p["nonce"])
         self.assertEqual(calls, [1])
 
+    def test_profile_already_applied_is_noop_without_nonce_or_post(self):
+        self.profile = {
+            "wifi": {"2.4GHz": {"tx_power": "50%"}},
+            "dns": {"ipv4_1": "1.1.1.1", "ipv4_2": "9.9.9.9",
+                    "hosts": []},
+        }
+        with patch.dict(os.environ, {OPT_IN_ENV: "1"}):
+            result = self.preview()
+        self.assertTrue(result["noop"])
+        self.assertNotIn("nonce", result)
+        self.assertIsNone(self.engine._pending)
+        self.assertEqual(self.dns.applied, 0)
+
+    def test_auto_channel_operating_channel_is_not_fixed_or_stale(self):
+        # Real firmware may keep the last selected channel while
+        # AutoChannelEnabled=1; this is a runtime value, not a static
+        # configuration drift.
+        self.zte._values["Channel"] = "6"
+        self.profile["wifi"]["2.4GHz"]["auto_channel"] = True
+        events = []
+        def dynamic_post(zte, tag, payload):
+            events.append(tag)
+            # Firmware chooses channel 11 instead of returning NULL.
+            zte._values["Channel"] = "11"
+            zte._values["TxPower"] = "75%"
+            return ("<ajax_response_xml_root><IF_ERRORID>0</IF_ERRORID>"
+                    "</ajax_response_xml_root>")
+        with patch.dict(os.environ, {OPT_IN_ENV: "1"}), patch(
+            "apps.zte_manager.services.f6201b_profile.post_menu",
+            side_effect=dynamic_post
+        ):
+            preview = self.preview()
+            self.assertIn("Channel", preview["radios"][0]["changes"])
+            # A scan can occur after preview and before confirmation.
+            self.zte._values["Channel"] = "1"
+            report = self.apply(preview["nonce"])
+        self.assertTrue(report["success"], report)
+        self.assertEqual(events, ["wlan_wlanbasicadconf_lua.lua"])
+
     def test_bad_confirmation_never_posts(self):
         with patch.dict(os.environ, {OPT_IN_ENV: "1"}):
             p = self.preview()
@@ -145,6 +184,8 @@ class BatchTests(unittest.TestCase):
             report = self.apply(p["nonce"])
         self.assertFalse(report["success"])
         self.assertFalse(report["partial"])
+        self.assertEqual(report["failed_stage"], "Wi-Fi 2.4GHz")
+        self.assertEqual(report["steps"][-1]["name"], "Wi-Fi 2.4GHz")
         self.assertEqual(self.dns.applied, 0)
         self.assertFalse(self.zte.writes_enabled)
 
