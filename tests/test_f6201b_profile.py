@@ -144,6 +144,7 @@ class BatchTests(unittest.TestCase):
         # AutoChannelEnabled=1; this is a runtime value, not a static
         # configuration drift.
         self.zte._values["Channel"] = "6"
+        self.profile["wifi"]["2.4GHz"]["auto_channel"] = True
         events = []
         def dynamic_post(zte, tag, payload):
             events.append(tag)
