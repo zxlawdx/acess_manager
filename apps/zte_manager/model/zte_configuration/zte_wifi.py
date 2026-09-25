@@ -863,6 +863,12 @@ def _verify_ssid(
             )
 
         if obtido != esperado:
+            if pedido == "password":
+                # Nunca devolver PSK antiga/nova em exceções, logs ou toast.
+                raise RuntimeError(
+                    "A ONT respondeu SUCC, mas a alteração da senha Wi-Fi "
+                    "não foi confirmada pela releitura segura."
+                )
             raise RuntimeError(
                 f"A ONT respondeu SUCC, mas {pedido} não foi confirmado "
                 f"na releitura ({obtido!r} != {esperado!r})."

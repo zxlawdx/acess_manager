@@ -3289,13 +3289,33 @@ async function applyExperimentalF6201BProfile() {
         }
         if (Object.keys(proposal.dns || {}).length) {
             const dnsTitle = document.createElement("strong");
-            dnsTitle.textContent = "DNS IPv4";
+            dnsTitle.textContent = "DNS IPv4/IPv6";
             resultArea.append(dnsTitle);
             for (const [field, change] of Object.entries(proposal.dns)) {
                 const row = document.createElement("p");
                 row.className = "muted";
                 row.textContent = field + ": " + change.before + " → " + change.after;
                 resultArea.append(row);
+            }
+        }
+        if (proposal.domain) {
+            const domainTitle = document.createElement("strong");
+            domainTitle.textContent = "Domínio DNS";
+            const domainInfo = document.createElement("p");
+            domainInfo.textContent =
+                (proposal.domain.before || "(vazio)") + " → " +
+                (proposal.domain.after || "(vazio)");
+            resultArea.append(domainTitle, domainInfo);
+        }
+        if (proposal.hosts?.length) {
+            const hostTitle = document.createElement("strong");
+            hostTitle.textContent = "Hosts DNS estáticos";
+            resultArea.append(hostTitle);
+            for (const item of proposal.hosts) {
+                const hostLine = document.createElement("p");
+                hostLine.textContent = item.name + ": " +
+                    (item.before || "(novo)") + " → " + item.after;
+                resultArea.append(hostLine);
             }
         }
         const omitted = document.createElement("p");

@@ -100,7 +100,7 @@ class CaptureCompatibilityTests(unittest.TestCase):
             proposal=dns.preview(zte,host="192.0.2.17",
                 firmware="V9.3.10P7N7",
                 changes={"ipv4_2":"8.8.8.8"})
-        self.assertEqual(proposal["operation"],"dns_ipv4")
+        self.assertEqual(proposal["operation"],"dns_ipv4_ipv6")
         self.assertEqual(proposal["changes"]["SerIPAddress2"]["after"],"8.8.8.8")
         self.assertTrue(all(item[0] in ("view","get") for item in zte.events))
         self.assertFalse(zte.writes_enabled)
@@ -147,7 +147,7 @@ class CaptureCompatibilityTests(unittest.TestCase):
         with patch.dict(os.environ,{OPT_IN_ENV:"1"}):
             for changes in [{"ipv4_1":"not-an-ip"},
                             {"ipv4_1":"127.0.0.1","password":"NO"},
-                            {"ipv6_1":"2001:db8::1"}]:
+                            {"ipv6_1":"not-an-ipv6"}]:
                 with self.assertRaises(ValueError):
                     dns.preview(zte,host="192.0.2.17",
                         firmware="V9.3.10P7N7",changes=changes)

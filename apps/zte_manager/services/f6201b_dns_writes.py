@@ -1,6 +1,7 @@
 """F6201B captured DNS Apply: opt-in, exact body, preview & read-back.
 
-Only DNS IPv4 server addresses: no domain/host/WAN/ACS changes.
+Both IPv4 and IPv6 DNS servers use the same captured server form; domain
+and static hosts are separate forms handled by the expanded batch.
 The user-provided capture included one successful DNS servers Apply with
 the exact 7-field body. No raw capture data or customer values are stored.
 """
@@ -67,29 +68,41 @@ class ExperimentalF6201BDNS:
         self.clear()
         if firmware != EXACT_FIRMWARE or not ExperimentalF6201BWrites.opted_in():
             raise PermissionError("DNS experimental não autorizado para este firmware.")
-        if not isinstance(changes, dict) or not changes or (
-            set(changes) - {"ipv4_1", "ipv4_2"}
-        ):
-            raise ValueError("Somente servidores DNS IPv4 são aceitos.")
+        allowed = {"ipv4_1", "ipv4_2", "ipv6_1", "ipv6_2"}
+        if not isinstance(changes, dict) or not changes or set(changes) - allowed:
+            raise ValueError("Somente servidores DNS IPv4/IPv6 são aceitos.")
         for key, value in changes.items():
             if not isinstance(value, str):
                 raise ValueError("O endereço DNS deve ser uma string IPv4.")
-            if key == "ipv4_2" and value.strip() == "":
-                continue  # servidor secundário opcional
-            try:
-                ipaddress.IPv4Address(value)
-            except ipaddress.AddressValueError:
-                raise ValueError("Endereço IPv4 inválido.") from None
+            if key.startswith("ipv6"):
+                if value.strip() in ("", "::"):
+                    continue
+                try:
+                    ipaddress.IPv6Address(value.strip())
+                except ipaddress.AddressValueError:
+                    raise ValueError("Endereço IPv6 inválido.") from None
+            else:
+                if key == "ipv4_2" and value.strip() == "":
+                    continue
+                try:
+                    ipaddress.IPv4Address(value.strip())
+                except ipaddress.AddressValueError:
+                    raise ValueError("Endereço IPv4 inválido.") from None
         current = _read(zte)
         before = {key: current.get(key, "") for key in (
             "SerIPAddress1", "SerIPAddress2",
             "SerIPv6Address1", "SerIPv6Address2"
         )}
         target = dict(before)
-        for source, dest in (("ipv4_1","SerIPAddress1"),
-                             ("ipv4_2","SerIPAddress2")):
+        for source, dest in (
+            ("ipv4_1", "SerIPAddress1"),
+            ("ipv4_2", "SerIPAddress2"),
+            ("ipv6_1", "SerIPv6Address1"),
+            ("ipv6_2", "SerIPv6Address2"),
+        ):
             if source in changes:
-                target[dest] = changes[source].strip()
+                value = changes[source].strip()
+                target[dest] = (value or "::") if source.startswith("ipv6") else value
         delta = {key: {"before": before[key], "after": target[key]}
                  for key in target if before[key] != target[key]}
         if not delta:
@@ -100,7 +113,7 @@ class ExperimentalF6201BDNS:
         )
         return {
             "nonce": nonce, "expires_in_seconds": PREVIEW_TTL,
-            "changes": delta, "operation": "dns_ipv4", "model": "F6201B",
+            "changes": delta, "operation": "dns_ipv4_ipv6", "model": "F6201B",
             "warning": "Alterar DNS pode afetar a conexão de clientes.",
         }
 

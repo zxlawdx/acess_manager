@@ -10,13 +10,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 import secrets
 import time
+import re
 import xml.etree.ElementTree as ET
 
 from apps.zte_manager.model.zte_configuration import (
     zte_wlan_channel_configuration as rf,
 )
 from apps.zte_manager.model.zte_configuration.zte_post import post_menu
-from apps.zte_manager.services.f6201b_evidence import OBSERVED_APPLY_FIELDS
+from apps.zte_manager.model.zte_configuration import zte_dns
+from apps.zte_manager.services.f6201b_evidence import (
+    OBSERVED_APPLY_FIELDS, DNS_DOMAIN_APPLY_FIELDS,
+)
 from apps.zte_manager.services.f6201b_writes import (
     EXACT_FIRMWARE, PREVIEW_TTL, ExperimentalF6201BWrites,
 )
@@ -33,8 +37,8 @@ CAPTURED_RF_FIELDS = tuple(
     if name not in {"IF_ACTION", "_InstID", "_sessionTOKEN"}
 )
 SKIPPED_PROFILE_FEATURES = (
-    "SSID/senha (perfil não possui esses campos)",
-    "DNS IPv6", "domínio DNS", "hosts DNS estáticos",
+    "Senhas/SSIDs: editar e confirmar por rede na aba Wi-Fi",
+    "Outras opções da ONT fora do perfil do atendente",
 )
 
 
@@ -46,6 +50,8 @@ class BatchPreview:
     created: float
     radios: list[dict]
     dns_nonce: str | None
+    domain: dict | None
+    hosts: list[dict]
 
 
 def _read_radios(zte) -> tuple[list[dict], dict]:
@@ -77,6 +83,42 @@ def _build_target(data: dict, radio: dict, band: str, config: dict) -> dict:
             + ", ".join(missing)
         )
     return target
+
+
+def _domain_name_valid(value: str) -> bool:
+    if value == "":
+        return True
+    if len(value) > 253 or not value.isascii():
+        return False
+    return all(re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+               for label in value.split("."))
+
+
+def _read_hosts(zte) -> list[dict]:
+    xml = zte_dns.dns_hosts_raw(zte)
+    if not isinstance(xml, str):
+        raise RuntimeError("A tabela de nomes DNS não retornou XML.")
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError:
+        raise RuntimeError("Resposta de hosts DNS inválida.") from None
+    if root.tag != "ajax_response_xml_root" or root.find("ALLDNSHOST") is None:
+        raise RuntimeError("ALLDNSHOST não foi confirmado para este login.")
+    return zte_dns._parse_hosts(xml)
+
+
+def _temporarily_write(zte, original_post, operation):
+    if original_post is None:
+        raise PermissionError("Transporte de escrita original indisponível.")
+    blocked = zte.session.post
+    old_enabled = getattr(zte, "writes_enabled", False)
+    try:
+        zte.session.post = original_post
+        zte.writes_enabled = True
+        return operation()
+    finally:
+        zte.session.post = blocked
+        zte.writes_enabled = old_enabled
 
 
 class ExperimentalF6201BProfile:
@@ -128,7 +170,7 @@ class ExperimentalF6201BProfile:
         # Existing DNS adapter reads current values and validates IPv4.
         current_dns = dns_adapter.read(zte)
         requested = {}
-        for key in ("ipv4_1", "ipv4_2"):
+        for key in ("ipv4_1", "ipv4_2", "ipv6_1", "ipv6_2"):
             value = dns.get(key)
             if value is not None and value != current_dns.get(key):
                 requested[key] = value
@@ -138,14 +180,51 @@ class ExperimentalF6201BProfile:
             )
             dns_nonce = dns_preview["nonce"]
             dns_delta = dns_preview["changes"]
-        if not proposals and not dns_delta:
+        domain_pending = None
+        domain_value = dns.get("domain_name")
+        if domain_value is not None:
+            if not isinstance(domain_value, str) or not _domain_name_valid(domain_value):
+                raise ValueError("Domínio DNS inválido.")
+            from apps.zte_manager.services.f6201b_dns_writes import _read as _read_dns
+            current_domain = _read_dns(zte)
+            domain_before = current_domain.get("DomainName") or ""
+            if domain_value != domain_before:
+                domain_pending = {
+                    "instance_id": current_domain["_InstID"],
+                    "before": domain_before, "after": domain_value,
+                }
+        target_hosts = dns.get("hosts") or []
+        if not isinstance(target_hosts, list) or len(target_hosts) > 32:
+            raise ValueError("Máximo de 32 nomes DNS no perfil.")
+        existing_hosts = _read_hosts(zte) if target_hosts else []
+        existing_by_name = {item["nome"]: item for item in existing_hosts}
+        host_changes = []
+        names_seen = set()
+        for target_host in target_hosts:
+            if not isinstance(target_host, dict):
+                raise ValueError("Entrada DNS incorreta no perfil.")
+            name = str(target_host.get("nome") or "").strip()
+            ip = str(target_host.get("ip") or "").strip()
+            zte_dns._validate_host(name, ip)
+            if name in names_seen:
+                raise ValueError("Host DNS duplicado no perfil: " + name)
+            names_seen.add(name)
+            before = existing_by_name.get(name)
+            if before is None or (before.get("ip") or "") != ip:
+                host_changes.append({
+                    "name": name, "after": ip,
+                    "before": before.get("ip") if before else None,
+                    "instance_id": before.get("id") if before else "-1",
+                })
+        if not proposals and not dns_delta and not domain_pending and not host_changes:
             raise ValueError(
                 "O equipamento já possui os valores suportados pelo perfil. "
                 "Nenhuma alteração experimental necessária."
             )
         nonce = secrets.token_urlsafe(24)
         self._pending = BatchPreview(
-            nonce, host, revision, time.monotonic(), proposals, dns_nonce
+            nonce, host, revision, time.monotonic(), proposals, dns_nonce,
+            domain_pending, host_changes
         )
         return {
             "model": "F6201B", "operation": "profile_captured",
@@ -153,6 +232,11 @@ class ExperimentalF6201BProfile:
             "radios": [{"band": item["band"], "changes": item["changes"]}
                        for item in proposals],
             "dns": dns_delta,
+            "domain": ({key: domain_pending[key]
+                        for key in ("before", "after")}
+                       if domain_pending else None),
+            "hosts": [{"name": entry["name"], "before": entry["before"],
+                       "after": entry["after"]} for entry in host_changes],
             "not_included": list(SKIPPED_PROFILE_FEATURES),
             "warning": (
                 "Teste experimental: alterações sequenciais; falhas podem "
@@ -220,6 +304,66 @@ class ExperimentalF6201BProfile:
                     "name": "Wi-Fi " + item["band"], "success": True,
                     "detail": "Aplicado e confirmado por releitura.",
                 })
+            if proposal.domain:
+                from apps.zte_manager.services.f6201b_dns_writes import _read as _read_dns
+                domain = proposal.domain
+                live = _read_dns(zte)
+                if (live.get("_InstID") != domain["instance_id"] or
+                        (live.get("DomainName") or "") != domain["before"]):
+                    raise RuntimeError("Domínio DNS mudou após a prévia.")
+                fields = {
+                    "IF_ACTION": "Apply", "_InstID": domain["instance_id"],
+                    "DomainName": domain["after"],
+                    "Btn_cancel_instCfgArea": "",
+                    "Btn_apply_instCfgArea": "",
+                }
+                payload = [(key, fields[key]) for key in DNS_DOMAIN_APPLY_FIELDS
+                           if key != "_sessionTOKEN"]
+                zte.get_view("dns", Menu3Location=0)
+                _temporarily_write(zte, original_post, lambda: post_menu(
+                    zte, "dns_localdns_lua.lua", payload
+                ))
+                if (_read_dns(zte).get("DomainName") or "") != domain["after"]:
+                    raise RuntimeError("Domínio DNS não confirmado na releitura.")
+                steps.append({
+                    "name": "Domínio DNS", "success": True,
+                    "detail": "Aplicado e confirmado.",
+                })
+
+            for host_item in proposal.hosts:
+                current_hosts = _read_hosts(zte)
+                matching = [row for row in current_hosts
+                            if row.get("nome") == host_item["name"]]
+                if len(matching) > 1:
+                    raise RuntimeError("Host DNS duplicado na ONT.")
+                live = matching[0] if matching else None
+                if ((live.get("id") if live else "-1") != host_item["instance_id"]
+                    or (live.get("ip") if live else None) != host_item["before"]):
+                    raise RuntimeError("Host DNS mudou após a prévia.")
+                fields = {
+                    "IF_ACTION": "Apply",
+                    "_InstID": host_item["instance_id"],
+                    "OBJID": "DNS", "LeaseTime": "isDNSHOSTInst",
+                    "HostName": host_item["name"],
+                    "IPAddress": host_item["after"],
+                }
+                payload = [(key, fields[key])
+                           for key in OBSERVED_APPLY_FIELDS["dns_hostname_lua.lua"]
+                           if key != "_sessionTOKEN"]
+                zte.get_view("dns", Menu3Location=0)
+                _temporarily_write(zte, original_post, lambda: post_menu(
+                    zte, "dns_hostname_lua.lua", payload
+                ))
+                confirmed = _read_hosts(zte)
+                if not any(row["nome"] == host_item["name"] and
+                           row.get("ip") == host_item["after"]
+                           for row in confirmed):
+                    raise RuntimeError("Host DNS não confirmado; revise antes de repetir.")
+                steps.append({
+                    "name": "Host DNS " + host_item["name"],
+                    "success": True, "detail": "Aplicado e confirmado.",
+                })
+
             if proposal.dns_nonce:
                 result = dns_adapter.apply(
                     zte, host=host, firmware=firmware,
