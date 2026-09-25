@@ -1248,6 +1248,26 @@ def capture_profile(context=None):
     )
 
 
+# Experimental F6201B profile uses the captured RF+DNS forms, NOT the
+# unrestricted legacy batch shared by F6600P/F670L.
+@api.post("/f6201b/profile/preview")
+def f6201b_profile_preview(context=None):
+    def action():
+        data = _validated(AttendantRequest, context)
+        return zte_service.f6201b_profile_preview(data.attendant)
+    return _safe_call(action)
+
+
+@api.post("/f6201b/profile/apply")
+def f6201b_profile_apply(context=None):
+    body = _json(context)
+    return _safe_call(
+        zte_service.f6201b_profile_apply,
+        str(body.get("nonce") or "")[:100],
+        str(body.get("confirmation") or "")[:50],
+    )
+
+
 @api.post("/profiles/apply")
 def apply_profile(context=None):
     def action():
