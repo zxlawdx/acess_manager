@@ -1,0 +1,291 @@
+/*
+ * ZTE Automatic • Workbench
+ * Inspired by conventional Portuguese desktop modeling tools:
+ * menus + inspector workspace + compact data grids, not sci-fi cards.
+ * Uses the existing DOM and CSS tokens; it does not change router I/O.
+ * This is an interpretation, not a copy of brModelo's branded interface.
+ */
+html[data-theme="light"] {
+  --ui-bg:#f2f4f2; --ui-sidebar:#e8ebe8; --ui-surface:#ffffff;
+  --ui-elevated:#f4f6f3; --ui-field:#ffffff;
+  --ui-border:#c5cec7; --ui-border-muted:#dce2dc;
+  --ui-text:#27342d; --ui-text-secondary:#516159; --ui-muted:#6c7a72;
+  --ui-accent:#3c6552; --ui-accent-contrast:#fff; --ui-accent-wash:#e4efe7;
+  --ui-success:#267349; --ui-success-wash:#e6f2e7;
+  --ui-warning:#946718; --ui-warning-wash:#f9f0dc;
+  --ui-danger:#ad4b40; --ui-danger-wash:#faebe8;
+  --ui-neutral:#566259; --ui-neutral-wash:#edf0ec;
+  --ui-shadow:none; --ui-radius:5px;
+}
+html[data-theme="dark"] {
+  --ui-bg:#222724; --ui-sidebar:#292f2a; --ui-surface:#303732;
+  --ui-elevated:#3b453d; --ui-field:#272e29;
+  --ui-border:#59665b; --ui-border-muted:#455247;
+  --ui-text:#f0f4ef; --ui-text-secondary:#c0cdc2; --ui-muted:#a4b3a6;
+  --ui-accent:#96c6a3; --ui-accent-contrast:#1c3022; --ui-accent-wash:#364d3c;
+  --ui-success:#a4d2ad; --ui-success-wash:#385543;
+  --ui-warning:#eccb91; --ui-warning-wash:#534630;
+  --ui-danger:#e9a79f; --ui-danger-wash:#573b37;
+  --ui-neutral:#bec9bf; --ui-neutral-wash:#404b42;
+  --ui-shadow:none; --ui-radius:5px;
+}
+:root {
+  --sidebar-width:248px;
+  --console-ribbon-height:28px;
+  --topbar-height:76px;
+}
+body {
+  font-family:"Segoe UI Variable","Segoe UI",Arial,sans-serif!important;
+  font-size:13px!important;line-height:1.48!important;
+}
+.app-shell {min-width:0!important}
+.workspace {min-width:0!important}
+.sidebar {
+  width:var(--sidebar-width)!important;
+  min-width:var(--sidebar-width)!important;
+  padding:0 12px 12px!important;
+  background:var(--ui-sidebar)!important;
+  border-right:1px solid var(--ui-border)!important;
+}
+.brand-row {
+  margin:0 0 10px!important;padding:16px 6px 14px!important;
+  border-bottom:1px solid var(--ui-border)!important;
+}
+.brand-mark,.brand-mark svg {height:32px!important;width:32px!important}
+.brand-copy strong {
+  font-size:14px!important;font-weight:700!important;
+  letter-spacing:-.015em!important;
+}
+.brand-copy span {
+  font:500 10px/1.4 "Segoe UI",sans-serif!important;
+  letter-spacing:.01em!important;color:var(--ui-muted)!important;
+}
+.nav-caption {
+  margin:12px 0 4px!important;padding:9px 10px 3px!important;
+  border-top:1px solid var(--ui-border-muted)!important;
+}
+.nav-caption span {
+  font:600 10px/1.4 "Segoe UI",sans-serif!important;
+  letter-spacing:.045em!important;color:var(--ui-muted)!important;
+}
+.nav-menu {gap:2px!important}
+.menu-item {
+  min-height:37px!important;padding:7px 10px!important;
+  gap:10px!important;font-size:13px!important;font-weight:500!important;
+  color:var(--ui-text-secondary)!important;
+  border:1px solid transparent!important;border-radius:4px!important;
+}
+.menu-item .material-symbols-outlined {
+  font-size:17px!important;color:var(--ui-muted)!important;
+}
+.menu-item.active {
+  border:1px solid var(--ui-border)!important;
+  background:var(--ui-surface)!important;font-weight:670!important;
+  color:var(--ui-text)!important;box-shadow:none!important;
+}
+.menu-item.active::before {display:none!important}
+.menu-item.active .material-symbols-outlined {color:var(--ui-accent)!important}
+.sidebar-bottom {
+  padding-top:12px!important;border-top:1px solid var(--ui-border)!important;
+}
+.target-card {
+  padding:12px!important;margin:0 0 10px!important;
+  background:var(--ui-surface)!important;border:1px solid var(--ui-border)!important;
+  box-shadow:none!important;
+}
+.target-head span,.connection-state small {
+  font:600 10px/1.4 "Segoe UI",sans-serif!important;
+  letter-spacing:.03em!important;
+}
+.target-card > strong {
+  font-size:15px!important;font-weight:700!important;
+}
+.target-card > .mono {font-size:11px!important}
+.console-ribbon {
+  background:var(--ui-sidebar)!important;
+  border-bottom:1px solid var(--ui-border)!important;
+  color:var(--ui-muted)!important;
+}
+.console-signature {
+  font:500 10px/1.4 "Segoe UI",sans-serif!important;
+  letter-spacing:.04em!important;
+}
+.window-dot {width:7px!important;height:7px!important;box-shadow:none!important}
+.window-dot.red,.window-dot.amber,.window-dot.green {
+  background:var(--ui-border)!important;
+}
+.topbar {
+  min-height:var(--topbar-height)!important;
+  padding:13px 21px!important;
+  background:var(--ui-surface)!important;
+  border-bottom:1px solid var(--ui-border)!important;
+  box-shadow:none!important;
+}
+.topbar-title .eyebrow {
+  font-size:10px!important;font-weight:600!important;
+  letter-spacing:.03em!important;
+}
+.topbar-title h1 {
+  font-size:22px!important;font-weight:700!important;
+  line-height:1.18!important;margin-top:2px!important;
+  letter-spacing:-.035em!important;
+}
+.topbar-title p {font-size:12px!important;margin-top:5px!important}
+.topbar-actions {gap:7px!important}
+.topbar-quick-actions {gap:4px!important}
+.topbar-quick-actions .console-action {
+  padding:7px 9px!important;min-height:33px!important;
+  color:var(--ui-text-secondary)!important;
+  border-color:transparent!important;
+  background:transparent!important;box-shadow:none!important;
+}
+.topbar-quick-actions .console-action:hover {
+  border-color:var(--ui-border)!important;
+  background:var(--ui-elevated)!important;
+}
+.console-action .material-symbols-outlined {font-size:16px!important}
+.device-chip {
+  max-width:220px!important;min-height:34px!important;
+  background:var(--ui-elevated)!important;
+  border:1px solid var(--ui-border-muted)!important;
+  box-shadow:none!important;
+}
+.device-chip > .material-symbols-outlined {
+  font-size:17px!important;color:var(--ui-muted)!important;
+}
+.zoom-control {border-color:var(--ui-border-muted)!important}
+.main-content {
+  padding:25px clamp(14px,2.4vw,38px) 45px!important;
+  max-width:1800px;margin:0 auto;
+}
+.page {min-width:0!important}
+.section-intro {
+  margin-bottom:25px!important;
+  padding-bottom:14px!important;
+  border-bottom:1px solid var(--ui-border-muted)!important;
+}
+.section-intro h2 {font-size:23px!important;letter-spacing:-.03em!important}
+.section-intro p {font-size:13px!important;max-width:800px}
+.section-kicker,.eyebrow {color:var(--ui-muted)!important}
+.subsection-title {
+  margin:26px 0 12px!important;
+  padding:0 0 9px!important;
+  border-bottom:1px solid var(--ui-border-muted)!important;
+}
+.subsection-title h3 {
+  font:660 15px/1.35 "Segoe UI",sans-serif!important;
+  color:var(--ui-text)!important;
+}
+.subsection-title .material-symbols-outlined {
+  color:var(--ui-muted)!important;font-size:17px!important;
+}
+.panel,.kpi-card,.ssid-card,.radio-card,.wan-card,.client-card,
+.feature-card,.profile-card,.diagnostic-card,.feature-control-card,
+.support-result-card,.management-list-item,.management-status-strip > div {
+  background:var(--ui-surface)!important;
+  background-image:none!important;border:1px solid var(--ui-border)!important;
+  border-radius:5px!important;box-shadow:none!important;
+}
+.panel {padding:20px!important}
+.panel-header {
+  margin-bottom:14px!important;padding-bottom:11px!important;
+  border-bottom:1px solid var(--ui-border-muted)!important;
+}
+.panel-header h3,.panel-heading h3 {
+  font-size:15px!important;font-weight:660!important;
+}
+.kpi-card::before {display:none!important}
+.kpi-card {min-height:0!important;padding:17px!important}
+.kpi-value {font-size:24px!important;font-weight:680!important}
+.ssid-card,.wan-card,.radio-card {overflow:hidden}
+.ssid-card-head,.wan-card-head {
+  background:var(--ui-elevated)!important;
+  border-bottom:1px solid var(--ui-border-muted)!important;
+}
+.ssid-icon,.feature-control-icon {
+  border:1px solid var(--ui-border-muted)!important;
+  background:var(--ui-surface)!important;
+  color:var(--ui-muted)!important;
+}
+.button,.console-action,.icon-button,.sidebar-action {
+  min-height:34px;border-radius:4px!important;
+  font-size:12px!important;font-weight:600!important;
+  box-shadow:none!important;
+}
+.button.primary,#connectButton,#applyProfileButton,#supportRunButton {
+  background:var(--ui-accent)!important;
+  color:var(--ui-accent-contrast)!important;
+  border:1px solid var(--ui-accent)!important;
+}
+.button.ghost,.button-secondary {
+  background:var(--ui-surface)!important;
+  color:var(--ui-text-secondary)!important;
+  border:1px solid var(--ui-border)!important;
+}
+button:focus-visible,input:focus-visible,select:focus-visible {
+  outline:2px solid var(--ui-accent)!important;outline-offset:2px!important;
+}
+.form-group label,.field > span {
+  font-size:11px!important;font-weight:650!important;
+  color:var(--ui-text-secondary)!important;
+}
+input:not([type=checkbox]):not([type=radio]),select,textarea {
+  min-height:35px!important;border-radius:4px!important;
+  background:var(--ui-field)!important;
+}
+.badge,.status-badge {
+  padding:3px 7px!important;border-radius:3px!important;
+  font:640 10px/1.3 "Segoe UI",sans-serif!important;
+  letter-spacing:0!important;
+}
+.table-wrap {
+  border:1px solid var(--ui-border-muted)!important;
+  border-radius:4px!important;overflow:auto;
+}
+table {border-collapse:collapse!important}
+th {
+  background:var(--ui-elevated)!important;
+  font-size:11px!important;font-weight:650!important;
+  padding:10px 12px!important;
+}
+td {padding:10px 12px!important;font-size:12px!important}
+tr:nth-child(even) td {background:var(--ui-elevated)!important}
+tr:hover td {background:var(--ui-accent-wash)!important}
+.port-card {
+  background:var(--ui-elevated)!important;
+  border:1px solid var(--ui-border)!important;border-radius:4px!important;
+  box-shadow:none!important;padding:12px!important;
+}
+.status-led,.live-dot {width:7px!important;height:7px!important}
+.request-status-indicator {
+  background:var(--ui-surface)!important;
+  color:var(--ui-text-secondary)!important;
+  border:1px solid var(--ui-border)!important;
+  box-shadow:var(--ui-shadow)!important;
+}
+.request-status-indicator.is-error {
+  color:var(--ui-danger)!important;border-color:var(--ui-danger)!important;
+}
+.busy-overlay:not(.hidden) {
+  background:rgba(22,26,23,.58)!important;backdrop-filter:none!important;
+}
+.busy-overlay .busy-card {
+  background:var(--ui-surface)!important;
+  border:1px solid var(--ui-border)!important;
+  color:var(--ui-text)!important;
+  box-shadow:0 8px 30px rgba(0,0,0,.13)!important;
+}
+@media(max-width:1080px){
+  :root{--sidebar-width:212px}
+  .main-content{padding:17px 14px 35px!important}
+  .topbar{padding:12px 14px!important}
+  .topbar-title h1{font-size:20px!important}
+}
+@media(max-width:730px){
+  .sidebar{padding:0 8px 10px!important}
+  .topbar-quick-actions{display:none!important}
+  .panel{padding:14px!important}
+}
+@media(prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms!important;animation-duration:.01ms!important}
+}
