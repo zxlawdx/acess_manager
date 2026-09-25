@@ -579,6 +579,7 @@ async function probeCapabilities() {
 let trackerQuickScanKey = null;
 let trackerQuickScanPromise = null;
 let trackerDetectedModel = null;
+let trackerSelectedFamily = null;
 
 function renderTrackerDiscovery(data) {
     const grid = document.getElementById("trackerCapabilityGrid");
@@ -662,6 +663,7 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
         const matched = (response.catalog?.models || []).find(item =>
             normalized.includes(item.model.toUpperCase())
         );
+        trackerSelectedFamily = matched?.family || null;
         if (matched) select.value = matched.model;
         select.dataset.loaded = "true";
         discoveryCatalogHost = currentHost;
@@ -750,8 +752,25 @@ async function runMultimodelDiagnostic() {
     }
     modelDiagnosticRunning = true;
     if (button) button.disabled = true;
-    const sections = ["device", "wan", "dsl", "optical",
-        "wifi_ssids", "wifi_clients", "lan_clients"];
+    const family = advancedState.trackerProbe?.family
+        || trackerSelectedFamily;
+    // Consultar somente páginas documentadas para a família, em vez de
+    // gastar 10-20 segundos em cada menu que não existe na F6600P.
+    const profiles = {
+        f6640: ["device", "wan", "wifi_ssids",
+            "wifi_clients", "lan_clients"],
+        h288a: ["device", "wan", "wifi_clients", "lan_clients"],
+        h388x: ["device", "wan", "wifi_clients", "lan_clients"],
+        h2640: ["device", "dsl", "wifi_clients", "lan_clients"],
+        vue: ["wan", "wifi_clients", "lan_clients"]
+    };
+    const sections = [...(profiles[family] || [
+        "device", "wan", "wifi_clients", "lan_clients"
+    ])];
+    if (family === "f6640" &&
+        String(trackerDetectedModel || "").toUpperCase().includes("F6600P")) {
+        sections.splice(2, 0, "optical");
+    }
     const report = {
         model: trackerDetectedModel || "Sessão atual",
         read_only: true, sections: {}, errors: {}
