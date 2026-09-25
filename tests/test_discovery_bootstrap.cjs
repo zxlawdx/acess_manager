@@ -29,13 +29,17 @@ const calls = [];
 const context = {
     console,
     Promise,
+    AbortController,
+    setTimeout,
+    clearTimeout,
+    trackerDetectedModel: null,
     currentHost: "192.0.2.25",
     ontConnected: true,
     routerWriteEnabled: true,
     advancedState: { loaded: false },
     document: { getElementById: id => elements[id] || null },
     Option: function(label, value) { this.label = label; this.value = value; },
-    discoveryRequest: async (endpoint) => {
+    apiRequest: async endpoint => {
         calls.push(endpoint);
         assert.equal(endpoint, "/discovery/bootstrap");
         return {
@@ -47,7 +51,6 @@ const context = {
             ] }
         };
     },
-    apiRequest: async () => { throw Error("Não deveria chamar API antiga"); },
     renderTrackerDiscovery: data => {
         calls.push("render:" + data.model);
         elements.trackerCapabilityGrid.textContent = JSON.stringify(data);
