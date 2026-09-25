@@ -723,36 +723,80 @@ function autoDiscoverTracker() {
 }
 
 
+let modelDiagnosticRunning = false;
 async function runMultimodelDiagnostic() {
     const output = document.getElementById("multimodelProbeOutput");
-    const select = document.getElementById("multimodelSelect");
+    const button = document.getElementById("multimodelDiagnosticButton");
     if (!ontConnected) {
         showToast("Conecte ao equipamento antes do diagnóstico.");
         return;
     }
-    setBusy(true, "Executando leituras por família (sem alterações)...");
+    if (modelDiagnosticRunning) {
+        showToast("O diagnóstico anterior ainda está em andamento.");
+        return;
+    }
+    modelDiagnosticRunning = true;
+    if (button) button.disabled = true;
+    const sections = ["device", "wan", "dsl", "optical",
+        "wifi_ssids", "wifi_clients", "lan_clients"];
+    const report = {
+        model: trackerDetectedModel || "Sessão atual",
+        read_only: true, sections: {}, errors: {}
+    };
+    const render = (step, total) => {
+        if (!output) return;
+        const ok = Object.values(report.sections).filter(
+            item => item?.available
+        ).length;
+        output.textContent = [
+            `DIAGNÓSTICO DO EQUIPAMENTO — ${step}/${total} ETAPAS`,
+            `Seções com dados: ${ok}`,
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            JSON.stringify(report, null, 2)
+        ].join("\n");
+    };
+    setBusy(true, "Preparando diagnóstico por modelo...");
+    render(0, sections.length);
     try {
-        // Diagnóstico não depende de detecção manual anterior.
-        // A escolha foi fixada no login e verificada pelo servidor.
-        const report = await discoveryRequest("/multimodel/diagnostic", {
-            method: "POST",
-            body: JSON.stringify({ model: trackerDetectedModel || null }),
-            timeoutMs: 95000
-        });
-        output.textContent = JSON.stringify(report, null, 2);
-        showToast(
-            report.supported
-                ? "Diagnóstico por família concluído. Seções não confirmadas estão sinalizadas."
-                : (report.reason || "Não foi possível confirmar endpoints deste firmware.")
-        );
-    } catch (error) {
-        output.textContent = "Diagnóstico indisponível; a sessão não foi encerrada.";
-        showToast(error.message);
+        // Toda consulta tem resposta própria. Erro em LAN/DSL não impede
+        // visualizar WAN, recursos ou GPON já obtidos.
+        for (const [index, section] of sections.entries()) {
+            setBusy(true,
+                `Diagnóstico ${index + 1}/${sections.length}: ${section}...`);
+            try {
+                const data = await discoveryRequest("/multimodel/diagnostic", {
+                    method: "POST",
+                    body: JSON.stringify({ section }),
+                    timeoutMs: 48000
+                });
+                report.model = data.model || report.model;
+                report.family = data.family;
+                Object.assign(report.sections, data.sections || {});
+                if (data.reason) report.errors[section] = data.reason;
+            } catch (error) {
+                report.errors[section] = String(error.message || error);
+                // Timeout não invalida o que já temos, mas a consulta
+                // anterior pode ainda estar executando no backend.
+                if (/passou de \d+s/.test(String(error.message))) {
+                    render(index + 1, sections.length);
+                    showToast("Diagnóstico parcial: tempo esgotado. Dados anteriores mantidos.");
+                    break;
+                }
+            }
+            render(index + 1, sections.length);
+        }
+        const found = Object.values(report.sections).filter(
+            item => item?.available
+        ).length;
+        showToast(found
+            ? `Diagnóstico finalizado: ${found} seções com dados.`
+            : "Diagnóstico sem dados confirmados. Consulte os motivos no relatório.");
     } finally {
+        modelDiagnosticRunning = false;
+        if (button) button.disabled = false;
         setBusy(false);
     }
 }
-
 
 async function showMultimodelMesh() {
     const output = document.getElementById("multimodelProbeOutput");
