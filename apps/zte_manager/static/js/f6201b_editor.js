@@ -40,6 +40,13 @@
             if (node) node.replaceChildren();
         }
         for (const id of ["wifiClientCount","lanClientCount","clientTotalKpi"]) set(id,"0");
+        // As limitações de escrita são específicas da sessão experimental.
+        // Ao voltar para a F6600P/F670L, restaurar todos os formulários.
+        $("adminPasswordForm")?.classList.remove("hidden");
+        for (const id of ["applyDefaultButton","rebootDeviceButton"]) {
+            const control = $(id);
+            if (control) control.disabled = false;
+        }
         for (const id of ["deviceModel","deviceFirmware","deviceCpu","deviceMemory",
             "deviceUptime","opticalRxKpi","opticalStatusKpi"]) set(id,"-");
         // Native F6600P/F670L loadAll repopulates exactly these existing nodes.
@@ -99,7 +106,8 @@
         const root = $("wifiNetworks");
         if (!root) return;
         if (!ssids.length) {
-            root.innerHTML = nativeInfo("SSIDs","Nenhuma rede retornada.");
+            root.innerHTML = failure("Redes Wi-Fi",
+                "Nenhuma rede foi retornada pelo firmware neste login.");
             return;
         }
         const canEdit = capabilities?.opted_in === true &&
@@ -355,6 +363,20 @@
             set("opticalRxKpi",optics.rx_power_raw??"-");
             set("opticalStatusKpi",optical?.available?
                 "Valor bruto do firmware (unidade não confirmada)":"Leitura não confirmada");
+        }
+        const pppoe=$("dashboardPppoe");
+        if(pppoe)pppoe.innerHTML=
+            '<div class="loading">Credenciais PPPoE não expostas por este perfil.</div>';
+        const dns=$("dashboardDns");
+        if(dns){
+            const section=await diagnostic("dns",run).catch(()=>null);
+            if(run!==epoch)return;
+            const item=section?.data?.[0]||{};
+            dns.innerHTML=section?.available?
+                '<div class="mini-metrics">'+
+                '<div><span>DNS 1</span><strong>'+safe(item.dns_ipv4_1||"-")+'</strong></div>'+
+                '<div><span>DNS 2</span><strong>'+safe(item.dns_ipv4_2||"-")+'</strong></div></div>':
+                nativeInfo("DNS",section);
         }
         const operations=$("applyDefaultButton");
         if(operations)operations.disabled=true;
