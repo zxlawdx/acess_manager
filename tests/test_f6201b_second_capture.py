@@ -57,7 +57,9 @@ class CaptureCompatibilityTests(unittest.TestCase):
                          ("IF_ACTION","Enable","_InstID"))
         self.assertEqual(SSID_APPLY_FIELDS[-2:],
                          ("encode","_sessionTOKEN"))
-        self.assertNotIn("Btn_apply_WLANSSIDConf",SSID_APPLY_FIELDS)
+        self.assertIn("Btn_apply_WLANSSIDConf",SSID_APPLY_FIELDS)
+        self.assertIn("_InstID_GUEST",SSID_APPLY_FIELDS)
+        self.assertEqual(len(SSID_APPLY_FIELDS),40)
         self.assertEqual(len(SSID_APPLY_FIELDS),
                          len(set(SSID_APPLY_FIELDS)))
         self.assertEqual(OBSERVED_APPLY_FIELDS[
