@@ -8,6 +8,7 @@ from apps.zte_manager.services.multimodel_service import (
     find_family,
     probe,
     mesh_summary,
+    read_clients,
 )
 
 
@@ -82,6 +83,24 @@ class MultiModelDiscoveryTests(unittest.TestCase):
         self.assertEqual(client.calls[0]["_type"], "vueData")
         self.assertEqual(client.calls[1]["_tag"], "vue_client_data")
         self.assertEqual(result["read_only"], True)
+
+    def test_legacy_h_series_clients_return_normalized_fields(self):
+        class HClient(FakeClient):
+            pass
+
+        h = HClient(
+            "<ajax_response_xml_root><IF_ERRORSTR>SUCC</IF_ERRORSTR>"
+            "<OBJ_ACCESSDEV_ID><Instance>"
+            "<ParaName>HostName</ParaName><ParaValue>ClienteTeste</ParaValue>"
+            "<ParaName>MACAddress</ParaName><ParaValue>AA:BB:CC:DD:EE:FF</ParaValue>"
+            "<ParaName>IPAddress</ParaName><ParaValue>192.168.1.7</ParaValue>"
+            "</Instance></OBJ_ACCESSDEV_ID></ajax_response_xml_root>"
+        )
+        result = read_clients(h, "H388X", "wifi_clients")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["hostname"], "ClienteTeste")
+        self.assertEqual(result[0]["ip"], "192.168.1.7")
+        self.assertEqual(h.calls[1][1], "accessdev_ssiddev_lua.lua")
 
     def test_mesh_summary_contains_counts_but_no_client_identifiers(self):
         class FakeMeshResponse:
