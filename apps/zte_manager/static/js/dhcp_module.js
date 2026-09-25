@@ -249,3 +249,103 @@
       root.append(note);
     }
   }
+
+  function renderReservations(data) {
+    const old = id("dhcpReservationPanel");
+    if (old) old.remove();
+    const caps = data.capabilities || {};
+    if (caps.reservation_write === false ||
+        !Array.isArray(data.reservations)) return;
+    const panel = document.createElement("div");
+    panel.id = "dhcpReservationPanel";
+    panel.className = "dhcp-reservation";
+    const title = document.createElement("h4");
+    title.textContent = "Reservas IPv4";
+    panel.append(title);
+    const form = document.createElement("form");
+    form.onsubmit = () => false;
+    const entries = {};
+    for (const [key,placeholder] of Object.entries({
+      name:"Nome da reserva", ip:"IP reservado", mac:"Endereço MAC"
+    })) {
+      const input = document.createElement("input");
+      input.required = true;
+      input.placeholder = placeholder;
+      input.autocomplete = "off";
+      entries[key] = input;
+      form.append(input);
+    }
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.className = "button primary";
+    submit.textContent = "Salvar reserva";
+    form.append(submit);
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      if (busy) return;
+      busy = true; submit.disabled = true;
+      feedback("Salvando reserva DHCP…");
+      setBusy(true, "Aplicando reserva DHCP…");
+      try {
+        const result = await apiRequest("/network/dhcp/reservation/save", {
+          method:"POST", body:JSON.stringify(Object.fromEntries(
+            Object.entries(entries).map(([key,node])=>[key,node.value.trim()])
+          ))
+        });
+        feedback(result.success
+          ? "Reserva enviada. Atualizando leitura da ONT."
+          : "Reserva não confirmada.", result.success ? "ok" : "error");
+        if (result.success) await refresh();
+      } catch(error) {
+        feedback("Reserva não confirmada: " + error.message, "error");
+      } finally {
+        busy = false; submit.disabled = false; setBusy(false);
+      }
+    });
+    panel.append(form);
+    for (const reserve of data.reservations) {
+      const row = document.createElement("div");
+      row.className = "dhcp-reservation-row";
+      const label = document.createElement("span");
+      label.textContent = [reserve.Name,reserve.IPAddr,reserve.MACAddr]
+        .filter(Boolean).join(" · ");
+      row.append(label);
+      if (reserve._InstID) {
+        const button = document.createElement("button");
+        button.className = "button ghost";
+        button.type = "button";
+        button.textContent = "Excluir";
+        button.onclick = async () => {
+          if (busy) return;
+          busy = true; button.disabled = true;
+          setBusy(true, "Removendo reserva DHCP…");
+          try {
+            const result = await apiRequest("/network/dhcp/reservation/delete",{
+              method:"POST",body:JSON.stringify({id:reserve._InstID})
+            });
+            feedback(result.success ? "Reserva removida." :
+              "Remoção não confirmada.", result.success ? "ok" : "error");
+            if (result.success) await refresh();
+          } catch(error) {
+            feedback("Remoção não confirmada: " + error.message, "error");
+          } finally {
+            busy = false; button.disabled = false; setBusy(false);
+          }
+        };
+        row.append(button);
+      }
+      panel.append(row);
+    }
+    id("dhcpModule").append(panel);
+  }
+  id("dhcpRefresh")?.addEventListener("click",()=>void refresh());
+  id("dhcpConfigForm")?.addEventListener("submit",event=>void apply(event));
+  document.addEventListener("zte:session-changed",() => {
+    pageEpoch++; snapshot = null;
+    feedback("Conecte a uma ONT para consultar DHCP.");
+  });
+  document.addEventListener("zte:page-open",event => {
+    if (event.detail?.pageName === "wan")
+      void refresh();
+  });
+})();
