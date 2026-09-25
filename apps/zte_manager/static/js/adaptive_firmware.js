@@ -258,6 +258,7 @@
         );
         const revision = bootstrap?.session_revision || "";
         if (!bootstrap?.connected || routerWriteEnabled || nativeModels.has(model)
+            || (model === "F6201B" && bootstrap.model_verified !== true)
             || !profile || !profile.candidate_features?.length
             || (detected && selected && detected !== "ZTE" && detected !== selected)) {
             teardownOldPanels();
