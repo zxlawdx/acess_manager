@@ -166,8 +166,8 @@ class CapturedFormTests(unittest.TestCase):
     def test_unknown_route_and_bad_values_fail_before_write(self):
         with self.assertRaises(PermissionError):
             self.workbench.preview(
-                self.zte, tag="tr069_remotemgr_lua.lua",
-                instance_id="DEV.TEST.IF1", changes={"UserPassword": "x"},
+                self.zte, tag="unlisted_route_lua.lua",
+                instance_id="DEV.TEST.IF1", changes={"UnknownField": "x"},
                 host="192.0.2.10", revision="r1", attendant="tech1")
         with self.assertRaisesRegex(ValueError, "0 ou 1"):
             self.workbench.preview(
