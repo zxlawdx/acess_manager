@@ -112,7 +112,7 @@ class CapturedFormTests(unittest.TestCase):
         preview = self.preview()
         self.assertEqual(preview["diff"]["BPDUEnable"],
                          {"before": "0", "after": "1"})
-        self.assertTrue(preview["risk_ack_required"])
+        self.assertTrue(preview["impact_warning"])
 
         def stub_post(zte, tag, payload, **kwargs):
             self.assertEqual(tag, "bpdu_lua.lua")
@@ -134,21 +134,26 @@ class CapturedFormTests(unittest.TestCase):
         with self.assertRaisesRegex(PermissionError, "Nonce"):
             self.apply(preview["nonce"])
 
-    def test_attendant_switch_consumes_nonce_without_post(self):
+    def test_session_change_consumes_nonce_without_post(self):
         preview = self.preview()
         with self.assertRaisesRegex(PermissionError, "expirada"):
-            self.apply(preview["nonce"], attendant="tech2")
+            self.apply(preview["nonce"], revision="new-session")
         self.assertEqual(self.zte.post_count, 0)
-        with self.assertRaises(PermissionError):
-            self.apply(preview["nonce"], attendant="tech1")
-
-    def test_risk_ack_is_mandatory_and_consumes_nonce(self):
-        preview = self.preview()
-        with self.assertRaisesRegex(PermissionError, "risco"):
-            self.apply(preview["nonce"], risk_ack=False)
         with self.assertRaises(PermissionError):
             self.apply(preview["nonce"])
-        self.assertEqual(self.zte.post_count, 0)
+
+    def test_extra_risk_ack_and_phrase_not_required(self):
+        proposal = self.preview()
+        def applied(zte, tag, payload, **_kwargs):
+            zte.post_count += 1
+            zte.current["BPDUEnable"] = "1"
+            return "<synthetic-success/>"
+        with patch("apps.zte_manager.services.f6201b_workbench.post_menu",
+                   side_effect=applied):
+            report = self.apply(proposal["nonce"], risk_ack=False,
+                                confirmation="")
+        self.assertTrue(report["verified"])
+        self.assertEqual(self.zte.post_count, 1)
 
     def test_rejects_stale_snapshot_without_issuing_post(self):
         preview = self.preview()
@@ -175,14 +180,19 @@ class CapturedFormTests(unittest.TestCase):
                 instance_id="DEV.TEST.IF1", changes={"BPDUEnable": "2"},
                 host="192.0.2.10", revision="r1", attendant="tech1")
 
-    def test_opt_in_required_for_preview_and_apply(self):
+    def test_environment_flag_does_not_gate_router_operation(self):
         with patch.dict(os.environ, {"ZTE_F6201B_EXPERIMENTAL_WRITES": "0"}):
-            with self.assertRaisesRegex(PermissionError, "ZTE_F6201B"):
-                self.preview()
-        preview = self.preview()
-        with patch.dict(os.environ, {"ZTE_F6201B_EXPERIMENTAL_WRITES": "0"}):
-            with self.assertRaises(PermissionError):
-                self.apply(preview["nonce"])
+            preview = self.preview()
+            def applied(zte, tag, payload, **_kwargs):
+                zte.post_count += 1
+                zte.current["BPDUEnable"] = "1"
+                return "<synthetic-success/>"
+            with patch("apps.zte_manager.services.f6201b_workbench.post_menu",
+                       side_effect=applied):
+                report = self.apply(preview["nonce"], confirmation="",
+                                    risk_ack=False)
+        self.assertTrue(report["verified"])
+        self.assertEqual(self.zte.post_count, 1)
 
     def test_timeout_consumes_nonce(self):
         preview = self.preview()
