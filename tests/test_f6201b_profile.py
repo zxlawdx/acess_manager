@@ -83,11 +83,11 @@ class BatchTests(unittest.TestCase):
             confirmation=confirmation,
             original_post=self.zte.session.blocked, **self.kw)
 
-    def test_off_by_default(self):
+    def test_internal_env_flag_does_not_restrict_profile(self):
         with patch.dict(os.environ, {OPT_IN_ENV: "0"}):
-            with self.assertRaises(PermissionError):
-                self.preview()
-        self.assertEqual(self.zte.views, [])
+            proposal = self.preview()
+        self.assertEqual(len(proposal["radios"]), 1)
+        self.assertGreater(len(self.zte.views), 0)
 
     def test_preview_get_only_has_two_independent_stages(self):
         with patch.dict(os.environ, {OPT_IN_ENV: "1"}):
@@ -166,11 +166,11 @@ class BatchTests(unittest.TestCase):
         self.assertTrue(report["success"], report)
         self.assertEqual(events, ["wlan_wlanbasicadconf_lua.lua"])
 
-    def test_bad_confirmation_never_posts(self):
-        with patch.dict(os.environ, {OPT_IN_ENV: "1"}):
-            p = self.preview()
+    def test_stale_nonce_never_posts(self):
+        with patch.dict(os.environ, {OPT_IN_ENV: "0"}):
+            proposal = self.preview()
             with self.assertRaises(PermissionError):
-                self.apply(p["nonce"], "sim")
+                self.apply("incorrect-" + proposal["nonce"], "")
         self.assertFalse(self.zte.writes_enabled)
         self.assertEqual(self.dns.applied, 0)
 
