@@ -1720,7 +1720,9 @@ async function detectFirmwareDiagnosticOptions() {
                         entry => entry.name === item.feature
                     );
                     if (option) {
-                        option.justConfirmed = !option.confirmed && item.available;
+                        if (item.available && !option.confirmed) {
+                            firmwareDiagnosticState.selected.add(item.feature);
+                        }
                         option.confirmed = item.available === true;
                     }
                 }
@@ -1729,7 +1731,16 @@ async function detectFirmwareDiagnosticOptions() {
             firmwareDiagnosticState.scanComplete = true;
             const confirmed = features.filter(item => item.confirmed).length;
             status.textContent = "Adaptador nativo: " + confirmed + " recursos confirmados."; 
-            result.textContent = "Selecione os recursos confirmados para consultar sua estrutura.";
+            if (window.renderAdaptiveDiagnostic) {
+                const sections = {};
+                features.forEach(item => {
+                    sections[item.name] = {
+                        available: item.confirmed,
+                        data: item.confirmed ? { status: "GET confirmado" } : null
+                    };
+                });
+                window.renderAdaptiveDiagnostic({ model, sections }, result);
+            }
             return;
         }
         do {
@@ -1752,21 +1763,29 @@ async function detectFirmwareDiagnosticOptions() {
                     item => item.name === capability.feature
                 );
                 if (option) {
-                    option.justConfirmed = !option.confirmed && capability.available === true;
+                    if (capability.available && !option.confirmed) {
+                        firmwareDiagnosticState.selected.add(capability.feature);
+                    }
                     option.confirmed = capability.available === true;
                 }
             }
             offset = Number(batch.next_offset ?? (offset + 2));
             status.textContent =
                 `Verificando ${model}: ${Math.min(offset, total)}/${total} endpoints avaliados...`;
-            result.textContent = JSON.stringify({
-                model,
-                evaluated: Math.min(offset, total),
-                total,
-                firmware: firmwareDiagnosticState.firmware,
-                experimental: model.toUpperCase().includes("F6201B"),
-                results
-            }, null, 2);
+            if (window.renderAdaptiveDiagnostic) {
+                const sections = {};
+                Object.entries(results).forEach(([name, item]) => {
+                    sections[name] = {
+                        available: item.available,
+                        data: item.available ? { status: "GET confirmado" } : null,
+                        reason: item.reason
+                    };
+                });
+                window.renderAdaptiveDiagnostic({ model, sections }, result, {
+                    progress: "Verificação " + Math.min(offset, total) +
+                              " de " + total
+                });
+            }
             renderFirmwareDiagnosticOptions();
             if (batch.session_expired) {
                 stopped = true;
