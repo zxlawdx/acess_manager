@@ -272,7 +272,9 @@ def _shape(xml: str, expected_root: str) -> dict[str, Any]:
     return result
 
 
-def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
+def probe(
+    zte, model: str, *, max_endpoints: int = 4, start: int = 0
+) -> dict[str, Any]:
     selected, family = find_family(model)
     if family is None:
         return {
@@ -284,8 +286,10 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
     candidates = dict(FAMILY[family])
     if selected == "F6600P":
         candidates["pon_optical"] = PON_F6600P
+    start = max(0, min(int(start), len(candidates)))
+    count = max(1, min(int(max_endpoints), 10))
     endpoints = {}
-    for name, endpoint in list(candidates.items())[:max(1, min(max_endpoints, 10))]:
+    for name, endpoint in list(candidates.items())[start:start + count]:
         try:
             xml = _fetch(zte, endpoint)
             # Faz a validação local mesmo quando implementação de ZTE mudar.
@@ -328,6 +332,8 @@ def probe(zte, model: str, *, max_endpoints: int = 4) -> dict[str, Any]:
             for name in candidates if name not in endpoints
         ],
         "model_specific": list(MODEL_EXTRAS.get(selected, ())),
+        "next_offset": min(len(candidates), start + count),
+        "total_candidates": len(candidates),
     }
 
 
