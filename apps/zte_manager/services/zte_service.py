@@ -91,6 +91,7 @@ class ZTEService:
 
                 return {
                     "success": True,
+                    "writes_enabled": getattr(self._zte, "writes_enabled", True),
                     "attendant": self.current_attendant,
                     "host": self.current_host,
                     "reused_session": True,
@@ -168,6 +169,15 @@ class ZTEService:
                 self._device_info.get("firmware"),
             )
             self._selected_model = detected_model or model_hint
+            # Somente os adaptadores originais possuem rotinas de escrita
+            # implementadas/testadas; os novos perfis iniciam read-only.
+            from apps.zte_manager.model.device_adapters import (
+                F6600PAdapter, F670LAdapter,
+            )
+            self._zte.writes_enabled = isinstance(
+                self._adapter,
+                (F6600PAdapter, F670LAdapter),
+            )
 
             self._capability_service = CapabilityService(
                 self._zte,
@@ -241,6 +251,7 @@ class ZTEService:
                 "attendant": self.current_attendant,
                 "host": self.current_host,
                 "reused_session": False,
+                "writes_enabled": self._zte.writes_enabled,
                 "device": self._device_info,
                 "adapter": self._adapter.name,
             }
