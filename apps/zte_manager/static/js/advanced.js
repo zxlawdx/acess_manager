@@ -1414,7 +1414,7 @@ async function loadDhcpOperations() {
         const basic = data.basic || {};
 
         document.getElementById(
-            "dhcpEnabled"
+            "advancedDhcpEnabled"
         ).checked = (
             String(basic.ServerEnable) === "1"
         );
@@ -1428,11 +1428,11 @@ async function loadDhcpOperations() {
         ).value = basic.MaxAddress || "";
 
         document.getElementById(
-            "dhcpDns1"
+            "advancedDhcpDns1"
         ).value = basic.DNSServer1 || "";
 
         document.getElementById(
-            "dhcpDns2"
+            "advancedDhcpDns2"
         ).value = basic.DNSServer2 || "";
 
         document.getElementById(
@@ -1543,7 +1543,7 @@ async function saveDhcpBasic(event) {
 
     const payload = {
         enabled: document.getElementById(
-            "dhcpEnabled"
+            "advancedDhcpEnabled"
         ).checked,
         min_address: document.getElementById(
             "dhcpMinAddress"
@@ -1552,10 +1552,10 @@ async function saveDhcpBasic(event) {
             "dhcpMaxAddress"
         ).value.trim(),
         dns1: document.getElementById(
-            "dhcpDns1"
+            "advancedDhcpDns1"
         ).value.trim(),
         dns2: document.getElementById(
-            "dhcpDns2"
+            "advancedDhcpDns2"
         ).value.trim(),
         lease_time: Number(
             document.getElementById(
