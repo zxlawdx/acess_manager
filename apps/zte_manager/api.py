@@ -801,6 +801,7 @@ def discovery_bootstrap(context=None):
                 and zte_service._adapter is not None
                 and zte_service._adapter.name in {
                     "zte-f670l-thinklua", "zte-f6600p-thinklua",
+                    "zte-f6201b-thinklua",
                 }
             ),
             "session_revision": zte_service._session_revision,
