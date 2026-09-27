@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .base import DeviceAdapter, EndpointSpec, FeatureSpec
 from apps.zte_manager.services.multimodel_service import find_family, FAMILY
+from apps.zte_manager.services.f6201b_evidence import OBSERVED_APPLY_FIELDS
 
 
 def _endpoint(
@@ -306,6 +307,31 @@ class F670LAdapter(ThinkLuaAdapter):
     name = "zte-f670l-thinklua"
 
 
+class F6201BAdapter(ThinkLuaAdapter):
+    """Native F6201B GET catalog, with operator-initiated captured writes.
+
+    A writable feature here means a mapped form exists, NOT that the
+    current session has exposed every conditional field. Each command's
+    dedicated adapter validates the actual form immediately before POST.
+    """
+    name = "zte-f6201b-thinklua"
+
+    @property
+    def features(self) -> dict[str, FeatureSpec]:
+        return {
+            key: FeatureSpec(
+                key, key.replace("_", " ").capitalize(),
+                (EndpointSpec(
+                    view=endpoint.view, tag=endpoint.tag,
+                    query=dict(endpoint.params), object_keys=(endpoint.root,),
+                ),),
+                writable=endpoint.tag in OBSERVED_APPLY_FIELDS,
+                notes="Capability candidata: GET e formulário real determinam disponibilidade.",
+            )
+            for key, endpoint in FAMILY["f6201b_candidate"].items()
+        }
+
+
 class MultiFamilyReadOnlyAdapter(ThinkLuaAdapter):
     """Novos modelos: só declarar os endpoints verificados como candidatos.
 
@@ -359,6 +385,8 @@ def select_adapter(
 
     if "F6600P" in normalized:
         return F6600PAdapter(model, firmware)
+    if "F6201B" in normalized:
+        return F6201BAdapter(model, firmware)
 
     key, family = find_family(normalized)
     if family:
