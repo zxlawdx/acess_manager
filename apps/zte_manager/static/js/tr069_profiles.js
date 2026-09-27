@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const byId = id => document.getElementById(id);
-  let profiles = [], busy = false, epoch = 0;
+  let profiles = [], busy = false, epoch = 0, setupSnapshot = null;
   const clearSecrets = () => {
     for (const id of ["tr069ProviderPassword", "tr069ProviderRequestPassword"]) {
       if (byId(id)) byId(id).value = "";
@@ -65,6 +65,7 @@
     try {
       const response = await apiRequest("/tr069/setup");
       if (requestEpoch !== epoch) return;
+      setupSnapshot = response;
       const candidates = response.wan_candidates || [];
       selection.replaceChildren(new Option("Selecione a WAN PPPoE TR069", ""));
       for (const wan of candidates) {
@@ -76,8 +77,13 @@
       if (original && candidates.some(wan => wan.name === original)) {
         selection.value = original;
       }
+      const needSecrets = [
+        !response.acs_secret_exists ? "senha ACS" : "",
+        !response.request_secret_exists ? "senha da solicitação de conexão" : ""
+      ].filter(Boolean).join(" e ");
       byId("tr069WanStatus").textContent = candidates.length
-        ? "Selecione a WAN PPPoE/TR069 existente e confirme antes de aplicar."
+        ? "Selecione a WAN PPPoE/TR069 existente e confirme antes de aplicar." +
+          (needSecrets ? " Preencha " + needSecrets + " para a primeira ativação." : "")
         : "Não há WAN PPPoE com serviço TR069 comprovado. Crie ou ajuste " +
           "a WAN de contrato na tela de gerenciamento antes de continuar.";
       button.disabled = candidates.length === 0 || response.available !== true;
@@ -119,11 +125,20 @@
     });
     byId("tr069ProviderSave")?.addEventListener("click", () => guard(async () => {
       const profile = collect();
+      // Keep password inputs ONLY in this still-active WebView session,
+      // not in the profile POST or browser storage.
+      const saveEpoch = epoch;
+      const pwd = byId("tr069ProviderPassword").value;
+      const requestPwd = byId("tr069ProviderRequestPassword").value;
       const result = await apiRequest("/tr069/providers/save", {
         method: "POST", body: JSON.stringify({profile})
       });
       await listProviders(result.name);
-      feedback("Perfil salvo localmente sem armazenar as senhas.");
+      if (epoch === saveEpoch) {
+        byId("tr069ProviderPassword").value = pwd;
+        byId("tr069ProviderRequestPassword").value = requestPwd;
+      }
+      feedback("Perfil salvo. As senhas continuam apenas nesta sessão.");
     }));
     byId("tr069ProviderDelete")?.addEventListener("click", () => guard(async () => {
       const name = byId("tr069ProviderSelect").value;
@@ -157,6 +172,13 @@
       const password = byId("tr069ProviderPassword").value || null;
       const connection_request_password =
         byId("tr069ProviderRequestPassword").value || null;
+      if (setupSnapshot?.acs_secret_exists === false && !password) {
+        throw new Error("Informe a senha ACS para configurar esta ONT.");
+      }
+      if (setupSnapshot?.request_secret_exists === false &&
+          !connection_request_password) {
+        throw new Error("Informe a senha de solicitação de conexão.");
+      }
       const button = byId("tr069ProviderApply");
       button.disabled = true;
       setBusy(true, "Aplicando TR-069 e relendo os parâmetros...");
@@ -179,6 +201,7 @@
     }));
     document.addEventListener("zte:session-changed", () => {
       epoch++;
+      setupSnapshot = null;
       clearSecrets();
       if (byId("tr069EligibleWan")) {
         byId("tr069EligibleWan").replaceChildren(
