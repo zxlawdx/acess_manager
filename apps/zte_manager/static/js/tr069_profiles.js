@@ -142,8 +142,10 @@
       const wan_name = byId("tr069EligibleWan").value;
       const stored = profiles.find(item => item.name === name);
       const draft = collect();
-      if (!name || !wan_name || !stored ||
-          JSON.stringify(draft) !== JSON.stringify(stored)) {
+      const unchanged = stored && Object.keys(draft).every(
+        key => draft[key] === stored[key]
+      );
+      if (!name || !wan_name || !unchanged) {
         throw new Error(
           "Selecione uma WAN e salve quaisquer alterações do perfil antes de aplicar."
         );
