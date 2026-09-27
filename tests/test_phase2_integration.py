@@ -366,6 +366,26 @@ class RealServiceIntegrationTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.service._zte.session.post("http://example.invalid")
 
+    def test_native_diagnostics_are_readable_even_when_writes_are_off(self):
+        from apps.zte_manager import api as api_module
+        self.connect()
+        self.service._zte.writes_enabled = False
+        with patch.object(api_module, "zte_service", self.service):
+            bootstrap = api_module.discovery_bootstrap()
+        self.assertTrue(bootstrap["connected"])
+        self.assertFalse(bootstrap["writes_enabled"])
+        self.assertTrue(bootstrap["native_diagnostics_available"])
+        self.assertTrue(bootstrap["model_verified"])
+
+    def test_native_diagnostics_do_not_advertise_captured_f6201b(self):
+        from apps.zte_manager import api as api_module
+        FakeZTE.model = "ZXHN F6201B"
+        FakeZTE.firmware = "V9.3.10P7N7"
+        self.connect()
+        with patch.object(api_module, "zte_service", self.service):
+            bootstrap = api_module.discovery_bootstrap()
+        self.assertFalse(bootstrap["native_diagnostics_available"])
+
     def test_f6201b_remains_on_captured_legacy_path(self):
         FakeZTE.model = "ZXHN F6201B"
         FakeZTE.firmware = "V9.3.10P7N7"
