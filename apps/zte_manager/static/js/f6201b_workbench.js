@@ -59,7 +59,7 @@
     const norm = String(info?.detected_model || "").toUpperCase()
       .replace(/[^A-Z0-9]/g, "");
     return info?.connected === true && info?.model_verified === true &&
-      info?.writes_enabled === false && norm === "F6201B";
+      norm === "F6201B";
   }
   function makeButton(label, callback, klass = "button ghost") {
     const button = el("button", klass, label);
@@ -295,7 +295,7 @@
       const root = el("section", "f6201b-wb");
       root.id = ID;
       root.append(el("div", "f6201b-wb-head",
-        "GERENCIAMENTO F6201B · V9.3.10P7N7"));
+        "GERENCIAMENTO F6201B · SESSÃO AUTENTICADA"));
       root.append(el("p", "f6201b-wb-count", "Carregando inventário…"));
       const layout = el("div", "f6201b-wb-layout");
       layout.append(el("nav", "f6201b-wb-routes"));
