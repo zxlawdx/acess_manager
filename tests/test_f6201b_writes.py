@@ -150,11 +150,17 @@ class F6201BWriteTests(unittest.TestCase):
             self.assertIs(self.zte.session.post, denied_post)
             self.assertFalse(self.zte.writes_enabled)
 
-    def test_rejects_wrong_firmware_unknown_field_or_view(self):
+    def test_unreviewed_firmware_still_checks_fields_and_live_view(self):
         with patch.dict(os.environ, {OPT_IN_ENV: "1"}):
-            with self.assertRaises(PermissionError):
+            # Version catalogs are informational. The real View/XML and
+            # existing PSK preservation decide if a new revision works.
+            proposal = self.writer.preview(self.zte, host="192.0.2.1",
+                firmware="V9.3.10P8N1", ssid_id="DEV.WIFI.AP1",
+                config={"ssid": "NEW"})
+            self.assertEqual(proposal["firmware"], "V9.3.10P8N1")
+            with self.assertRaises(ValueError):
                 self.writer.preview(self.zte, host="192.0.2.1",
-                    firmware="V9.3.10P8N1", ssid_id="DEV.WIFI.AP1",
+                    firmware="", ssid_id="DEV.WIFI.AP1",
                     config={"ssid": "NEW"})
             with self.assertRaises(ValueError):
                 self.preview({"password": "no!"})
