@@ -20,6 +20,7 @@ let renderCount=0;const ctx={
  ontConnected:true,currentHost:"192.0.2.1",
  trackerDetectedModel:null,trackerSelectedFamily:null,
  trackerSessionGeneration:0,
+ discoveryBootPromise:null,discoveryCatalogHost:null,discoveryCatalogRevision:null,
  globalThis:{currentZteRevision:"rev-1"},
  Option:function(label,value){this.label=label;this.value=value;},
  document:{getElementById:id=>elements[id]||null},
