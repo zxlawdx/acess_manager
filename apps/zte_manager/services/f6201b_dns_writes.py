@@ -66,8 +66,8 @@ class ExperimentalF6201BDNS:
 
     def preview(self, zte, *, host, firmware, changes) -> dict:
         self.clear()
-        if firmware != EXACT_FIRMWARE:
-            raise PermissionError("DNS experimental não autorizado para este firmware.")
+        if not firmware:
+            raise ValueError("Firmware não identificado no login atual.")
         allowed = {"ipv4_1", "ipv4_2", "ipv6_1", "ipv6_2"}
         if not isinstance(changes, dict) or not changes or set(changes) - allowed:
             raise ValueError("Somente servidores DNS IPv4/IPv6 são aceitos.")
@@ -137,8 +137,8 @@ class ExperimentalF6201BDNS:
               original_post) -> dict:
         proposal = self._pending
         self.clear()
-        if firmware != EXACT_FIRMWARE:
-            raise PermissionError("DNS experimental bloqueado.")
+        if not firmware:
+            raise ValueError("Firmware não identificado no login atual.")
         if not proposal or not secrets.compare_digest(
             proposal.nonce, str(nonce)
         ):
