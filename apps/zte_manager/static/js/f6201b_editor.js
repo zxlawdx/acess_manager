@@ -53,7 +53,7 @@
     }
     const verifiedModel = info =>
         info?.connected === true &&
-        String(info.detected_model || "").toUpperCase().replace(/[^A-Z0-9]/g,"") === "F6201B" &&
+        String(info.detected_model || "").toUpperCase().replace(/[^A-Z0-9]/g,"").endsWith("F6201B") &&
         info.model_verified === true;
 
     async function bootstrap() {
