@@ -15,6 +15,9 @@ class SavedProfileServiceTests(unittest.TestCase):
 
     def test_other_saved_presets_are_not_an_employee_permission_boundary(self):
         fake = object()
+        # A writable F6201B borrows the live authenticated POST; this
+        # synthetic fake carries no HTTP session, so inject the transport.
+        self.service._readonly_original_post = lambda *_args, **_kwargs: None
         expected = {"success": True, "noop": False}
         with patch.object(self.service, "_f6201b_write_firmware",
                           return_value=EXACT_FIRMWARE), patch.object(
