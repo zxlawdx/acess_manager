@@ -10,6 +10,9 @@ from apps.zte_manager.application.operations.audit_executor import AuditedOperat
 from apps.zte_manager.application.operations.verifiers import verify_dhcp, verify_ssid
 from apps.zte_manager.application.inventory import DeviceRegistrar
 from apps.zte_manager.infrastructure.zte.adapters import ThinkLuaDeviceAdapter
+from apps.zte_manager.infrastructure.zte.adapters.thinklua_device import (
+    DeviceWriteNotApproved,
+)
 from apps.zte_manager.infrastructure.zte.firmware_policy import (
     FirmwarePolicy, canonical_model,
 )
@@ -98,6 +101,25 @@ class ZTEService:
     # CONEXÃO
     # =========================================================
 
+    def _disable_session_writes(self) -> None:
+        """Block direct transport POSTs after any missing/changed identity.
+
+        Keep the original transport only for the existing exact-firmware
+        F6201B captured workflow, whose own guards remain unchanged.
+        """
+        if self._zte is None:
+            return
+        self._zte.writes_enabled = False
+        if self._readonly_original_post is None:
+            self._readonly_original_post = self._zte.session.post
+
+            def blocked_post(*_args, **_kwargs):
+                raise PermissionError(
+                    "Sessão somente leitura; reconecte após validar o firmware."
+                )
+
+            self._zte.session.post = blocked_post
+
     def connect(
         self,
         ip: str,
@@ -144,6 +166,7 @@ class ZTEService:
                         type(exc).__name__,
                     )
                     if self._runtime_driver is not None:
+                        self._disable_session_writes()
                         raise ValueError(
                             "Não foi possível revalidar a ONT. Desconecte e reconecte."
                         ) from None
@@ -151,9 +174,9 @@ class ZTEService:
                     previous_identity = self._device_info
                     if not actual or any(
                         actual.get(key) != previous_identity.get(key)
-                        for key in ("modelo", "firmware", "serial")
+                        for key in ("fabricante", "modelo", "firmware", "serial")
                     ):
-                        self._zte.writes_enabled = False
+                        self._disable_session_writes()
                         raise ValueError(
                             "A identidade ou o firmware mudou; desconecte e reconecte."
                         )
@@ -350,18 +373,9 @@ class ZTEService:
                 self._zte.writes_enabled = False
 
             if not self._zte.writes_enabled:
-                # Defesa em profundidade: as APIs de alguns firmwares
-                # usam POST direto fora de post_menu (backup, reboot etc.).
-                # Bloquear no transporte evita que um botão antigo faça
-                # alterações por acidente no equipamento recém-cadastrado.
-                def read_only_post(*args, **kwargs):
-                    raise PermissionError(
-                        "Sessão de descoberta somente leitura. "
-                        "POST bloqueado até existir adaptador de escrita validado."
-                    )
-
-                self._readonly_original_post = self._zte.session.post
-                self._zte.session.post = read_only_post
+                # Block even direct POSTs outside the legacy post_menu gateway.
+                # The captured F6201B path retains the original post handle.
+                self._disable_session_writes()
 
             self._capability_service = CapabilityService(
                 self._zte,
@@ -511,16 +525,41 @@ class ZTEService:
         # Revalidate the authenticated driver before *all* normal
         # _run_change writes; perform GET before before_reader prepares a form.
         if self._runtime_driver is not None:
-            self._runtime_driver.assert_session_identity()
-        audited = self._audited_operation.execute(
-            session_id=self._history_session_id,
-            operation=operation,
-            target=target,
-            before_reader=before_reader,
-            action=action,
-            after_reader=after_reader or before_reader,
-            verify=verify,
-        )
+            try:
+                self._runtime_driver.assert_session_identity()
+            except DeviceWriteNotApproved:
+                self._disable_session_writes()
+                try:
+                    history_repository.save_change(
+                        self._history_session_id,
+                        operation=operation,
+                        target=target,
+                        before=None,
+                        after=None,
+                        success=False,
+                        outcome="failed",
+                        message="device_identity_preflight_denied",
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "preflight_audit_failed error_type=%s",
+                        type(exc).__name__,
+                    )
+                raise
+        try:
+            audited = self._audited_operation.execute(
+                session_id=self._history_session_id,
+                operation=operation,
+                target=target,
+                before_reader=before_reader,
+                action=action,
+                after_reader=after_reader or before_reader,
+                verify=verify,
+            )
+        except DeviceWriteNotApproved:
+            # The device changed between initial preflight and action.
+            self._disable_session_writes()
+            raise
         return audited.value
 
     def _audit_device_command(self, operation, target, command):
