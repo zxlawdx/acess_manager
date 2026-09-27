@@ -101,6 +101,73 @@
       (totals.existing_adapter || 0) + " integradas · " +
       (totals.needs_form_adapter || 0) + " dependem de captura";
   }
+  async function inspectMapped(tag, container) {
+    const current = generation;
+    container.replaceChildren(el("p", "muted", "Lendo estrutura na ONT..."));
+    try {
+      const result = await api("/multimodel/mapped-inspect", {tag});
+      if (current !== generation) return;
+      container.replaceChildren();
+      if (!result.available) {
+        container.append(el("p", "f6201b-wb-hint",
+          result.reason || "O firmware não confirmou este GET."));
+      } else {
+        container.append(el("p", "muted",
+          "Estrutura da resposta atual (sem credenciais, endereços ou valores):"));
+        container.append(el("pre", "f6201b-wb-structure",
+          JSON.stringify(result.structure, null, 2)));
+      }
+    } catch (error) {
+      if (current === generation) {
+        container.replaceChildren(el("p", "f6201b-wb-hint",
+          "Falha na consulta: " + (error?.message || "GET indisponível")));
+      }
+    }
+  }
+
+  async function renderGetInventory(root) {
+    if (root.querySelector(".f6201b-wb-read-inventory")) return;
+    const requestGeneration = generation;
+    const area = el("details", "f6201b-wb-read-inventory");
+    area.append(el("summary", "", "Todas as leituras capturadas (GET)"));
+    const query = el("input");
+    query.type = "search";
+    query.placeholder = "Buscar menu / categoria";
+    query.setAttribute("aria-label", "Buscar leitura do equipamento");
+    const list = el("div", "f6201b-wb-read-list");
+    const output = el("div", "f6201b-wb-read-output");
+    area.append(query, list, output);
+    root.append(area);
+    try {
+      const data = await api("/multimodel/mapped-routes");
+      if (requestGeneration !== generation) return;
+      const routes = Array.isArray(data?.routes) ? data.routes : [];
+      area.querySelector("summary").textContent =
+        "Leituras capturadas (GET): " + routes.length;
+      function render() {
+        const filter = query.value.trim().toLowerCase();
+        const fragment = document.createDocumentFragment();
+        for (const route of routes.filter(item =>
+          (item.tag + " " + item.category).toLowerCase().includes(filter))) {
+          const btn = el("button", "f6201b-wb-item",
+            route.category + " · " + route.tag);
+          btn.type = "button";
+          btn.addEventListener("click", () =>
+            void inspectMapped(route.tag, output));
+          fragment.append(btn);
+        }
+        list.replaceChildren(fragment);
+      }
+      query.addEventListener("input", render);
+      render();
+    } catch (error) {
+      if (requestGeneration === generation) {
+        output.textContent =
+          "Não foi possível carregar o catálogo GET: " + error.message;
+      }
+    }
+  }
+
   async function fetchInspect(root) {
     const requestGeneration = generation;
     const tag = selected;
@@ -268,8 +335,11 @@
     detail.append(el("p", "f6201b-wb-hint", row.reason));
     if (row.state !== "supervised_lab") {
       detail.append(el("p", "f6201b-wb-hint",
-        "Esta rota não é elegível para POST neste editor. O catálogo descreve " +
-        "exatamente o estado observado sem presumir compatibilidade."));
+        "A escrita deste formulário utiliza o módulo dedicado, ou ainda " +
+        "precisa de campos condicionais retornados pelo firmware."));
+      const inspection = el("div", "f6201b-wb-mapped-shape");
+      detail.append(makeButton("Ler estrutura GET", () =>
+        void inspectMapped(row.tag, inspection)), inspection);
       return;
     }
     const toolbar = el("div", "f6201b-wb-toolbar");
@@ -315,6 +385,7 @@
     }
     renderList(root);
     renderDetails(root);
+    void renderGetInventory(root);
   }
   document.addEventListener("zte:session-changed", reset);
   document.addEventListener("zte:page-open", event => {
