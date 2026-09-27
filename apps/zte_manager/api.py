@@ -2157,11 +2157,12 @@ def tr069_setup(context=None):
 def apply_tr069_provider(context=None):
     def action():
         data = _validated(TR069ProviderApplyRequest, context)
+        if data.confirm is not True:
+            raise ValueError("Confirme a aplicação dos parâmetros ACS.")
         return zte_service.apply_tr069_provider(
             data.name, data.wan_name,
             password=data.password,
             connection_request_password=data.connection_request_password,
-            confirm=data.confirm,
         )
     return _safe_call(action)
 
