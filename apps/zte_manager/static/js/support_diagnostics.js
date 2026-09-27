@@ -407,27 +407,25 @@ async function runSupportDiagnostic({
         return;
     }
 
-    if (!routerWriteEnabled) {
-        let state;
-        try {
-            state = await apiRequest("/discovery/bootstrap");
-        } catch (error) {
-            showToast("Não foi possível validar a sessão: " + error.message);
-            return;
-        }
-        if (state.model_verified === true &&
-            /F6201B$/.test(String(state.detected_model || "")
-                .toUpperCase().replace(/[^A-Z0-9]/g, ""))) {
-            await classicF6201BDiagnostic(state, {full, dashboard});
-            return;
-        }
-        if (state.native_diagnostics_available !== true) {
-            // Unknown/Vue: use safe, individually validated read-only GETs.
-            await runSelectedFirmwareDiagnostic();
-            return;
-        }
-        // A falha de uma escrita não remove diagnósticos GET dos
-        // F670L/F6600P reconhecidos pelo backend.
+    // Protocol selection is independent of read/write permission:
+    // F6201B owns its native captured ping/trace/RF diagnostic workflow
+    // even when this session has normal operator POST rights.
+    let state;
+    try {
+        state = await apiRequest("/discovery/bootstrap");
+    } catch (error) {
+        showToast("Não foi possível validar a sessão: " + error.message);
+        return;
+    }
+    if (state.model_verified === true &&
+        /F6201B$/.test(String(state.detected_model || "")
+            .toUpperCase().replace(/[^A-Z0-9]/g, ""))) {
+        await classicF6201BDiagnostic(state, {full, dashboard});
+        return;
+    }
+    if (!routerWriteEnabled && state.native_diagnostics_available !== true) {
+        await runSelectedFirmwareDiagnostic();
+        return;
     }
 
     supportDiagnosticState.running = true;
@@ -1928,7 +1926,7 @@ async function loadFirmwareDiagnosticOptions() {
         firmwareDiagnosticState.revision = bootstrap.session_revision;
         firmwareDiagnosticState.model = model;
         firmwareDiagnosticState.classicMode =
-            model.toUpperCase().replace(/[^A-Z0-9]/g, "") === "F6201B" &&
+            /F6201B$/.test(model.toUpperCase().replace(/[^A-Z0-9]/g, "")) &&
             bootstrap.model_verified === true;
         firmwareDiagnosticState.firmware = bootstrap.firmware || null;
         firmwareDiagnosticState.scanComplete = false;
