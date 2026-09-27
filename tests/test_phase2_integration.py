@@ -166,7 +166,7 @@ class FirmwarePolicyTests(unittest.TestCase):
 
     def test_invalid_telemetry_manifest_cannot_disable_known_model_writes(self):
         with patch.dict("os.environ", {
-            "ZTE_APPROVED_FIRMWARE_JSON": '{"F670L": ["UNTESTED"]}'
+            "ZTE_APPROVED_FIRMWARE_JSON": '{"Other": ["UNTESTED"]}'
         }):
             with self.assertLogs(
                 "apps.zte_manager.infrastructure.zte.firmware_policy", "WARNING"
