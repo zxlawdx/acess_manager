@@ -48,6 +48,9 @@ jobs:
           node --check apps/zte_manager/static/js/dhcp_module.js
           node --check apps/zte_manager/static/js/adaptive_firmware.js
 
+      - name: Verify native read-only diagnostics independent of write permissions
+        run: node tests/test_native_readonly_diagnostics.cjs
+
       - name: Verify desktop clipboard capabilities and safe fallback
         run: node tests/test_desktop_clipboard.cjs
 
@@ -111,4 +114,6 @@ jobs:
         run: |
           python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat -v
       - name: Verify clipboard browser selection never touches Windows Web APIs
-        run: node tests/test_desktop_clipboard.cjs
+        run: |
+          node tests/test_desktop_clipboard.cjs
+          node tests/test_native_readonly_diagnostics.cjs
