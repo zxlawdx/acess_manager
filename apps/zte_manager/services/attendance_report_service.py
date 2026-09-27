@@ -152,7 +152,7 @@ class AttendanceReportService:
                 "verified": " — alteração verificada por releitura",
                 "accepted": " — comando aceito; alteração ainda não verificada",
                 "uncertain": " — resultado incerto após a tentativa",
-                "failed": " — tentativa falhou",
+                "failed": " — tentativa sem confirmação (falhou)",
                 "attempted": " — tentativa iniciada",
                 "legacy_success_unverified": (
                     " — execução registrada pelo fluxo legado; "
