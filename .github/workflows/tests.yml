@@ -46,6 +46,8 @@ jobs:
           node --check apps/zte_manager/static/js/neutral_theme.js
           node --check apps/zte_manager/static/js/f6201b_workbench.js
           node --check apps/zte_manager/static/js/dhcp_module.js
+          node --check apps/zte_manager/static/js/named_presets.js
+          node --check apps/zte_manager/static/js/tr069_profiles.js
           node --check apps/zte_manager/static/js/adaptive_firmware.js
 
       - name: Verify native read-only diagnostics independent of write permissions
@@ -68,6 +70,9 @@ jobs:
           node tests/test_f6600p_advanced_ui.cjs
           node tests/test_f6600p_support_ui.cjs
           node tests/test_f6600p_light_popups.cjs
+          node tests/test_tr069_preset_ui.cjs
+          node --check apps/zte_manager/static/js/tr069_profiles.js
+          node --check apps/zte_manager/static/js/named_presets.js
 
       - name: Verify ONT data and session restoration
         run: node tests/test_session_restore.cjs
@@ -104,6 +109,9 @@ jobs:
       - name: Verify DHCP and native diagnostics UI contracts
         run: node tests/test_dhcp_module_ui.cjs
 
+      - name: Verify provider ACS and named profile UI integration
+        run: node tests/test_tr069_preset_ui.cjs
+
       - name: Verify F6201B captured workbench and isolation
         run: node tests/test_f6201b_workbench_ui.cjs
 
@@ -121,7 +129,7 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Verify Phase 2 session, inventory and desktop host contracts
         run: |
-          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat tests.test_api_error_sanitization tests.test_f6600p_support_progress -v
+          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat tests.test_api_error_sanitization tests.test_f6600p_support_progress -v tests.test_f6600p_dhcp_encoded tests.test_tr069_named_presets
       - name: Verify clipboard browser selection never touches Windows Web APIs
         run: |
           node tests/test_desktop_clipboard.cjs
