@@ -157,7 +157,7 @@ def find_family(model: str | None) -> tuple[str | None, str | None]:
 # As aliases compartilham endpoints, mas NÃO atestam funções de escrita.
 MODEL_EXTRAS: dict[str, tuple[str, ...]] = {
     "F6600P": ("pon_optical", "mesh_topology_candidate"),
-    "F6201B": ("captured_get_routes_v9_3_10p7n7", "read_only"),
+    "F6201B": ("captured_get_routes", "runtime_validated_forms"),
     "F8748": ("wan_traffic_counters",),
     "H2640": ("dsl_sync_not_internet",),
     "SR7410": ("vue_api",),
@@ -384,9 +384,10 @@ def probe(
         "model": selected, "family": family, "read_only": True,
         "supported": any(x["available"] for x in endpoints.values()),
         "endpoints": endpoints,
-        "notes": ("F6201B: tags observadas na captura V9.3.10P7N7. "
-                  "Disponibilidade depende de confirmação XML em runtime. "
-                  "Somente GET, sem escrita." if selected == "F6201B" else
+        "notes": ("F6201B: estas sondagens executam apenas GET. "
+                  "As operações de escrita ficam nos formulários nativos, "
+                  "validados em tempo real com a sessão autenticada."
+                  if selected == "F6201B" else
                   "Somente descoberta; escrita e backup requerem validação por firmware."),
         "capabilities": [
             {
