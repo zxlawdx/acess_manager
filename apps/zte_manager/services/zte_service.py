@@ -375,9 +375,16 @@ class ZTEService:
                     revision=self._session_revision,
                 )
                 self._zte.writes_enabled = runtime_context.writable
+            elif detected_runtime == "F6201B" and known_detected == "F6201B":
+                # Recognized, authenticated F6201B uses its *captured*
+                # adapters for complex forms. The operator controls normal
+                # writes; no static revision allowlist or read-only transport.
+                # The generic F6600P runtime driver must NOT be attached:
+                # it has a different multi-object SSID/RF protocol.
+                self._zte.writes_enabled = True
             else:
-                # Vue, unknown families and F6201B retain their existing
-                # read-only/captured flows. Never bind a generic ThinkLua writer.
+                # Unknown and Vue protocols still require their own driver:
+                # operator authorization cannot create missing protocol code.
                 self._zte.writes_enabled = False
 
             if not self._zte.writes_enabled:
@@ -532,10 +539,13 @@ class ZTEService:
         """
         # Revalidate the authenticated driver before *all* normal
         # _run_change writes; perform GET before before_reader prepares a form.
-        if self._runtime_driver is not None:
+        if self._runtime_driver is not None or self._is_captured_f6201b():
             try:
-                self._runtime_driver.assert_session_identity()
-            except DeviceWriteNotApproved:
+                if self._runtime_driver is not None:
+                    self._runtime_driver.assert_session_identity()
+                else:
+                    self._f6201b_write_firmware()
+            except (DeviceWriteNotApproved, ValueError, PermissionError):
                 self._disable_session_writes()
                 try:
                     history_repository.save_change(
@@ -1092,7 +1102,7 @@ class ZTEService:
                         config=config, host=self.current_host,
                         revision=self._session_revision,
                         attendant=self.current_attendant,
-                        original_post=self._readonly_original_post,
+                        original_post=self._f6201b_post_transport(),
                     ),
                 )
             if self._runtime_driver is not None:
@@ -1283,25 +1293,41 @@ class ZTEService:
             )
 
     def _f6201b_write_firmware(self):
-        """Hardware/firmware compatibility, never an employee permissions gate.
+        """Authenticated live identity preflight, NOT a revision allowlist.
 
-        Selection in a dropdown is not proof of capabilities; the authenticated
-        device status is authoritative and rechecked for captured POSTs.
+        The form-specific adapter validates its *real* view/XML fields,
+        tokens and readback. On firmware/serial drift quarantine the
+        transport and require a fresh login before any operation.
         """
-        device = self.get_client().device_status()
+        device = self.get_client().device_status() or {}
         detected, _ = multimodel_service.find_family(
             device.get("modelo") or ""
         )
         if detected != "F6201B":
+            self._disable_session_writes()
             raise ValueError(
-                "A ONT não confirmou suporte ao adaptador F6201B."
+                "A identidade da ONT mudou: reconecte antes de executar."
             )
-        firmware = device.get("firmware")
-        if firmware != EXACT_FIRMWARE:
+        previous = self._device_info
+        if any(
+            previous.get(key) and
+            device.get(key) != previous.get(key)
+            for key in ("fabricante", "modelo", "firmware", "serial")
+        ):
+            self._disable_session_writes()
             raise ValueError(
-                "Este firmware requer seu próprio mapeamento de comandos."
+                "Identidade, serial ou firmware alterado: reconecte."
             )
-        return firmware
+        if not getattr(self.get_client(), "writes_enabled", False):
+            raise PermissionError(
+                "Sessão não autoriza escrita após falha de identidade."
+            )
+        return device.get("firmware") or ""
+
+    def _f6201b_post_transport(self):
+        """Live operator transport; never bypass a quarantined session."""
+        self._f6201b_write_firmware()
+        return self._readonly_original_post or self.get_client().session.post
 
     def f6201b_write_status(self):
         with self._lock:
@@ -1336,7 +1362,7 @@ class ZTEService:
                     self.get_client(), host=self.current_host,
                     firmware=firmware, nonce=nonce,
                     confirmation=confirmation,
-                    original_post=self._readonly_original_post,
+                    original_post=self._f6201b_post_transport(),
                 ),
             )
 
@@ -1395,7 +1421,7 @@ class ZTEService:
                     self.get_client(), host=self.current_host,
                     firmware=firmware, nonce=nonce,
                     confirmation=confirmation,
-                    original_post=self._readonly_original_post,
+                    original_post=self._f6201b_post_transport(),
                 ),
             )
 
@@ -1419,7 +1445,7 @@ class ZTEService:
                     self.get_client(), host=self.current_host,
                     revision=self._session_revision, firmware=firmware,
                     nonce=nonce, confirmation=confirmation,
-                    original_post=self._readonly_original_post,
+                    original_post=self._f6201b_post_transport(),
                     dns_adapter=self._f6201b_dns,
                 ),
             )
@@ -1433,7 +1459,7 @@ class ZTEService:
                     self.get_client(), host=self.current_host,
                     revision=self._session_revision, firmware=firmware,
                     profile=profile_service.get_profile(attendant),
-                    original_post=self._readonly_original_post,
+                    original_post=self._f6201b_post_transport(),
                     dns_adapter=self._f6201b_dns,
                 ),
             )
@@ -1446,7 +1472,7 @@ class ZTEService:
                 lambda: self._f6201b_writer.apply_changes(
                     self.get_client(), host=self.current_host, firmware=firmware,
                     ssid_id=ssid_id, config=config,
-                    original_post=self._readonly_original_post,
+                    original_post=self._f6201b_post_transport(),
                 ),
             )
 
@@ -1458,7 +1484,7 @@ class ZTEService:
                 lambda: self._f6201b_dns.apply_changes(
                     self.get_client(), host=self.current_host,
                     firmware=firmware, changes=changes,
-                    original_post=self._readonly_original_post,
+                    original_post=self._f6201b_post_transport(),
                 ),
             )
 
@@ -1472,7 +1498,7 @@ class ZTEService:
                     changes=changes, host=self.current_host,
                     revision=self._session_revision,
                     attendant=self.current_attendant,
-                    original_post=self._readonly_original_post,
+                    original_post=self._f6201b_post_transport(),
                 ),
             )
 
@@ -1506,7 +1532,7 @@ class ZTEService:
                     revision=self._session_revision,
                     attendant=self.current_attendant, nonce=nonce,
                     confirmation=confirmation, risk_ack=risk_ack,
-                    original_post=self._readonly_original_post,
+                    original_post=self._f6201b_post_transport(),
                 ),
             )
 
@@ -1771,7 +1797,7 @@ class ZTEService:
                             "2.4GHz": {"auto_channel": True},
                             "5GHz": {"auto_channel": True},
                         }, "dns": {}},
-                        original_post=self._readonly_original_post,
+                        original_post=self._f6201b_post_transport(),
                         dns_adapter=self._f6201b_dns,
                     ),
                 )
