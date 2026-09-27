@@ -991,6 +991,10 @@
                             <span class="material-symbols-outlined">router</span>
                             Detectar modelo
                         </button>
+                        <button id="refreshAdvancedNetworkButton" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">lan</span>
+                            Carregar DHCP / NAT
+                        </button>
                         <button id="multimodelDiagnosticButton" class="button ghost" type="button">
                             <span class="material-symbols-outlined">fact_check</span>
                             Diagnóstico por modelo
@@ -1029,7 +1033,7 @@
                                 <option value="">Usar identificação automática</option>
                             </select>
                         </label>
-                        <p class="muted">Detecção somente leitura. Não libera alterações nos outros modelos.</p>
+                        <p class="muted">Detectar modelo utiliza a identidade validada no login, sem consultar dezenas de menus. Detectar recursos faz sondagens GET reais, sem alterar a ONT.</p>
                         <pre id="multimodelProbeOutput" class="selectable-output"
                              style="max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;"
                              aria-live="polite">Selecione um modelo e clique em Detectar modelo.</pre>
@@ -1038,11 +1042,11 @@
                         <div class="operation-row">
                             <strong>Recursos por firmware — perfis documentados do zte_tracker</strong>
                             <p id="trackerDiscoveryStatus" class="muted">
-                                Identificando modelo da sessão e preparando leitura automática...
+                                Identificando modelo da sessão (sem sondagem automática)...
                             </p>
                             <small class="muted">Disponível = resposta validada neste equipamento.
                                 Não testado = apenas documentado para a família, sem garantia neste firmware.
-                                Recursos experimentais permanecem somente leitura.</small>
+                                A detecção GET é independente das ações de configuração autenticadas.</small>
                         </div>
                         <div id="trackerCapabilityGrid" class="capability-grid">
                             <span class="muted">Aguardando identificação do dispositivo.</span>
