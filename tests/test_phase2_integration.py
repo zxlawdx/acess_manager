@@ -203,6 +203,11 @@ class RealServiceIntegrationTests(unittest.TestCase):
 
     def test_login_binds_same_transport_without_second_login(self):
         response = self.connect()
+        self.assertEqual(set(response), {
+            "success", "attendant", "host", "reused_session", "model",
+            "model_verified", "session_revision", "writes_enabled", "device",
+            "adapter",
+        })
         self.assertTrue(response["success"])
         self.assertTrue(response["writes_enabled"])
         self.assertTrue(response["model_verified"])
