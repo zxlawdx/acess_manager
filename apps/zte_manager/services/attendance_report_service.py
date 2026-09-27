@@ -139,13 +139,26 @@ class AttendanceReportService:
             target = change.get("target")
             description = label + (" (" + self._safe_target(target) + ")"
                                    if target else "")
+            outcome = change.get("outcome") or (
+                "legacy_success_unverified" if change.get("success") else "failed"
+            )
+            # Older rows have no trustworthy field-specific verification.
             difference = self._change_summary(
                 change.get("before_json"), change.get("after_json")
-            ) if change.get("success") else ""
+            ) if outcome == "verified" else ""
             if difference:
                 description += ": " + difference
-            description += (" — realizado" if change.get("success")
-                            else " — tentativa sem confirmação")
+            description += {
+                "verified": " — alteração verificada por releitura",
+                "accepted": " — comando aceito; alteração ainda não verificada",
+                "uncertain": " — resultado incerto após a tentativa",
+                "failed": " — tentativa falhou",
+                "attempted": " — tentativa iniciada",
+                "legacy_success_unverified": (
+                    " — execução registrada pelo fluxo legado; "
+                    "sem prova padronizada de releitura"
+                ),
+            }.get(outcome, " — tentativa sem confirmação")
             events.append((change.get("created_at") or "", "change",
                            change.get("id") or 0, description))
 
