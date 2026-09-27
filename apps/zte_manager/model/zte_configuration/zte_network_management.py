@@ -240,7 +240,9 @@ _DHCP_IPV4_FIELDS = frozenset({
 _CIPHER_B64 = re.compile(r"^[A-Za-z0-9+/]{22,}={0,2}$")
 
 
-def _dhcp_decode(zte, xml: str, basic: dict[str, Any]) -> tuple[dict, set, list]:
+def _dhcp_decode(
+    zte, xml: str, basic: dict[str, Any], token: str | None,
+) -> tuple[dict, set, list]:
     """Decode ONLY confirmed IPv4 AES values; never show ciphertext as IP.
 
     Some ThinkLua firmwares omit the <encode> list on the DHCP page.
@@ -255,7 +257,6 @@ def _dhcp_decode(zte, xml: str, basic: dict[str, Any]) -> tuple[dict, set, list]
         }
     except ET.ParseError:
         declared = set()
-    token = getattr(zte, "session_tmp_token", None)
     values = dict(basic)
     encrypted = set()
     warnings = []
@@ -309,6 +310,9 @@ def dhcp_status(zte) -> dict[str, Any]:
     basic_objects = zte._parse_instances(
         basic_xml
     )
+    # Menus ThinkLua rotate this temporary token on each menuView.
+    # Capture it BEFORE subsequent DHCP leases/reservation requests.
+    basic_page_token = getattr(zte, "session_tmp_token", None)
 
     zte.get_view(
         "lanMgrIpv4",
@@ -340,7 +344,9 @@ def dhcp_status(zte) -> dict[str, Any]:
         else {}
     )
 
-    decoded, encrypted_fields, warnings = _dhcp_decode(zte, basic_xml, basic)
+    decoded, encrypted_fields, warnings = _dhcp_decode(
+        zte, basic_xml, basic, basic_page_token
+    )
     # Internal metadata is boolean/field names only, never key/token/ciphertext.
     # A partially decoded form remains inspectable but cannot perform POSTs.
     return {
