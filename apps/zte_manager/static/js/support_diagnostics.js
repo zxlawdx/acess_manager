@@ -793,18 +793,30 @@ function renderSupportDiagnostic(result) {
         result
     );
 
-    output.innerHTML = `
-        ${renderDiagnosticSummary(result, finalResult)}
-        ${renderAffectedClient(finalResult)}
-        ${renderFindings(finalResult)}
-        ${renderWifiEnvironment(finalResult)}
-        ${renderSpeedTest(finalResult)}
-        ${renderDiagnosticErrors(finalResult)}
-    `;
-
-    bindRecommendationActions(
-        output
-    );
+    // An optional firmware section can have a different shape (or fail).
+    // Do not let one renderer hide all previously collected diagnosis data.
+    output.replaceChildren();
+    const sections = [
+        ["Resumo", () => renderDiagnosticSummary(result, finalResult)],
+        ["Cliente", () => renderAffectedClient(finalResult)],
+        ["Conclusões", () => renderFindings(finalResult)],
+        ["Wi-Fi", () => renderWifiEnvironment(finalResult)],
+        ["Velocidade", () => renderSpeedTest(finalResult)],
+        ["Etapas indisponíveis", () => renderDiagnosticErrors(finalResult)]
+    ];
+    for (const [name, render] of sections) {
+        try {
+            const html = render();
+            if (html) output.insertAdjacentHTML("beforeend", html);
+        } catch (error) {
+            console.warn("diagnostic_section_render_failed", name, error?.name);
+            const fallback = document.createElement("div");
+            fallback.className = "support-empty warning";
+            fallback.textContent = name + ": dados retornados em formato inesperado.";
+            output.appendChild(fallback);
+        }
+    }
+    bindRecommendationActions(output);
 
     const reportActions = document.getElementById(
         "supportReportActions"
