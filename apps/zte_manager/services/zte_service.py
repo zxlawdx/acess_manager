@@ -2440,6 +2440,11 @@ class ZTEService:
             server = current.get("server") or {}
             return {
                 "available": current.get("available") is True,
+                # Only existence flags; never leak credentials to browser.
+                "acs_secret_exists": bool(server.get("UserPassword")),
+                "request_secret_exists": bool(
+                    server.get("ConnectionRequestPassword")
+                ),
                 "wan_candidates": self._tr069_wan_candidates(
                     zte.wan_configurations()
                 ),
@@ -2465,6 +2470,19 @@ class ZTEService:
             raise ValueError("Informe e salve a URL ACS do perfil antes de aplicar.")
         with self._lock:
             zte = self.get_client()
+            status = zte.tr069_management_status()
+            if status.get("available") is not True:
+                raise ValueError("A gestão TR-069 não está disponível neste equipamento.")
+            current_server = status.get("server") or {}
+            if not password and not current_server.get("UserPassword"):
+                raise ValueError(
+                    "Informe a senha ACS para a primeira configuração."
+                )
+            if (not connection_request_password and
+                not current_server.get("ConnectionRequestPassword")):
+                raise ValueError(
+                    "Informe a senha de solicitação de conexão para a primeira configuração."
+                )
             candidates = self._tr069_wan_candidates(zte.wan_configurations())
             matched = next(
                 (item for item in candidates if item["name"] == wan_name),
