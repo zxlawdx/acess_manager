@@ -1051,8 +1051,8 @@ input[type="url"] {
 }
 
 select option {
-    color: var(--text);
-    background: #18191e;
+    color: var(--select-option-fg, var(--text));
+    background-color: var(--select-option-bg, #18191e);
 }
 
 .password-control {
