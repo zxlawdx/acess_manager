@@ -28,6 +28,11 @@ html[data-theme="light"] {
   --ui-neutral-wash:#eaf0ea;
   --ui-shadow:0 1px 3px rgba(22,48,29,.06);
   --ui-radius:6px;
+  --ui-surface-light:#ffffff;
+  --ui-text-light:#111827;
+  --ui-border-light:#d1d5db;
+  --select-option-bg:var(--ui-surface-light);
+  --select-option-fg:var(--ui-text-light);
 }
 html[data-theme="light"] body,
 html[data-theme="light"] #vela-page,
@@ -704,3 +709,64 @@ html[data-theme="light"] .profile-radio-card .checkbox-container {
   color:var(--ui-text)!important;
 }
 
+
+/* Targeted QtWebEngine popup & unthemed legacy components (light only).
+ * Do not allow older dark rules to paint native <option> popup windows.
+ * Dark mode remains governed by the existing stylesheets unchanged.
+ */
+html[data-theme="light"] select,
+html[data-theme="light"] select option,
+html[data-theme="light"] select optgroup,
+html[data-theme="light"] .field select,
+html[data-theme="light"] .form-group select,
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="light"] textarea {
+    color-scheme: light !important;
+    background-color: var(--ui-surface-light, #ffffff) !important;
+    color: var(--ui-text-light, #111827) !important;
+    border-color: var(--ui-border-light, #d1d5db) !important;
+    -webkit-text-fill-color: var(--ui-text-light, #111827) !important;
+}
+html[data-theme="light"] select option:checked {
+    background-color: #e4f2e8 !important;
+    color: #143d29 !important;
+    -webkit-text-fill-color: #143d29 !important;
+}
+html[data-theme="light"] select option:disabled {
+    background-color: #f3f4f6 !important;
+    color: #526056 !important;
+    -webkit-text-fill-color: #526056 !important;
+}
+html[data-theme="light"] .card,
+html[data-theme="light"] .capability-card,
+html[data-theme="light"] .feature-item,
+html[data-theme="light"] .advanced-card,
+html[data-theme="light"] .history-card,
+html[data-theme="light"] #trackerDiscoverySection .operation-row,
+html[data-theme="light"] #page-advanced .operation-row,
+html[data-theme="light"] .hero-flow > div {
+    background-color: var(--ui-surface-light, #ffffff) !important;
+    background-image: none !important;
+    color: var(--ui-text-light, #111827) !important;
+    border-color: var(--ui-border-light, #d1d5db) !important;
+    box-shadow: none !important;
+}
+html[data-theme="light"] .capability-card strong,
+html[data-theme="light"] .hero-flow > div strong,
+html[data-theme="light"] #page-advanced .operation-row strong {
+    color: var(--ui-text-light, #111827) !important;
+    -webkit-text-fill-color: var(--ui-text-light, #111827) !important;
+}
+html[data-theme="light"] .capability-card p,
+html[data-theme="light"] .capability-card .operation-meta,
+html[data-theme="light"] .hero-flow > div small,
+html[data-theme="light"] #trackerDiscoveryStatus,
+html[data-theme="light"] #trackerDiscoverySection .muted,
+html[data-theme="light"] #page-advanced .operation-row .muted {
+    color: var(--ui-text-secondary, #374151) !important;
+    -webkit-text-fill-color: var(--ui-text-secondary, #374151) !important;
+}
+html[data-theme="light"] .hero-flow > div > span {
+    color: var(--ui-accent, #286647) !important;
+    -webkit-text-fill-color: var(--ui-accent, #286647) !important;
+}
