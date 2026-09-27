@@ -850,6 +850,28 @@ class ZTEService:
         config
     ):
         with self._lock:
+            if self._is_captured_f6201b():
+                firmware = self._f6201b_write_firmware()
+                if not isinstance(config, dict):
+                    raise ValueError("Configuração do SSID inválida.")
+                selected = dict(config)
+                if "hidden" in selected:
+                    if ("broadcast" in selected and
+                        selected["broadcast"] is selected["hidden"]):
+                        raise ValueError("Campos broadcast e hidden divergentes.")
+                    selected["broadcast"] = not selected.pop("hidden")
+                # The generic UI exposes additional radio/security fields:
+                # this path uses the live-captured SSID adapter to avoid
+                # silently overwriting or losing the current WPA keys.
+                return self._audit_device_command(
+                    "f6201b_ssid_update", "SSID",
+                    lambda: self._f6201b_writer.apply_changes(
+                        self.get_client(), host=self.current_host,
+                        firmware=firmware, ssid_id=ssid_id,
+                        config=selected,
+                        original_post=self._f6201b_post_transport(),
+                    ),
+                )
             if self._runtime_driver is not None:
                 driver = self._runtime_driver
                 reader = lambda: driver.get_wifi_config()["networks"]
@@ -1581,7 +1603,23 @@ class ZTEService:
     def set_dns(self, config):
         with self._lock:
             zte = self.get_client()
-
+            if self._is_captured_f6201b():
+                firmware = self._f6201b_write_firmware()
+                if not isinstance(config, dict):
+                    raise ValueError("Parâmetros DNS inválidos.")
+                # The F6201B composite handles servers, domain and hosts
+                # without using the F670L-specific bulk DNS POST sequence.
+                return self._audit_device_command(
+                    "f6201b_dns_update", "DNS",
+                    lambda: self._f6201b_profile.apply_saved(
+                        zte, host=self.current_host,
+                        revision=self._session_revision,
+                        firmware=firmware,
+                        profile={"wifi": {}, "dns": config},
+                        original_post=self._f6201b_post_transport(),
+                        dns_adapter=self._f6201b_dns,
+                    ),
+                )
             return self._run_change(
                 operation="dns_update",
                 target="dns",
