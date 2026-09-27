@@ -4,6 +4,8 @@ from threading import RLock
 from typing import Optional
 
 from apps.zte_manager.model.device_adapters import select_adapter
+from apps.zte_manager.application.operations.audit_executor import AuditedOperation
+from apps.zte_manager.application.operations.verifiers import verify_dhcp, verify_ssid
 from apps.zte_manager.model.zte import ZTE
 from apps.zte_manager.repositories.history_repository import history_repository
 from apps.zte_manager.repositories.management_repository import (
@@ -66,6 +68,7 @@ class ZTEService:
         self._f6201b_diagnostics = F6201BDiagnostics()
         self._captured_workbench = CapturedFormWorkbench()
         self._readonly_original_post = None
+        self._audited_operation = AuditedOperation(history_repository)
 
     # =========================================================
     # CONEXÃO
@@ -423,56 +426,35 @@ class ZTEService:
             return reader()
         except Exception as error:
             return {
-                "_error": str(error),
+                "_error": type(error).__name__,  # Never expose firmware response secrets
             }
 
     def _run_change(
         self,
         *,
-        operation,
-        target,
+        operation: str,
+        target: str | None,
         before_reader,
         action,
         after_reader=None,
+        verify=None,
     ):
+        """Preserve the legacy action return value and the active ONT RLock.
+
+        An accepted HTTP POST is not a verified change. Only an explicit
+        operation-specific verifier against fresh firmware data can set the
+        verified history bit; otherwise the event is accepted/uncertain/failed.
         """
-        Template Method de auditoria.
-
-        Toda escrita nova passa pelo mesmo before -> action -> after e grava
-        sucesso/falha no Repository. Isso evita cópia de try/except por feature.
-        """
-        before = self._safe_capture(
-            before_reader
-        )
-
-        try:
-            result = action()
-        except Exception as error:
-            history_repository.save_change(
-                self._history_session_id,
-                operation=operation,
-                target=target,
-                before=before,
-                after=None,
-                success=False,
-                message=str(error),
-            )
-            raise
-
-        after = self._safe_capture(
-            after_reader or before_reader
-        )
-
-        history_repository.save_change(
-            self._history_session_id,
+        audited = self._audited_operation.execute(
+            session_id=self._history_session_id,
             operation=operation,
             target=target,
-            before=before,
-            after=after,
-            success=True,
+            before_reader=before_reader,
+            action=action,
+            after_reader=after_reader or before_reader,
+            verify=verify,
         )
-
-        return result
+        return audited.value
 
     def _audit_device_command(self, operation, target, command):
         """Audit direct F6201B commands which do not use _run_change.
@@ -752,6 +734,9 @@ class ZTEService:
                     config
                 ),
                 after_reader=reader,
+                verify=lambda before, response, after: verify_ssid(
+                    ssid_id, config, before, response, after
+                ),
             )
 
     def wifi_radios(self):
@@ -990,6 +975,9 @@ class ZTEService:
                 operation="dhcp_basic", target="lan",
                 before_reader=zte.dhcp_status,
                 action=lambda: zte.set_dhcp_basic(config),
+                verify=lambda before, response, after: verify_dhcp(
+                    config, before, response, after
+                ),
             )
 
     def save_dhcp_reservation(

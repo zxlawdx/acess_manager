@@ -9,6 +9,7 @@ from threading import RLock
 from typing import Any
 
 from apps.zte_manager.runtime import data_dir
+from apps.zte_manager.application.operations.redaction import redact_sensitive
 
 
 def _utc_now() -> str:
@@ -19,7 +20,7 @@ def _utc_now() -> str:
 
 def _json(value: Any) -> str:
     return json.dumps(
-        value,
+        redact_sensitive(value),
         ensure_ascii=False,
         default=str,
         separators=(",", ":"),
@@ -132,6 +133,20 @@ class HistoryRepository:
                 );
                 """
             )
+            # Existing installations must retain their complete session history.
+            # Old 'success=1' rows do NOT constitute verified readback.
+            columns = {
+                row["name"] for row in db.execute(
+                    "PRAGMA table_info(configuration_change)"
+                )
+            }
+            if "outcome" not in columns:
+                db.execute("ALTER TABLE configuration_change ADD COLUMN outcome TEXT")
+                db.execute(
+                    "UPDATE configuration_change SET outcome = "
+                    "CASE WHEN success = 1 THEN 'legacy_success_unverified' "
+                    "ELSE 'failed' END WHERE outcome IS NULL"
+                )
 
     def start_session(
         self,
@@ -252,7 +267,16 @@ class HistoryRepository:
         after: Any,
         success: bool,
         message: str | None = None,
+        outcome: str | None = None,
     ) -> int:
+        if outcome is None:
+            # Preserve legacy callers without asserting an unproven verification.
+            outcome = "legacy_success_unverified" if success else "failed"
+        elif outcome not in {"attempted", "accepted", "verified", "uncertain", "failed"}:
+            raise ValueError("Invalid audit outcome")
+        else:
+            # The legacy success bit now means VERIFIED for the new executor.
+            success = outcome == "verified"
         with self._lock, self._connection() as db:
             cursor = db.execute(
                 """
@@ -264,9 +288,10 @@ class HistoryRepository:
                     before_json,
                     after_json,
                     success,
-                    message
+                    message,
+                    outcome
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session_id,
@@ -277,6 +302,7 @@ class HistoryRepository:
                     _json(after) if after is not None else None,
                     1 if success else 0,
                     message,
+                    outcome,
                 ),
             )
 
