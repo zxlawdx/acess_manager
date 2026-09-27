@@ -40,6 +40,7 @@ from apps.zte_manager.services.f6201b_support import run_f6201b_support
 from apps.zte_manager.services import f6201b_dhcp
 from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
 from apps.zte_manager.services.profile_service import profile_service
+from apps.zte_manager.services.tr069_profile_service import tr069_provider_profiles
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
     SupportDiagnosticOptions,
@@ -2402,6 +2403,101 @@ class ZTEService:
                 after_reader=(
                     zte.tr069_management_status
                 ),
+            )
+
+    @staticmethod
+    def _tr069_wan_candidates(items):
+        """Return only existing PPPoE WAN interfaces that carry TR069.
+
+        Never create, switch or change the customer's PPPoE contract here.
+        """
+        options = []
+        for row in items:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("WANCName") or "").strip()
+            services = " ".join(str(row.get(key) or "") for key in (
+                "StrServList", "ServList",
+            )).upper()
+            types = " ".join(str(row.get(key) or "") for key in (
+                "linkMode", "TransType", "wantype",
+            )).upper()
+            if "TR069" not in services or "PPP" not in types or not name:
+                continue
+            options.append({
+                "name": name,
+                "id": str(row.get("_InstID") or ""),
+                "services": services[:100],
+            })
+        return options
+
+    def tr069_setup(self):
+        """Non-secret status + eligible existing PPPoE/TR069 interfaces."""
+        with self._lock:
+            zte = self.get_client()
+            current = zte.tr069_management_status()
+            server = current.get("server") or {}
+            return {
+                "available": current.get("available") is True,
+                "wan_candidates": self._tr069_wan_candidates(
+                    zte.wan_configurations()
+                ),
+                "current": {
+                    key: server.get(key) for key in (
+                        "URL", "UserName", "PeriodicInformEnable",
+                        "PeriodicInformInterval", "DefaultWan",
+                        "ConnectionRequestUsername",
+                    )
+                },
+            }
+
+    def apply_tr069_provider(
+        self, name: str, wan_name: str, *, password=None,
+        connection_request_password=None, confirm=False,
+    ):
+        if not confirm:
+            raise ValueError("Confirme a configuração TR-069 antes de aplicar.")
+        profiles = tr069_provider_profiles.list()
+        profile = next((item for item in profiles if item["name"] == name), None)
+        if not profile:
+            raise ValueError("Perfil ACS não encontrado.")
+        if not profile.get("url"):
+            raise ValueError("Informe e salve a URL ACS do perfil antes de aplicar.")
+        with self._lock:
+            zte = self.get_client()
+            candidates = self._tr069_wan_candidates(zte.wan_configurations())
+            matched = next(
+                (item for item in candidates if item["name"] == wan_name),
+                None,
+            )
+            if matched is None:
+                raise ValueError(
+                    "Selecione uma WAN PPPoE existente que inclua TR069; "
+                    "nenhuma configuração foi alterada."
+                )
+            config = {
+                "url": profile["url"],
+                "username": profile["username"],
+                "connection_request_username":
+                    profile["connection_request_username"],
+                "periodic_inform_enabled":
+                    profile["periodic_inform_enabled"],
+                "periodic_inform_interval":
+                    profile["periodic_inform_interval"],
+                "default_wan": matched["name"],
+            }
+            if password:
+                config["password"] = password
+            if connection_request_password:
+                config["connection_request_password"] = (
+                    connection_request_password
+                )
+            return self._run_change(
+                operation="tr069_provider_apply",
+                target=matched["name"],
+                before_reader=zte.tr069_management_status,
+                action=lambda: zte.set_tr069_management(config),
+                after_reader=zte.tr069_management_status,
             )
 
     def wan_configurations(self):
