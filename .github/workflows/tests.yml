@@ -39,6 +39,7 @@ jobs:
           node --check apps/zte_manager/static/js/app.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/support_diagnostics.js
+          node --check apps/zte_manager/static/js/desktop_clipboard.js
           node --check apps/zte_manager/static/js/management.js
           node --check apps/zte_manager/static/js/adaptive_firmware.js
           node --check apps/zte_manager/static/js/f6201b_editor.js
@@ -46,6 +47,9 @@ jobs:
           node --check apps/zte_manager/static/js/f6201b_workbench.js
           node --check apps/zte_manager/static/js/dhcp_module.js
           node --check apps/zte_manager/static/js/adaptive_firmware.js
+
+      - name: Verify desktop clipboard capabilities and safe fallback
+        run: node tests/test_desktop_clipboard.cjs
 
       - name: Verify loading overlay behavior
         run: node tests/test_loading_overlay.cjs
