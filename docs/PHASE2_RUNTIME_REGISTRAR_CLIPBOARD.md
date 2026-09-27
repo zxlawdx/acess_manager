@@ -55,6 +55,13 @@ export ZTE_APPROVED_FIRMWARE_JSON='{"F670L":["V9.0.11P1N9"]}'
 python manage.py runserver
 ```
 
+No PowerShell (Windows), antes de iniciar o aplicativo:
+
+```powershell
+$env:ZTE_APPROVED_FIRMWARE_JSON = '{"F670L":["V9.0.11P1N9"]}'
+python manage.py runserver
+```
+
 Reinicie a aplicação para aplicar mudanças de política; não acrescente
 versões desconhecidas à variável: a política rejeita modelos/versões que
 não aparecem em `KNOWN_CANDIDATES`. A adição de versões futuras exige
@@ -117,6 +124,7 @@ Testes sintéticos cobrem: um único login, sessão emprestada, reuso,
 troca de firmware, bloqueio de POST em versão desconhecida, F6201B
 preservada, falha de inventário e de histórico, allowlist de dados,
 contrato HTTP, ausência de fallback perigoso no Windows e cópia manual.
-O workflow do repositório continua testando em Ubuntu; uma GUI real
-Qt/Windows e WebKit/Linux e mudanças físicas em ONT **ainda exigem
-validação antes do merge em produção**.
+O workflow contém suíte completa Ubuntu/Python 3.13 e testes de contrato
+Phase 2 no runner Windows/Python 3.12; um runner Windows headless **não**
+comprova a abertura da GUI Qt. Uma GUI real Qt/Windows e WebKit/Linux e
+mudanças físicas em ONT **ainda exigem validação antes do merge em produção**.
