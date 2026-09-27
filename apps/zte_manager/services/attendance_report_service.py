@@ -145,7 +145,9 @@ class AttendanceReportService:
             # Older rows have no trustworthy field-specific verification.
             difference = self._change_summary(
                 change.get("before_json"), change.get("after_json")
-            ) if outcome == "verified" else ""
+            ) if (outcome == "verified" or (
+                outcome == "legacy_success_unverified" and change.get("success")
+            )) else ""
             if difference:
                 description += ": " + difference
             description += {
