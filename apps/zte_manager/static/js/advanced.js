@@ -9,8 +9,11 @@ const advancedState = {
     dhcp: null,
     portForwarding: [],
     dmz: [],
-    loaded: false
+    loaded: false,
+    networkLoaded: { dhcp: false, portForwarding: false, dmz: false }
 };
+let advancedNetworkBusy = false;
+let meshProbeBusy = false;
 
 
 pageInfo.advanced = {
@@ -495,9 +498,39 @@ async function loadCapabilityCatalog() {
 }
 
 
+let nativeProbeBusy = false;
+
+function renderNativeDetection(catalog, results, model) {
+    const byFeature = new Map(results.map(item => [item.feature, item]));
+    const rows = Object.entries(catalog).map(([feature, spec]) => {
+        const result = byFeature.get(feature);
+        return {
+            feature, label: spec.label || feature,
+            status: !result || result.not_tested
+                ? "not_tested"
+                : result.available ? "detected" : "not_confirmed",
+            // Do not display raw HTTP/firmware error bodies.
+            reason: result && !result.available && !result.not_tested
+                ? "unexpected_firmware_response" : undefined
+        };
+    });
+    const checked = rows.filter(row => row.status !== "not_tested").length;
+    const confirmed = rows.filter(row => row.status === "detected").length;
+    renderTrackerDiscovery({
+        model, family: "thinklua_native", candidate_features: rows,
+        reason: `Menus nativos: ${checked}/${rows.length} testados, ${confirmed} confirmados. ` +
+            "Uma falha de GET não retira permissão de configuração."
+    });
+}
+
 async function probeCapabilities() {
     if (!ontConnected) {
         showToast("Conecte-se à ONT para detectar recursos.");
+        return;
+    }
+    if (nativeProbeBusy || trackerProbeBusy || modelDiagnosticRunning ||
+        advancedNetworkBusy || meshProbeBusy) {
+        showToast("Uma sondagem já está em andamento. Aguarde a conclusão.");
         return;
     }
     // GETs do adaptador são independentes de POSTs: sessão em modo
@@ -515,6 +548,8 @@ async function probeCapabilities() {
         await probeMultimodel();
         return;
     }
+    nativeProbeBusy = true;
+    const scanGeneration = trackerSessionGeneration;
     setBusy(true, "Carregando catálogo de menus nativos...");
 
     try {
@@ -546,7 +581,11 @@ async function probeCapabilities() {
                         timeoutMs: 70000
                     }
                 );
-                results.push(...(response.features || []));
+                if (scanGeneration !== trackerSessionGeneration || !ontConnected) return;
+                if (!Array.isArray(response.features)) {
+                    throw new Error("O probe retornou um formato de recursos inválido.");
+                }
+                results.push(...response.features);
             } catch (error) {
                 console.warn("Probe parcial:", batch, error);
                 const timeout = /passou de \\d+s/.test(String(error.message));
@@ -562,21 +601,28 @@ async function probeCapabilities() {
                         "Sondagem nativa interrompida por demora. O firmware pode continuar processando.";
                     advancedState.capabilityProbe = { features: results };
                     renderCapabilities(catalog, results);
+                    renderNativeDetection(catalog, results, bootstrap.detected_model || bootstrap.model);
                     break;
                 }
             }
 
             advancedState.capabilityProbe = { features: results };
             renderCapabilities(catalog, results);
+            renderNativeDetection(catalog, results, bootstrap.detected_model || bootstrap.model);
             showToast(
                 `Recursos verificados: ${Math.min(index + batchSize, keys.length)}/${keys.length}`
             );
         }
 
-        showToast("Detecção finalizada. Recursos indisponíveis identificados.");
+        const available = results.filter(item => item.available).length;
+        const unavailable = results.filter(item => !item.available && !item.not_tested).length;
+        const pending = keys.length - results.filter(item => !item.not_tested).length;
+        showToast(`Detecção: ${available} confirmado(s), ${unavailable} indisponível(is), ` +
+            `${Math.max(0, pending)} pendente(s).`);
     } catch (error) {
         showToast(error.message);
     } finally {
+        nativeProbeBusy = false;
         setBusy(false);
     }
 }
@@ -740,6 +786,50 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
     return discoveryBootPromise;
 }
 
+// Identificar modelo é uma leitura LOCAL do login, não uma sequência de
+// 20+ GETs lentos. A sondagem é uma ação separada: "Detectar recursos".
+async function detectConnectedModel() {
+    if (!ontConnected) {
+        showToast("Conecte-se à ONT para identificar o modelo.");
+        return;
+    }
+    const button = document.getElementById("multimodelProbeButton");
+    const output = document.getElementById("multimodelProbeOutput");
+    const status = document.getElementById("trackerDiscoveryStatus");
+    if (button) button.disabled = true;
+    try {
+        const bootstrap = await loadMultimodelCatalog({ refresh: true });
+        const catalog = bootstrap?.catalog?.models || [];
+        const detected = resolvedModelCode(bootstrap?.detected_model, catalog);
+        const selected = resolvedModelCode(bootstrap?.model, catalog);
+        const profile = catalog.find(item =>
+            resolvedModelCode(item.model, catalog) === (detected || selected)
+        );
+        if (!bootstrap?.connected || !bootstrap.model_verified ||
+            !profile || (detected && selected && detected !== selected)) {
+            const reason = "Modelo ainda não confirmado pela sessão autenticada. " +
+                "Reconecte e confira a identidade no equipamento.";
+            if (status) status.textContent = reason;
+            if (output) output.textContent = reason;
+            showToast(reason);
+            return;
+        }
+        const message = `Modelo: ${profile.model} · Firmware: ${bootstrap.firmware || "não informado"}` +
+            ` · Perfil: ${profile.family}. Identificação confirmada no login. ` +
+            "Use Detectar recursos para validar os GETs disponíveis.";
+        if (output) output.textContent = message;
+        if (status) status.textContent = message;
+        showToast("Modelo identificado. Recursos ainda não testados.");
+    } catch (error) {
+        const message = "Falha ao identificar o modelo: " + error.message;
+        if (status) status.textContent = message;
+        if (output) output.textContent = message;
+        showToast(message);
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
 // Timeout somente nas rotas de descoberta. Não encerra a sessão da ONT:
 // uma falha ou diagnóstico prolongado é exibido e os outros botões
 // permanecem operacionais no QtWebEngine.
@@ -797,8 +887,9 @@ async function runMultimodelDiagnostic() {
         showToast("Conecte ao equipamento antes do diagnóstico.");
         return;
     }
-    if (modelDiagnosticRunning) {
-        showToast("O diagnóstico anterior ainda está em andamento.");
+    if (modelDiagnosticRunning || nativeProbeBusy || trackerProbeBusy ||
+        advancedNetworkBusy || meshProbeBusy) {
+        showToast("Aguarde a leitura avançada atual antes de iniciar outra.");
         return;
     }
     modelDiagnosticRunning = true;
@@ -809,12 +900,12 @@ async function runMultimodelDiagnostic() {
     try {
         bootstrap = await discoveryRequest("/discovery/bootstrap");
         if (!bootstrap.connected) throw new Error("Sessão não conectada");
-        const detected = String(bootstrap.detected_model || "").toUpperCase()
-            .replace(/[^A-Z0-9]/g, "");
-        const selected = String(bootstrap.model || "").toUpperCase()
-            .replace(/[^A-Z0-9]/g, "");
-        if (detected && detected !== "ZTE" && selected !== detected)
-            throw new Error("Perfil divergente do modelo detectado");
+        const knownModels = bootstrap.catalog?.models || [];
+        const detected = resolvedModelCode(bootstrap.detected_model, knownModels);
+        const selected = resolvedModelCode(bootstrap.model, knownModels);
+        if (!bootstrap.model_verified ||
+            (detected && detected !== "ZTE" && selected && selected !== detected))
+            throw new Error("Modelo não verificado ou perfil divergente da sessão.");
         trackerDetectedModel = detected && detected !== "ZTE"
             ? bootstrap.detected_model : bootstrap.model;
     } catch (error) {
@@ -823,10 +914,10 @@ async function runMultimodelDiagnostic() {
         showToast("Identificação atual indisponível: " + error.message);
         return;
     }
-    const normalized = String(trackerDetectedModel || "").toUpperCase()
-        .replace(/[^A-Z0-9]/g, "");
-    const profile = (bootstrap.catalog?.models || []).find(
-        item => item.model.toUpperCase().replace(/[^A-Z0-9]/g, "") === normalized
+    const knownModels = bootstrap.catalog?.models || [];
+    const normalized = resolvedModelCode(trackerDetectedModel, knownModels);
+    const profile = knownModels.find(
+        item => resolvedModelCode(item.model, knownModels) === normalized
     );
     const family = profile?.family || null;
     // Consultar somente páginas documentadas para a família, em vez de
@@ -915,6 +1006,12 @@ async function runMultimodelDiagnostic() {
 }
 
 async function showMultimodelMesh() {
+    if (meshProbeBusy || nativeProbeBusy || trackerProbeBusy ||
+        modelDiagnosticRunning || advancedNetworkBusy) {
+        showToast("Aguarde a leitura avançada atual antes do resumo Mesh.");
+        return;
+    }
+    meshProbeBusy = true;
     const output = document.getElementById("multimodelProbeOutput");
     const select = document.getElementById("multimodelSelect");
     setBusy(true, "Consultando topologia Mesh...");
@@ -943,6 +1040,7 @@ async function showMultimodelMesh() {
         output.textContent = "Topologia indisponível para este firmware.";
         showToast(error.message);
     } finally {
+        meshProbeBusy = false;
         setBusy(false);
     }
 }
@@ -961,6 +1059,9 @@ document.addEventListener("zte:session-changed", () => {
     advancedState.capabilities = null;
     advancedState.capabilityProbe = null;
     advancedState.trackerProbe = null;
+    advancedState.networkLoaded = { dhcp: false, portForwarding: false, dmz: false };
+    advancedState.dhcp = null;
+    syncAdvancedNetworkForms();
     const select = document.getElementById("multimodelSelect");
     if (select) {
         select.dataset.loaded = "false";
@@ -982,8 +1083,9 @@ async function probeMultimodel({ quick = false } = {}) {
         showToast("Conecte-se ao equipamento primeiro.");
         return;
     }
-    if (trackerProbeBusy) {
-        if (!quick) showToast("Uma detecção já está em andamento.");
+    if (trackerProbeBusy || nativeProbeBusy || modelDiagnosticRunning ||
+        advancedNetworkBusy || meshProbeBusy) {
+        if (!quick) showToast("Aguarde a leitura avançada atual.");
         return;
     }
     trackerProbeBusy = true;
@@ -1403,6 +1505,27 @@ function findingIcon(severity) {
 // DHCP / LAN
 // =========================================================
 
+// Prevent accidental DHCP/NAT writes with empty/stale forms when the
+// expensive read is now operator-initiated. This is data readiness, not a
+// firmware/version permission gate; backend still checks the live device.
+function syncAdvancedNetworkForms() {
+    const loaded = advancedState.networkLoaded;
+    const controls = [
+        ["dhcp", "#dhcpBasicForm button[type=submit]"],
+        ["dhcp", "#dhcpReservationForm button[type=submit]"],
+        ["portForwarding", "#portForwardForm button[type=submit]"],
+        ["dmz", "#dmzForm button[type=submit]"]
+    ];
+    for (const [key, selector] of controls) {
+        const control = document.querySelector(selector);
+        if (!control) continue;
+        const ready = Boolean(ontConnected && routerWriteEnabled && loaded[key]) &&
+            (key !== "dhcp" || advancedState.dhcp?.write_safe !== false);
+        control.disabled = !ready;
+        control.title = ready ? "" : "Carregue os dados atuais antes de configurar.";
+    }
+}
+
 async function loadDhcpOperations() {
     try {
         const data = await apiRequest(
@@ -1455,7 +1578,12 @@ async function loadDhcpOperations() {
         renderDhcpReservations(
             data.reservations || []
         );
+        advancedState.networkLoaded.dhcp = true;
+        syncAdvancedNetworkForms();
+        return true;
     } catch (error) {
+        advancedState.networkLoaded.dhcp = false;
+        syncAdvancedNetworkForms();
         document.getElementById(
             "dhcpLeaseList"
         ).innerHTML = featureUnavailable(
@@ -1469,6 +1597,7 @@ async function loadDhcpOperations() {
             "Reservas DHCP",
             error.message
         );
+        return false;
     }
 }
 
@@ -1679,8 +1808,9 @@ async function deleteDhcpReservation(event) {
 // =========================================================
 
 async function loadNatOperations() {
-    await loadPortForwarding();
-    await loadDmz();
+    const forwarding = await loadPortForwarding();
+    const dmz = await loadDmz();
+    return forwarding && dmz;
 }
 
 
@@ -1701,11 +1831,17 @@ async function loadPortForwarding() {
         );
 
         renderPortForwarding();
+        advancedState.networkLoaded.portForwarding = true;
+        syncAdvancedNetworkForms();
+        return true;
     } catch (error) {
+        advancedState.networkLoaded.portForwarding = false;
+        syncAdvancedNetworkForms();
         container.innerHTML = featureUnavailable(
             "Port Forwarding",
             error.message
         );
+        return false;
     }
 }
 
@@ -1919,11 +2055,17 @@ async function loadDmz() {
                 </div>
             `
             : '<span class="muted">Nenhuma instância DMZ retornada.</span>';
+        advancedState.networkLoaded.dmz = true;
+        syncAdvancedNetworkForms();
+        return true;
     } catch (error) {
+        advancedState.networkLoaded.dmz = false;
+        syncAdvancedNetworkForms();
         container.innerHTML = featureUnavailable(
             "DMZ",
             error.message
         );
+        return false;
     }
 }
 
@@ -2306,15 +2448,10 @@ async function loadOperationsConsoleInternal() {
         }
     }
 
-    if (trackerDetectedModel) {
-        // O catálogo e a identificação já estão visíveis. Serializar
-        // sondagens e consultas opcionais na sessão única da ONT.
-        await autoDiscoverTracker();
-    }
-
-    const optionalLoaders = routerWriteEnabled
-        ? [loadDhcpOperations, loadNatOperations, loadHistory]
-        : [loadHistory];
+    // Não iniciar sondagem nem coleta DHCP/NAT implicitamente:
+    // esses GETs seguram o RLock da única sessão e atrasavam TODOS os botões.
+    // O modelo vem do bootstrap local; os demais GETs são por ação do operador.
+    const optionalLoaders = [loadHistory];
 
     // Rodar sequencialmente no equipamento, mas não atrasar a UI.
     // A falha de um módulo não interrompe os demais.
@@ -2339,6 +2476,42 @@ async function loadOperationsConsoleInternal() {
 }
 
 
+async function loadAdvancedNetworkManually() {
+    if (!ontConnected) {
+        showToast("Conecte-se à ONT para consultar DHCP e NAT.");
+        return;
+    }
+    if (advancedNetworkBusy || nativeProbeBusy || trackerProbeBusy ||
+        modelDiagnosticRunning || meshProbeBusy) {
+        showToast("Aguarde a leitura avançada atual.");
+        return;
+    }
+    advancedNetworkBusy = true;
+    const button = document.getElementById("refreshAdvancedNetworkButton");
+    if (button) button.disabled = true;
+    setBusy(true, "Consultando DHCP / LAN...");
+    try {
+        // A consulta de NAT é independente: erro em uma etapa não oculta a outra.
+        const failures = [];
+        for (const [name, loader] of [["DHCP/LAN", loadDhcpOperations], ["NAT", loadNatOperations]]) {
+            setBusy(true, `Consultando ${name}...`);
+            try {
+                if ((await loader()) === false) failures.push(name);
+            } catch (error) {
+                failures.push(name);
+                console.warn("Leitura avançada indisponível:", name, error?.name);
+            }
+        }
+        showToast(failures.length
+            ? "Leitura parcial. Indisponível: " + failures.join(", ")
+            : "Informações DHCP e NAT atualizadas.");
+    } finally {
+        advancedNetworkBusy = false;
+        if (button) button.disabled = false;
+        setBusy(false);
+    }
+}
+
 window.startQuickProbe = async function startQuickProbe() {
     if (!ontConnected) {
         showToast("Conecte-se ao equipamento antes de detectar recursos.");
@@ -2348,11 +2521,9 @@ window.startQuickProbe = async function startQuickProbe() {
         // Não aguardar DHCP/NAT/histórico para executar o botão Probe.
         // O botão funciona mesmo quando outro módulo está demorando.
         await loadMultimodelCatalog();
-        if (routerWriteEnabled) {
-            await probeCapabilities();
-        } else {
-            await probeMultimodel();
-        }
+        // A seleção entre GET nativo e catálogo familiar cabe ao bootstrap.
+        // O estado de POST (routerWriteEnabled) é irrelevante nesta tela.
+        await probeCapabilities();
     } catch (error) {
         console.error("Falha no atalho Probe:", error);
         const status = document.getElementById("trackerDiscoveryStatus");
@@ -2364,6 +2535,9 @@ window.startQuickProbe = async function startQuickProbe() {
 
 
 function initAdvancedOperations() {
+    syncAdvancedNetworkForms();
+    const info = document.getElementById("dhcpLeaseList");
+    if (info) info.textContent = "Clique em Carregar DHCP / NAT para consultar o estado atual.";
     document.addEventListener("zte:page-open", event => {
         if (event.detail?.pageName === "advanced" && ontConnected) {
             void loadOperationsConsole();
@@ -2403,8 +2577,11 @@ function initAdvancedOperations() {
         )
         ?.addEventListener(
             "click",
-            probeMultimodel
+            detectConnectedModel
         );
+
+    document.getElementById("refreshAdvancedNetworkButton")
+        ?.addEventListener("click", loadAdvancedNetworkManually);
 
     document
         .getElementById(
