@@ -44,7 +44,9 @@ const context = {
         assert.equal(endpoint, "/discovery/bootstrap");
         return {
             connected: true,
-            model: "F6600P",
+            model: "ZXHN F6600P",
+            detected_model: "F6600P",
+            native_diagnostics_available: true,
             catalog: { models: [
                 { model: "F6600P", family: "f6640", protocol: "thinklua",
                   candidate_features: ["wifi_clients", "lan_clients"] }
@@ -72,7 +74,11 @@ vm.runInContext(sources.join("\n"), context);
     assert.equal(elements.multimodelSelect.value, "F6600P");
     assert.equal(elements.multimodelSelect.dataset.loaded, "true");
     assert.ok(calls.indexOf("render:F6600P") >= 0);
-    assert.ok(calls.indexOf("autoProbe") < calls.indexOf("capability"));
+    assert.ok(calls.indexOf("render:F6600P") < calls.indexOf("capability"),
+        "Identificação do equipamento deve aparecer antes do catálogo nativo");
+    assert.ok(calls.includes("capability"), "O driver nativo é consultado");
+    assert.ok(!calls.includes("autoProbe"),
+        "Uma capability local lenta não deve acionar GETs concorrentes na ONT");
     assert.match(elements.trackerCapabilityGrid.textContent, /wifi_clients/);
     // pending intencionalmente não aguardado: o bootstrap deve renderizar
     // mesmo que uma rota de capabilities antiga nunca conclua.
