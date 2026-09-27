@@ -74,6 +74,11 @@ vm.runInContext(source.slice(from,to),ctx);
   assert.ok(nativeFrom>=0 && nativeTo>nativeFrom);
   ctx.advancedState={capabilities:null,capabilityProbe:null};
   ctx.trackerProbeBusy=false;
+  // The VM loads selected function slices; full advanced.js initializes these
+  // independent operation guards before registering browser event handlers.
+  ctx.modelDiagnosticRunning=false;
+  ctx.advancedNetworkBusy=false;
+  ctx.meshProbeBusy=false;
   ctx.routerWriteEnabled=false;
   ctx.renderCapabilities=()=>{};
   const called=[];
