@@ -748,6 +748,15 @@ def discovery_bootstrap(context=None):
             ),
             "detected_model": device.get("modelo") or device.get("model"),
             "model_verified": zte_service._model_verified,
+            # Leitura/probe nativo não depende de autorização de POST.
+            "native_diagnostics_available": bool(
+                zte_service.connected
+                and zte_service._model_verified
+                and zte_service._adapter is not None
+                and zte_service._adapter.name in {
+                    "zte-f670l-thinklua", "zte-f6600p-thinklua",
+                }
+            ),
             "session_revision": zte_service._session_revision,
             "firmware": device.get("firmware"),
             "writes_enabled": (
