@@ -328,6 +328,74 @@ function renderF6201BSupportDiagnostic(report, output) {
             '</ul></article>' : "");
 }
 
+// The full diagnostic is intentionally sequential to preserve the ONT's
+// menuView/menuData state. Poll only local in-memory progress; never start
+// concurrent router probes or keep a browser request alive indefinitely.
+const SUPPORT_DIAGNOSTIC_WAIT_MS = 240000;
+const SUPPORT_PROGRESS_LABELS = Object.freeze({
+    queued: "Aguardando liberação da sessão da ONT",
+    preparing: "Preparando o diagnóstico",
+    base: "Coletando GPON, WAN, LAN e clientes",
+    wifi_radios: "Consultando rádios Wi-Fi",
+    band_steering: "Consultando Band Steering",
+    wifi_environment: "Analisando ambiente e canais Wi-Fi",
+    dns_health: "Consultando DNS",
+    dhcp: "Consultando DHCP",
+    firmware_health: "Verificando recursos do firmware",
+    speedtest: "Executando teste de velocidade",
+    analysis: "Consolidando resultados",
+    remediation: "Aplicando otimizações solicitadas",
+    post_validation: "Validando as alterações",
+    saving: "Finalizando e registrando histórico",
+    failed: "O diagnóstico falhou",
+    completed: "Diagnóstico finalizado"
+});
+
+function beginSupportProgress(output) {
+    if (!output || typeof fetch !== "function" ||
+        typeof AbortController !== "function") return () => {};
+    let stopped = false;
+    let timer = null;
+    const controller = new AbortController();
+    async function poll() {
+        try {
+            const response = await fetch(
+                "/api/diagnostics/support/progress",
+                {cache: "no-store", signal: controller.signal}
+            );
+            if (response.ok) {
+                const data = await response.json();
+                if (stopped || !data?.running) return;
+                const label = SUPPORT_PROGRESS_LABELS[data.stage] ||
+                    (String(data.stage || "").startsWith("validation_")
+                        ? "Validando leituras da ONT" : "Processando diagnóstico");
+                const total = Number(data.total) || 0;
+                const completed = Number(data.completed) || 0;
+                const progress = total > 1
+                    ? ` · ${Math.min(completed, total)}/${total}` : "";
+                const message = label + progress + "...";
+                output.textContent = message;
+                output.setAttribute("aria-live", "polite");
+                setBusy(true, message);
+            }
+        } catch (error) {
+            // Polling is optional; the main POST still returns the report
+            // or a bounded, user-visible error.
+            if (error?.name !== "AbortError") {
+                console.warn("Progresso local indisponível:", error?.name);
+            }
+        } finally {
+            if (!stopped) timer = setTimeout(poll, 1300);
+        }
+    }
+    timer = setTimeout(poll, 800);
+    return () => {
+        stopped = true;
+        clearTimeout(timer);
+        controller.abort();
+    };
+}
+
 async function runSupportDiagnostic({
     full = true,
     dashboard = false
@@ -340,16 +408,26 @@ async function runSupportDiagnostic({
     }
 
     if (!routerWriteEnabled) {
-        const state = await apiRequest("/discovery/bootstrap");
-        if (state.model_verified === true &&
-            String(state.detected_model || "").toUpperCase() === "F6201B") {
-            await classicF6201BDiagnostic(state, {full, dashboard});
-        } else {
-            // Outros firmwares experimentais conservam o diagnóstico
-            // técnico de candidatos no painel por família.
-            await runSelectedFirmwareDiagnostic();
+        let state;
+        try {
+            state = await apiRequest("/discovery/bootstrap");
+        } catch (error) {
+            showToast("Não foi possível validar a sessão: " + error.message);
+            return;
         }
-        return;
+        if (state.model_verified === true &&
+            /F6201B$/.test(String(state.detected_model || "")
+                .toUpperCase().replace(/[^A-Z0-9]/g, ""))) {
+            await classicF6201BDiagnostic(state, {full, dashboard});
+            return;
+        }
+        if (state.native_diagnostics_available !== true) {
+            // Unknown/Vue: use safe, individually validated read-only GETs.
+            await runSelectedFirmwareDiagnostic();
+            return;
+        }
+        // A falha de uma escrita não remove diagnósticos GET dos
+        // F670L/F6600P reconhecidos pelo backend.
     }
 
     supportDiagnosticState.running = true;
@@ -397,16 +475,29 @@ async function runSupportDiagnostic({
         }
     }
 
+    const output = document.getElementById("supportDiagnosticOutput");
+    if (!dashboard && output) {
+        output.textContent =
+            "Diagnóstico iniciado. Aguardando resultados reais da ONT...";
+        output.setAttribute("aria-live", "polite");
+    }
+    const stopProgress = !dashboard ? beginSupportProgress(output) : () => {};
+    const requestController = typeof AbortController === "function"
+        ? new AbortController() : null;
+    const deadline = requestController ? setTimeout(
+        () => requestController.abort(), SUPPORT_DIAGNOSTIC_WAIT_MS
+    ) : null;
+
     try {
         const result = await apiRequest(
             "/diagnostics/support",
             {
                 method: "POST",
-                body: JSON.stringify(
-                    payload
-                )
+                body: JSON.stringify(payload),
+                ...(requestController ? {signal: requestController.signal} : {})
             }
         );
+        stopProgress();
 
         if (dashboard) {
             supportDiagnosticState.dashboardDiagnostic = result;
@@ -457,29 +548,37 @@ async function runSupportDiagnostic({
         return result;
 
     } catch (error) {
+        const message = error?.name === "AbortError"
+            ? "O diagnóstico excedeu quatro minutos. O backend pode continuar " +
+              "trabalhando; aguarde a liberação da ONT antes de tentar novamente."
+            : String(error?.message || "Falha inesperada no diagnóstico.");
         if (dashboard) {
-            renderDashboardHealthError(
-                error
-            );
+            renderDashboardHealthError(new Error(message));
         } else {
-            showToast(
-                error.message
-            );
-
-            const output = document.getElementById(
+            showToast(message);
+            const failedOutput = document.getElementById(
                 "supportDiagnosticOutput"
             );
-
-            if (output) {
-                output.innerHTML = `
-                    <div class="support-empty critical">
-                        <strong>Falha no diagnóstico</strong>
-                        <span>${supportEscape(error.message)}</span>
-                    </div>
-                `;
+            if (failedOutput) {
+                failedOutput.replaceChildren();
+                const card = document.createElement("div");
+                card.className = "support-empty critical";
+                const title = document.createElement("strong");
+                title.textContent = "Falha no diagnóstico";
+                const detail = document.createElement("span");
+                detail.textContent = message;
+                card.append(title, detail);
+                failedOutput.append(card);
             }
         }
+        const badge = document.getElementById("supportDiagnosticBadge");
+        if (!dashboard && badge) {
+            badge.className = "badge danger";
+            badge.textContent = "Falhou";
+        }
     } finally {
+        stopProgress();
+        if (deadline !== null) clearTimeout(deadline);
         supportDiagnosticState.running = false;
 
         if (!dashboard) {
