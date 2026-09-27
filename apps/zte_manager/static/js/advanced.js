@@ -482,19 +482,16 @@ async function loadCapabilityCatalog() {
         "/device/capabilities"
     );
 
+    if (!data || typeof data.features !== "object" || !data.features ||
+        Array.isArray(data.features)) {
+        throw new Error("O catálogo nativo retornou um formato inválido.");
+    }
     advancedState.capabilities = data;
+    const badge = document.getElementById("adapterBadge");
+    if (badge) badge.textContent = data.adapter || "ThinkLua";
 
-    document.getElementById(
-        "adapterBadge"
-    ).textContent = (
-        data.adapter
-        || "ThinkLua"
-    );
-
-    renderCapabilities(
-        data.features || {},
-        null
-    );
+    renderCapabilities(data.features, null);
+    return data;
 }
 
 
@@ -503,8 +500,18 @@ async function probeCapabilities() {
         showToast("Conecte-se à ONT para detectar recursos.");
         return;
     }
-    if (!routerWriteEnabled && !advancedState.capabilities?.features) {
-        // Família Vue: a detecção menuView/menuData não se aplica.
+    // GETs do adaptador são independentes de POSTs: sessão em modo
+    // somente leitura não torna o catálogo nativo indisponível.
+    let bootstrap;
+    try {
+        bootstrap = await discoveryRequest("/discovery/bootstrap", {
+            timeoutMs: 10000
+        });
+    } catch (error) {
+        showToast("Identificação temporariamente indisponível: " + error.message);
+        return;
+    }
+    if (bootstrap.native_diagnostics_available !== true) {
         await probeMultimodel();
         return;
     }
@@ -626,6 +633,17 @@ let discoveryCatalogHost = null;
 let discoveryCatalogRevision = null;
 let trackerSessionGeneration = 0;
 
+// Algumas ONTs retornam "ZXHN F6600P" em vez de "F6600P". Não
+// tratar prefixos do fabricante como divergência de identidade: o
+// backend já fez a verificação da sessão real.
+function resolvedModelCode(value, models = []) {
+    const normalized = String(value || "").toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+    const names = models.map(item => String(item.model || "").toUpperCase()
+        .replace(/[^A-Z0-9]/g, "")).sort((a, b) => b.length - a.length);
+    return names.find(code => code && normalized.endsWith(code)) || normalized;
+}
+
 // O bootstrap não consulta a ONT: a lista de modelos precisa aparecer mesmo
 // se outro diagnóstico estiver segurando o contexto HTTP do equipamento.
 async function loadMultimodelCatalog({ refresh = false } = {}) {
@@ -653,20 +671,21 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
         }
 
         // Recriar options impede duplicatas após reconexão/troca de ONT.
+        const catalogModels = response.catalog?.models || [];
         select.replaceChildren(new Option("Usar identificação automática", ""));
-        for (const item of response.catalog?.models || []) {
+        for (const item of catalogModels) {
             select.add(new Option(
-                `${item.model} · ${item.protocol.toUpperCase()}`,
+                `${item.model} · ${String(item.protocol || "thinklua").toUpperCase()}`,
                 item.model
             ));
         }
 
         // O backend conhece o modelo selecionado no LOGIN. Nunca mudar
         // silenciosamente o perfil de uma sessão já autenticada.
-        const detected = String(response.detected_model || "").toUpperCase()
-            .replace(/[^A-Z0-9]/g, "");
-        const selected = String(response.model || "").toUpperCase()
-            .replace(/[^A-Z0-9]/g, "");
+        const detected = resolvedModelCode(
+            response.detected_model, catalogModels
+        );
+        const selected = resolvedModelCode(response.model, catalogModels);
         if (detected && detected !== "ZTE" && selected && selected !== detected) {
             trackerDetectedModel = null;
             trackerSelectedFamily = null;
@@ -677,10 +696,11 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
         trackerDetectedModel = detected && detected !== "ZTE"
             ? response.detected_model : response.model || null;
         globalThis.currentZteRevision = response.session_revision || "";
-        const normalized = String(trackerDetectedModel || "").toUpperCase()
-            .replace(/[^A-Z0-9]/g, "");
-        const matched = (response.catalog?.models || []).find(item =>
-            normalized === item.model.toUpperCase().replace(/[^A-Z0-9]/g, "")
+        const normalized = resolvedModelCode(
+            trackerDetectedModel, catalogModels
+        );
+        const matched = catalogModels.find(item =>
+            normalized === resolvedModelCode(item.model, catalogModels)
         );
         trackerSelectedFamily = matched?.family || null;
         if (matched) select.value = matched.model;
@@ -704,8 +724,12 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
             });
         } else if (info) {
             info.textContent = trackerDetectedModel
-                ? "Este modelo não tem perfil no zte_tracker. Menus nativos ainda podem funcionar."
-                : "O login não identificou o modelo. Reconecte informando o modelo.";
+                ? "Modelo identificado, mas sem perfil documentado. Consultando o catálogo nativo."
+                : "O backend ainda não retornou um modelo verificado.";
+            const grid = document.getElementById("trackerCapabilityGrid");
+            if (grid) grid.textContent = trackerDetectedModel
+                ? "Use Detectar recursos para consultar as capacidades nativas."
+                : "A identificação ainda não terminou. Tente novamente.";
         }
         return response;
     })().catch(error => {
@@ -2230,24 +2254,58 @@ function loadOperationsConsole() {
 async function loadOperationsConsoleInternal() {
     if (!ontConnected) return;
 
-    // Prioridade absoluta: bootstrap e recursos visíveis. A versão anterior
-    // aguardava /device/capabilities e depois DHCP/NAT/histórico;
-    // qualquer leitura demorada impedia que o modelo aparecesse na UI.
+    // Bootstrap e catálogo nativo são exclusivamente locais e devem
+    // aparecer ANTES das sondagens menuView/menuData, que podem levar
+    // dezenas de segundos. Nenhuma GET pesada deve esconder o modelo.
+    let bootstrap = null;
     try {
-        await loadMultimodelCatalog();
+        bootstrap = await loadMultimodelCatalog();
     } catch (error) {
         console.warn("Bootstrap de descoberta:", error);
+        const status = document.getElementById("trackerDiscoveryStatus");
+        const grid = document.getElementById("trackerCapabilityGrid");
+        if (status) status.textContent =
+            "A identificação está indisponível: " + error.message;
+        if (grid) grid.textContent =
+            "Não foi possível consultar o catálogo. Tente Detectar modelo novamente.";
+    }
+
+    if (bootstrap?.native_diagnostics_available === true) {
+        try {
+            const native = await loadCapabilityCatalog();
+            const grid = document.getElementById("trackerCapabilityGrid");
+            // Quando o firmware não consta dos perfis documentados,
+            // exibir o catálogo nativo sem declarar GETs não executados
+            // como confirmados.
+            if (grid && !grid.querySelector(".capability-card")) {
+                renderTrackerDiscovery({
+                    model: trackerDetectedModel || bootstrap.model,
+                    family: "thinklua",
+                    candidate_features: Object.entries(native.features).map(
+                        ([feature, spec]) => ({
+                            feature, label: spec.label || feature,
+                            status: "not_tested"
+                        })
+                    ),
+                    reason: "Modelo autenticado. Recursos do adaptador disponíveis para verificação GET."
+                });
+            }
+        } catch (error) {
+            const grid = document.getElementById("capabilityGrid");
+            if (grid) grid.textContent =
+                "Não foi possível carregar os menus nativos: " + error.message;
+        }
     }
 
     if (trackerDetectedModel) {
-        // Não iniciar DHCP/NAT durante menuView -> menuData: todos usam
-        // a mesma sessão/contexto do firmware e devem ser serializados.
+        // O catálogo e a identificação já estão visíveis. Serializar
+        // sondagens e consultas opcionais na sessão única da ONT.
         await autoDiscoverTracker();
     }
 
     const optionalLoaders = routerWriteEnabled
-        ? [loadCapabilityCatalog, loadDhcpOperations, loadNatOperations, loadHistory]
-        : [loadCapabilityCatalog, loadHistory];
+        ? [loadDhcpOperations, loadNatOperations, loadHistory]
+        : [loadHistory];
 
     // Rodar sequencialmente no equipamento, mas não atrasar a UI.
     // A falha de um módulo não interrompe os demais.
