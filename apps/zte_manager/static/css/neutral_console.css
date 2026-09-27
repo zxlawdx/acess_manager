@@ -14,6 +14,8 @@ html[data-theme="dark"] {
   --ui-border-muted: #303235;
   --ui-text: #f0f0ee;
   --ui-text-secondary: #b7b9b7;
+  --select-option-bg: #18191e;
+  --select-option-fg: #f0f0ee;
   --ui-muted: #939792;
   --ui-accent: #65b28c; /* reserved for selected/primary actions */
   --ui-accent-contrast: #0e2219;
@@ -74,6 +76,8 @@ html[data-theme="light"] {
   --ui-border-muted: #e6e8e3;
   --ui-text: #242726;
   --ui-text-secondary: #525955;
+  --select-option-bg: #ffffff;
+  --select-option-fg: #111827;
   --ui-muted: #717b74;
   --ui-accent: #276c50;
   --ui-accent-contrast: #ffffff;

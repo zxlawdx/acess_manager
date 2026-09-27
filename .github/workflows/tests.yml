@@ -63,6 +63,12 @@ jobs:
       - name: Verify discovery bootstrap survives stalled capabilities
         run: node tests/test_discovery_bootstrap.cjs
 
+      - name: Verify F6600P Advanced, visible diagnostic progress and Qt light popups
+        run: |
+          node tests/test_f6600p_advanced_ui.cjs
+          node tests/test_f6600p_support_ui.cjs
+          node tests/test_f6600p_light_popups.cjs
+
       - name: Verify ONT data and session restoration
         run: node tests/test_session_restore.cjs
 
@@ -115,9 +121,12 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Verify Phase 2 session, inventory and desktop host contracts
         run: |
-          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat tests.test_api_error_sanitization -v
+          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat tests.test_api_error_sanitization tests.test_f6600p_support_progress -v
       - name: Verify clipboard browser selection never touches Windows Web APIs
         run: |
           node tests/test_desktop_clipboard.cjs
           node tests/test_native_readonly_diagnostics.cjs
           node tests/test_inventory_view.cjs
+          node tests/test_f6600p_advanced_ui.cjs
+          node tests/test_f6600p_support_ui.cjs
+          node tests/test_f6600p_light_popups.cjs

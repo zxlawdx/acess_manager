@@ -1647,7 +1647,13 @@ class SupportDiagnosticService:
         self,
         options: SupportDiagnosticOptions,
         thresholds: DiagnosticThresholds,
+        *,
+        progress: Callable[[str, int, int], None] | None = None,
     ) -> dict[str, Any]:
+        # Progress carries ONLY static stage identifiers and counters:
+        # do not export raw firmware values or exception messages.
+        if progress is not None:
+            progress("base", 0, 1)
         base = AutomaticDiagnosticService(
             self.zte
         ).run(
@@ -1731,7 +1737,12 @@ class SupportDiagnosticService:
                 )
             )
 
-        for collector in collectors:
+        total_stages = 1 + len(collectors)
+        if progress is not None:
+            progress("base", 1, total_stages)
+        for index, collector in enumerate(collectors, start=2):
+            if progress is not None:
+                progress(collector.name, index - 1, total_stages)
             try:
                 context[
                     "sections"
@@ -1743,10 +1754,12 @@ class SupportDiagnosticService:
             except Exception as error:
                 context[
                     "errors"
-                ][collector.name] = str(
-                    error
-                )
+                ][collector.name] = type(error).__name__
+            if progress is not None:
+                progress(collector.name, index, total_stages)
 
+        if progress is not None:
+            progress("analysis", total_stages, total_stages)
         rules: list[DiagnosticRule] = [
             DnsHealthRule(),
             ClientPathRule(
