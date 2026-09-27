@@ -49,7 +49,7 @@ class ExperimentalF6201BWrites:
 
     @staticmethod
     def capabilities(firmware: str | None = None) -> dict:
-        eligible = firmware == EXACT_FIRMWARE
+        eligible = bool(firmware)
         return {
             "model": "F6201B",
             "firmware": firmware,
@@ -219,8 +219,8 @@ class ExperimentalF6201BWrites:
     def preview(self, zte, *, host: str, firmware: str,
                 ssid_id: str, config: dict) -> dict:
         self.clear()
-        if firmware != EXACT_FIRMWARE:
-            raise PermissionError("Somente F6201B firmware V9.3.10P7N7.")
+        if not firmware:
+            raise ValueError("A ONT não informou a versão do firmware.")
         if not isinstance(ssid_id, str) or not re.fullmatch(
             r"DEV\.WIFI\.AP\d+", ssid_id
         ):
@@ -291,8 +291,8 @@ class ExperimentalF6201BWrites:
         proposal = self._pending
         # Consome inclusive tentativa inválida: evitar replay involuntário.
         self.clear()
-        if firmware != EXACT_FIRMWARE:
-            raise PermissionError("Escrita experimental não autorizada.")
+        if not firmware:
+            raise ValueError("Não foi possível confirmar o firmware da sessão.")
         if not proposal or not secrets.compare_digest(proposal.nonce, str(nonce)):
             raise PermissionError("Prévia ausente ou inválida.")
         if (proposal.host != host or
