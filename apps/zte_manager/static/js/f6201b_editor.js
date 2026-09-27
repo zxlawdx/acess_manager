@@ -53,9 +53,8 @@
     }
     const verifiedModel = info =>
         info?.connected === true &&
-        String(info.detected_model || "").toUpperCase().replace(/[^A-Z0-9]/g,"") === "F6201B" &&
-        info.model_verified === true &&
-        info.writes_enabled === false;
+        String(info.detected_model || "").toUpperCase().replace(/[^A-Z0-9]/g,"").endsWith("F6201B") &&
+        info.model_verified === true;
 
     async function bootstrap() {
         const info = await apiRequest("/discovery/bootstrap");
@@ -428,7 +427,7 @@
                 if (run !== epoch) return;
                 operations.disabled = !(flags.supported_firmware);
                 operations.title = operations.disabled
-                    ? "Ative a escrita experimental para testar o perfil F6201B."
+                    ? "O firmware atual não disponibilizou um formulário de escrita válido."
                     : "Perfil experimental: abrir prévia e confirmar RF/DNS.";
             } catch(error) {
                 operations.disabled = true;
@@ -453,9 +452,9 @@
             }catch(error){if(run===epoch)node.innerHTML=failure(name,"Leitura falhou.");}
         }
         const account=$("accountDetails");
-        if(account)account.innerHTML=failure("Conta administrativa","A edição geral permanece indisponível no perfil experimental.");
-        const password=$("adminPasswordForm");if(password)password.classList.add("hidden");
-        const reboot=$("rebootDeviceButton");if(reboot)reboot.disabled=true;
+        // Conta e reinicialização são ações normais do operador; os
+        // respectivos serviços validam as respostas do firmware ao executar.
+        // O painel especializado não deve ocultar os controles nativos.
     }
     // DNS no próprio bloco antigo "Configuração padrão", sem telas extras.
     async function renderDnsProfile() {
@@ -547,7 +546,7 @@
     }
     async function open(page) {
         // F6600P/F670L continue usando integralmente os carregadores antigos.
-        if (!ontConnected || routerWriteEnabled) return;
+        if (!ontConnected) return;
         if(!["wifi","wan","clients","dashboard","device","profiles"].includes(page))return;
         const info=await bootstrap();
         if(!info)return;

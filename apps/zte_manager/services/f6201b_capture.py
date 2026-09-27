@@ -8,6 +8,9 @@ Não faz POST para a ONT e não expõe nenhuma resposta bruta ou senha.
 """
 from __future__ import annotations
 
+import json
+import xml.etree.ElementTree as ET
+
 from apps.zte_manager.services import multimodel_service as mm
 from apps.zte_manager.services.f6201b_evidence import CAPTURED_GET_VIEWS, CAPTURED_GET_ROOTS, GET_PARAMS, OBSERVED_APPLY_FIELDS
 
@@ -113,7 +116,7 @@ def _rows():
         yield {
             "category": category, "tag": tag, "root": root,
             "request_type": request_type, "response_format": fmt,
-            "inspectable": bool(root) and fmt == "XML",
+            "inspectable": fmt in {"XML", "JSON", "XML_TRUNCATED"},
         }
 
 
@@ -129,12 +132,12 @@ for tag, view in CAPTURED_GET_VIEWS.items():
         continue
     root = CAPTURED_GET_ROOTS.get(tag, "")
     # A segunda captura também registra vistas e tabelas novas.
-    # Nunca tratar HTML/JSON (root vazio) como XML inspecionável.
+    # O inspetor valida XML/JSON recebidos ao vivo, sem expor valores.
     ALLOWED[tag] = {
         "category": "Captura complementar", "tag": tag, "root": root,
         "request_type": "menuData", "response_format":
             "XML" if root else "OUTRO",
-        "inspectable": bool(root),
+        "inspectable": True,
     }
 
 
@@ -158,21 +161,58 @@ def catalog() -> dict:
     }
 
 
+def _structural_xml(raw: str, expected: str = "") -> dict:
+    """Return only object counts and nonsensitive schema; no ParaValue."""
+    root = ET.fromstring(raw)
+    if root.tag != "ajax_response_xml_root":
+        raise ValueError("A resposta não possui o envelope XML ThinkLua.")
+    if (root.findtext("IF_ERRORID") or "0").strip() not in {"0", "0000"}:
+        raise ValueError("A ONT recusou a leitura atual.")
+    if "SessionTimeout" in raw or "login_need_refresh" in raw:
+        raise ValueError("Sessão expirada; reconecte.")
+    structures = {}
+    for node in root:
+        if not (node.tag.startswith(("OBJ_", "ID_")) or
+                node.tag == "ALLDNSHOST"):
+            continue
+        instances = node.findall("Instance")
+        names = set()
+        for record in instances:
+            children = list(record)
+            for pos, item in enumerate(children[:-1]):
+                if item.tag != "ParaName" or children[pos + 1].tag != "ParaValue":
+                    continue
+                field = (item.text or "").strip()
+                if field and not mm.SENSITIVE_NAME.search(field):
+                    names.add(field[:64])
+        structures[node.tag] = {
+            "records": len(instances),
+            "fields": sorted(names)[:80],
+        }
+    if expected and expected not in structures:
+        raise ValueError("O formulário não retornou o objeto esperado.")
+    if not structures:
+        raise ValueError("A resposta não contém objetos XML inspecionáveis.")
+    return structures
+
+
 def inspect(zte, tag: str) -> dict:
+    """Inspect each captured GET on explicit operator request.
+
+    XML and JSON routes are independent of POST permissions. Never expose
+    firmware values, HTML, credential fields or raw router data.
+    """
     route = ALLOWED.get(tag)
     if not route:
-        raise ValueError("Rota não incluída na captura sanitizada.")
-    if not route["inspectable"]:
-        return {"tag": tag, "available": False,
-                "reason": "Sem objeto XML completo na captura fornecida."}
+        raise ValueError("Rota não incluída na captura autorizada.")
     if tag == "wlan_sta_wlan_profile_lua.lua":
-        # Este endpoint exige _sessionTOKEN na URL e APGetFrom:
-        # não realizar scan involuntário durante inspeção estrutural.
-        return {"tag": tag, "available": False,
-                "reason": "Wi-Fi Scan exige procedimento específico."}
+        # Scanning is an explicit user action, never automatic bootstrap.
+        params = {**GET_PARAMS.get(tag, {}), "APGetFrom": "ScanAP"}
+    else:
+        params = GET_PARAMS.get(tag, {})
     if route["request_type"] == "hiddenData":
         response = zte.session.get(zte.base_url + "/", params={
-            "_type": "hiddenData", "_tag": tag
+            "_type": "hiddenData", "_tag": tag,
         }, timeout=10)
         response.raise_for_status()
         raw = response.text
@@ -180,14 +220,28 @@ def inspect(zte, tag: str) -> dict:
         view = CAPTURED_GET_VIEWS.get(tag)
         if not view:
             return {"tag": tag, "available": False,
-                    "reason": "Captura não confirmou menuView da rota."}
+                    "reason": "Este GET ainda não tem menuView documentada."}
         zte.get_view(view, Menu3Location=0)
-        raw = zte.get_menu(tag, **GET_PARAMS.get(tag, {}))
-    # Modelo comum sanitiza nomes de campo e não retorna ParaValue.
-    try:
-        structure = mm._shape(raw, route["root"])
-    except Exception:
+        raw = zte.get_menu(tag, **params)
+    if not isinstance(raw, str) or not raw.strip():
         return {"tag": tag, "available": False,
-                "reason": "Resposta sem o OBJ esperado ou sessão inválida."}
+                "reason": "A ONT retornou uma resposta vazia."}
+    try:
+        if route["response_format"] == "JSON":
+            payload = json.loads(raw)
+            if not isinstance(payload, (dict, list)):
+                raise ValueError("JSON sem objeto ou lista.")
+            fields = (
+                sorted(str(k)[:64] for k in payload
+                       if not mm.SENSITIVE_NAME.search(str(k)))[:80]
+                if isinstance(payload, dict) else []
+            )
+            structure = {"type": type(payload).__name__,
+                         "items": len(payload), "fields": fields}
+        else:
+            structure = _structural_xml(raw, route["root"])
+    except (ET.ParseError, ValueError, TypeError):
+        return {"tag": tag, "available": False,
+                "reason": "A resposta não confirmou a estrutura capturada."}
     return {"tag": tag, "category": route["category"],
             "available": True, "structure": structure}

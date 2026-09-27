@@ -162,7 +162,8 @@ class FirmwarePolicyTests(unittest.TestCase):
         )
         self.assertTrue(policy.permits("ZTE", "F670L", "V15.0.UNKNOWN"))
         self.assertFalse(policy.permits("Huawei", "F670L", "V9.0.11P1N9"))
-        self.assertFalse(policy.permits("ZTE", "F6201B", "V9.3.10P7N7"))
+        self.assertTrue(policy.permits("ZTE", "F6201B", "V9.3.10P7N7"))
+        self.assertTrue(policy.permits("ZTE", "ZXHN F6201B", "OTHER_REVISION"))
 
     def test_invalid_telemetry_manifest_cannot_disable_known_model_writes(self):
         with patch.dict("os.environ", {
@@ -377,23 +378,52 @@ class RealServiceIntegrationTests(unittest.TestCase):
         self.assertTrue(bootstrap["native_diagnostics_available"])
         self.assertTrue(bootstrap["model_verified"])
 
-    def test_native_diagnostics_do_not_advertise_captured_f6201b(self):
+    def test_f6201b_native_catalog_and_operator_writes_are_independent_of_revision(self):
         from apps.zte_manager import api as api_module
+        FakeZTE.model = "ZXHN F6201B"
+        FakeZTE.firmware = "REVISION_NOT_IN_CATALOG"
+        result = self.connect()
+        self.assertTrue(result["writes_enabled"])
+        self.assertTrue(result["model_verified"])
+        self.assertEqual(result["adapter"], "zte-f6201b-thinklua")
+        self.assertIsNone(self.service._runtime_driver)
+        self.assertIsNone(self.service._readonly_original_post)
+        self.assertEqual(self.service._zte.login_calls, 1)
+        status = self.service.f6201b_write_status()
+        self.assertTrue(status["supported_firmware"])
+        self.assertEqual(status["firmware_policy"], "form_validated_at_runtime")
+        self.assertTrue(status["writes_enabled"])
+        with patch.object(api_module, "zte_service", self.service):
+            bootstrap = api_module.discovery_bootstrap()
+        self.assertTrue(bootstrap["native_diagnostics_available"])
+
+    def test_f6201b_stale_identity_quarantines_operator_writes(self):
         FakeZTE.model = "ZXHN F6201B"
         FakeZTE.firmware = "V9.3.10P7N7"
         self.connect()
-        with patch.object(api_module, "zte_service", self.service):
-            bootstrap = api_module.discovery_bootstrap()
-        self.assertFalse(bootstrap["native_diagnostics_available"])
+        self.service._zte.identity["firmware"] = "FIRMWARE_CHANGED"
+        with self.assertRaisesRegex(ValueError, "Identidade|firmware"):
+            self.service._f6201b_write_firmware()
+        self.assertFalse(self.service._zte.writes_enabled)
+        with self.assertRaises(PermissionError):
+            self.service._zte.session.post("http://example.invalid")
+        with self.assertRaises((ValueError, PermissionError)):
+            self.service._f6201b_post_transport()
 
-    def test_f6201b_remains_on_captured_legacy_path(self):
+    def test_f6201b_standard_wifi_uses_captured_writer_not_generic_zte(self):
         FakeZTE.model = "ZXHN F6201B"
         FakeZTE.firmware = "V9.3.10P7N7"
-        result = self.connect()
-        self.assertFalse(result["writes_enabled"])
-        self.assertIsNone(self.service._runtime_driver)
-        self.assertIsNotNone(self.service._readonly_original_post)
-        self.assertEqual(self.service._zte.login_calls, 1)
+        self.connect()
+        with patch.object(self.service._f6201b_writer, "apply_changes",
+                          return_value={"success": True, "verified": True}) as writer:
+            result = self.service.set_ssid_config("DEV.WIFI.AP1", {
+                "ssid": "New SSID", "hidden": True,
+            })
+        self.assertTrue(result["verified"])
+        config = writer.call_args.kwargs["config"]
+        self.assertEqual(config["broadcast"], False)
+        self.assertNotIn("hidden", config)
+        self.assertEqual(self.service._zte.posts, 0)
 
 
 class DesktopCapabilitiesContractTests(unittest.TestCase):

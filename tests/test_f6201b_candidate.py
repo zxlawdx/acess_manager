@@ -34,7 +34,7 @@ class ReadOnlyDevice:
 
 
 class F6201BTests(unittest.TestCase):
-    def test_experimental_profile_never_enables_writes(self):
+    def test_f6201b_uses_own_adapter_not_f670l_or_f6600p(self):
         model, family = multimodel.find_family("ZXHN F6201B")
         self.assertEqual((model, family), ("F6201B", "f6201b_candidate"))
         self.assertEqual(multimodel.catalog()["models"][-1]["evidence"],
@@ -73,7 +73,7 @@ class F6201BTests(unittest.TestCase):
         self.assertGreaterEqual(routes["total_get_routes"], 92)
         self.assertTrue(any(item["tag"] == "optical_info_lua.lua"
                             for item in routes["routes"]))
-        self.assertFalse(f6201b_capture.ALLOWED["topo_lua.lua"]["inspectable"])
+        self.assertTrue(f6201b_capture.ALLOWED["topo_lua.lua"]["inspectable"])
         self.assertTrue(f6201b_capture.ALLOWED[
             "wan_internetstatus_lua.lua"]["inspectable"])
 

@@ -1261,7 +1261,7 @@ function renderCapabilities(
 async function runAutomaticDiagnostic(event) {
     event.preventDefault();
     if (!routerWriteEnabled) {
-        showToast("Use Diagnóstico por modelo: não há comandos de diagnóstico certificados para esta família.");
+        // A ausência de escrita não bloqueia diagnóstico GET.
         await runMultimodelDiagnostic();
         return;
     }

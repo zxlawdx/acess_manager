@@ -24,8 +24,9 @@ logger = logging.getLogger(__name__)
 KNOWN_CANDIDATES: Mapping[str, frozenset[str]] = {
     "F670L": frozenset({"V9.0.11P1N9", "V9.0.11P1N40"}),
     "F6600P": frozenset({"V9.0.10P6N34"}),
+    "F6201B": frozenset({"V9.3.10P7N7"}),
 }
-_MODEL_PATTERN = re.compile(r"(?<![A-Z0-9])(F670L|F6600P)(?![A-Z0-9])")
+_MODEL_PATTERN = re.compile(r"(?<![A-Z0-9])(F670L|F6600P|F6201B)(?![A-Z0-9])")
 
 
 def canonical_model(value: str | None) -> str | None:

@@ -152,8 +152,8 @@ class ExperimentalF6201BProfile:
 
     @staticmethod
     def _authorized(firmware):
-        if firmware != EXACT_FIRMWARE:
-            raise ValueError("Formulário RF indisponível neste firmware.")
+        if not firmware:
+            raise ValueError("Firmware não identificado no login atual.")
 
     def preview(self, zte, *, host, revision, firmware, profile, dns_adapter):
         self.clear()
