@@ -145,32 +145,41 @@ class DeviceRegistrarTests(unittest.TestCase):
 
 
 class FirmwarePolicyTests(unittest.TestCase):
-    def test_exact_known_firmware_and_explicit_approval_required(self):
+    def test_known_transport_writes_are_independent_of_firmware_catalog(self):
         empty = FirmwarePolicy()
-        self.assertFalse(empty.permits("ZTE", "F670L", "V9.0.11P1N9"))
+        self.assertTrue(empty.permits("ZTE", "F670L", "V9.0.11P1N9"))
+        self.assertTrue(empty.permits("ZTE", "F670L", "UNKNOWN_FIRMWARE"))
+        self.assertTrue(empty.permits("ZTE", "F6600P", None))
         policy = FirmwarePolicy.from_approved({"F670L": ["V9.0.11P1N9"]})
-        self.assertTrue(policy.permits(
-            "ZTE", "ZXHN F670L", "V9.0.11P1N9"
-        ))
-        self.assertFalse(policy.permits("ZTE", "F670L", "V9.0.11P1N40"))
-        self.assertFalse(policy.permits("ZTE", "F670L", "V9.0.11P1N9-HOTFIX"))
+        self.assertEqual(
+            policy.recognition_status("F670L", "V9.0.11P1N9"), "reviewed"
+        )
+        self.assertEqual(
+            policy.recognition_status("F670L", "V9.0.11P1N40"), "known_candidate"
+        )
+        self.assertEqual(
+            policy.recognition_status("F670L", "V15.0.UNKNOWN"), "unreviewed"
+        )
+        self.assertTrue(policy.permits("ZTE", "F670L", "V15.0.UNKNOWN"))
         self.assertFalse(policy.permits("Huawei", "F670L", "V9.0.11P1N9"))
         self.assertFalse(policy.permits("ZTE", "F6201B", "V9.3.10P7N7"))
 
-    def test_invalid_environment_manifest_fails_closed(self):
+    def test_invalid_telemetry_manifest_cannot_disable_known_model_writes(self):
         with patch.dict("os.environ", {
-            "ZTE_APPROVED_FIRMWARE_JSON": '{"F670L": ["UNTESTED"]}'
+            "ZTE_APPROVED_FIRMWARE_JSON": '{"Other": ["UNTESTED"]}'
         }):
             with self.assertLogs(
                 "apps.zte_manager.infrastructure.zte.firmware_policy", "WARNING"
             ) as logs:
                 policy = FirmwarePolicy.from_environment()
         self.assertEqual(policy.approved, {})
+        self.assertTrue(policy.permits("ZTE", "F670L", "UNTESTED"))
         self.assertNotIn("UNTESTED", str(logs.output))
 
-    def test_cannot_approve_unknown_variant(self):
-        with self.assertRaises(ValueError):
-            FirmwarePolicy.from_approved({"F670L": ["V12.UNKNOWN"]})
+    def test_operator_can_document_new_firmware_as_telemetry(self):
+        policy = FirmwarePolicy.from_approved({"F670L": ["V12.UNKNOWN"]})
+        self.assertEqual(policy.recognition_status("F670L", "V12.UNKNOWN"), "reviewed")
+        self.assertTrue(policy.permits("ZTE", "F670L", "V12.UNKNOWN"))
 
 
 class RealServiceIntegrationTests(unittest.TestCase):
@@ -294,7 +303,8 @@ class RealServiceIntegrationTests(unittest.TestCase):
         self.assertEqual(self.service._history_session_id, 42)
         self.assertNotIn("NOT_FOR_LOG", str(logs.output))
 
-    def test_unapproved_firmware_installs_read_only_driver_without_legacy_bypass(self):
+    def test_unlisted_firmware_supports_operator_initiated_actions(self):
+        FakeZTE.firmware = "OPERATOR-BUILD-999"
         self.service._firmware_policy = FirmwarePolicy()
         self.service._driver_factory = lambda: (
             service_module.ThinkLuaDeviceAdapter(
@@ -302,13 +312,21 @@ class RealServiceIntegrationTests(unittest.TestCase):
             )
         )
         response = self.connect()
-        self.assertFalse(response["writes_enabled"])
+        self.assertTrue(response["writes_enabled"])
         self.assertIsNotNone(self.service._runtime_driver)
-        with self.assertRaises(PermissionError):
-            self.service._zte.session.post("http://example.invalid")
-        with self.assertRaises(DeviceWriteNotApproved):
-            self.service.set_ssid_config("AP1", {"ssid": "cant-write"})
-        self.assertEqual(self.service._zte.posts, 0)
+        self.assertTrue(self.service.set_ssid_config(
+            "AP1", {"ssid": "operator-updated"}
+        )["success"])
+        self.assertEqual(self.service.wifi_networks()[0]["ssid"], "operator-updated")
+        # Direct POST is not artificially blocked on a recognized model.
+        self.service._zte.session.post("http://example.invalid")
+        self.assertEqual(self.service._zte.posts, 1)
+
+    def test_healthy_connection_with_no_firmware_field_remains_writable(self):
+        self.connect()
+        self.assertTrue(self.service._zte.writes_enabled)
+        # The policy never requires an entry in the firmware catalog.
+        self.assertTrue(self.policy.permits("ZTE", "F670L", None))
 
     def test_f6600p_exact_approved_firmware_uses_same_runtime_driver(self):
         FakeZTE.model = "F6600P"
@@ -347,6 +365,26 @@ class RealServiceIntegrationTests(unittest.TestCase):
         self.assertFalse(self.service._zte.writes_enabled)
         with self.assertRaises(PermissionError):
             self.service._zte.session.post("http://example.invalid")
+
+    def test_native_diagnostics_are_readable_even_when_writes_are_off(self):
+        from apps.zte_manager import api as api_module
+        self.connect()
+        self.service._zte.writes_enabled = False
+        with patch.object(api_module, "zte_service", self.service):
+            bootstrap = api_module.discovery_bootstrap()
+        self.assertTrue(bootstrap["connected"])
+        self.assertFalse(bootstrap["writes_enabled"])
+        self.assertTrue(bootstrap["native_diagnostics_available"])
+        self.assertTrue(bootstrap["model_verified"])
+
+    def test_native_diagnostics_do_not_advertise_captured_f6201b(self):
+        from apps.zte_manager import api as api_module
+        FakeZTE.model = "ZXHN F6201B"
+        FakeZTE.firmware = "V9.3.10P7N7"
+        self.connect()
+        with patch.object(api_module, "zte_service", self.service):
+            bootstrap = api_module.discovery_bootstrap()
+        self.assertFalse(bootstrap["native_diagnostics_available"])
 
     def test_f6201b_remains_on_captured_legacy_path(self):
         FakeZTE.model = "ZXHN F6201B"

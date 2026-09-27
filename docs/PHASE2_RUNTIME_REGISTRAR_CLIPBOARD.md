@@ -7,9 +7,9 @@ formulários capturados da F6201B.
 
 ## Arquivos novos e modificados
 
-- `infrastructure/zte/firmware_policy.py`: catálogo fechado de **versões
-  candidatas conhecidas** + allowlist de aprovações locais. Versões listadas
-  no repositório não são evidência automática de homologação física.
+- `infrastructure/zte/firmware_policy.py`: reconhecimento de famílias
+  ThinkLua e telemetria **não bloqueante** de compatibilidade de firmware.
+  O catálogo de versões conhecidas não é uma permissão de escrita.
 - `infrastructure/zte/adapters/thinklua_device.py`: suporta
   `attach_authenticated(existing_zte, ...)` que empresta a sessão aberta
   pelo `ZTEService` **sem outro login ou logout**; revalida firmware, modelo,
@@ -18,9 +18,9 @@ formulários capturados da F6201B.
   ThinkLua F670L/F6600P foi identificado pela resposta real do dispositivo.
   Utiliza o driver para status, leitura/escrita SSID e DHCP, mantendo os
   mesmos envelopes/valores retornados ao frontend. As demais funcionalidades
-  legadas continuam na mesma sessão HTTP, com o bloqueio de POST para
-  firmware não aprovado; migração incremental de cada operação continua
-  necessária para guardas por comando e verificadores específicos.
+  legadas continuam na mesma sessão HTTP. Modelos ThinkLua reconhecidos
+  iniciam com escrita habilitada, independentemente do catálogo de firmware;
+  erros reais de sessão/comunicação e troca de identidade continuam protegidos.
 - `application/inventory/device_registrar.py`: inventário best-effort
   separado do login, com allowlist de campos planos, metadados mínimos e
   logs de *tipos* de exceção sem identificadores/segredos.
@@ -32,47 +32,33 @@ formulários capturados da F6201B.
   seleção manual. JS não usa heurística `navigator.userAgent` nem
   `execCommand` no novo módulo.
 
-## Aprovação de firmware — política de segurança
+## Política operacional de escrita (alinhamento após PR #47)
 
-A verificação por nome de modelo da primeira fase foi removida como
-mecanismo de concessão de escrita no **novo driver e seu vínculo no login**.
-É preciso identificar modelo e versão reais, ambos exatamente iguais a uma
-versão conhecida **e** explicitamente aprovada por instalação.
+Modelos ThinkLua **realmente identificados pela ONT** (F670L/F6600P)
+recebem `writes_enabled=true` por padrão na sessão técnica. A existência
+ou ausência de uma versão no catálogo de firmware **não** autoriza nem
+bloqueia POSTs; a escolha operacional é do usuário da ferramenta.
 
-| Modelo do novo driver | Versões candidatas encontradas no repositório |
-|---|---|
-| F670L | `V9.0.11P1N9` (documentação), `V9.0.11P1N40` (fixture de teste) |
-| F6600P | `V9.0.10P6N34` (fixture de teste) |
-| F6201B | **Nunca** incluída no driver genérico. Sua via capturada usa `EXACT_FIRMWARE` próprio. |
+As proteções efetivas mantidas no driver são: autenticação, GET de
+revalidação de identidade antes de mutações, correspondência do equipamento
+(modelo/serial e versão *quando conhecida*), comunicação saudável e erro
+real retornado pelo dispositivo. A aplicação não faz homologação de firmware
+automática a partir de uma consulta de status.
 
-**Por padrão todas as versões do driver genérico são somente leitura.**
-As versões acima são candidatas documentadas, não foram homologadas
-fisicamente nesta PR. Após testes de bancada autorizados, o operador pode
-aprovar **apenas uma versão já presente no catálogo** com a variável local:
+`FirmwarePolicy.recognition_status(model, firmware)` fornece **telemetria**:
+`reviewed`, `known_candidate`, `unreviewed` ou `unavailable`. O manifesto
+opcional `ZTE_APPROVED_FIRMWARE_JSON` apenas anota versões revistas;
+não altera `writes_enabled`, nem precisa existir para trabalhar. A
+F6201B permanece **fora** do driver genérico: seus comandos capturados
+exigem identificação da versão exata porque a forma do protocolo foi
+capturada nessa versão. Não confundir essa proteção técnica com limitação
+artificial por cargo/operador.
 
-```bash
-export ZTE_APPROVED_FIRMWARE_JSON='{"F670L":["V9.0.11P1N9"]}'
-python manage.py runserver
-```
-
-No PowerShell (Windows), antes de iniciar o aplicativo:
-
-```powershell
-$env:ZTE_APPROVED_FIRMWARE_JSON = '{"F670L":["V9.0.11P1N9"]}'
-python manage.py runserver
-```
-
-Reinicie a aplicação para aplicar mudanças de política; não acrescente
-versões desconhecidas à variável: a política rejeita modelos/versões que
-não aparecem em `KNOWN_CANDIDATES`. A adição de versões futuras exige
-revisão de código e homologação por operação. Não adicionar credenciais
-ao manifesto ou a logs.
-
-**Compatibilidade funcional:** a mudança deliberada é que instalações
-sem aprovação explícita passarão a apresentar `writes_enabled=false`
-no login para F670L/F6600P. As **chaves e tipos JSON** da API e os
-demais endpoints são preservados. Isso evita que a migração reintroduza
-o risco de POST em firmware ainda desconhecido.
+O endpoint `/api/discovery/bootstrap` mantém todos os campos existentes
+e acrescenta o Boolean `native_diagnostics_available`. Os painéis nativos
+F670L/F6600P usam essa capacidade de **leitura**, independentemente de
+`writes_enabled`. Nenhum botão de diagnóstico GET deve ser escondido
+apenas porque uma operação de alteração falhou.
 
 ## Invariantes de sessão
 
@@ -84,7 +70,7 @@ o risco de POST em firmware ainda desconhecido.
    `menuView → menuData → POST`; o bloqueio interno do driver é reentrante.
 3. Reuso rejeita mudanças de modelo/firmware/serial e, em sessão gerenciada
    pelo driver, indisponibilidade de identificação. O driver revalida
-   novamente identidade e aprovação antes da escrita.
+   novamente identidade e sessão antes da escrita.
 4. F6201B segue por `_f6201b_write_firmware()`,
    `_readonly_original_post` e seus comandos capturados: não passa pelo
    driver genérico.
@@ -94,7 +80,7 @@ o risco de POST em firmware ainda desconhecido.
    indisponível durante falhas da base de dados.
 6. Fluxos legados que não usam ainda o driver não possuem todos os
    preflights por operação. Migração e ensaio por firmware seguem pendentes;
-   não interpretar uma aprovação de um firmware como homologação física
+   não interpretar um firmware reconhecido como homologação física
    de todos os comandos expostos pela interface.
 
 ## Clipboard
@@ -117,12 +103,13 @@ clipboard web somente se o host autorizou e `isSecureContext` e
 ```bash
 python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat -v
 node tests/test_desktop_clipboard.cjs
+node tests/test_native_readonly_diagnostics.cjs
 python -m unittest discover -s tests -v
 ```
 
 Testes sintéticos cobrem: um único login, sessão emprestada, reuso,
-troca de firmware, bloqueio de POST em versão desconhecida, F6201B
-preservada, falha de inventário e de histórico, allowlist de dados,
+troca de identidade durante uma sessão, escrita de F670L/F6600P
+com firmware não catalogado, F6201B capturada preservada, falha de inventário e de histórico, allowlist de dados,
 contrato HTTP, ausência de fallback perigoso no Windows e cópia manual.
 O workflow contém suíte completa Ubuntu/Python 3.13 e testes de contrato
 Phase 2 no runner Windows/Python 3.12; um runner Windows headless **não**

@@ -59,8 +59,9 @@ def _identity(raw: Mapping[str, Any]) -> DeviceInfo:
 class ThinkLuaDeviceAdapter:
     """Driver for the legacy ThinkLua transport, not Vue/F6201B captured writes.
 
-    FirmwarePolicy is an explicit reviewed version allowlist + operator approval,
-    *not* a technician-role permission system.
+    A recognized ThinkLua transport is writable by default for the operator.
+    FirmwarePolicy provides non-blocking compatibility telemetry. Session
+    identity checks still protect against stale or changed equipment.
     """
 
     def __init__(
@@ -160,7 +161,7 @@ class ThinkLuaDeviceAdapter:
 
     def _matches_bound_identity(self, current: Mapping[str, Any]) -> bool:
         bound = self._identity
-        if bound is None or not bound.model or not bound.firmware:
+        if bound is None or not bound.model:
             return False
         return (
             current.get("modelo") == bound.model
@@ -178,7 +179,7 @@ class ThinkLuaDeviceAdapter:
             client = self._require()
             if self._context is None or not self._context.writable:
                 raise DeviceWriteNotApproved(
-                    "Modelo/firmware sem aprovação explícita de escrita."
+                    "Sessão sem transporte de escrita ThinkLua reconhecido."
                 )
             try:
                 current = client.device_status() or {}
@@ -199,7 +200,7 @@ class ThinkLuaDeviceAdapter:
                 current.get("firmware"),
             ):
                 raise DeviceWriteNotApproved(
-                    "Firmware sem aprovação para escrita."
+                    "A identidade atual não corresponde a um transporte ThinkLua reconhecido."
                 )
             if getattr(client, "writes_enabled", True) is False:
                 raise DeviceWriteNotApproved("Sessão de descoberta somente leitura.")

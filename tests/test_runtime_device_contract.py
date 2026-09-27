@@ -126,15 +126,28 @@ class DeviceRuntimeContractTests(unittest.TestCase):
         self.assertFalse(self.adapter.verify_change("unknown", {"x": "y"}))
         self.assertEqual(self.clients[0].commands, ["dhcp", "wifi"])
 
-    def test_unapproved_known_firmware_is_read_only_by_default(self):
+    def test_known_model_writes_by_default_without_firmware_approval(self):
         adapter = ThinkLuaDeviceAdapter(
             lambda **kwargs: FakeZTE(**kwargs),
             firmware_policy=FirmwarePolicy(),
         )
         session = adapter.authenticate(self.credentials)
-        self.assertFalse(session.writable)
-        with self.assertRaises(DeviceWriteNotApproved):
-            adapter.set_lan_config({"enabled": False})
+        self.assertTrue(session.writable)
+        result = adapter.set_lan_config({"enabled": False})
+        self.assertTrue(result["success"])
+
+    def test_unlisted_firmware_version_is_not_a_write_permission_gate(self):
+        def new_version(**kwargs):
+            client = FakeZTE(**kwargs)
+            client.identity["firmware"] = "OPERATOR-FIRMWARE-NO-CATALOG"
+            return client
+
+        adapter = ThinkLuaDeviceAdapter(
+            new_version, firmware_policy=FirmwarePolicy(),
+        )
+        session = adapter.authenticate(self.credentials)
+        self.assertTrue(session.writable)
+        self.assertTrue(adapter.set_lan_config({"enabled": False})["success"])
 
     def test_unknown_model_is_read_only_not_implicitly_approved_by_probe(self):
         def unknown(**kwargs):

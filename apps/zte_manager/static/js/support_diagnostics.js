@@ -1827,9 +1827,10 @@ async function loadFirmwareDiagnosticOptions() {
         firmwareDiagnosticState.options = (entry?.candidate_features || [])
             .filter(name => FIRMWARE_DIAGNOSTIC_SECTIONS[name])
             .map(name => ({ name, confirmed: false }));
-        // Para a F670L, consultar o adaptador nativo; nunca declarar
-        // operações perigosas como opções de diagnóstico.
-        if (!entry && bootstrap.writes_enabled) {
+        // Os diagnósticos nativos são CONSULTAS GET e continuam disponíveis
+        // mesmo quando uma ação de escrita está indisponível. F6600P já
+        // aparece no catálogo multimodelo: preferir seu adaptador nativo.
+        if (bootstrap.native_diagnostics_available === true) {
             const nativeCatalog = await apiRequest("/device/capabilities");
             firmwareDiagnosticState.source = "native";
             firmwareDiagnosticState.options = Object.entries(nativeCatalog?.features || {})
@@ -1840,7 +1841,7 @@ async function loadFirmwareDiagnosticOptions() {
                 }));
         }
         renderFirmwareDiagnosticOptions();
-        if (!entry && !firmwareDiagnosticState.options.length) {
+        if (!firmwareDiagnosticState.options.length) {
             panel.querySelector("#firmwareDiagnosticStatus").textContent =
                 `O modelo ${model || "não identificado"} ainda não possui perfil. Não serão executadas consultas por suposição.`;
         }
