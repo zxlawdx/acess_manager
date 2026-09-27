@@ -257,6 +257,8 @@ class RealServiceIntegrationTests(unittest.TestCase):
         with self.assertRaises(DeviceWriteNotApproved):
             self.service.set_dhcp_basic({"enabled": False})
         self.assertEqual(self.service._zte.posts, 0)
+        with self.assertRaises(PermissionError):
+            self.service._zte.session.post("http://example.invalid")
 
     def test_failure_in_both_sqlite_paths_does_not_break_authenticated_login(self):
         failing_registrar = DeviceRegistrar(FakeManagementRepository(
@@ -302,6 +304,44 @@ class RealServiceIntegrationTests(unittest.TestCase):
         with self.assertRaises(DeviceWriteNotApproved):
             self.service.set_ssid_config("AP1", {"ssid": "cant-write"})
         self.assertEqual(self.service._zte.posts, 0)
+
+    def test_f6600p_exact_approved_firmware_uses_same_runtime_driver(self):
+        FakeZTE.model = "F6600P"
+        FakeZTE.firmware = "V9.0.10P6N34"
+        self.service = service_module.ZTEService(
+            registrar=self.registrar,
+            firmware_policy=FirmwarePolicy.from_approved({
+                "F6600P": ["V9.0.10P6N34"]
+            }),
+        )
+        result = self.connect()
+        self.assertTrue(result["writes_enabled"])
+        self.assertTrue(result["model_verified"])
+        self.assertIs(self.service._runtime_driver._client, self.service._zte)
+        self.assertEqual(self.service._zte.login_calls, 1)
+
+    def test_wrong_family_hint_does_not_attach_wrong_capabilities(self):
+        with self.assertRaisesRegex(ValueError, "Modelo informado diverge"):
+            self.service.connect(
+                "192.0.2.1", "technician", "fixture-only-password",
+                model_hint="F6201B",
+            )
+        self.assertEqual(len(self.repo.records), 0)
+
+    def test_identity_read_failure_quarantines_existing_session(self):
+        self.connect()
+        def broken_status():
+            raise RuntimeError("secret=DO_NOT_LOG")
+        self.service._zte.device_status = broken_status
+        with self.assertLogs(
+            "apps.zte_manager.services.zte_service", "WARNING"
+        ) as logs:
+            with self.assertRaisesRegex(ValueError, "revalidar"):
+                self.connect()
+        self.assertNotIn("DO_NOT_LOG", str(logs.output))
+        self.assertFalse(self.service._zte.writes_enabled)
+        with self.assertRaises(PermissionError):
+            self.service._zte.session.post("http://example.invalid")
 
     def test_f6201b_remains_on_captured_legacy_path(self):
         FakeZTE.model = "ZXHN F6201B"
