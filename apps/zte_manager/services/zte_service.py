@@ -426,7 +426,7 @@ class ZTEService:
             return reader()
         except Exception as error:
             return {
-                "_error": str(error),
+                "_error": type(error).__name__,  # Never expose firmware response secrets
             }
 
     def _run_change(
