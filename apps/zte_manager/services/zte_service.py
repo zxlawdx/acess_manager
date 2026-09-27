@@ -309,6 +309,8 @@ class ZTEService:
                         claimed_runtime and actual_runtime
                         and claimed_runtime != actual_runtime
                     )
+                    or (claimed and actual_runtime and claimed != actual_runtime)
+                    or (actual and claimed_runtime and actual != claimed_runtime)
                 ):
                     self._zte.session.close()
                     self._zte = None
@@ -386,12 +388,19 @@ class ZTEService:
                 )
                 self._history_session_id = None
 
-            self._registrar.register(
-                host=self.current_host,
-                device_info=self._device_info,
-                adapter_name=self._adapter.name,
-                attendant=self.current_attendant,
-            )
+            try:
+                self._registrar.register(
+                    host=self.current_host,
+                    device_info=self._device_info,
+                    adapter_name=self._adapter.name,
+                    attendant=self.current_attendant,
+                )
+            except Exception as exc:
+                # Additional defense if a custom registrar violates its
+                # best-effort contract: authenticated login must still work.
+                logger.warning(
+                    "inventory_registrar_failed error_type=%s", type(exc).__name__
+                )
 
             return {
                 "success": True,
