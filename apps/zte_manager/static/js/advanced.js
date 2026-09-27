@@ -610,7 +610,11 @@ async function probeCapabilities() {
             );
         }
 
-        showToast("Detecção finalizada. Recursos indisponíveis identificados.");
+        const available = results.filter(item => item.available).length;
+        const unavailable = results.filter(item => !item.available && !item.not_tested).length;
+        const pending = keys.length - results.filter(item => !item.not_tested).length;
+        showToast(`Detecção: ${available} confirmado(s), ${unavailable} indisponível(is), ` +
+            `${Math.max(0, pending)} pendente(s).`);
     } catch (error) {
         showToast(error.message);
     } finally {
