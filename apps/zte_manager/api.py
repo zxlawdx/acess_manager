@@ -1195,6 +1195,12 @@ def automatic_diagnostic(context=None):
     )
 
 
+@api.get("/diagnostics/support/progress")
+def support_diagnostic_progress(context=None):
+    """Progress is in-memory and independent of the active ONT RLock."""
+    return _safe_call(zte_service.support_progress)
+
+
 @api.post("/diagnostics/support")
 def support_diagnostic(context=None):
     def action():
