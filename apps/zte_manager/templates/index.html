@@ -99,6 +99,10 @@
                 <span>Config. padrão</span>
             </button>
 
+            <button class="menu-item protected-page locked" data-page="tr069" type="button">
+                <span class="material-symbols-outlined">settings_ethernet</span>
+                <span>Gestão TR-069</span>
+            </button>
             <button class="menu-item protected-page locked" data-page="advanced" type="button">
                 <span class="material-symbols-outlined">developer_board</span>
                 <span>Avançado</span>
@@ -847,6 +851,30 @@
                     <p>Os parâmetros abaixo pertencem somente a este atendente.</p>
                 </article>
 
+                <article class="panel with-top-space" id="namedPresetPanel">
+                    <div class="panel-header"><div>
+                        <span class="section-kicker">CONFIGURAÇÕES VARIANTES</span>
+                        <h3>Configurações salvas do atendente</h3>
+                    </div></div>
+                    <div class="field-grid three">
+                        <label class="field"><span>CONFIGURAÇÃO</span>
+                            <select id="namedPresetSelect" aria-label="Escolher configuração salva"></select></label>
+                        <label class="field"><span>NOVA CONFIGURAÇÃO</span>
+                            <input id="namedPresetName" type="text" maxlength="60"
+                                placeholder="Ex.: Cliente empresarial"></label>
+                        <div class="profile-actions">
+                            <button type="button" id="namedPresetCreate" class="button ghost">+ Criar conf.</button>
+                            <button type="button" id="namedPresetDelete" class="button ghost">Excluir</button>
+                        </div>
+                    </div>
+                    <p id="namedPresetHint" class="muted" role="status" aria-live="polite">
+                        A configuração principal permanece compatível com o fluxo atual.
+                    </p>
+                    <div class="profile-actions">
+                        <button type="button" id="namedPresetSave" class="button ghost">Salvar configuração selecionada</button>
+                        <button type="button" id="namedPresetApply" class="button primary">Aplicar configuração selecionada</button>
+                    </div>
+                </article>
                 <div id="profileRadios" class="radio-grid"></div>
 
                 <article class="panel with-top-space">
@@ -878,6 +906,75 @@
             <!-- ==================================================
                  ADVANCED OPERATIONS
             =================================================== -->
+            <!-- Gestão TR-069: credenciais de aplicação não são persistidas. -->
+            <section id="page-tr069" class="page">
+                <div class="section-intro">
+                    <div><span class="section-kicker">ACS / CWMP</span>
+                        <h2>Gestão TR-069</h2>
+                        <p>Perfis reutilizáveis por provedor, vinculados exclusivamente
+                           a uma WAN PPPoE existente com serviço TR069.</p></div>
+                </div>
+                <div class="advanced-grid">
+                    <article class="panel">
+                        <div class="panel-header"><div>
+                            <span class="section-kicker">PROVIDER PROFILE</span>
+                            <h3>Criar e editar perfil ACS</h3>
+                        </div></div>
+                        <div class="form-stack">
+                            <label class="field"><span>PERFIL</span>
+                                <select id="tr069ProviderSelect"></select></label>
+                            <label class="field"><span>NOME DO PROVEDOR</span>
+                                <input type="text" id="tr069ProviderName" maxlength="60"></label>
+                            <label class="field"><span>URL ACS</span>
+                                <input type="url" id="tr069ProviderUrl" maxlength="500"
+                                    placeholder="https://exemplo.com/tr069" autocomplete="off"></label>
+                            <label class="field"><span>USUÁRIO ACS</span>
+                                <input type="text" id="tr069ProviderUser" autocomplete="off"></label>
+                            <label class="field"><span>SENHA ACS (SOMENTE ESTA APLICAÇÃO)</span>
+                                <input type="password" id="tr069ProviderPassword"
+                                    autocomplete="new-password" placeholder="Em branco: preservar senha atual"></label>
+                            <label class="field"><span>USUÁRIO DE SOLICITAÇÃO DE CONEXÃO</span>
+                                <input type="text" id="tr069ProviderRequestUser" autocomplete="off"></label>
+                            <label class="field"><span>SENHA DA SOLICITAÇÃO DE CONEXÃO (SOMENTE ESTA APLICAÇÃO)</span>
+                                <input type="password" id="tr069ProviderRequestPassword"
+                                    autocomplete="new-password" placeholder="Em branco: preservar senha atual"></label>
+                            <label class="check-row"><input type="checkbox"
+                                id="tr069ProviderPeriodic" checked>
+                                <span>Habilitar informação periódica</span></label>
+                            <label class="field"><span>INTERVALO DE INFORMAÇÃO (SEGUNDOS)</span>
+                                <select id="tr069ProviderInterval">
+                                    <option value="300">300 s — configuração antiga</option>
+                                    <option value="1200" selected>1200 s — configuração nova</option>
+                                </select></label>
+                            <p class="muted">As senhas não são armazenadas em arquivos de perfis,
+                               logs ou armazenamento do navegador.</p>
+                            <div class="profile-actions">
+                                <button type="button" id="tr069ProviderNew" class="button ghost">+ Criar perfil</button>
+                                <button type="button" id="tr069ProviderSave" class="button ghost">Salvar perfil</button>
+                                <button type="button" id="tr069ProviderDelete" class="button ghost">Excluir perfil</button>
+                            </div>
+                        </div>
+                    </article>
+                    <article class="panel">
+                        <div class="panel-header"><div>
+                            <span class="section-kicker">ONT / WAN</span>
+                            <h3>Vincular ACS à WAN PPPoE TR069</h3>
+                        </div></div>
+                        <label class="field"><span>WAN PPPoE COM SERVIÇO TR069</span>
+                            <select id="tr069EligibleWan">
+                                <option value="">Consultando WANs existentes...</option>
+                            </select></label>
+                        <p id="tr069WanStatus" class="muted" role="status" aria-live="polite"></p>
+                        <div class="profile-actions with-top-space">
+                            <button type="button" id="tr069ProviderRefresh" class="button ghost">Atualizar WANs</button>
+                            <button type="button" id="tr069ProviderApply" class="button primary">
+                                Aplicar TR-069 na ONT</button>
+                        </div>
+                        <p id="tr069ProviderFeedback" role="status" aria-live="polite"></p>
+                    </article>
+                </div>
+            </section>
+
             <section id="page-advanced" class="page">
                 <div class="section-intro">
                     <div>
@@ -1046,14 +1143,14 @@
                         <div class="panel-header"><div><span class="section-kicker">DHCP SERVER</span><h3>Pool IPv4</h3></div></div>
                         <form id="dhcpBasicForm" class="operations-form">
                             <label class="check-row">
-                                <input id="dhcpEnabled" type="checkbox">
+                                <input id="advancedDhcpEnabled" type="checkbox">
                                 <span>Servidor DHCP ativo</span>
                             </label>
                             <div class="operations-form-grid with-top-space">
                                 <label class="field"><span>INÍCIO</span><input id="dhcpMinAddress" type="text"></label>
                                 <label class="field"><span>FIM</span><input id="dhcpMaxAddress" type="text"></label>
-                                <label class="field"><span>DNS 1</span><input id="dhcpDns1" type="text"></label>
-                                <label class="field"><span>DNS 2</span><input id="dhcpDns2" type="text"></label>
+                                <label class="field"><span>DNS 1</span><input id="advancedDhcpDns1" type="text"></label>
+                                <label class="field"><span>DNS 2</span><input id="advancedDhcpDns2" type="text"></label>
                                 <label class="field"><span>LEASE (s)</span><input id="dhcpLeaseTime" type="number" min="60"></label>
                             </div>
                             <button class="button primary with-top-space" type="submit">Aplicar DHCP</button>
@@ -1722,3 +1819,5 @@
 <script src="{{ static('zte_manager/js/neutral_theme.js') }}"></script>
 <script src="{{ static('zte_manager/js/f6201b_workbench.js') }}"></script>
 <script src="{{ static('zte_manager/js/dhcp_module.js') }}"></script>
+<script src="{{ static('zte_manager/js/named_presets.js') }}"></script>
+<script src="{{ static('zte_manager/js/tr069_profiles.js') }}"></script>

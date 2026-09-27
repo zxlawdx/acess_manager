@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import base64
+import re
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+import secrets
 from ipaddress import IPv4Address, IPv4Network
 from typing import Any, Iterable
 
 from .zte_post import post_menu
+from . import zte_security
 
 
 @dataclass(frozen=True)
@@ -228,6 +233,68 @@ DMZ_SPEC = CrudSpec(
 )
 
 
+_DHCP_IPV4_FIELDS = frozenset({
+    "IPAddr", "SubMask", "SubnetMask", "MinAddress", "MaxAddress",
+    "IPRouters", "DNSServer1", "DNSServer2",
+})
+_CIPHER_B64 = re.compile(r"^[A-Za-z0-9+/]{22,}={0,2}$")
+
+
+def _dhcp_decode(
+    zte, xml: str, basic: dict[str, Any], token: str | None,
+) -> tuple[dict, set, list]:
+    """Decode ONLY confirmed IPv4 AES values; never show ciphertext as IP.
+
+    Some ThinkLua firmwares omit the <encode> list on the DHCP page.
+    A token-based fallback is accepted only when AES returns valid IPv4.
+    Failed or ambiguous decoding marks the form non-writable.
+    """
+    try:
+        root = ET.fromstring(xml)
+        declared = {
+            name.strip() for name in (root.findtext("encode") or "").split(",")
+            if name.strip()
+        }
+    except ET.ParseError:
+        declared = set()
+    values = dict(basic)
+    encrypted = set()
+    warnings = []
+    for field in _DHCP_IPV4_FIELDS:
+        raw = str(values.get(field) or "").strip()
+        if not raw:
+            continue
+        if field not in declared and not _CIPHER_B64.fullmatch(raw):
+            continue
+        try:
+            ciphertext = base64.b64decode(raw, validate=True)
+        except Exception:
+            ciphertext = b""
+        is_cipher = field in declared or (
+            len(ciphertext) >= 16 and len(ciphertext) % 16 == 0
+        )
+        if not is_cipher:
+            continue
+        decrypted = ""
+        if token:
+            decrypted = zte_security.aes_decrypt_value(
+                raw, token, token[::-1]
+            )
+        try:
+            valid = str(IPv4Address(decrypted)) if decrypted != raw else ""
+        except ValueError:
+            valid = ""
+        if valid:
+            values[field] = valid
+            encrypted.add(field)
+        else:
+            # Preserve no ambiguous ciphertext in a text box: applying
+            # a guessed value could break network access to the ONT.
+            values[field] = ""
+            warnings.append(field)
+    return values, encrypted, warnings
+
+
 def dhcp_status(zte) -> dict[str, Any]:
     gateway = ThinkLuaCrudGateway(zte)
 
@@ -243,6 +310,9 @@ def dhcp_status(zte) -> dict[str, Any]:
     basic_objects = zte._parse_instances(
         basic_xml
     )
+    # Menus ThinkLua rotate this temporary token on each menuView.
+    # Capture it BEFORE subsequent DHCP leases/reservation requests.
+    basic_page_token = getattr(zte, "session_tmp_token", None)
 
     zte.get_view(
         "lanMgrIpv4",
@@ -274,9 +344,21 @@ def dhcp_status(zte) -> dict[str, Any]:
         else {}
     )
 
+    decoded, encrypted_fields, warnings = _dhcp_decode(
+        zte, basic_xml, basic, basic_page_token
+    )
+    # Internal metadata is boolean/field names only, never key/token/ciphertext.
+    # A partially decoded form remains inspectable but cannot perform POSTs.
     return {
-        "basic": basic,
+        "basic": decoded,
         "lan_dns": lan_dns,
+        "dhcp_encoded_fields": sorted(encrypted_fields),
+        "write_safe": not warnings,
+        "warnings": (
+            ["Campos DHCP protegidos sem decodificação validada: " +
+             ", ".join(sorted(warnings)) + ". Alterações desativadas."]
+            if warnings else []
+        ),
         "leases": lease_objects.get(
             "OBJ_DHCPHOSTINFO_ID",
             [],
@@ -296,6 +378,11 @@ def set_dhcp_basic(
     derruba a sessão e pode retirar o equipamento do caminho de gerenciamento.
     """
     current = dhcp_status(zte)
+    if current.get("write_safe") is False:
+        raise ValueError(
+            "Não foi possível validar os campos protegidos de DHCP; "
+            "não é seguro aplicar o formulário."
+        )
     basic = dict(
         current.get("basic") or {}
     )
@@ -371,11 +458,21 @@ def set_dhcp_basic(
         "LeaseTime",
     )
 
+    encrypted_fields = set(current.get("dhcp_encoded_fields") or [])
+    crypto_key = secrets.token_hex(8) if encrypted_fields else None
+    crypto_iv = secrets.token_hex(8) if encrypted_fields else None
+    rsa_encoded = (
+        zte_security.rsa_encrypt_text(
+            crypto_key + "+" + crypto_iv, zte.public_key_pem
+        ) if encrypted_fields else None
+    )
     for name in ordered:
-        fields.append((
-            name,
-            basic.get(name) or "",
-        ))
+        value = basic.get(name) or ""
+        if name in encrypted_fields and value:
+            value = zte_security.aes_encrypt_value(
+                value, crypto_key, crypto_iv
+            )
+        fields.append((name, value))
 
     for name in (
         "Ipv4DnsOrigin",
@@ -393,6 +490,8 @@ def set_dhcp_basic(
         ("Btn_cancel_DHCPBasicCfg", ""),
         ("Btn_apply_DHCPBasicCfg", ""),
     ])
+    if rsa_encoded:
+        fields.append(("encode", rsa_encoded))
 
     zte.get_view(
         "lanMgrIpv4",

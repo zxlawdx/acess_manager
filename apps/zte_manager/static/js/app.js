@@ -479,7 +479,11 @@ const pageInfo = {
     },
     profiles: {
         title: "Configuração padrão",
-        subtitle: "Perfil persistente de cada atendente."
+        subtitle: "Perfis e variantes persistentes de cada atendente."
+    },
+    tr069: {
+        title: "Gestão TR-069",
+        subtitle: "Perfis ACS por provedor e WAN PPPoE/TR069 existente."
     },
     clients: {
         title: "Clientes",
@@ -559,6 +563,17 @@ function openPage(pageName) {
         document.getElementById(
             "pageSubtitle"
         ).textContent = info.subtitle;
+    }
+
+    if (pageName === "profiles" &&
+        globalThis.activeNamedPreset &&
+        globalThis.activeNamedPreset !== "Configuração principal") {
+        // The named preset controller owns this editor until the operator
+        // selects the legacy primary profile again.
+        document.dispatchEvent(new CustomEvent(
+            "zte:page-open", {detail:{pageName}}
+        ));
+        return;
     }
 
     if (pageName === "profiles") {
@@ -2854,7 +2869,9 @@ async function loadProfile() {
         method: "POST",
         body: JSON.stringify({ attendant })
     });
-    if (epoch !== sessionEpoch || attendant !== currentAttendant) return null;
+    if (epoch !== sessionEpoch || attendant !== currentAttendant ||
+        (globalThis.activeNamedPreset &&
+            globalThis.activeNamedPreset !== "Configuração principal")) return null;
     if (!profile || typeof profile !== "object" ||
         !profile.wifi?.["2.4GHz"] || !profile.wifi?.["5GHz"]) {
         throw new Error("O backend não devolveu os padrões de Wi-Fi 2.4/5 GHz.");
