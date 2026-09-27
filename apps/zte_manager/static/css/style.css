@@ -936,8 +936,9 @@ input::placeholder {
 }
 
 select option {
-    color: var(--text);
-    background: var(--surface);
+    /* Win32 Qt popup items need their own explicit theme-dependent colors. */
+    color: var(--select-option-fg, var(--text));
+    background-color: var(--select-option-bg, var(--surface));
 }
 
 .password-control,
