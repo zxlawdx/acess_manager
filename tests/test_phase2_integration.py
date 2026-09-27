@@ -274,6 +274,19 @@ class RealServiceIntegrationTests(unittest.TestCase):
         self.assertIsNone(self.service._history_session_id)
         self.assertNotIn("DO_NOT_LOG", str(capture.output))
 
+    def test_failed_snapshot_preserves_history_session_and_login(self):
+        with patch.object(
+            service_module.history_repository, "save_snapshot",
+            side_effect=sqlite3.OperationalError("password=NOT_FOR_LOG"),
+        ):
+            with self.assertLogs(
+                "apps.zte_manager.services.zte_service", "WARNING"
+            ) as logs:
+                response = self.connect()
+        self.assertTrue(response["success"])
+        self.assertEqual(self.service._history_session_id, 42)
+        self.assertNotIn("NOT_FOR_LOG", str(logs.output))
+
     def test_unapproved_firmware_installs_read_only_driver_without_legacy_bypass(self):
         self.service._firmware_policy = FirmwarePolicy()
         self.service._driver_factory = lambda: (
