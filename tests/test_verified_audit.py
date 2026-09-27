@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -172,7 +173,7 @@ class SQLiteOutcomeTests(unittest.TestCase):
     def test_existing_legacy_db_migrates_without_relabeling_success_as_verified(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "history.sqlite3"
-            with sqlite3.connect(path) as connection:
+            with closing(sqlite3.connect(path)) as connection, connection:
                 connection.executescript(
                     """
                     CREATE TABLE configuration_change (
