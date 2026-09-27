@@ -59,7 +59,7 @@
     const norm = String(info?.detected_model || "").toUpperCase()
       .replace(/[^A-Z0-9]/g, "");
     return info?.connected === true && info?.model_verified === true &&
-      norm === "F6201B";
+      norm.endsWith("F6201B");
   }
   function makeButton(label, callback, klass = "button ghost") {
     const button = el("button", klass, label);
