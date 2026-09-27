@@ -62,8 +62,12 @@ class UIActionRegressions(unittest.TestCase):
         region = source.split(
             "async function managementCopyText(", 1
         )[1].split("function managementRelevantNetworkResult()", 1)[0]
-        self.assertIn('"/desktop/clipboard"', region)
-        self.assertNotIn('document.execCommand("copy")', region)
+        native = js("desktop_clipboard.js")
+        self.assertIn("window.desktopClipboard.copy(value, textarea, apiRequest)", region)
+        self.assertIn('"/desktop/clipboard"', native)
+        self.assertIn('"/desktop/capabilities"', native)
+        self.assertNotIn("navigator.userAgent", region)
+        self.assertNotIn("execCommand", region)
 
 
 if __name__ == "__main__":

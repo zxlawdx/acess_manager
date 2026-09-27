@@ -51,6 +51,9 @@ jobs:
       - name: Verify native read-only diagnostics independent of write permissions
         run: node tests/test_native_readonly_diagnostics.cjs
 
+      - name: Verify DOM-only inventory ES module and classic shim
+        run: node tests/test_inventory_view.cjs
+
       - name: Verify desktop clipboard capabilities and safe fallback
         run: node tests/test_desktop_clipboard.cjs
 
@@ -112,8 +115,9 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Verify Phase 2 session, inventory and desktop host contracts
         run: |
-          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat -v
+          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat tests.test_api_error_sanitization -v
       - name: Verify clipboard browser selection never touches Windows Web APIs
         run: |
           node tests/test_desktop_clipboard.cjs
           node tests/test_native_readonly_diagnostics.cjs
+          node tests/test_inventory_view.cjs

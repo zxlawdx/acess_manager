@@ -1,3 +1,10 @@
+import logging
+import re
+import traceback
+from pathlib import Path
+from typing import Any, Callable
+from uuid import uuid4
+
 from pydantic import ValidationError
 
 from vela.api import api
@@ -72,6 +79,25 @@ from apps.zte_manager.services.desktop_capabilities import (
 from apps.zte_manager.services.zte_service import zte_service
 
 
+logger = logging.getLogger(__name__)
+
+
+def _safe_action_code(value: object) -> str:
+    """Only code identifiers, never URLs, IPs, credentials or user inputs."""
+    safe = re.sub(r"[^a-zA-Z0-9_]", "_", str(value or "unknown"))[:64]
+    return safe or "unknown"
+
+
+def _sanitized_traceback(exc: BaseException) -> str:
+    """Frame names/line numbers only; exclude exception text and code lines."""
+    frames = traceback.extract_tb(exc.__traceback__, limit=8)
+    return ";".join(
+        f"{_safe_action_code(Path(frame.filename).stem)}."
+        f"{_safe_action_code(frame.name)}:{frame.lineno}"
+        for frame in frames
+    )
+
+
 # =========================================================
 # HELPERS DA API VELA
 # =========================================================
@@ -122,7 +148,7 @@ def _validated(model, context):
     )
 
 
-def _safe_call(func, *args, **kwargs):
+def _safe_call(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """
     Adapter da camada HTTP do Vela.
 
@@ -176,9 +202,23 @@ def _safe_call(func, *args, **kwargs):
         }
 
     except Exception as erro:
+        # The exception message may contain a device HTTP response, credentials,
+        # host paths or firmware dumps. Never emit/log raw exception text.
+        error_id = uuid4().hex
+        logger.error(
+            "api_internal_error error_id=%s action=%s error_type=%s frames=%s",
+            error_id,
+            _safe_action_code(getattr(func, "__name__", "unknown")),
+            _safe_action_code(type(erro).__name__),
+            _sanitized_traceback(erro),
+        )
         return {
-            "error": str(erro),
+            "error": (
+                "Ocorreu um erro interno. Informe o código "
+                f"{error_id} ao suporte."
+            ),
             "type": "internal",
+            "error_id": error_id,
         }
 
 

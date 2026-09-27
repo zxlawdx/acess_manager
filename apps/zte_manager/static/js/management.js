@@ -94,33 +94,33 @@ async function managementCopyText(
         return false;
     }
 
+    // Um único caminho multiplataforma para atendimento e gerenciamento:
+    // NUNCA acessar as APIs de cópia do QtWebEngine no Windows.
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.readOnly = true;
+    textarea.setAttribute("aria-label", "Conteúdo disponível para cópia manual");
+    textarea.style.cssText =
+        "position:fixed;left:10px;bottom:10px;width:360px;" +
+        "max-width:90vw;height:90px;z-index:10000";
+    document.body.appendChild(textarea);
     try {
-        // O execCommand/copy do QtWebEngine no Windows pode encerrar a
-        // janela nativa; usar o mesmo endpoint seguro do atendimento.
-        if (/Windows/i.test(navigator.userAgent)) {
-            await apiRequest("/desktop/clipboard", {
-                method: "POST",
-                body: JSON.stringify({ text: value })
-            });
-        } else if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(value);
-        } else {
-            throw new Error("API de clipboard indisponível.");
+        const method = window.desktopClipboard
+            ? await window.desktopClipboard.copy(value, textarea, apiRequest)
+            : "manual";
+        if (method === "manual") {
+            textarea.focus();
+            textarea.select();
+            showToast("Área de transferência indisponível. Pressione Ctrl+C no texto selecionado.");
+            return false;
         }
+        textarea.remove();
         showToast(successMessage);
         return true;
-    } catch (error) {
-        console.warn("Falha ao copiar no painel:", error);
-        // Não usar execCommand no Windows nem forçar o WebView a
-        // fechar. Seleção manual segura se não houver clipboard nativo.
-        const output = document.createElement("textarea");
-        output.value = value;
-        output.setAttribute("readonly", "");
-        output.style.cssText = "position:fixed;left:10px;bottom:10px;width:360px;max-width:90vw;height:90px;z-index:10000";
-        document.body.appendChild(output);
-        output.focus();
-        output.select();
-        showToast("Área de transferência indisponível. Pressione Ctrl+C no texto selecionado.");
+    } catch (_error) {
+        textarea.focus();
+        textarea.select();
+        showToast("Cópia automática indisponível. Use Ctrl+C no texto selecionado.");
         return false;
     }
 }
@@ -149,15 +149,9 @@ function selectedManagementDevice() {
 
 
 function checkedManagementDevices() {
-    return [
-        ...document.querySelectorAll(
-            ".management-device-check:checked"
-        )
-    ].map(
-        input => Number(
-            input.value
-        )
-    );
+    // A seleção pertence ao componente, não ao subconjunto de linhas
+    // atualmente visível após busca/filtro.
+    return window.managementInventoryView?.getCheckedIds() || [];
 }
 
 
@@ -342,131 +336,16 @@ function relativeManagementTime(value) {
 }
 
 
+// Compatibilidade com todos os pontos de chamada existentes do painel.
 function renderManagementInventory() {
-    const body = document.getElementById(
-        "managementInventoryBody"
-    );
-
-    if (!body) {
-        return;
-    }
-
-    const search = (
-        document.getElementById(
-            "managementInventorySearch"
-        )?.value || ""
-    ).trim().toLowerCase();
-
-    const visible = managementState.devices.filter(
-        item => {
-            if (!search) {
-                return true;
-            }
-
-            return [
-                item.customer_name,
-                item.host,
-                item.model,
-                item.serial,
-                item.mac,
-                item.olt,
-                item.cto,
-                item.pop
-            ].some(
-                value => String(
-                    value || ""
-                ).toLowerCase().includes(
-                    search
-                )
-            );
-        }
-    );
-
-    body.innerHTML = visible.length
-        ? visible.map(
-            item => {
-                const selected = Number(item.id) === Number(
-                    managementState.selectedDeviceId
-                );
-
-                const topology = [
-                    item.pop,
-                    item.olt,
-                    item.cto
-                ].filter(Boolean).join(" / ") || "-";
-
-                return `
-                    <tr
-                        data-device-id="${item.id}"
-                        class="${selected ? "selected" : ""}"
-                    >
-                        <td>
-                            <input
-                                class="management-device-check"
-                                type="checkbox"
-                                value="${item.id}"
-                                aria-label="Selecionar equipamento"
-                            >
-                        </td>
-                        <td>
-                            <strong>${managementEscape(item.model || "ZTE")}</strong>
-                            <small>${managementEscape(item.serial || item.mac || item.key || "-")}</small>
-                            <small>
-                                FW ${managementEscape(item.firmware || "-")}
-                                ${item.firmware_compliant === true
-                                    ? " • homologado"
-                                    : item.firmware_compliant === false
-                                        ? " • fora do padrão"
-                                        : ""}
-                            </small>
-                        </td>
-                        <td>${managementEscape(item.customer_name || "-")}</td>
-                        <td class="mono">${managementEscape(item.host || "-")}</td>
-                        <td>${item.rx_power !== null && item.rx_power !== undefined ? managementEscape(item.rx_power + " dBm") : "-"}</td>
-                        <td>${managementEscape(topology)}</td>
-                        <td><span class="badge ${item.status === "online" ? "ok" : item.status === "offline" ? "critical" : ""}">${managementEscape(item.status || "unknown")}</span></td>
-                        <td>há ${managementEscape(relativeManagementTime(item.last_seen))}</td>
-                    </tr>
-                `;
-            }
-        ).join("")
-        : `
-            <tr>
-                <td colspan="8" class="muted">
-                    Nenhuma ONT no inventário.
-                </td>
-            </tr>
-        `;
-
-    body.querySelectorAll(
-        "tr[data-device-id]"
-    ).forEach(
-        row => {
-            row.addEventListener(
-                "click",
-                event => {
-                    if (
-                        event.target.matches(
-                            "input"
-                        )
-                    ) {
-                        return;
-                    }
-
-                    managementState.selectedDeviceId = Number(
-                        row.dataset.deviceId
-                    );
-
-                    renderManagementInventory();
-                    showToast(
-                        "ONT selecionada para gerenciamento."
-                    );
-                }
-            );
-        }
-    );
+    const view = window.managementInventoryView;
+    if (!view) return;  // O evento inventory-ready renderizará após o ES module.
+    view.render({
+        devices: managementState.devices,
+        selectedDeviceId: managementState.selectedDeviceId,
+        query: document.getElementById("managementInventorySearch")?.value || ""
+    });
 }
-
 
 function renderManagementProfiles() {
     const selects = [
@@ -2949,6 +2828,19 @@ document.getElementById(
     "input",
     renderManagementInventory
 );
+
+// Ponte com o novo inventário: dois listeners globais instalados UMA VEZ.
+// O componente de inventário usa AbortController nos listeners delegados
+// ao tbody, sem registrar handlers individuais por linha.
+window.managementRelativeTime = relativeManagementTime;
+document.addEventListener("management:inventory-ready", renderManagementInventory);
+document.addEventListener("management:inventory-select", event => {
+    const id = Number(event.detail?.id);
+    if (!Number.isSafeInteger(id) || id <= 0) return;
+    managementState.selectedDeviceId = id;
+    renderManagementInventory();
+    showToast("ONT selecionada para gerenciamento.");
+});
 
 
 document.getElementById(
