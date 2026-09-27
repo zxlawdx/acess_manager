@@ -7,7 +7,7 @@ from typing import Any
 _SECRET_TOKENS = (
     "password", "passwd", "passphrase", "secret", "token", "credential",
     "authorization", "cookie", "private_key", "public_key", "keypassphrase",
-    "psk", "chave", "senha",
+    "psk", "chave", "senha", "key",
 )
 
 
