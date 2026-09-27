@@ -1412,6 +1412,15 @@ async function loadDhcpOperations() {
         advancedState.dhcp = data;
 
         const basic = data.basic || {};
+        const apply = document.querySelector("#dhcpBasicForm button[type=submit]");
+        if (apply) apply.disabled = data.write_safe === false;
+        if (data.write_safe === false) {
+            const list = document.getElementById("dhcpLeaseList");
+            if (list) list.textContent = (
+                (data.warnings || []).join(" ") ||
+                "Valores DHCP não confirmados. Escrita desativada."
+            );
+        }
 
         document.getElementById(
             "advancedDhcpEnabled"
