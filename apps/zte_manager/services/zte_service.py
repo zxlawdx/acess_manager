@@ -2,7 +2,7 @@ from dataclasses import replace
 import logging
 from collections.abc import Callable
 from uuid import uuid4
-from threading import RLock
+from threading import Lock, RLock
 from typing import Optional
 
 from apps.zte_manager.model.device_adapters import select_adapter
@@ -96,6 +96,12 @@ class ZTEService:
         self._captured_workbench = CapturedFormWorkbench()
         self._readonly_original_post = None
         self._audited_operation = AuditedOperation(history_repository)
+        # Independent of the ONT RLock: the GUI can read progress while
+        # menuView/menuData collectors execute serially on another thread.
+        self._support_progress_lock = Lock()
+        self._support_progress_state = {
+            "running": False, "stage": "idle", "completed": 0, "total": 0,
+        }
 
     # =========================================================
     # CONEXÃO
@@ -1794,115 +1800,113 @@ class ZTEService:
             # The report contains only whitelisted model diagnostic fields.
             return {**result, "history_id": run_id}
 
-    def support_diagnostic(
-        self,
-        config
-    ):
-        """
-        Diagnóstico completo do atendimento.
-
-        O engine só lê. Se auto_optimize_wifi estiver habilitado, a camada
-        Service aplica as recomendações seguras através de _run_change e roda
-        uma validação final. Assim diagnóstico e escrita nunca se misturam.
-        """
-        with self._lock:
-            zte = self.get_client()
-            thresholds = self._diagnostic_thresholds(
-                config
-            )
-            options = self._support_options(
-                config
-            )
-            engine = SupportDiagnosticService(
-                zte,
-                self._capabilities(),
-            )
-
-            result = engine.run(
-                options,
-                thresholds,
-            )
-
-            result["mode"] = options.mode
-            result["remediations"] = []
-
-            if config.get(
-                "auto_optimize_wifi",
-                False
-            ):
-                result[
-                    "remediations"
-                ] = self._apply_safe_wifi_recommendations(
-                    result
-                )
-
-                if result[
-                    "remediations"
-                ]:
-                    validation_options = replace(
-                        options,
-                        include_speedtest=False,
-                        include_traceroute=False,
-                    )
-
-                    validation = engine.run(
-                        validation_options,
-                        thresholds,
-                    )
-
-                    validation["mode"] = (
-                        options.mode
-                    )
-
-                    # Speed Test não é repetido após a mudança de canal para
-                    # evitar tráfego duplicado. Mantemos a medição inicial no
-                    # relatório final quando ela existiu.
-                    initial_speed = (
-                        result.get(
-                            "sections",
-                            {}
-                        ).get(
-                            "speedtest"
-                        )
-                    )
-
-                    if initial_speed:
-                        validation.setdefault(
-                            "sections",
-                            {},
-                        )[
-                            "speedtest"
-                        ] = initial_speed
-
-                    result[
-                        "post_validation"
-                    ] = validation
-
-            diagnostic_id = (
-                history_repository.save_diagnostic(
-                    self._history_session_id,
-                    result,
-                )
-            )
-
-            history_repository.save_snapshot(
-                self._history_session_id,
-                "support_diagnostic",
-                (
-                    result.get(
-                        "post_validation"
-                    )
-                    or result
-                ).get(
-                    "sections",
-                    {}
-                ),
-            )
-
-            return {
-                **result,
-                "history_id": diagnostic_id,
+    def _set_support_progress(
+        self, stage: str, completed: int = 0, total: int = 0, *,
+        running: bool = True,
+    ) -> None:
+        # Stage labels originate only from fixed application code, never
+        # firmware/XML or raw exception strings.
+        with self._support_progress_lock:
+            self._support_progress_state = {
+                "running": running,
+                "stage": stage,
+                "completed": max(0, int(completed)),
+                "total": max(0, int(total)),
             }
+
+    def support_progress(self) -> dict:
+        """Safe GET route; crucially does NOT acquire the long-lived ONT lock."""
+        with self._support_progress_lock:
+            return dict(self._support_progress_state)
+
+    def support_diagnostic(self, config):
+        """Run the full support workflow and expose truthful, sanitized stages.
+
+        Router actions stay serialized by the existing RLock. Failure to write
+        OPTIONAL history must never discard a completed hardware diagnostic.
+        """
+        self._set_support_progress("queued")
+        try:
+            with self._lock:
+                self._set_support_progress("preparing")
+                zte = self.get_client()
+                thresholds = self._diagnostic_thresholds(config)
+                options = self._support_options(config)
+                engine = SupportDiagnosticService(zte, self._capabilities())
+
+                result = engine.run(
+                    options, thresholds,
+                    progress=lambda stage, completed, total:
+                        self._set_support_progress(stage, completed, total),
+                )
+                result["mode"] = options.mode
+                result["remediations"] = []
+
+                if config.get("auto_optimize_wifi", False):
+                    self._set_support_progress("remediation")
+                    result["remediations"] = (
+                        self._apply_safe_wifi_recommendations(result)
+                    )
+                    if result["remediations"]:
+                        self._set_support_progress("post_validation")
+                        validation_options = replace(
+                            options,
+                            include_speedtest=False,
+                            include_traceroute=False,
+                        )
+                        validation = engine.run(
+                            validation_options, thresholds,
+                            progress=lambda stage, completed, total:
+                                self._set_support_progress(
+                                    "validation_" + stage, completed, total
+                                ),
+                        )
+                        validation["mode"] = options.mode
+                        initial_speed = (
+                            result.get("sections", {}).get("speedtest")
+                        )
+                        if initial_speed:
+                            validation.setdefault("sections", {})[
+                                "speedtest"
+                            ] = initial_speed
+                        result["post_validation"] = validation
+
+                self._set_support_progress("saving")
+                diagnostic_id = None
+                if self._history_session_id is not None:
+                    try:
+                        diagnostic_id = history_repository.save_diagnostic(
+                            self._history_session_id, result,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "support_history_write_failed error_type=%s",
+                            type(exc).__name__,
+                        )
+                    try:
+                        history_repository.save_snapshot(
+                            self._history_session_id,
+                            "support_diagnostic",
+                            (result.get("post_validation") or result).get(
+                                "sections", {}
+                            ),
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "support_snapshot_write_failed error_type=%s",
+                            type(exc).__name__,
+                        )
+
+                response = {**result, "history_id": diagnostic_id}
+        except Exception as exc:
+            self._set_support_progress("failed", running=False)
+            logger.warning(
+                "support_diagnostic_failed error_type=%s",
+                type(exc).__name__,
+            )
+            raise
+        self._set_support_progress("completed", 1, 1, running=False)
+        return response
 
     def _apply_safe_wifi_recommendations(
         self,
