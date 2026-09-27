@@ -38,7 +38,7 @@
       gateway.closest(".field").hidden = !capabilities.gateway_write;
       gateway.value = basic.IPRouters || basic.IPAddr || "";
     }
-    const canEdit = Boolean(
+    const canEdit = data.write_safe !== false && Boolean(
       capabilities.server_write === undefined ? basic._InstID :
       capabilities.server_write
     );
@@ -70,7 +70,10 @@
     renderIpv6(data);
     renderReservations(data);
     const notes = data.warnings || [];
-    if (notes.length) feedback(notes.join(" · "));
+    if (notes.length) feedback(
+      notes.join(" · "),
+      data.write_safe === false ? "error" : ""
+    );
   }
   async function refresh() {
     if (!ontConnected) return;
