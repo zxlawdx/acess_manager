@@ -95,7 +95,7 @@ async function managementCopyText(
     }
 
     // Um único caminho multiplataforma para atendimento e gerenciamento:
-    // NUNCA acessar navigator.clipboard/execCommand do QtWebEngine no Windows.
+    // NUNCA acessar as APIs de cópia do QtWebEngine no Windows.
     const textarea = document.createElement("textarea");
     textarea.value = value;
     textarea.readOnly = true;
