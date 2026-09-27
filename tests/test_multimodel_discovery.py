@@ -47,8 +47,9 @@ class MultiModelDiscoveryTests(unittest.TestCase):
     def test_new_model_adapters_do_not_advertise_writes(self):
         from apps.zte_manager.model.device_adapters import select_adapter
         for name in MODEL_FAMILY:
-            if name == "F6600P":
-                # Compatibilidade anterior com serviços completos mantida.
+            if name in {"F6600P", "F6201B"}:
+                # Native ThinkLua families expose candidate write metadata;
+                # the actual authenticated form determines availability.
                 continue
             adapter = select_adapter(name)
             self.assertTrue(
@@ -56,6 +57,10 @@ class MultiModelDiscoveryTests(unittest.TestCase):
                 name,
             )
         self.assertEqual(select_adapter("E2631").features, {})
+        f6201b = select_adapter("ZXHN F6201B")
+        self.assertEqual(f6201b.name, "zte-f6201b-thinklua")
+        self.assertTrue(f6201b.features["wifi_ssids"].writable)
+        self.assertFalse(f6201b.features["pon_optical"].writable)
 
     def test_post_menu_blocks_new_models_even_with_token(self):
         from apps.zte_manager.model.zte_configuration.zte_post import post_menu
