@@ -13,6 +13,7 @@ from apps.zte_manager.infrastructure.zte.adapters import (
 from apps.zte_manager.infrastructure.zte.adapters.thinklua_device import (
     DeviceWriteNotApproved,
 )
+from apps.zte_manager.infrastructure.zte.firmware_policy import FirmwarePolicy
 
 
 class FakeZTE:
@@ -22,7 +23,7 @@ class FakeZTE:
         self.session = SimpleNamespace(close=self.close)
         self.identity = {
             "fabricante": "ZTE", "modelo": "F670L",
-            "firmware": "LAB-NON-PRODUCTION", "serial": "LAB1",
+            "firmware": "V9.0.11P1N9", "serial": "LAB1",
         }
         self.dhcp = {
             "basic": {"ServerEnable": "1", "MinAddress": "192.168.1.20"},
@@ -76,7 +77,12 @@ class DeviceRuntimeContractTests(unittest.TestCase):
             self.clients.append(client)
             return client
 
-        self.adapter = ThinkLuaDeviceAdapter(build)
+        self.adapter = ThinkLuaDeviceAdapter(
+            build,
+            firmware_policy=FirmwarePolicy.from_approved(
+                {"F670L": ["V9.0.11P1N9"]}
+            ),
+        )
         self.credentials = Credentials("192.0.2.1", "admin", "never-include-password")
 
     def test_is_runtime_protocol_with_real_methods(self):
@@ -119,6 +125,16 @@ class DeviceRuntimeContractTests(unittest.TestCase):
         )
         self.assertFalse(self.adapter.verify_change("unknown", {"x": "y"}))
         self.assertEqual(self.clients[0].commands, ["dhcp", "wifi"])
+
+    def test_unapproved_known_firmware_is_read_only_by_default(self):
+        adapter = ThinkLuaDeviceAdapter(
+            lambda **kwargs: FakeZTE(**kwargs),
+            firmware_policy=FirmwarePolicy(),
+        )
+        session = adapter.authenticate(self.credentials)
+        self.assertFalse(session.writable)
+        with self.assertRaises(DeviceWriteNotApproved):
+            adapter.set_lan_config({"enabled": False})
 
     def test_unknown_model_is_read_only_not_implicitly_approved_by_probe(self):
         def unknown(**kwargs):
