@@ -40,6 +40,7 @@ from apps.zte_manager.services.f6201b_support import run_f6201b_support
 from apps.zte_manager.services import f6201b_dhcp
 from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
 from apps.zte_manager.services.profile_service import profile_service
+from apps.zte_manager.services.named_preset_service import named_preset_service
 from apps.zte_manager.services.tr069_profile_service import tr069_provider_profiles
 from apps.zte_manager.services.speed_test_service import SpeedTestService
 from apps.zte_manager.services.support_diagnostic_service import (
@@ -2921,6 +2922,40 @@ class ZTEService:
             attendant,
             profile
         )
+
+    def list_named_presets(self, attendant: str) -> list[str]:
+        return named_preset_service.list(attendant)
+
+    def get_named_preset(self, attendant: str, name: str) -> dict:
+        return named_preset_service.get(attendant, name)
+
+    def save_named_preset(
+        self, attendant: str, name: str, profile: dict
+    ) -> dict:
+        return named_preset_service.save(attendant, name, profile)
+
+    def delete_named_preset(self, attendant: str, name: str) -> bool:
+        return named_preset_service.delete(attendant, name)
+
+    def apply_named_preset(self, attendant: str, name: str) -> dict:
+        with self._lock:
+            # Experimental F6201B has a separate captured-form write path;
+            # never send a generic F6600P/F670L batch to that firmware.
+            if self._is_captured_f6201b():
+                raise ValueError(
+                    "A F6201B requer o fluxo de aplicação capturado específico."
+                )
+            zte = self.get_client()
+            profile = named_preset_service.get(attendant, name)
+            return self._run_change(
+                operation="named_profile_apply",
+                target="named_preset",
+                before_reader=zte.current_standard_configuration,
+                action=lambda: named_preset_service.apply(
+                    zte, attendant, name
+                ),
+                after_reader=zte.current_standard_configuration,
+            )
 
     def current_configuration(self):
         with self._lock:
