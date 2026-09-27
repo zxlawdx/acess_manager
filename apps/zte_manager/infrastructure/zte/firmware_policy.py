@@ -1,13 +1,13 @@
-"""Fail-closed, exact-version approvals for the *generic* ThinkLua driver.
+"""ThinkLua transport recognition and non-blocking firmware compatibility telemetry.
 
-These versions occur in the repository's test fixtures / F670L compatibility
-notes: they are KNOWN CANDIDATES, not claims of completed physical homologation.
-Enable a candidate only after local real-device verification by explicitly
-setting ZTE_APPROVED_FIRMWARE_JSON, e.g.
-{"F670L": ["V9.0.11P1N9"]}. Unknown variants cannot be enabled with this flag.
+Recognized F670L/F6600P sessions permit normal operator-initiated writes by
+default, regardless of the firmware review catalog. An unsupported protocol,
+failed authentication, stale device identity or an actual transport/firmware
+error is still handled by the driver's session guards.
 
-F6201B V9.3.10P7N7 retains its separately captured, firmware-gated workflow;
-it is NEVER a generic ThinkLua write target.
+Known firmware versions and optional operator approvals are *informational*:
+neither this catalog nor its absence is a write-permission gate. Captured
+F6201B writes retain their separate exact-firmware/protocol guard.
 """
 from __future__ import annotations
 
@@ -34,29 +34,33 @@ def canonical_model(value: str | None) -> str | None:
 
 
 def canonical_firmware(value: str | None) -> str:
-    # No fuzzy matching, prefix matching or implicit "latest" support.
     return str(value or "").strip().upper()
 
 
 @dataclass(frozen=True, slots=True)
 class FirmwarePolicy:
-    """Operator-approved subset of the explicitly known candidate versions."""
+    """Non-blocking firmware notes; protocol recognition drives write support."""
 
     approved: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
     @classmethod
     def from_approved(cls, values: Mapping[str, Any]) -> FirmwarePolicy:
+        """Record operator-reviewed versions as telemetry, not permissions."""
         approved: dict[str, frozenset[str]] = {}
         for model, revisions in values.items():
             canonical = canonical_model(model)
-            if canonical is None or str(model).upper().strip() != canonical:
-                raise ValueError("Unknown firmware-approval model")
+            if canonical is None or str(model).strip().upper() != canonical:
+                raise ValueError("Unknown firmware telemetry model")
             if not isinstance(revisions, (list, tuple, set, frozenset)):
-                raise ValueError("Firmware approvals must be a sequence")
-            entries = frozenset(canonical_firmware(version) for version in revisions)
-            if not entries.issubset(KNOWN_CANDIDATES[canonical]):
-                raise ValueError("Firmware approval not in reviewed candidate catalog")
-            approved[canonical] = entries
+                raise ValueError("Firmware telemetry requires a sequence")
+            values_clean = frozenset(
+                canonical_firmware(version)
+                for version in revisions
+                if isinstance(version, str) and canonical_firmware(version)
+            )
+            if len(values_clean) != len(revisions):
+                raise ValueError("Firmware telemetry contains invalid values")
+            approved[canonical] = values_clean
         return cls(approved=approved)
 
     @classmethod
@@ -67,25 +71,41 @@ class FirmwarePolicy:
         try:
             parsed = json.loads(raw)
             if not isinstance(parsed, dict):
-                raise ValueError("Approval manifest must be a JSON object")
+                raise ValueError("Firmware telemetry must be a JSON object")
             return cls.from_approved(parsed)
         except (ValueError, TypeError) as exc:
             logger.warning(
-                "firmware_approval_manifest_rejected error_type=%s",
+                "firmware_telemetry_manifest_rejected error_type=%s",
                 type(exc).__name__,
             )
-            return cls()  # Never silently revert to permissive policy.
+            return cls()
+
+    def recognition_status(
+        self, model: str | None, firmware: str | None,
+    ) -> str:
+        """Telemetry only: reviewed, known_candidate, unreviewed or unavailable."""
+        code = canonical_model(model)
+        version = canonical_firmware(firmware)
+        if not code or not version:
+            return "unavailable"
+        if version in self.approved.get(code, frozenset()):
+            return "reviewed"
+        if version in KNOWN_CANDIDATES.get(code, frozenset()):
+            return "known_candidate"
+        return "unreviewed"
 
     def permits(
         self, manufacturer: str | None, model: str | None, firmware: str | None,
     ) -> bool:
-        code = canonical_model(model)
-        version = canonical_firmware(firmware)
-        if not code or not version:
+        """Recognized ThinkLua transport only; firmware revision is NOT a gate.
+
+        The vendor/model response must come from the authenticated ONT;
+        the caller must separately verify session liveness and unchanged
+        device identity before sending writes. firmware is accepted here
+        to preserve the existing call signature.
+        """
+        del firmware
+        if canonical_model(model) is None:
             return False
-        if manufacturer and "ZTE" not in manufacturer.strip().upper():
-            return False
-        return (
-            version in KNOWN_CANDIDATES.get(code, frozenset())
-            and version in self.approved.get(code, frozenset())
-        )
+        vendor = str(manufacturer or "").strip().upper()
+        return not vendor or "ZTE" in vendor or "ZXHN" in vendor
