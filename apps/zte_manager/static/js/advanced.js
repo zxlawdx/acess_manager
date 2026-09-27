@@ -9,8 +9,11 @@ const advancedState = {
     dhcp: null,
     portForwarding: [],
     dmz: [],
-    loaded: false
+    loaded: false,
+    networkLoaded: { dhcp: false, portForwarding: false, dmz: false }
 };
+let advancedNetworkBusy = false;
+let meshProbeBusy = false;
 
 
 pageInfo.advanced = {
@@ -525,7 +528,8 @@ async function probeCapabilities() {
         showToast("Conecte-se à ONT para detectar recursos.");
         return;
     }
-    if (nativeProbeBusy || trackerProbeBusy) {
+    if (nativeProbeBusy || trackerProbeBusy || modelDiagnosticRunning ||
+        advancedNetworkBusy || meshProbeBusy) {
         showToast("Uma sondagem já está em andamento. Aguarde a conclusão.");
         return;
     }
@@ -883,8 +887,9 @@ async function runMultimodelDiagnostic() {
         showToast("Conecte ao equipamento antes do diagnóstico.");
         return;
     }
-    if (modelDiagnosticRunning) {
-        showToast("O diagnóstico anterior ainda está em andamento.");
+    if (modelDiagnosticRunning || nativeProbeBusy || trackerProbeBusy ||
+        advancedNetworkBusy || meshProbeBusy) {
+        showToast("Aguarde a leitura avançada atual antes de iniciar outra.");
         return;
     }
     modelDiagnosticRunning = true;
@@ -1001,6 +1006,12 @@ async function runMultimodelDiagnostic() {
 }
 
 async function showMultimodelMesh() {
+    if (meshProbeBusy || nativeProbeBusy || trackerProbeBusy ||
+        modelDiagnosticRunning || advancedNetworkBusy) {
+        showToast("Aguarde a leitura avançada atual antes do resumo Mesh.");
+        return;
+    }
+    meshProbeBusy = true;
     const output = document.getElementById("multimodelProbeOutput");
     const select = document.getElementById("multimodelSelect");
     setBusy(true, "Consultando topologia Mesh...");
@@ -1029,6 +1040,7 @@ async function showMultimodelMesh() {
         output.textContent = "Topologia indisponível para este firmware.";
         showToast(error.message);
     } finally {
+        meshProbeBusy = false;
         setBusy(false);
     }
 }
@@ -1047,6 +1059,9 @@ document.addEventListener("zte:session-changed", () => {
     advancedState.capabilities = null;
     advancedState.capabilityProbe = null;
     advancedState.trackerProbe = null;
+    advancedState.networkLoaded = { dhcp: false, portForwarding: false, dmz: false };
+    advancedState.dhcp = null;
+    syncAdvancedNetworkForms();
     const select = document.getElementById("multimodelSelect");
     if (select) {
         select.dataset.loaded = "false";
@@ -1068,8 +1083,9 @@ async function probeMultimodel({ quick = false } = {}) {
         showToast("Conecte-se ao equipamento primeiro.");
         return;
     }
-    if (trackerProbeBusy) {
-        if (!quick) showToast("Uma detecção já está em andamento.");
+    if (trackerProbeBusy || nativeProbeBusy || modelDiagnosticRunning ||
+        advancedNetworkBusy || meshProbeBusy) {
+        if (!quick) showToast("Aguarde a leitura avançada atual.");
         return;
     }
     trackerProbeBusy = true;
@@ -1489,6 +1505,27 @@ function findingIcon(severity) {
 // DHCP / LAN
 // =========================================================
 
+// Prevent accidental DHCP/NAT writes with empty/stale forms when the
+// expensive read is now operator-initiated. This is data readiness, not a
+// firmware/version permission gate; backend still checks the live device.
+function syncAdvancedNetworkForms() {
+    const loaded = advancedState.networkLoaded;
+    const controls = [
+        ["dhcp", "#dhcpBasicForm button[type=submit]"],
+        ["dhcp", "#dhcpReservationForm button[type=submit]"],
+        ["portForwarding", "#portForwardForm button[type=submit]"],
+        ["dmz", "#dmzForm button[type=submit]"]
+    ];
+    for (const [key, selector] of controls) {
+        const control = document.querySelector(selector);
+        if (!control) continue;
+        const ready = Boolean(ontConnected && routerWriteEnabled && loaded[key]) &&
+            (key !== "dhcp" || advancedState.dhcp?.write_safe !== false);
+        control.disabled = !ready;
+        control.title = ready ? "" : "Carregue os dados atuais antes de configurar.";
+    }
+}
+
 async function loadDhcpOperations() {
     try {
         const data = await apiRequest(
@@ -1541,7 +1578,12 @@ async function loadDhcpOperations() {
         renderDhcpReservations(
             data.reservations || []
         );
+        advancedState.networkLoaded.dhcp = true;
+        syncAdvancedNetworkForms();
+        return true;
     } catch (error) {
+        advancedState.networkLoaded.dhcp = false;
+        syncAdvancedNetworkForms();
         document.getElementById(
             "dhcpLeaseList"
         ).innerHTML = featureUnavailable(
@@ -1555,6 +1597,7 @@ async function loadDhcpOperations() {
             "Reservas DHCP",
             error.message
         );
+        return false;
     }
 }
 
@@ -1765,8 +1808,9 @@ async function deleteDhcpReservation(event) {
 // =========================================================
 
 async function loadNatOperations() {
-    await loadPortForwarding();
-    await loadDmz();
+    const forwarding = await loadPortForwarding();
+    const dmz = await loadDmz();
+    return forwarding && dmz;
 }
 
 
@@ -1787,11 +1831,17 @@ async function loadPortForwarding() {
         );
 
         renderPortForwarding();
+        advancedState.networkLoaded.portForwarding = true;
+        syncAdvancedNetworkForms();
+        return true;
     } catch (error) {
+        advancedState.networkLoaded.portForwarding = false;
+        syncAdvancedNetworkForms();
         container.innerHTML = featureUnavailable(
             "Port Forwarding",
             error.message
         );
+        return false;
     }
 }
 
@@ -2005,11 +2055,17 @@ async function loadDmz() {
                 </div>
             `
             : '<span class="muted">Nenhuma instância DMZ retornada.</span>';
+        advancedState.networkLoaded.dmz = true;
+        syncAdvancedNetworkForms();
+        return true;
     } catch (error) {
+        advancedState.networkLoaded.dmz = false;
+        syncAdvancedNetworkForms();
         container.innerHTML = featureUnavailable(
             "DMZ",
             error.message
         );
+        return false;
     }
 }
 
@@ -2425,8 +2481,13 @@ async function loadAdvancedNetworkManually() {
         showToast("Conecte-se à ONT para consultar DHCP e NAT.");
         return;
     }
+    if (advancedNetworkBusy || nativeProbeBusy || trackerProbeBusy ||
+        modelDiagnosticRunning || meshProbeBusy) {
+        showToast("Aguarde a leitura avançada atual.");
+        return;
+    }
+    advancedNetworkBusy = true;
     const button = document.getElementById("refreshAdvancedNetworkButton");
-    if (button?.disabled) return;
     if (button) button.disabled = true;
     setBusy(true, "Consultando DHCP / LAN...");
     try {
@@ -2435,7 +2496,7 @@ async function loadAdvancedNetworkManually() {
         for (const [name, loader] of [["DHCP/LAN", loadDhcpOperations], ["NAT", loadNatOperations]]) {
             setBusy(true, `Consultando ${name}...`);
             try {
-                await loader();
+                if ((await loader()) === false) failures.push(name);
             } catch (error) {
                 failures.push(name);
                 console.warn("Leitura avançada indisponível:", name, error?.name);
@@ -2445,6 +2506,7 @@ async function loadAdvancedNetworkManually() {
             ? "Leitura parcial. Indisponível: " + failures.join(", ")
             : "Informações DHCP e NAT atualizadas.");
     } finally {
+        advancedNetworkBusy = false;
         if (button) button.disabled = false;
         setBusy(false);
     }
@@ -2473,6 +2535,9 @@ window.startQuickProbe = async function startQuickProbe() {
 
 
 function initAdvancedOperations() {
+    syncAdvancedNetworkForms();
+    const info = document.getElementById("dhcpLeaseList");
+    if (info) info.textContent = "Clique em Carregar DHCP / NAT para consultar o estado atual.";
     document.addEventListener("zte:page-open", event => {
         if (event.detail?.pageName === "advanced" && ontConnected) {
             void loadOperationsConsole();
