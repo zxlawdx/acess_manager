@@ -15,6 +15,11 @@ from apps.zte_manager.schemas import (
     AdminPasswordRequest,
     AgentRequest,
     AttendantRequest,
+    NamedPresetRequest,
+    NamedPresetSaveRequest,
+    TR069ProviderSaveRequest,
+    TR069ProviderDeleteRequest,
+    TR069ProviderApplyRequest,
     AttendanceReportRequest,
     AutomaticDiagnosticRequest,
     BandSteeringConfigRequest,
@@ -77,6 +82,7 @@ from apps.zte_manager.services.desktop_capabilities import (
     get_desktop_capabilities,
 )
 from apps.zte_manager.services.zte_service import zte_service
+from apps.zte_manager.services.tr069_profile_service import tr069_provider_profiles
 
 
 logger = logging.getLogger(__name__)
@@ -1369,6 +1375,52 @@ def save_profile(context=None):
     )
 
 
+# Named presets preserve all existing single-primary profile routes.
+@api.post("/profiles/named/list")
+def list_named_presets(context=None):
+    def action():
+        data = _validated(AttendantRequest, context)
+        return {"names": zte_service.list_named_presets(data.attendant)}
+    return _safe_call(action)
+
+
+@api.post("/profiles/named/get")
+def get_named_preset(context=None):
+    def action():
+        data = _validated(NamedPresetRequest, context)
+        return zte_service.get_named_preset(data.attendant, data.name)
+    return _safe_call(action)
+
+
+@api.post("/profiles/named/save")
+def save_named_preset(context=None):
+    def action():
+        data = _validated(NamedPresetSaveRequest, context)
+        return zte_service.save_named_preset(
+            data.attendant, data.name,
+            {"wifi": data.wifi, "dns": data.dns},
+        )
+    return _safe_call(action)
+
+
+@api.post("/profiles/named/delete")
+def delete_named_preset(context=None):
+    def action():
+        data = _validated(NamedPresetRequest, context)
+        return {"success": zte_service.delete_named_preset(
+            data.attendant, data.name
+        )}
+    return _safe_call(action)
+
+
+@api.post("/profiles/named/apply")
+def apply_named_preset(context=None):
+    def action():
+        data = _validated(NamedPresetRequest, context)
+        return zte_service.apply_named_preset(data.attendant, data.name)
+    return _safe_call(action)
+
+
 @api.post("/profiles/capture")
 def capture_profile(context=None):
     def action():
@@ -2073,6 +2125,45 @@ def management_sntp_update(context=None):
     return _safe_call(
         action
     )
+
+
+@api.get("/tr069/providers")
+def list_tr069_providers(context=None):
+    return _safe_call(lambda: {"profiles": tr069_provider_profiles.list()})
+
+
+@api.post("/tr069/providers/save")
+def save_tr069_provider(context=None):
+    def action():
+        data = _validated(TR069ProviderSaveRequest, context)
+        return tr069_provider_profiles.save(data.profile)
+    return _safe_call(action)
+
+
+@api.post("/tr069/providers/delete")
+def delete_tr069_provider(context=None):
+    def action():
+        data = _validated(TR069ProviderDeleteRequest, context)
+        return {"success": tr069_provider_profiles.delete(data.name)}
+    return _safe_call(action)
+
+
+@api.get("/tr069/setup")
+def tr069_setup(context=None):
+    return _safe_call(zte_service.tr069_setup)
+
+
+@api.post("/tr069/providers/apply")
+def apply_tr069_provider(context=None):
+    def action():
+        data = _validated(TR069ProviderApplyRequest, context)
+        return zte_service.apply_tr069_provider(
+            data.name, data.wan_name,
+            password=data.password,
+            connection_request_password=data.connection_request_password,
+            confirm=data.confirm,
+        )
+    return _safe_call(action)
 
 
 @api.get("/management/tr069")
