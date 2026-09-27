@@ -129,7 +129,7 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Verify Phase 2 session, inventory and desktop host contracts
         run: |
-          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat tests.test_api_error_sanitization tests.test_f6600p_support_progress -v tests.test_f6600p_dhcp_encoded tests.test_tr069_named_presets
+          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat tests.test_api_error_sanitization tests.test_f6600p_support_progress tests.test_f6600p_dhcp_encoded tests.test_tr069_named_presets -v
       - name: Verify clipboard browser selection never touches Windows Web APIs
         run: |
           node tests/test_desktop_clipboard.cjs
