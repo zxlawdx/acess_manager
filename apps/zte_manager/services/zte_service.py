@@ -375,18 +375,27 @@ class ZTEService:
                     attendant=self.current_attendant,
                     device=self._device_info,
                 )
-                history_repository.save_snapshot(
-                    self._history_session_id, "connect",
-                    {
-                        "device": self._device_info,
-                        "adapter": self._adapter.describe(),
-                    },
-                )
             except Exception as exc:
                 logger.warning(
                     "history_start_failed error_type=%s", type(exc).__name__
                 )
                 self._history_session_id = None
+            if self._history_session_id is not None:
+                try:
+                    history_repository.save_snapshot(
+                        self._history_session_id, "connect",
+                        {
+                            "device": self._device_info,
+                            "adapter": self._adapter.describe(),
+                        },
+                    )
+                except Exception as exc:
+                    # A snapshot failure does not invalidate an existing
+                    # history session ID or turn a successful login into 500.
+                    logger.warning(
+                        "history_snapshot_failed error_type=%s",
+                        type(exc).__name__,
+                    )
 
             try:
                 self._registrar.register(
