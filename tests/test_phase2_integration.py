@@ -300,5 +300,52 @@ class RealServiceIntegrationTests(unittest.TestCase):
         self.assertEqual(self.service._zte.login_calls, 1)
 
 
+class DesktopCapabilitiesContractTests(unittest.TestCase):
+    def test_host_python_is_authoritative_not_browser_user_agent(self):
+        from apps.zte_manager.services.desktop_capabilities import (
+            get_desktop_capabilities,
+        )
+        self.assertEqual(get_desktop_capabilities("win32"), {
+            "platform": "win32",
+            "native_clipboard": True,
+            "web_clipboard_allowed": False,
+            "webview_transport": "http",
+        })
+        self.assertEqual(get_desktop_capabilities("linux"), {
+            "platform": "linux",
+            "native_clipboard": False,
+            "web_clipboard_allowed": True,
+            "webview_transport": "http",
+        })
+
+    def test_real_get_endpoint_preserves_capability_contract(self):
+        from apps.zte_manager import api as api_module
+        with patch.object(
+            api_module, "get_desktop_capabilities",
+            return_value={
+                "platform": "win32", "native_clipboard": True,
+                "web_clipboard_allowed": False, "webview_transport": "http",
+            }
+        ) as host:
+            data = api_module.desktop_capabilities(
+                {"headers": {"User-Agent": "Fake Linux browser"}}
+            )
+        host.assert_called_once_with()
+        self.assertEqual(data["platform"], "win32")
+        self.assertFalse(data["web_clipboard_allowed"])
+
+    def test_new_script_is_registered_before_support_diagnostics(self):
+        from pathlib import Path
+        template = (
+            Path(__file__).resolve().parents[1]
+            / "apps" / "zte_manager" / "templates" / "index.html"
+        ).read_text(encoding="utf-8")
+        self.assertLess(
+            template.index("zte_manager/js/desktop_clipboard.js"),
+            template.index("zte_manager/js/support_diagnostics.js"),
+        )
+
+
+
 if __name__ == "__main__":
     unittest.main()
