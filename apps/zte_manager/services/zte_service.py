@@ -2454,10 +2454,9 @@ class ZTEService:
 
     def apply_tr069_provider(
         self, name: str, wan_name: str, *, password=None,
-        connection_request_password=None, confirm=False,
+        connection_request_password=None,
     ):
-        if not confirm:
-            raise ValueError("Confirme a configuração TR-069 antes de aplicar.")
+        # The public Vela API checks explicit operator confirmation.
         profiles = tr069_provider_profiles.list()
         profile = next((item for item in profiles if item["name"] == name), None)
         if not profile:
