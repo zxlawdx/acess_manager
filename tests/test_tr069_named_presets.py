@@ -102,7 +102,7 @@ class ProviderProfileTests(unittest.TestCase):
                 with self.subTest(invalid=invalid):
                     with self.assertRaises(ValueError):
                         instance.apply_tr069_provider(
-                            "Example Network", invalid, confirm=True
+                            "Example Network", invalid
                         )
             change.assert_not_called()
             self.assertEqual(
@@ -110,7 +110,7 @@ class ProviderProfileTests(unittest.TestCase):
                 "Internet_TR069",
             )
             report = instance.apply_tr069_provider(
-                "Example Network", "Internet_TR069", confirm=True
+                "Example Network", "Internet_TR069"
             )
             self.assertTrue(report["success"])
             self.assertEqual(change.call_args.kwargs["operation"],
