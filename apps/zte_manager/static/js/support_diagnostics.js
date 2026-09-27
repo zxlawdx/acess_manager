@@ -1275,32 +1275,25 @@ async function copySupportAttendance() {
     }
 
     try {
-        // O botão no Windows NÃO chama as APIs do QtWebEngine: alguns builds
-        // encerram o processo ao acessar navigator.clipboard/execCommand.
-        if (/Windows/i.test(navigator.userAgent)) {
-            await apiRequest("/desktop/clipboard", {
-                method: "POST",
-                body: JSON.stringify({ text })
-            });
-        } else if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(text);
-        } else {
+        // Nunca usar APIs do WebEngine como fallback num Windows.
+        // Se a capacidade do host estiver indisponível, selecionar manualmente.
+        const clipboard = window.desktopClipboard;
+        const method = clipboard && typeof clipboard.copy === "function"
+            ? await clipboard.copy(text, textarea, apiRequest)
+            : "manual";
+        if (method === "manual") {
             textarea.focus();
             textarea.select();
-            if (!document.execCommand("copy")) {
-                throw new Error("Clipboard não disponível.");
-            }
+            showToast("Texto selecionado. Use Ctrl+C para copiar.");
+        } else {
+            showToast("Atendimento copiado.");
         }
-
-        showToast("Atendimento copiado.");
     } catch (error) {
         // Evita crash/propagação de falha no botão; preserva a seleção
         // para cópia manual caso o desktop esteja sem permissão.
         textarea.focus();
         textarea.select();
-        showToast(
-            `Cópia automática indisponível: ${error.message}. Use Ctrl+C.`
-        );
+        showToast("Cópia automática indisponível. Use Ctrl+C.");
     }
 }
 

@@ -75,8 +75,15 @@ class WindowsCompatibilityTests(unittest.TestCase):
             / "js" / "support_diagnostics.js"
         ).read_text(encoding="utf-8")
 
-        self.assertIn('"/desktop/clipboard"', js)
-        self.assertIn('if (/Windows/i.test(navigator.userAgent))', js)
+        clipboard_js = (
+            ROOT / "apps" / "zte_manager" / "static"
+            / "js" / "desktop_clipboard.js"
+        ).read_text(encoding="utf-8")
+        self.assertTrue("clipboard.copy(text, textarea, apiRequest)" in js)
+        self.assertNotIn("navigator.userAgent", js)
+        self.assertIn('"/desktop/clipboard"', clipboard_js)
+        self.assertIn('"/desktop/capabilities"', clipboard_js)
+        self.assertNotIn("execCommand", clipboard_js)
 
     def test_windows_layout_scopes_workspace(self):
         css = (

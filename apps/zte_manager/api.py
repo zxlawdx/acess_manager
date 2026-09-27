@@ -66,6 +66,9 @@ from apps.zte_manager.services.cpe_management_service import (
     cpe_management_service,
 )
 from apps.zte_manager.services.desktop_clipboard import copy_text as copy_desktop_text
+from apps.zte_manager.services.desktop_capabilities import (
+    get_desktop_capabilities,
+)
 from apps.zte_manager.services.zte_service import zte_service
 
 
@@ -191,6 +194,12 @@ def health(context=None):
         "service": "ZTE Automatic",
         "runtime": "Vela Framework",
     }
+
+
+@api.get("/desktop/capabilities")
+def desktop_capabilities(context: dict | None = None) -> dict[str, object]:
+    """The backend host determines clipboard safety; never trust User-Agent."""
+    return get_desktop_capabilities()
 
 
 @api.post("/desktop/clipboard")

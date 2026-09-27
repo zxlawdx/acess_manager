@@ -1,4 +1,6 @@
 from dataclasses import replace
+import logging
+from collections.abc import Callable
 from uuid import uuid4
 from threading import RLock
 from typing import Optional
@@ -6,6 +8,14 @@ from typing import Optional
 from apps.zte_manager.model.device_adapters import select_adapter
 from apps.zte_manager.application.operations.audit_executor import AuditedOperation
 from apps.zte_manager.application.operations.verifiers import verify_dhcp, verify_ssid
+from apps.zte_manager.application.inventory import DeviceRegistrar
+from apps.zte_manager.infrastructure.zte.adapters import ThinkLuaDeviceAdapter
+from apps.zte_manager.infrastructure.zte.adapters.thinklua_device import (
+    DeviceWriteNotApproved,
+)
+from apps.zte_manager.infrastructure.zte.firmware_policy import (
+    FirmwarePolicy, canonical_model,
+)
 from apps.zte_manager.model.zte import ZTE
 from apps.zte_manager.repositories.history_repository import history_repository
 from apps.zte_manager.repositories.management_repository import (
@@ -37,6 +47,9 @@ from apps.zte_manager.services.support_diagnostic_service import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 class ZTEService:
     """
     Service Layer / Facade da aplicação.
@@ -50,7 +63,21 @@ class ZTEService:
     causar SessionTimeout mesmo com o login ainda válido.
     """
 
-    def __init__(self):
+    def __init__(
+        self, *,
+        firmware_policy: FirmwarePolicy | None = None,
+        driver_factory: Callable[[], ThinkLuaDeviceAdapter] | None = None,
+        registrar: DeviceRegistrar | None = None,
+    ) -> None:
+        self._firmware_policy = (
+            firmware_policy if firmware_policy is not None
+            else FirmwarePolicy.from_environment()
+        )
+        self._driver_factory = driver_factory or (
+            lambda: ThinkLuaDeviceAdapter(firmware_policy=self._firmware_policy)
+        )
+        self._registrar = registrar or DeviceRegistrar(management_repository)
+        self._runtime_driver: ThinkLuaDeviceAdapter | None = None
         self._zte: Optional[ZTE] = None
         self._lock = RLock()
         self.current_attendant = None
@@ -73,6 +100,25 @@ class ZTEService:
     # =========================================================
     # CONEXÃO
     # =========================================================
+
+    def _disable_session_writes(self) -> None:
+        """Block direct transport POSTs after any missing/changed identity.
+
+        Keep the original transport only for the existing exact-firmware
+        F6201B captured workflow, whose own guards remain unchanged.
+        """
+        if self._zte is None:
+            return
+        self._zte.writes_enabled = False
+        if self._readonly_original_post is None:
+            self._readonly_original_post = self._zte.session.post
+
+            def blocked_post(*_args, **_kwargs):
+                raise PermissionError(
+                    "Sessão somente leitura; reconecte após validar o firmware."
+                )
+
+            self._zte.session.post = blocked_post
 
     def connect(
         self,
@@ -114,8 +160,32 @@ class ZTEService:
                 actual = {}
                 try:
                     actual = self._zte.device_status() or {}
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(
+                        "session_reuse_identity_read_failed error_type=%s",
+                        type(exc).__name__,
+                    )
+                    if self._runtime_driver is not None:
+                        self._disable_session_writes()
+                        raise ValueError(
+                            "Não foi possível revalidar a ONT. Desconecte e reconecte."
+                        ) from None
+                if self._runtime_driver is not None:
+                    previous_identity = self._device_info
+                    if not actual or any(
+                        actual.get(key) != previous_identity.get(key)
+                        for key in ("fabricante", "modelo", "firmware", "serial")
+                    ):
+                        self._disable_session_writes()
+                        raise ValueError(
+                            "A identidade ou o firmware mudou; desconecte e reconecte."
+                        )
+                claimed_model = canonical_model(model_hint)
+                detected_model = canonical_model(actual.get("modelo"))
+                if claimed_model and detected_model and claimed_model != detected_model:
+                    raise ValueError(
+                        "Modelo informado diverge da identidade da ONT."
+                    )
                 claimed, _ = multimodel_service.find_family(model_hint)
                 detected, _ = multimodel_service.find_family(
                     actual.get("modelo") or ""
@@ -178,14 +248,25 @@ class ZTEService:
             # aberta na própria interface da ZTE. O botão Desconectar continua
             # executando logout explícito quando essa for a intenção.
             if self._zte is not None:
-                history_repository.end_session(
-                    self._history_session_id
-                )
-
+                if self._history_session_id is not None:
+                    try:
+                        history_repository.end_session(self._history_session_id)
+                    except Exception as exc:
+                        logger.warning(
+                            "history_end_failed error_type=%s", type(exc).__name__
+                        )
                 try:
                     self._zte.session.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(
+                        "session_local_close_failed error_type=%s", type(exc).__name__
+                    )
+            if self._runtime_driver is not None:
+                self._runtime_driver.close()  # Borrowed client is not closed twice.
+                self._runtime_driver = None
+            self._history_session_id = None
+            self._adapter = None
+            self._capability_service = None
 
             self._f6201b_writer.clear()
             self._f6201b_dns.clear()
@@ -206,11 +287,14 @@ class ZTEService:
             resposta = self._zte.login()
 
             if not resposta:
+                try:
+                    self._zte.session.close()
+                except Exception as exc:
+                    logger.warning(
+                        "failed_login_close_failed error_type=%s", type(exc).__name__
+                    )
                 self._zte = None
-
-                raise RuntimeError(
-                    "Não foi possível autenticar na ONT."
-                )
+                raise RuntimeError("Não foi possível autenticar na ONT.")
 
             self.current_attendant = (
                 attendant.strip()
@@ -240,7 +324,17 @@ class ZTEService:
                 from apps.zte_manager.services.multimodel_service import find_family
                 claimed, _ = find_family(model_hint)
                 actual, _ = find_family(detected_model)
-                if claimed and actual and claimed != actual:
+                claimed_runtime = canonical_model(model_hint)
+                actual_runtime = canonical_model(detected_model)
+                if (
+                    (claimed and actual and claimed != actual)
+                    or (
+                        claimed_runtime and actual_runtime
+                        and claimed_runtime != actual_runtime
+                    )
+                    or (claimed and actual_runtime and claimed != actual_runtime)
+                    or (actual and claimed_runtime and actual != claimed_runtime)
+                ):
                     self._zte.session.close()
                     self._zte = None
                     raise ValueError(
@@ -261,98 +355,75 @@ class ZTEService:
                 self._device_info.get("firmware"),
             )
             self._selected_model = selected_model
-            self._model_verified = bool(known_detected)
-            # Somente os adaptadores originais possuem rotinas de escrita
-            # implementadas/testadas; os novos perfis iniciam read-only.
-            from apps.zte_manager.model.device_adapters import (
-                F6600PAdapter, F670LAdapter,
-            )
-            # Modelos sem identificação confirmada permanecem READ ONLY.
-            self._zte.writes_enabled = isinstance(
-                self._adapter,
-                (F6600PAdapter, F670LAdapter),
-            ) and bool(detected_model or model_hint)
+            # Actual firmware identity, NEVER the operator's manual model hint,
+            # decides whether an approved runtime driver may perform writes.
+            detected_runtime = canonical_model(detected_model)
+            self._model_verified = bool(known_detected or detected_runtime)
+            if detected_runtime and detected_runtime in {"F6600P", "F670L"}:
+                self._runtime_driver = self._driver_factory()
+                runtime_context = self._runtime_driver.attach_authenticated(
+                    self._zte, host=self.current_host,
+                    device_info=self._device_info,
+                    revision=self._session_revision,
+                )
+                self._zte.writes_enabled = runtime_context.writable
+            else:
+                # Vue, unknown families and F6201B retain their existing
+                # read-only/captured flows. Never bind a generic ThinkLua writer.
+                self._zte.writes_enabled = False
 
             if not self._zte.writes_enabled:
-                # Defesa em profundidade: as APIs de alguns firmwares
-                # usam POST direto fora de post_menu (backup, reboot etc.).
-                # Bloquear no transporte evita que um botão antigo faça
-                # alterações por acidente no equipamento recém-cadastrado.
-                def read_only_post(*args, **kwargs):
-                    raise PermissionError(
-                        "Sessão de descoberta somente leitura. "
-                        "POST bloqueado até existir adaptador de escrita validado."
-                    )
-
-                self._readonly_original_post = self._zte.session.post
-                self._zte.session.post = read_only_post
+                # Block even direct POSTs outside the legacy post_menu gateway.
+                # The captured F6201B path retains the original post handle.
+                self._disable_session_writes()
 
             self._capability_service = CapabilityService(
                 self._zte,
                 self._adapter,
             )
 
-            self._history_session_id = (
-                history_repository.start_session(
+            # Optional databases must never invalidate an authenticated ONT.
+            try:
+                self._history_session_id = history_repository.start_session(
                     host=self.current_host,
                     attendant=self.current_attendant,
                     device=self._device_info,
                 )
-            )
+            except Exception as exc:
+                logger.warning(
+                    "history_start_failed error_type=%s", type(exc).__name__
+                )
+                self._history_session_id = None
+            if self._history_session_id is not None:
+                try:
+                    history_repository.save_snapshot(
+                        self._history_session_id, "connect",
+                        {
+                            "device": self._device_info,
+                            "adapter": self._adapter.describe(),
+                        },
+                    )
+                except Exception as exc:
+                    # A snapshot failure does not invalidate an existing
+                    # history session ID or turn a successful login into 500.
+                    logger.warning(
+                        "history_snapshot_failed error_type=%s",
+                        type(exc).__name__,
+                    )
 
-            history_repository.save_snapshot(
-                self._history_session_id,
-                "connect",
-                {
-                    "device": self._device_info,
-                    "adapter": self._adapter.describe(),
-                },
-            )
-
-            # Registro leve imediato: a ONT já aparece no inventário ao
-            # conectar. A sincronização completa (óptico/config/capabilities)
-            # pode ser executada na área de gerenciamento.
             try:
-                serial = (
-                    self._device_info.get("serial")
-                    or self._device_info.get("serial_number")
-                    or self._device_info.get("sn")
-                    or self._device_info.get("SerialNumber")
+                self._registrar.register(
+                    host=self.current_host,
+                    device_info=self._device_info,
+                    adapter_name=self._adapter.name,
+                    attendant=self.current_attendant,
                 )
-
-                mac = (
-                    self._device_info.get("mac")
-                    or self._device_info.get("mac_address")
-                    or self._device_info.get("MACAddress")
+            except Exception as exc:
+                # Additional defense if a custom registrar violates its
+                # best-effort contract: authenticated login must still work.
+                logger.warning(
+                    "inventory_registrar_failed error_type=%s", type(exc).__name__
                 )
-
-                management_repository.upsert_device({
-                    "key": (
-                        serial
-                        or mac
-                        or self.current_host
-                    ),
-                    "host": self.current_host,
-                    "model": (
-                        self._device_info.get("modelo")
-                        or self._device_info.get("model")
-                    ),
-                    "serial": serial,
-                    "mac": mac,
-                    "firmware": (
-                        self._device_info.get("firmware")
-                        or self._device_info.get("software")
-                    ),
-                    "status": "online",
-                    "metadata": {
-                        "device": self._device_info,
-                        "adapter": self._adapter.name,
-                        "attendant": self.current_attendant,
-                    },
-                })
-            except Exception:
-                # Inventário não pode impedir o atendimento/login.
-                pass
 
             return {
                 "success": True,
@@ -367,23 +438,29 @@ class ZTEService:
                 "adapter": self._adapter.name,
             }
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         with self._lock:
             if self._zte is None:
                 return
-
-            # Encerramos somente a sessão HTTP local. Não chamamos
-            # logout_entry automaticamente: alguns firmwares ZTE trabalham
-            # com uma única sessão administrativa e um logout remoto pode
-            # derrubar também a aba original do equipamento que o atendente
-            # deixou aberta no navegador.
+            # Local socket only; never log the remote administrative user out.
             try:
-                history_repository.end_session(
-                    self._history_session_id
-                )
-
-                self._zte.session.close()
+                if self._history_session_id is not None:
+                    try:
+                        history_repository.end_session(self._history_session_id)
+                    except Exception as exc:
+                        logger.warning(
+                            "history_end_failed error_type=%s", type(exc).__name__
+                        )
+                try:
+                    self._zte.session.close()
+                except Exception as exc:
+                    logger.warning(
+                        "session_local_close_failed error_type=%s", type(exc).__name__
+                    )
             finally:
+                if self._runtime_driver is not None:
+                    self._runtime_driver.close()
+                    self._runtime_driver = None
                 self._zte = None
                 self.current_host = None
                 self.current_attendant = None
@@ -445,15 +522,44 @@ class ZTEService:
         operation-specific verifier against fresh firmware data can set the
         verified history bit; otherwise the event is accepted/uncertain/failed.
         """
-        audited = self._audited_operation.execute(
-            session_id=self._history_session_id,
-            operation=operation,
-            target=target,
-            before_reader=before_reader,
-            action=action,
-            after_reader=after_reader or before_reader,
-            verify=verify,
-        )
+        # Revalidate the authenticated driver before *all* normal
+        # _run_change writes; perform GET before before_reader prepares a form.
+        if self._runtime_driver is not None:
+            try:
+                self._runtime_driver.assert_session_identity()
+            except DeviceWriteNotApproved:
+                self._disable_session_writes()
+                try:
+                    history_repository.save_change(
+                        self._history_session_id,
+                        operation=operation,
+                        target=target,
+                        before=None,
+                        after=None,
+                        success=False,
+                        outcome="failed",
+                        message="device_identity_preflight_denied",
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "preflight_audit_failed error_type=%s",
+                        type(exc).__name__,
+                    )
+                raise
+        try:
+            audited = self._audited_operation.execute(
+                session_id=self._history_session_id,
+                operation=operation,
+                target=target,
+                before_reader=before_reader,
+                action=action,
+                after_reader=after_reader or before_reader,
+                verify=verify,
+            )
+        except DeviceWriteNotApproved:
+            # The device changed between initial preflight and action.
+            self._disable_session_writes()
+            raise
         return audited.value
 
     def _audit_device_command(self, operation, target, command):
@@ -547,7 +653,11 @@ class ZTEService:
 
     def device_status(self):
         with self._lock:
-            result = self.get_client().device_status()
+            result = (
+                self._runtime_driver.read_device_status()
+                if self._runtime_driver is not None
+                else self.get_client().device_status()
+            )
 
             if isinstance(result, dict):
                 self._device_info = result
@@ -710,6 +820,8 @@ class ZTEService:
         reveal_password=False
     ):
         with self._lock:
+            if self._runtime_driver is not None and not reveal_password:
+                return self._runtime_driver.get_wifi_config()["networks"]
             return self.get_client().wifi_networks(
                 reveal_password=reveal_password
             )
@@ -720,19 +832,22 @@ class ZTEService:
         config
     ):
         with self._lock:
-            zte = self.get_client()
-            reader = lambda: zte.wifi_networks(
-                reveal_password=False
-            )
+            if self._runtime_driver is not None:
+                driver = self._runtime_driver
+                reader = lambda: driver.get_wifi_config()["networks"]
+                action = lambda: driver.set_wifi_config({
+                    "ssid_id": ssid_id, "changes": config,
+                })
+            else:
+                zte = self.get_client()
+                reader = lambda: zte.wifi_networks(reveal_password=False)
+                action = lambda: zte.set_ssid_config(ssid_id, config)
 
             return self._run_change(
                 operation="ssid_update",
                 target=ssid_id,
                 before_reader=reader,
-                action=lambda: zte.set_ssid_config(
-                    ssid_id,
-                    config
-                ),
+                action=action,
                 after_reader=reader,
                 verify=lambda before, response, after: verify_ssid(
                     ssid_id, config, before, response, after
@@ -954,6 +1069,8 @@ class ZTEService:
             if self._is_captured_f6201b():
                 self._f6201b_write_firmware()
                 return f6201b_dhcp.status(self.get_client())
+            if self._runtime_driver is not None:
+                return self._runtime_driver.get_lan_config()
             return self.get_client().dhcp_status()
 
     def set_dhcp_basic(self, config):
@@ -970,11 +1087,19 @@ class ZTEService:
                         original_post=self._readonly_original_post,
                     ),
                 )
-            zte = self.get_client()
+            if self._runtime_driver is not None:
+                driver = self._runtime_driver
+                reader = driver.get_lan_config
+                action = lambda: driver.set_lan_config(config)
+            else:
+                zte = self.get_client()
+                reader = zte.dhcp_status
+                action = lambda: zte.set_dhcp_basic(config)
             return self._run_change(
                 operation="dhcp_basic", target="lan",
-                before_reader=zte.dhcp_status,
-                action=lambda: zte.set_dhcp_basic(config),
+                before_reader=reader,
+                action=action,
+                after_reader=reader,
                 verify=lambda before, response, after: verify_dhcp(
                     config, before, response, after
                 ),
