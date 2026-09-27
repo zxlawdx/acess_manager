@@ -2869,7 +2869,9 @@ async function loadProfile() {
         method: "POST",
         body: JSON.stringify({ attendant })
     });
-    if (epoch !== sessionEpoch || attendant !== currentAttendant) return null;
+    if (epoch !== sessionEpoch || attendant !== currentAttendant ||
+        (globalThis.activeNamedPreset &&
+            globalThis.activeNamedPreset !== "Configuração principal")) return null;
     if (!profile || typeof profile !== "object" ||
         !profile.wifi?.["2.4GHz"] || !profile.wifi?.["5GHz"]) {
         throw new Error("O backend não devolveu os padrões de Wi-Fi 2.4/5 GHz.");
