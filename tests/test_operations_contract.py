@@ -33,6 +33,13 @@ MANAGEMENT_JS = (
     / "js"
     / "management.js"
 ).read_text(encoding="utf-8")
+# History and backup were moved out of advanced.js during modularization.
+# A feature remains integrated only when its script is loaded by Vela.
+HISTORY_JS = (
+    ROOT / "apps" / "zte_manager" / "static" / "js"
+    / "features" / "history.js"
+).read_text(encoding="utf-8")
+
 INDEX = (
     ROOT
     / "apps"
@@ -67,11 +74,22 @@ class OperationsContractTests(unittest.TestCase):
         )
 
         for endpoint in endpoints:
+            # Keep the boundary check meaningful after splitting the UI:
+            # advanced.js delegates backup/history actions to history.js.
+            source = HISTORY_JS if endpoint in (
+                "/system/backup", "/history", "/history/snapshot"
+            ) else ADVANCED_JS
             self.assertIn(
                 endpoint,
-                ADVANCED_JS,
+                source,
                 msg=f"UI não usa a rota esperada: {endpoint}",
             )
+            if source == HISTORY_JS:
+                self.assertIn(
+                    "zte_manager/js/features/history.js",
+                    INDEX,
+                    msg="Módulo de histórico não está registrado no Vela",
+                )
             self.assertIn(
                 endpoint,
                 API,
