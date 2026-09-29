@@ -510,7 +510,7 @@
             categories.forEach((routes, category) => {
                 const details = make("details", "adaptive-route-category");
                 const summary = make("summary", "", category +
-                    " · " + routes.length + " rota(s)");
+                    " · " + routes.length + " funcionalidad(es)");
                 details.append(summary);
                 const list = make("div", "adaptive-route-list");
                 routes.forEach(route => {
@@ -549,7 +549,8 @@
                             });
                         } catch (error) {
                             result.replaceChildren(make("p", "adaptive-empty",
-                                "Consulta indisponível: " + error.message));
+                                "A consulta não foi confirmada nesta sessão. " +
+                                "Verifique a conexão e tente novamente."));
                         } finally {
                             button.disabled = false;
                             setBusy(false);
