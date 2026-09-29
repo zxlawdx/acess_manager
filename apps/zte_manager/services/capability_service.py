@@ -10,10 +10,9 @@ from apps.zte_manager.model.device_adapters import DeviceAdapter
 
 
 _SECRET_MARKERS = (
-    "password",
-    "passwd",
-    "passphrase",
-    "secret",
+    "password", "passwd", "passphrase", "secret",
+    "token", "cookie", "credential", "authorization",
+    "private_key", "sessionid", "session_key",
 )
 
 
