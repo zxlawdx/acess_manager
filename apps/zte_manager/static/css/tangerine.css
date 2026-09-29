@@ -70,7 +70,7 @@ html[data-theme] .sidebar {
   box-shadow:none!important; backdrop-filter:none!important;
   padding:16px 11px!important; transition:width .18s ease;
 }
-html[data-theme] .workspace {transition:margin-left .18s ease;min-width:0;}
+html[data-theme] .workspace {min-width:0;}
 html[data-theme] .brand-row {height:auto;min-height:54px;gap:10px;padding:0 6px;}
 html[data-theme] .brand-mark {
   background:var(--am-primary)!important; border-radius:10px!important;
@@ -244,20 +244,6 @@ html[data-theme] summary:focus-visible {
   outline:2px solid var(--am-primary-deep)!important;outline-offset:3px!important;
 }
 html[data-theme] button:disabled {opacity:.5!important;cursor:not-allowed!important;}
-html[data-theme] .sidebar.is-collapsed {width:70px!important;padding-inline:9px!important;}
-html[data-theme] .sidebar.is-collapsed .brand-copy,
-html[data-theme] .sidebar.is-collapsed .nav-group-label,
-html[data-theme] .sidebar.is-collapsed .menu-item>span:not(.material-symbols-outlined),
-html[data-theme] .sidebar.is-collapsed .target-card,
-html[data-theme] .sidebar.is-collapsed .nav-caption,
-html[data-theme] .sidebar.is-collapsed .connection-state div,
-html[data-theme] .sidebar.is-collapsed #disconnectButton {display:none!important;}
-html[data-theme] .sidebar.is-collapsed .brand-row {padding:0;flex-direction:column;gap:5px;}
-html[data-theme] .sidebar.is-collapsed .brand-mark {height:28px;width:28px;}
-html[data-theme] .sidebar.is-collapsed .menu-item {justify-content:center;padding:0!important;}
-html[data-theme] .sidebar.is-collapsed+.workspace {margin-left:70px!important;}
-html[data-theme] .sidebar.is-collapsed .connection-state {justify-content:center;}
-html[data-theme] .sidebar .menu-item {flex-shrink:0;}
 @media(max-width:1050px) {
   html[data-theme] .topbar {flex-wrap:wrap;}
   html[data-theme] .topbar-quick-actions {display:none!important;}
@@ -267,19 +253,6 @@ html[data-theme] .sidebar .menu-item {flex-shrink:0;}
   html[data-theme] .dashboard-grid {grid-template-columns:repeat(2,minmax(0,1fr))!important;}
 }
 @media(max-width:800px) {
-  html[data-theme] {--sidebar-width:70px;}
-  html[data-theme] .sidebar:not(.is-collapsed) {width:70px!important;padding-inline:9px!important;}
-  html[data-theme] .sidebar:not(.is-collapsed) .brand-copy,
-  html[data-theme] .sidebar:not(.is-collapsed) .nav-group-label,
-  html[data-theme] .sidebar:not(.is-collapsed) .menu-item>span:not(.material-symbols-outlined),
-  html[data-theme] .sidebar:not(.is-collapsed) .target-card,
-  html[data-theme] .sidebar:not(.is-collapsed) .connection-state div,
-  html[data-theme] .sidebar:not(.is-collapsed) #disconnectButton {display:none!important;}
-  html[data-theme] .sidebar:not(.is-collapsed) .menu-item {justify-content:center;padding:0!important;}
-  html[data-theme] .sidebar:not(.is-collapsed) .brand-row {padding:0;flex-direction:column;gap:5px;}
-  html[data-theme] .sidebar:not(.is-collapsed) .brand-mark {width:28px;height:28px;}
-  html[data-theme] .workspace {margin-left:70px!important;}
-  html[data-theme] .sidebar:not(.is-collapsed) .connection-state {justify-content:center;}
   html[data-theme] .kpi-grid {grid-template-columns:repeat(2,minmax(0,1fr))!important;}
   html[data-theme] .dashboard-grid {grid-template-columns:minmax(0,1fr)!important;}
   html[data-theme] .dashboard-grid .span-2 {grid-column:auto!important;}
@@ -1189,97 +1162,4 @@ html[data-theme] .am-diagnostic-tabbed .diagnostic-card button[type=submit] {
     border-top:1px solid var(--am-border)!important;
     min-height:170px;max-height:330px!important;
   }
-}
-
-/* Shell geometry: sidebar and workspace share one layout coordinate system.
-   The old fixed-sidebar + margin-left model desynchronizes when QtWebEngine
-   zoom changes or the sidebar is collapsed. A grid cannot overlap itself. */
-html[data-theme] body{width:100%!important;max-width:100%!important;overflow-x:hidden;}
-html[data-theme] .app-shell{
-  --am-current-sidebar:244px;
-  display:grid!important;grid-template-columns:var(--am-current-sidebar) minmax(0,1fr);
-  align-items:stretch;width:100%;min-width:0;min-height:100vh;min-height:100dvh;
-  margin:0!important;overflow:clip;
-}
-html[data-theme] .app-shell.am-shell-collapsed{
-  --am-current-sidebar:72px;
-}
-html[data-theme] .app-shell>.sidebar{
-  position:sticky!important;inset:0 auto auto 0!important;
-  width:var(--am-current-sidebar)!important;height:100vh;height:100dvh;
-  max-height:100dvh;overflow:hidden;box-sizing:border-box;
-  z-index:50;min-width:0;
-}
-html[data-theme] .app-shell>.sidebar.is-collapsed{
-  width:72px!important;padding:13px 7px!important;
-}
-html[data-theme] .app-shell>.sidebar.is-collapsed .brand-row{
-  flex-direction:column!important;align-items:center!important;
-  padding:8px 0!important;height:auto!important;gap:9px!important;
-}
-html[data-theme] .app-shell>.sidebar.is-collapsed .brand-row .shell-control{
-  margin:0!important;
-}
-html[data-theme] .app-shell>.sidebar.is-collapsed .nav-menu{
-  padding:8px 0 16px!important;
-}
-html[data-theme] .app-shell>.sidebar.is-collapsed .menu-item{
-  min-height:43px!important;justify-content:center!important;
-  padding:0!important;gap:0!important;
-}
-html[data-theme] .app-shell>.workspace,
-html[data-theme] .app-shell>.sidebar.is-collapsed+.workspace{
-  width:100%!important;min-width:0;max-width:100%;
-  margin:0!important;overflow:visible;box-sizing:border-box;
-  container-type:inline-size;
-}
-html[data-theme] .am-workspace-header{
-  min-width:0;width:100%;align-items:center!important;
-}
-html[data-theme] .am-workspace-title{min-width:0;flex:1 1 170px;}
-html[data-theme] .am-workspace-tools{
-  min-width:0;max-width:100%;flex:1 1 460px;
-  justify-content:flex-end!important;
-}
-html[data-theme] .am-workspace-tools>*{flex-shrink:0;}
-html[data-theme] #topDeviceChip{max-width:min(230px,100%);min-width:0;}
-html[data-theme] #topDeviceChip>div{min-width:0;overflow:hidden;}
-html[data-theme] #topDeviceMeta{display:block;max-width:155px;white-space:nowrap;
-  text-overflow:ellipsis;overflow:hidden;}
-html[data-theme] .main-content,html[data-theme] .page,
-html[data-theme] #wifiNetworks,html[data-theme] #wifiRadios{
-  width:100%;min-width:0;max-width:100%;box-sizing:border-box;
-}
-html[data-theme] #wifiNetworks,html[data-theme] #wifiRadios{
-  grid-template-columns:repeat(auto-fit,minmax(min(310px,100%),1fr))!important;
-}
-@container (max-width:1170px){
-  html[data-theme] .am-quick-tools{display:none!important;}
-}
-@container (max-width:910px){
-  html[data-theme] .am-workspace-tools{
-    justify-content:flex-start!important;flex-basis:100%;
-  }
-  html[data-theme] #wifiNetworks,html[data-theme] #wifiRadios{
-    grid-template-columns:repeat(auto-fit,minmax(min(290px,100%),1fr))!important;
-  }
-}
-@media(max-width:780px){
-  html[data-theme] .app-shell{--am-current-sidebar:72px;}
-  html[data-theme] .app-shell>.sidebar:not(.is-collapsed){
-    padding:13px 7px!important;
-  }
-  html[data-theme] .app-shell>.sidebar:not(.is-collapsed) .brand-row .shell-control{
-    margin:0!important;
-  }
-  html[data-theme] .am-workspace-tools{justify-content:flex-start!important;}
-}
-/* QtWebEngine: inverse layout width avoids page overflow at 110–160% zoom. */
-html[data-theme] .app-shell {
-  width:calc(100% / var(--am-zoom,1))!important;
-  zoom:var(--am-zoom,1);
-  max-width:none!important;
-}
-html[data-theme][data-sidebar-collapsed="true"] .app-shell{
-  --am-current-sidebar:72px;
 }
