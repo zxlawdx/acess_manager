@@ -50,8 +50,8 @@ test("HTTP/firmware raw errors are not rendered by the common API helper", () =>
   assert.match(ctx.safe("Internal Server Error",500),/não conseguiu concluir/i);
   assert.match(ctx.safe(new Error("Failed to fetch")),/sem comunicação/i);
   assert.equal(ctx.safe("Perfil não encontrado"),"Perfil não encontrado");
-  assert.match(app,/normalizeApiErrorMessage\\(\\s*message,\\s*response\\.status,/);
-  assert.match(app,/data && typeof data === "object" \\? data\\.type/);
+  assert.ok(app.includes("normalizeApiErrorMessage(") && app.includes("response.status,"));
+  assert.ok(app.includes('data && typeof data === "object" ? data.type'));
   assert.match(ctx.safe("Recurso não implementado", 0, "unsupported"),/não está disponível/i);
   assert.match(ctx.safe("Not Found", 404),/ainda não foi confirmado/i);
   assert.match(advanced,/escapeHtml\(normalizeApiErrorMessage\(message/);
