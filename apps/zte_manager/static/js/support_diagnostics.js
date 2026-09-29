@@ -1109,7 +1109,7 @@ function renderWifiEnvironment(result) {
         <article class="support-result-card">
             <div class="support-card-head">
                 <div>
-                    <span class="section-kicker">RF ENVIRONMENT</span>
+                    <span class="section-kicker">ANÁLISE WI-FI</span>
                     <h3>Interferência e canais vizinhos</h3>
                 </div>
             </div>
@@ -1145,7 +1145,7 @@ function renderWifiBandEnvironment(band, data) {
                         • melhor ${supportEscape(analysis.best_channel ?? "-")}
                     </span>
                 </div>
-                <span class="badge">${networks.length} APs</span>
+                <span class="badge">${analysis.neighbor_scan_confirmed ? networks.length + " redes lidas" : "Sem leitura confirmada"}</span>
             </div>
 
             <div class="channel-score-strip">
@@ -1158,10 +1158,23 @@ function renderWifiBandEnvironment(band, data) {
                     `
                 ).join("")}
             </div>
+            ${scoreEntries.length ? '<p class="muted">Pontuação relativa de interferência: ' +
+                'quanto menor, melhor. Não representa utilização nem velocidade medida.</p>' : ""}
 
-            ${data.error
-                ? `<p class="muted">Scan indisponível: ${supportEscape(data.error)}</p>`
-                : ""}
+            ${analysis.neighbor_scan_confirmed === false
+                ? '<p class="muted">A leitura de redes vizinhas não foi confirmada. ' +
+                  'Não será realizada seleção de canal baseada nessa medição.</p>'
+                : !analysis.candidate_channels_confirmed
+                ? '<p class="muted">O firmware não confirmou a lista de canais ' +
+                  'autorizados. Nenhuma mudança de canal será proposta.</p>'
+                : analysis.auto_channel
+                ? '<p class="muted">Este rádio já utiliza seleção automática ' +
+                  'pelo equipamento. Uma varredura pontual não garante melhoria.</p>'
+                : analysis.recommendation?.action?.type === "wifi_channel"
+                ? '<p class="muted">Sugestão baseada na leitura atual. ' +
+                  'A mudança só é confirmada após uma nova leitura do rádio.</p>'
+                : '<p class="muted">Não há evidência suficiente de melhoria ' +
+                  'para recomendar alteração de canal nesta leitura.</p>'}
 
             <div class="neighbor-table-wrap">
                 <table class="neighbor-table">
