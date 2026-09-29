@@ -2147,64 +2147,10 @@ async function readFirmwareFeature(event) {
 }
 
 
+// History actions live in a separate presentation module. Keep these
+// public function names to preserve all legacy event listener contracts.
 async function backupConfiguration() {
-    if (!ontConnected) {
-        showToast("Conecte-se ao equipamento antes de executar backup.");
-        return;
-    }
-    if (!routerWriteEnabled) {
-        // Exportar configuração não foi homologado para todos os firmwares.
-        showToast("Backup binário não homologado neste modelo. Use Diagnóstico por modelo.");
-        return;
-    }
-    if (
-        !window.confirm(
-            "Exportar agora um backup local da configuração da ONT?"
-        )
-    ) {
-        return;
-    }
-
-    setBusy(
-        true,
-        "Exportando configuração da ONT..."
-    );
-
-    try {
-        const data = await apiRequest(
-            "/system/backup",
-            {
-                method: "POST"
-            }
-        );
-
-        document.getElementById(
-            "backupResult"
-        ).innerHTML = `
-            <div class="operation-row with-top-space">
-                <strong>Backup salvo</strong>
-                <p class="mono">${escapeHtml(data.path || data.filename || "-")}</p>
-                <div class="operation-meta">
-                    <span>${escapeHtml(data.size ?? 0)} bytes</span>
-                </div>
-            </div>
-        `;
-
-        showToast("Backup local concluído.");
-
-        // Falha no refresh visual não invalida o backup já persistido.
-        try {
-            await loadHistory();
-        } catch (historyError) {
-            console.warn("Backup salvo; histórico indisponível:", historyError);
-        }
-    } catch (error) {
-        showToast(
-            error.message
-        );
-    } finally {
-        setBusy(false);
-    }
+    return window.AccessManagerHistory.backup();
 }
 
 
@@ -2212,112 +2158,13 @@ async function backupConfiguration() {
 // HISTÓRICO / SNAPSHOT
 // =========================================================
 
+// History and snapshot share one sanitized timeline, not separate renderers.
 async function captureSnapshot() {
-    if (!ontConnected) {
-        showToast("Conecte-se ao equipamento para capturar snapshot.");
-        return;
-    }
-    if (!routerWriteEnabled) {
-        showToast("Snapshot legado indisponível neste firmware. Use Diagnóstico por modelo.");
-        return;
-    }
-    setBusy(
-        true,
-        "Capturando snapshot operacional..."
-    );
-
-    try {
-        const data = await apiRequest(
-            "/history/snapshot",
-            {
-                method: "POST",
-                body: JSON.stringify({
-                    reason: "manual-ui"
-                })
-            }
-        );
-
-        showToast(
-            data.partial
-                ? `Snapshot #${data.snapshot_id} parcial: falharam ${(data.failed_sections || []).join(", ")}.`
-                : `Snapshot #${data.snapshot_id} salvo.`
-        );
-
-        // Snapshot já persistido; atualização visual é independente.
-        try {
-            await loadHistory();
-        } catch (historyError) {
-            console.warn("Snapshot salvo; histórico indisponível:", historyError);
-        }
-    } catch (error) {
-        showToast(
-            error.message
-        );
-    } finally {
-        setBusy(false);
-    }
+    return window.AccessManagerHistory.snapshot();
 }
 
-
 async function loadHistory() {
-    const container = document.getElementById(
-        "historyOutput"
-    );
-
-    try {
-        const data = await apiRequest(
-            "/history?limit=20"
-        );
-
-        const changes = data.changes || [];
-        const diagnostics = data.diagnostics || [];
-
-        const rows = [
-            ...changes.map(
-                item => ({
-                    type: item.success ? "CHANGE" : "FAILED",
-                    title: item.operation,
-                    time: item.created_at,
-                    detail: item.target || item.message || "-"
-                })
-            ),
-            ...diagnostics.map(
-                item => ({
-                    type: "DIAG",
-                    title: item.status || "diagnostic",
-                    time: item.created_at,
-                    detail: item.summary || "-"
-                })
-            )
-        ].sort(
-            (a, b) => String(b.time).localeCompare(
-                String(a.time)
-            )
-        ).slice(
-            0,
-            20
-        );
-
-        container.innerHTML = rows.length
-            ? rows.map(
-                item => `
-                    <div class="operation-row">
-                        <div class="operation-row-head">
-                            <strong>${escapeHtml(item.title || "-")}</strong>
-                            <small>${escapeHtml(item.type)}</small>
-                        </div>
-                        <p>${escapeHtml(item.detail || "-")}</p>
-                        <small class="mono">${escapeHtml(item.time || "-")}</small>
-                    </div>
-                `
-            ).join("")
-            : '<span class="muted">Histórico vazio.</span>';
-    } catch (error) {
-        container.innerHTML = featureUnavailable(
-            "Histórico",
-            error.message
-        );
-    }
+    return window.AccessManagerHistory.load();
 }
 
 
