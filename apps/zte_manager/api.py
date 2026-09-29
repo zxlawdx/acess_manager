@@ -83,6 +83,8 @@ from apps.zte_manager.services.desktop_capabilities import (
 )
 from apps.zte_manager.services.zte_service import zte_service
 from apps.zte_manager.services.tr069_profile_service import tr069_provider_profiles
+from apps.zte_manager.services.error_policy import PublicFailure, classify
+
 
 
 logger = logging.getLogger(__name__)
@@ -155,61 +157,38 @@ def _validated(model, context):
 
 
 def _safe_call(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    """
-    Adapter da camada HTTP do Vela.
+    """Vela error boundary: explicit typed failures, no protocol details.
 
-    O servidor interno atual serializa dict/list, mas não possui o mesmo
-    mecanismo de HTTPException do FastAPI. Portanto erros conhecidos voltam
-    em um envelope {"error": ...}; o app.js converte esse envelope em exceção.
+    The current Vela runtime serializes returned dictionaries rather than
+    propagating a FastAPI-style HTTPException. Keep the existing 'error' field
+    for older clients and add stable machine codes for the desktop UI.
     """
     try:
-        return func(
-            *args,
-            **kwargs
-        )
-
+        return func(*args, **kwargs)
     except ValidationError as erro:
-        primeiro = erro.errors()[0]
-        campo = ".".join(
-            str(item)
-            for item in primeiro.get("loc", [])
-        )
-
-        mensagem = primeiro.get(
-            "msg",
-            "Dados inválidos."
-        )
-
-        return {
-            "error": (
-                f"{campo}: {mensagem}"
-                if campo
-                else mensagem
-            ),
-            "type": "validation",
-        }
-
-    except ValueError as erro:
-        return {
-            "error": str(erro),
-            "type": "validation",
-        }
-
-    except RuntimeError as erro:
-        return {
-            "error": str(erro),
-            "type": "state",
-        }
-
-    except TimeoutError as erro:
-        return {
-            "error": str(erro),
-            "type": "timeout",
-        }
-
+        # Pydantic's raw message/input can contain submitted passwords.
+        # Only use the static field path, never the rejected input.
+        first = erro.errors(include_input=False)[0]
+        location = first.get("loc", ())
+        field = _safe_action_code(location[-1] if location else "input")
+        return PublicFailure(
+            "INVALID_INPUT", "validation",
+            "Verifique o campo " + field.replace("_", " ") + ".",
+        ).envelope()
     except Exception as erro:
-        # The exception message may contain a device HTTP response, credentials,
-        # host paths or firmware dumps. Never emit/log raw exception text.
+        known = classify(erro)
+        if known is not None:
+            logger.warning(
+                "api_action_failure action=%s code=%s failure_type=%s",
+                _safe_action_code(getattr(func, "__name__", "unknown")),
+                known.code,
+                _safe_action_code(type(erro).__name__),
+            )
+            return known.envelope()
+
+        # Unexpected driver errors may embed whole responses, credential
+        # cookies and device URLs. Log only exception TYPES and sanitized
+        # traceback FRAME names; send the technician an incident code.
         error_id = uuid4().hex
         logger.error(
             "api_internal_error error_id=%s action=%s error_type=%s frames=%s",
@@ -218,14 +197,13 @@ def _safe_call(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
             _safe_action_code(type(erro).__name__),
             _sanitized_traceback(erro),
         )
-        return {
-            "error": (
-                "Ocorreu um erro interno. Informe o código "
-                f"{error_id} ao suporte."
-            ),
-            "type": "internal",
-            "error_id": error_id,
-        }
+        envelope = PublicFailure(
+            "INTERNAL_ERROR", "internal",
+            "Ocorreu um erro interno. Informe o código " +
+            error_id + " ao suporte.",
+        ).envelope()
+        envelope["error_id"] = error_id
+        return envelope
 
 
 # =========================================================
