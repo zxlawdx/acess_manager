@@ -45,6 +45,7 @@ from apps.zte_manager.services.profile_service import profile_service
 from apps.zte_manager.services.named_preset_service import named_preset_service
 from apps.zte_manager.services.tr069_profile_service import tr069_provider_profiles
 from apps.zte_manager.services.speed_test_service import SpeedTestService
+from apps.zte_manager.services.workstation_path_diagnostic import WorkstationPathDiagnostic
 from apps.zte_manager.services.support_diagnostic_service import (
     SupportDiagnosticOptions,
     SupportDiagnosticService,
@@ -2189,6 +2190,30 @@ class ZTEService:
             )
 
             return result
+
+    def workstation_diagnostic(self):
+        """PC connectivity comparison: independent of the ONT RLock.
+
+        If another client/session replaces this one while a socket probe is
+        running, never attribute that probe to the newly connected client.
+        """
+        session = self._history_session_id
+        result = WorkstationPathDiagnostic().run()
+        if session is not None and session == self._history_session_id:
+            try:
+                history_repository.save_snapshot(
+                    session, "workstation_diagnostic", {
+                        "source": "technician_workstation",
+                        "dns_ok": result["dns"]["ok"],
+                        "tcp_ok": result["tcp"]["ok"],
+                    },
+                )
+            except Exception as exc:
+                logger.warning(
+                    "workstation_history_write_failed error_type=%s",
+                    type(exc).__name__,
+                )
+        return result
 
     def generate_attendance(self, diagnostic_id=None):
         """Create a session-wide OS even if no full diagnostic was run.
