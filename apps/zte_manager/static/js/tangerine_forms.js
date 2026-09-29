@@ -25,6 +25,22 @@
   };
   const isPlain = value => value !== null && typeof value === "object" &&
     !Array.isArray(value);
+  // Never trust names returned by firmware profiles or entered dynamically.
+  const safeKey = key => typeof key === "string" && key.length > 0 &&
+    key.length <= 64 && !["__proto__","prototype","constructor"].includes(key);
+  function validateConfig(obj, depth=0) {
+    if(depth>12) throw new Error("Configuração possui níveis excessivos.");
+    if(Array.isArray(obj)) {
+      obj.forEach(value=>{if(value&&typeof value==="object")validateConfig(value,depth+1);});
+      return true;
+    }
+    if(!isPlain(obj))return true;
+    for(const [key,val] of Object.entries(obj)){
+      if(!safeKey(key))throw new Error("Parâmetro reservado na configuração.");
+      if(val&&typeof val==="object")validateConfig(val,depth+1);
+    }
+    return true;
+  }
   function labelFor(key) {
     if (Object.prototype.hasOwnProperty.call(NAMES, key)) return NAMES[key];
     return String(key).replace(/_/g," ").replace(/([a-z])([A-Z])/g,"$1 $2")
@@ -32,6 +48,9 @@
   }
   function assignPath(obj, path, value) {
     if (!path.length) return;
+    if(!isPlain(obj)||!path.every(safeKey))
+      throw new Error("Parâmetro inválido ou reservado.");
+    validateConfig(value);
     let current = obj;
     for (let i=0; i<path.length-1; i++) {
       const name = path[i];
@@ -50,7 +69,20 @@
     }
     return String(value);
   }
-  const API = Object.freeze({labelFor,assignPath,coerce,isPlain});
+  const API=Object.freeze({labelFor,assignPath,coerce,isPlain,safeKey,validateConfig});
+  const instances=new Map();
+  function assertValid(id) {
+    const instance=instances.get(id);
+    if(!instance)return true;
+    if(instance.pending.size) {
+      const msg="Revise os campos inválidos e conclua os parâmetros adicionados.";
+      instance.feedback.textContent=msg;
+      throw new Error(msg);
+    }
+    return true;
+  }
+  if(typeof window!=="undefined")
+    window.TangerineFormController=Object.freeze({assertValid});
   if (typeof window !== "undefined") window.TangerineFormsCore = API;
   function node(tag, cls, text) {
     const el = document.createElement(tag);
@@ -65,6 +97,7 @@
     try {
       initial = JSON.parse(source.value || "{}");
       if (!isPlain(initial)) throw Error("A configuração deve conter campos.");
+      validateConfig(initial);
     } catch {
       label.classList.add("am-source-invalid");
       return false;  // preserve the functional raw editor if initial data is invalid
@@ -82,9 +115,11 @@
     feedback.setAttribute("role","status");
     feedback.setAttribute("aria-live","polite");
     let counter=0;
+    const pending=new Set();
+    instances.set(source.id,{pending,feedback});
     function sync() {
       source.value=JSON.stringify(state,null,2);
-      feedback.textContent="";
+      if(!pending.size)feedback.textContent="";
       source.dispatchEvent(new Event("input",{bubbles:true}));
     }
     function addDynamic(container,path) {
@@ -92,6 +127,7 @@
       add.type="button";
       add.addEventListener("click",() => {
         const row=node("div","am-dynamic-field");
+        pending.add(row);
         const name=node("input");name.type="text";name.placeholder="Nome do parâmetro";
         name.setAttribute("aria-label","Nome do novo parâmetro");
         const type=node("select");
@@ -107,28 +143,40 @@
         function commit() {
           const nameValue=name.value.trim();
           const target=path.reduce((acc,key)=>acc[key],state);
-          if (savedName && savedName!==nameValue) delete target[savedName];
-          if (!/^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/.test(nameValue)) {
+          if (!/^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/.test(nameValue) ||
+              !safeKey(nameValue)) {
+            pending.add(row);
             feedback.textContent="Informe um nome de parâmetro válido antes de salvar.";
             return;
           }
           if (Object.prototype.hasOwnProperty.call(target,nameValue) && savedName!==nameValue) {
-            feedback.textContent="Este parâmetro já existe.";return;
+            pending.add(row);feedback.textContent="Este parâmetro já existe.";return;
           }
           let val;
-          try {val=type.value==="boolean"?(input.value==="true"):coerce(input.value,type.value);}
-          catch(e){feedback.textContent=e.message;return;}
-          target[nameValue]=val;savedName=nameValue;sync();
+          try {
+            if(type.value==="boolean" && !["true","false"].includes(input.value.trim().toLowerCase()))
+              throw new Error("Informe verdadeiro ou falso.");
+            val=type.value==="boolean"
+              ? input.value.trim().toLowerCase()==="true"
+              : coerce(input.value,type.value);
+          } catch(e){pending.add(row);feedback.textContent=e.message;return;}
+          if(savedName&&savedName!==nameValue)delete target[savedName];
+          target[nameValue]=val;savedName=nameValue;pending.delete(row);sync();
         }
         type.addEventListener("change",()=>{
           input.type=type.value==="number"?"number":"text";
           input.placeholder=type.value==="boolean"?"true ou false":"Valor";
+          pending.add(row);
           if (savedName) commit();
         });
+        name.addEventListener("input",()=>pending.add(row));
+        input.addEventListener("input",()=>pending.add(row));
         name.addEventListener("change",commit);
         input.addEventListener("change",commit);
         remove.addEventListener("click",()=>{
           if(savedName){const target=path.reduce((acc,key)=>acc[key],state);delete target[savedName];sync();}
+          pending.delete(row);
+          if(!pending.size)feedback.textContent="";
           row.remove();
         });
         row.append(name,type,input,remove);
@@ -165,7 +213,7 @@
           input.setAttribute("aria-label",labelFor(key));
           if (kind==="boolean") {
             input.addEventListener("change",()=>{
-              assignPath(state,[...path,key],input.checked);sync();
+              assignPath(state,[...path,key],input.checked);pending.delete(input);sync();
             });
           } else {
             input.addEventListener("change",()=>{
@@ -173,10 +221,11 @@
                 const next=Array.isArray(value)
                   ?input.value.split(",").map(item=>item.trim()).filter(Boolean)
                   :coerce(input.value,kind==="number"?"number":"string");
-                assignPath(state,[...path,key],next);sync();
-              } catch(error) {feedback.textContent=error.message;}
+                assignPath(state,[...path,key],next);pending.delete(input);sync();
+              } catch(error) {pending.add(input);feedback.textContent=error.message;}
             });
           }
+          if(kind!=="boolean")input.addEventListener("input",()=>pending.add(input));
           wrap.appendChild(input);container.appendChild(wrap);
         }
       }
