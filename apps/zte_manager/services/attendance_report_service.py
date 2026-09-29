@@ -255,6 +255,10 @@ class AttendanceReportService:
             "backup_configuration": "Backup da configuração",
             "automatic_diagnostic": "Coleta do diagnóstico automático",
             "firmware_diagnostic_get": "Inspeção de firmware realizada",
+            "workstation_diagnostic": (
+                "Verificação adicional do computador do técnico "
+                "(não representa a conexão do cliente)"
+            ),
         }
         for snapshot in timeline.get("snapshots", []):
             reason = snapshot.get("reason")
