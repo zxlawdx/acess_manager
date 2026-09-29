@@ -72,6 +72,10 @@
   // that a read-only firmware endpoint accepts write operations.
   const EDITORS=Object.freeze({
     wifi_advanced:["wifi","wifiRadios"],
+    wifi_ssids:["wifi","wifiNetworks"],
+    wifi_radios:["wifi","wifiRadios"],
+    wifi_radio_advanced:["wifi","wifiRadios"],
+    dns:["profiles","profileDns4_1"],
     wifi_schedule:["wifi","wifiScheduleControl"],
     band_steering:["wifi","bandSteeringControl"],
     dhcp_basic:["advanced","dhcp","dhcpBasicForm"],
