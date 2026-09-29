@@ -1820,7 +1820,7 @@ function renderFirmwareDiagnosticOptions() {
         }
     }
 
-    const grid = panel.querySelector("#firmwareDiagnosticChoices");
+
     const status = panel.querySelector("#firmwareDiagnosticStatus");
     const confirmed = firmwareDiagnosticState.options.filter(item => item.confirmed);
     status.textContent = !ontConnected
@@ -1828,7 +1828,7 @@ function renderFirmwareDiagnosticOptions() {
         : (firmwareDiagnosticState.model || "ZTE") + " · " +
           confirmed.length + " recurso(s) confirmados · " +
           (firmwareDiagnosticState.options.length - confirmed.length) +
-          " indisponíveis ou não testados.";
+          " ainda não confirmados.";
 
     const groupOf = feature => {
         if (/wifi|wps|band_steering|mesh/i.test(feature)) return "Wi-Fi e Mesh";
@@ -1836,50 +1836,99 @@ function renderFirmwareDiagnosticOptions() {
         if (/device|pon|optical|tr069|voip/i.test(feature)) return "Equipamento e GPON";
         return "Segurança e diagnóstico";
     };
-    const groups = new Map();
-    firmwareDiagnosticState.options.forEach(item => {
-        const group = groupOf(item.name);
-        if (!groups.has(group)) groups.set(group, []);
-        groups.get(group).push(item);
-    });
+    // Only verified choices are immediately actionable. Unconfirmed
+    // candidates belong to a collapsed, readable inspection list; a failed
+    // probe is never evidence that firmware lacks the capability.
+    const grid = panel.querySelector("#firmwareDiagnosticChoices");
+    const previousExpanded = panel.querySelector("#firmwareDiagnosticPending")?.open === true;
     grid.replaceChildren();
-    groups.forEach((items, title) => {
-        const fieldset = document.createElement("fieldset");
-        fieldset.className = "adaptive-choice-group";
-        const legend = document.createElement("legend");
-        legend.textContent = title;
-        fieldset.append(legend);
-        const choices = document.createElement("div");
-        choices.className = "adaptive-choice-grid";
-        for (const item of items) {
-            const label = document.createElement("label");
-            label.className = "adaptive-choice";
-            const input = document.createElement("input");
-            input.type = "checkbox";
-            input.value = item.name;
-            input.disabled = !item.confirmed;
-            input.checked = item.confirmed &&
-                firmwareDiagnosticState.selected.has(item.name);
-            input.addEventListener("change", () => {
-                if (input.checked) firmwareDiagnosticState.selected.add(item.name);
-                else firmwareDiagnosticState.selected.delete(item.name);
-            });
-            const content = document.createElement("div");
-            const name = document.createElement("span");
-            name.textContent = item.label ||
-                FIRMWARE_DIAGNOSTIC_LABELS[item.name] || item.name;
-            const note = document.createElement("small");
-            note.className = "adaptive-choice-note";
-            note.textContent = item.confirmed ? "Leitura confirmada" :
-                (firmwareDiagnosticState.scanComplete
-                    ? "Não respondeu neste firmware" : "Aguardando verificação");
-            content.append(name, note);
-            label.append(input, content);
-            choices.append(label);
+
+    function groupItems(entries, interactive) {
+        const groups = new Map();
+        for (const item of entries) {
+            const category = groupOf(item.name);
+            if (!groups.has(category)) groups.set(category, []);
+            groups.get(category).push(item);
         }
-        fieldset.append(choices);
-        grid.append(fieldset);
-    });
+        const nodes = [];
+        groups.forEach((items, title) => {
+            const fieldset = document.createElement("fieldset");
+            fieldset.className = "adaptive-choice-group";
+            const legend = document.createElement("legend");
+            legend.textContent = title;
+            fieldset.append(legend);
+            const choices = document.createElement("div");
+            choices.className = "adaptive-choice-grid";
+            for (const item of items) {
+                const caption = FIRMWARE_DIAGNOSTIC_LABELS[item.name] ||
+                    // Avoid exposing unvetted driver names in operator UI.
+                    (/^[\\p{L}\\p{N} /()-]{3,70}$/u.test(item.label || "")
+                        ? item.label : "Recurso do equipamento");
+                if (!interactive) {
+                    const row = document.createElement("div");
+                    row.className = "am-pending-feature";
+                    const label = document.createElement("strong");
+                    label.textContent = caption;
+                    const reason = document.createElement("small");
+                    reason.textContent = firmwareDiagnosticState.scanComplete
+                        ? "Leitura não confirmada nesta sessão"
+                        : "Aguardando verificação";
+                    row.append(label, reason);
+                    choices.append(row);
+                    continue;
+                }
+                const label = document.createElement("label");
+                label.className = "adaptive-choice";
+                const input = document.createElement("input");
+                input.type = "checkbox";
+                input.value = item.name;
+                input.checked = firmwareDiagnosticState.selected.has(item.name);
+                input.addEventListener("change", () => {
+                    if (input.checked) firmwareDiagnosticState.selected.add(item.name);
+                    else firmwareDiagnosticState.selected.delete(item.name);
+                });
+                const content = document.createElement("div");
+                const name = document.createElement("span");
+                name.textContent = caption;
+                const note = document.createElement("small");
+                note.className = "adaptive-choice-note";
+                note.textContent = "Leitura confirmada";
+                content.append(name, note);
+                label.append(input, content);
+                choices.append(label);
+            }
+            fieldset.append(choices);
+            nodes.push(fieldset);
+        });
+        return nodes;
+    }
+
+    const pending = firmwareDiagnosticState.options.filter(item => !item.confirmed);
+    if (confirmed.length) grid.append(...groupItems(confirmed, true));
+    else {
+        const empty = document.createElement("p");
+        empty.className = "am-features-empty";
+        empty.textContent = "Nenhuma funcionalidade foi confirmada ainda. " +
+            "Use Verificar recursos disponíveis. As demais ferramentas " +
+            "da sessão continuam funcionando independentemente.";
+        grid.append(empty);
+    }
+    if (pending.length) {
+        const more = document.createElement("details");
+        more.id = "firmwareDiagnosticPending";
+        more.className = "am-pending-features";
+        more.open = previousExpanded;
+        const caption = document.createElement("summary");
+        caption.textContent = pending.length + " recurso(s) ainda não confirmados" +
+            " — mostrar detalhes";
+        more.append(caption);
+        const pendingGrid = document.createElement("div");
+        pendingGrid.className = "am-pending-grid";
+        pendingGrid.append(...groupItems(pending, false));
+        more.append(pendingGrid);
+        grid.append(more);
+    }
+
     panel.querySelector("#firmwareDiagnosticRun").disabled =
         !confirmed.length || firmwareDiagnosticState.probeRunning;
     panel.querySelector("#firmwareDiagnosticDetect").disabled =
