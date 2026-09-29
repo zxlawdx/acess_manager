@@ -20,7 +20,7 @@
         document.documentElement.dataset.sidebarCollapsed =
             String(localStorage.getItem("access-manager-sidebar-collapsed") === "true");
         var savedZoom = Number(localStorage.getItem("zteAutomatic.uiZoom")) || 1;
-        document.documentElement.style.setProperty("--am-zoom",
+        document.documentElement.style.setProperty("--am-font-scale",
             String(Math.min(1.6, Math.max(.8, savedZoom))));
     } catch (e) {
         document.documentElement.dataset.sidebarCollapsed = "false";
@@ -45,6 +45,7 @@
 <link rel="stylesheet" href="{{ static('zte_manager/css/tangerine_workflows.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/components/topology.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/components/firmware_inspector.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/components/shell_layout.css') }}">
 
 <div class="app-shell">
 
@@ -201,10 +202,10 @@
                     </select>
                 </label>
                 <button id="themeToggle" class="console-action hidden" type="button" aria-label="Alternar tema">Alternar tema</button>
-                <div class="zoom-control" title="Zoom da interface: Ctrl + / Ctrl - / Ctrl 0">
-                    <button id="zoomOutButton" class="zoom-button" type="button" aria-label="Diminuir interface">A−</button>
+                <div class="zoom-control" role="group" aria-label="Tamanho do texto" title="Tamanho do texto: Ctrl + / Ctrl - / Ctrl 0">
+                    <button id="zoomOutButton" class="zoom-button" type="button" aria-label="Diminuir tamanho do texto">A−</button>
                     <span id="zoomLevel" class="zoom-level">100%</span>
-                    <button id="zoomInButton" class="zoom-button" type="button" aria-label="Aumentar interface">A+</button>
+                    <button id="zoomInButton" class="zoom-button" type="button" aria-label="Aumentar tamanho do texto">A+</button>
                 </div>
                 <div id="topDeviceChip" class="device-chip hidden"><span class="material-symbols-outlined">router</span><div><strong id="topDeviceModel">ZTE</strong><span id="topDeviceMeta" class="mono">-</span></div></div>
                 <button id="refreshButton" class="icon-button hidden" type="button" title="Atualizar dados" aria-label="Atualizar dados"><span class="refresh-glyph" aria-hidden="true">↻</span></button>
@@ -734,11 +735,11 @@
             <section id="page-supportDiagnostic" class="page">
                 <div class="section-intro am-section-intro">
                     <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">monitor_heart</span>
-                        <span class="section-kicker">AUTOMATIC SUPPORT DIAGNOSTICS</span>
-                        <h2>Diagnóstico automático do atendimento</h2>
+                        <span class="section-kicker">DIAGNÓSTICO / ATENDIMENTO</span>
+                        <h2>Diagnóstico de conexão</h2>
                         <p>
-                            Cruza GPON, WAN, DNS, LAN, clientes, RF, canais vizinhos e throughput.
-                            Alterações automáticas são auditadas e revalidadas antes do resumo final.
+                            Verifique a conexão, selecione as análises necessárias e registre o atendimento.
+                            Qualquer alteração exige confirmação do resultado.
                         </p>
                     </div>
                     <span id="supportDiagnosticBadge" class="badge">Pronto</span>
@@ -859,10 +860,9 @@
 
                     <div id="supportDiagnosticOutput" class="support-output">
                         <div class="support-empty">
-                            <strong>Nenhum diagnóstico completo executado.</strong>
+                            <strong>Pronto para diagnosticar</strong>
                             <span>
-                                A triagem do Dashboard não altera configurações nem executa o Speed Test pesado.
-                                Use o botão acima para investigar o atendimento atual.
+                                Escolha as análises acima e inicie o diagnóstico quando necessário.
                             </span>
                         </div>
                     </div>
