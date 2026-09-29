@@ -150,10 +150,34 @@ class AuditedOperation:
                     _safe_code(operation), type(exc).__name__,
                 )
 
+        # Preserve the actual stages of the saved default profile for the
+        # attendance report. Store *only fixed stage names and booleans*, not
+        # POST payloads, credentials or raw firmware response text.
+        history_after = after if after_ok else None
+        if operation == "profile_apply" and isinstance(value, dict):
+            public_steps = []
+            permitted = {
+                "Wi-Fi 2.4GHz": "Wi-Fi 2,4 GHz",
+                "Wi-Fi 5GHz": "Wi-Fi 5 GHz",
+                "DNS": "Servidores DNS",
+            }
+            for step in value.get("steps", []):
+                if not isinstance(step, dict) or step.get("name") not in permitted:
+                    continue
+                public_steps.append({
+                    "name": permitted[step["name"]],
+                    "accepted": step.get("success") is True,
+                })
+            if public_steps:
+                history_after = (
+                    {**history_after, "_profile_steps": public_steps}
+                    if isinstance(history_after, dict)
+                    else {"_profile_steps": public_steps}
+                )
         self._record(
             session_id=session_id, operation=operation, target=target,
             before=before if before_ok else None,
-            after=after if after_ok else None,
+            after=history_after,
             outcome=outcome,
             message=None if outcome is ChangeOutcome.VERIFIED else "outcome:" + outcome.value,
         )
