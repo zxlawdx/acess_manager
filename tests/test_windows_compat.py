@@ -85,14 +85,22 @@ class WindowsCompatibilityTests(unittest.TestCase):
         self.assertIn('"/desktop/capabilities"', clipboard_js)
         self.assertNotIn("execCommand", clipboard_js)
 
-    def test_windows_layout_scopes_workspace(self):
-        css = (
+    def test_windows_layout_uses_grid_instead_of_width_subtraction(self):
+        telecom = (
             ROOT / "apps" / "zte_manager" / "static"
             / "css" / "telecom_console.css"
         ).read_text(encoding="utf-8")
+        shell = (
+            ROOT / "apps" / "zte_manager" / "static"
+            / "css" / "components" / "shell_layout.css"
+        ).read_text(encoding="utf-8")
 
-        self.assertIn("width: calc(100% - var(--sidebar-width))", css)
-        self.assertIn("flex-wrap: wrap", css)
+        self.assertNotIn(
+            "width: calc(100% - var(--sidebar-width))", telecom
+        )
+        self.assertIn("grid-template-columns:var(--am-shell-column)", shell)
+        self.assertIn("overflow-y:auto", shell)
+        self.assertIn("flex-wrap: wrap", telecom)
 
 
 if __name__ == "__main__":
