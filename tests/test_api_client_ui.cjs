@@ -17,7 +17,7 @@ function harness(responder){
     console,AbortController,Date,
     fetch:responder,window:{},API_BASE:"/api",
     pendingApiRequests:0,explicitBusy:false,clickFeedbackUntil:0,
-    lastActionText:"",renderBusyOverlay(){},
+    lastActionText:"",overlayRenders:0,renderBusyOverlay(){context.overlayRenders++;},
     updateRequestStatus(message){updates.push(message||"");},
     clearTimeout(){},setTimeout(){return 1;},
     document:{getElementById(){return {classList:{contains(){return false}}};},
@@ -33,6 +33,21 @@ const response=(status,body,contentType="application/json")=>({
   ok:status>=200&&status<300,status,
   headers:{get(key){return key==="content-type"?contentType:null;}},
   async json(){return body;},async text(){return String(body);}
+});
+
+test("silent local queries do not occupy busy overlay or global error badge",async()=>{
+  const h=harness(async()=>response(200,{devices:[]}));
+  const data=await h.request("/management/inventory?limit=5",
+    {expected:"object",silent:true});
+  assert.deepEqual(data,{devices:[]});
+  assert.equal(h.context.pendingApiRequests,0);
+  assert.equal(h.context.overlayRenders,0);
+  assert.equal(h.updates.length,0);
+  const failed=harness(async()=>response(503,"unavailable","text/html"));
+  await assert.rejects(failed.request("/management/inventory",
+    {expected:"object",silent:true}),/erro interno|Erro interno|ocorreu um erro/i);
+  assert.equal(failed.events.length,0);
+  assert.equal(failed.updates.length,0);
 });
 
 test("true success and expected-object schema pass unchanged",async()=>{
