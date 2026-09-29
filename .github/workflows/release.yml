@@ -65,6 +65,8 @@ jobs:
           node --check apps/zte_manager/static/js/features/history.js
           node --test tests/test_history_view.cjs
           node --test tests/test_structured_forms.cjs
+          node --check apps/zte_manager/static/js/features/connection_inventory.js
+          node --test tests/test_connection_inventory.cjs
           node --check apps/zte_manager/static/js/tangerine_shell.js
           node --test tests/test_api_client_ui.cjs tests/test_advanced_workbench.cjs
           node --check apps/zte_manager/static/js/tangerine_forms.js
@@ -162,6 +164,7 @@ jobs:
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/core/api_errors.js
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/workbench_tabs.js
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/features/history.js
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/features/connection_inventory.js
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/tangerine_forms.js
 
       - name: Package Linux build
