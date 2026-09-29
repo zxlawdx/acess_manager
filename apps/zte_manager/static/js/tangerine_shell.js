@@ -14,7 +14,7 @@
       preferredCollapsed = localStorage.getItem(STORAGE) === "true";
     } catch {}
     const compactMedia = typeof window !== "undefined" && window.matchMedia
-      ? window.matchMedia("(max-width: 920px)") : null;
+      ? window.matchMedia("(max-width: 930px)") : null;
     const isCompact = () => Boolean(compactMedia?.matches);
     let backdrop = null;
     if (compactMedia && document.createElement && document.body?.appendChild) {
