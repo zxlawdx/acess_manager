@@ -400,17 +400,17 @@ function setConnectionStatus(connected) {
 
     if (consoleState) {
         consoleState.textContent = connected
-            ? "SESSION ACTIVE"
-            : "SESSION OFFLINE";
+            ? "SESSÃO ATIVA"
+            : "DESCONECTADO";
     }
 
     if (consoleHost) {
         consoleHost.textContent = connected
             ? (
                 currentHost
-                || "TARGET CONNECTED"
+                || "EQUIPAMENTO CONECTADO"
             )
-            : "NO TARGET";
+            : "SEM EQUIPAMENTO";
     }
 
     document.body.classList.toggle(
