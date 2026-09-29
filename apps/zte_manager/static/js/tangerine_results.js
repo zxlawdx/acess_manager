@@ -8,7 +8,13 @@
   model:"Modelo",firmware:"Firmware",host:"Equipamento",device_id:"Identificador",
   count:"Quantidade",name:"Nome",type:"Tipo",created_at:"Horário",
   wan:"WAN",dns:"DNS",wifi:"Wi-Fi",connected:"Conexão",available:"Disponível",
-  operation:"Operação",verified:"Verificado",pending:"Pendente"};
+  operation:"Operação",verified:"Verificado",pending:"Pendente",
+  audit_outcome:"Resultado da verificação"};
+ const OUTCOMES=Object.freeze({
+   verified:"Alteração confirmada",accepted:"Solicitação recebida",
+   uncertain:"Resultado não confirmado",failed:"Operação não concluída",
+   attempted:"Aguardando confirmação"
+ });
  const label=name=>LABELS[name]||String(name).replace(/_/g," ").replace(/^./,x=>x.toUpperCase());
  function sanitize(value,depth=0) {
    if(value===null||value===undefined)return "Não informado";
@@ -17,7 +23,9 @@
    if(typeof value==="object"){
       const safe={};
       for(const [key,val] of Object.entries(value).slice(0,50)){
-       if(!PRIVATE.test(key))safe[key]=sanitize(val,depth+1);
+       if(!PRIVATE.test(key))safe[key]=key==="audit_outcome"
+         ?(OUTCOMES[String(val)]||"Confirmação indisponível")
+         :sanitize(val,depth+1);
       }
       return safe;
    }
@@ -80,7 +88,10 @@
     }
     const box=node("section","am-operator-result");
     box.setAttribute("aria-label","Resultado da operação");
-    box.appendChild(node("h4","am-result-title",value?.error?"Operação não concluída":"Resultado da consulta"));
+    const outcome=OUTCOMES[value?.audit_outcome] ||
+      (value?.success===true?"Solicitação recebida":"Resultado da consulta");
+    box.appendChild(node("h4","am-result-title",value?.error?
+      "Operação não concluída":outcome));
     if(value?.error){
       const safe=typeof window.normalizeApiErrorMessage==="function"
        ?window.normalizeApiErrorMessage(value.error,0,value.type||"")
