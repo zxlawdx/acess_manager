@@ -191,32 +191,59 @@
         mount.classList.add("adaptive-report");
         mount.replaceChildren();
         const sections = Object.entries(report.sections || {});
-        const ok = sections.filter(([, section]) => section?.available === true).length;
+        const confirmed = sections.filter(([, item]) => item?.available === true);
+        const count = confirmed.length;
+        if (report.probe_only) {
+            // Probing identifies available readers, not data collection.
+            // The selectable diagnostic options already show every resource:
+            // do not duplicate 12–25 tall empty cards or claim a completed
+            // diagnostic after a successful capability probe.
+            const summary = el("section", "adaptive-probe-result");
+            summary.setAttribute("role", "status");
+            summary.append(
+                el("span", "adaptive-eyebrow", "IDENTIFICAÇÃO CONCLUÍDA"),
+                el("strong", "", count + " de " + sections.length +
+                    " funcionalidades responderam nesta verificação."),
+                el("p", "", "Selecione os recursos confirmados acima e execute " +
+                    "a coleta para consultar dados reais. Uma resposta ausente " +
+                    "não demonstra incompatibilidade do firmware.")
+            );
+            if (options.progress)
+                summary.append(el("small", "adaptive-progress", options.progress));
+            mount.append(summary);
+            return;
+        }
         const hero = el("header", "adaptive-summary");
         const copy = el("div");
-        copy.append(el("span", "adaptive-eyebrow", "DIAGNÓSTICO · SOMENTE LEITURA"));
-        copy.append(el("h2", "", report.model || "ZTE"));
-        copy.append(el("p", "", `${ok} de ${sections.length} seções com leitura confirmada`));
+        copy.append(el("span", "adaptive-eyebrow", "LEITURAS DO EQUIPAMENTO"));
+        copy.append(el("h2", "", report.model || "Equipamento conectado"));
+        copy.append(el("p", "", count + " de " + sections.length +
+            " recursos consultados com resposta confirmada"));
         hero.append(copy);
         const score = el("div", "adaptive-score");
-        score.append(el("strong", "", String(ok)));
-        score.append(el("small", "", "seções lidas"));
+        score.append(el("strong", "", String(count)));
+        score.append(el("small", "", "consultas confirmadas"));
         hero.append(score);
         mount.append(hero);
-        if (options.progress) mount.append(
-            el("p", "adaptive-progress", options.progress)
-        );
+        if (options.progress)
+            mount.append(el("p", "adaptive-progress", options.progress));
         const cards = el("div", "adaptive-grid");
         if (!sections.length) cards.append(el("p", "adaptive-empty",
-            "Nenhuma leitura concluída. Selecione recursos e inicie o diagnóstico."));
+            "Nenhuma leitura concluída. Selecione recursos e inicie a coleta."));
         sections.forEach(([key, value]) => cards.append(makeCard(key, value)));
         mount.append(cards);
         const errors = Object.entries(report.errors || {});
         if (errors.length) {
             const details = el("details", "adaptive-errors");
-            details.append(el("summary", "", errors.length + " avisos técnicos"));
-            errors.forEach(([key, value]) =>
-                details.append(el("p", "", pretty(key) + ": " + String(value).slice(0, 160))));
+            details.append(el("summary", "", errors.length +
+                " leitura(s) sem confirmação"));
+            for (const [key, value] of errors) {
+                // Internal URLs, parser errors and route names belong in
+                // private logs, never in the field operator's view.
+                const detail = el("p", "", pretty(key) +
+                    ": consulta indisponível no momento.");
+                details.append(detail);
+            }
             mount.append(details);
         }
     }
