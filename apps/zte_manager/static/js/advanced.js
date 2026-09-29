@@ -844,16 +844,16 @@ async function discoveryRequest(endpoint, {
         });
         if (!data || typeof data !== "object" || Array.isArray(data)) {
             throw new Error(
-                "O servidor devolveu um formato inesperado para " +
-                endpoint + ". Verifique se o app instalado é a versão atual."
+                "Não foi possível interpretar os recursos retornados pelo equipamento. " +
+                "Confirme a versão instalada e tente novamente."
             );
         }
         return data;
     } catch (error) {
         if (error?.name === "AbortError") {
             throw new Error(
-                `A consulta ${endpoint} passou de ${Math.round(timeoutMs / 1000)}s. ` +
-                "A conexão local continua ativa; aguarde antes de repetir."
+                `A consulta excedeu ${Math.round(timeoutMs / 1000)} segundos. ` +
+                "A sessão pode continuar ativa; aguarde antes de repetir."
             );
         }
         throw error;
@@ -2382,7 +2382,7 @@ function featureUnavailable(
     return `
         <div class="operation-row">
             <strong>${escapeHtml(title)} indisponível</strong>
-            <p>${escapeHtml(message || "O firmware/login não expôs este recurso.")}</p>
+            <p>${escapeHtml(normalizeApiErrorMessage(message || "O firmware ou login não oferece este recurso."))}</p>
         </div>
     `;
 }
