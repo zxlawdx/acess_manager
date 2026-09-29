@@ -487,7 +487,7 @@ function populateFirmwareSelector(features) {
     const previous = select.value;
     select.replaceChildren();
     const catalog = Object.entries(features || {}).sort((a, b) => {
-        const operator = window.AccessManagerInspector;
+        const operator = globalThis.AccessManagerInspector;
         const left = operator?.label(a[0], a[1]?.label) || a[1]?.label || a[0];
         const right = operator?.label(b[0], b[1]?.label) || b[1]?.label || b[0];
         return left.localeCompare(right, "pt-BR");
@@ -500,7 +500,7 @@ function populateFirmwareSelector(features) {
     for (const [feature, spec] of catalog) {
         const option = document.createElement("option");
         option.value = feature;
-        option.textContent = window.AccessManagerInspector?.label(feature, spec.label) ||
+        option.textContent = globalThis.AccessManagerInspector?.label(feature, spec.label) ||
             "Funcionalidade do equipamento";
         select.appendChild(option);
     }
@@ -703,7 +703,7 @@ function renderTrackerDiscovery(data) {
                 : "Documentado, ainda não testado";
         return `<article class="capability-card">
             <div class="capability-head"><div>
-                <strong>${escapeHtml(window.AccessManagerInspector?.label(item.feature, item.label) || "Funcionalidade do equipamento")}</strong>
+                <strong>${escapeHtml(globalThis.AccessManagerInspector?.label(item.feature, item.label) || "Funcionalidade do equipamento")}</strong>
                 <p>${escapeHtml(label)}</p>
             </div><i class="capability-state ${confirmed ? "available" : absent ? "unavailable" : ""}"></i></div>
             <div class="operation-meta"><span>IDENTIFICAÇÃO</span><span>Leitura vinculada à sessão atual</span></div>
@@ -1294,8 +1294,8 @@ async function exportFeatureShapes() {
     // O tracker já entregou campos/contagens sem valores pessoais. Isto
     // também funciona quando não existe um adaptador ThinkLua nativo.
     const drawMap = () => {
-        if (window.AccessManagerInspector?.renderMap) {
-            window.AccessManagerInspector.renderMap(report, output);
+        if (globalThis.AccessManagerInspector?.renderMap) {
+            globalThis.AccessManagerInspector.renderMap(report, output);
         } else {
             output.textContent = "A visualização dos recursos não está disponível nesta instalação.";
         }
@@ -1371,7 +1371,7 @@ function renderCapabilities(
                     <article class="capability-card">
                         <div class="capability-head">
                             <div>
-                                <strong>${escapeHtml(window.AccessManagerInspector?.label(key, spec.label) || "Funcionalidade do equipamento")}</strong>
+                                <strong>${escapeHtml(globalThis.AccessManagerInspector?.label(key, spec.label) || "Funcionalidade do equipamento")}</strong>
                                 <p>${escapeHtml(stateText)}</p>
                             </div>
                             <i class="capability-state ${stateClass}"></i>
@@ -2171,10 +2171,10 @@ async function readFirmwareFeature(event) {
             "/features/read?feature=" + encodeURIComponent(feature),
             {expected:"object"}
         );
-        if (!window.AccessManagerInspector) {
+        if (!globalThis.AccessManagerInspector) {
             throw new Error("O componente de inspeção não foi carregado.");
         }
-        window.AccessManagerInspector.render(feature, data, output);
+        globalThis.AccessManagerInspector.render(feature, data, output);
     } catch (error) {
         if (output) {
             output.replaceChildren();
