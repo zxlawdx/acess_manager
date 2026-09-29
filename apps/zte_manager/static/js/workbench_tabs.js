@@ -105,7 +105,11 @@
     const advanced = document.getElementById("page-advanced");
     const api = setupWorkbench(advanced);
     setupClients(document.getElementById("page-clients"));
-    if (typeof window !== "undefined") window.AccessManagerWorkbench = api;
+    const diagnostics = setupWorkbench(document.getElementById("page-diagnostics"));
+    if (typeof window !== "undefined") {
+      window.AccessManagerWorkbench = api;
+      window.AccessManagerDiagnosticsTabs = diagnostics;
+    }
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init, {once:true});
