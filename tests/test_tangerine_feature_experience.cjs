@@ -24,6 +24,7 @@ function fakeNode(tag="div"){
     replaceChildren(...nodes){this.children=[...nodes];},
     querySelectorAll(){return [];},
     focus(){this.focused=true;},
+    matches(selector){return selector.split(",").some(item=>item.trim().toUpperCase()===this.tagName);},
     scrollIntoView(){this.scrolled=true;}
   };
 }
