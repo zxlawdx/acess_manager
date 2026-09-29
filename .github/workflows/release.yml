@@ -68,6 +68,10 @@ jobs:
           node --check apps/zte_manager/static/js/features/connection_inventory.js
           node --check apps/zte_manager/static/js/features/device_topology.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
+          node --check apps/zte_manager/static/js/features/provider_diagnostics.js
+          node --check apps/zte_manager/static/js/support_diagnostics.js
+          node --check apps/zte_manager/static/js/adaptive_firmware.js
+          node --test tests/test_provider_diagnostics_ui.cjs
           node --test tests/test_tangerine_feature_experience.cjs
           node --test tests/test_operator_outcomes.cjs
           node --test tests/test_shell_and_support_layout.cjs
@@ -179,6 +183,8 @@ jobs:
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/components/topology.css
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/components/firmware_inspector.css
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/components/shell_layout.css
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/components/provider_diagnostics.css
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/features/provider_diagnostics.js
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/tangerine_forms.js
 
       - name: Package Linux build
@@ -243,6 +249,8 @@ jobs:
           if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\features\firmware_inspector.js")) { throw "Inspetor nao encontrado no bundle Windows" }
           if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\css\components\topology.css")) { throw "Estilos do grafo nao encontrados no bundle Windows" }
           if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\css\components\shell_layout.css")) { throw "Layout responsivo nao encontrado no bundle Windows" }
+          if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\css\components\provider_diagnostics.css")) { throw "Layout de diagnostico nao encontrado no bundle Windows" }
+          if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\features\provider_diagnostics.js")) { throw "Modulo de diagnostico ISP nao encontrado no bundle Windows" }
           Compress-Archive -Path "dist\ZTEAutomatic" -DestinationPath $zip -Force
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256"
