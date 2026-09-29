@@ -21,7 +21,7 @@ _SECRET_MARKERS = (
 )
 _INLINE_SECRET = re.compile(
     r"https?://|(?:password|passwd|secret|token|cookie|authorization|"
-    r"credential)\\s*[:=]|\\b[a-z0-9+/]{44,}={0,2}\\b",
+    r"credential)\s*[:=]|\b[a-z0-9+/]{44,}={0,2}\b",
     re.IGNORECASE,
 )
 
