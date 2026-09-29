@@ -74,7 +74,7 @@
     editor.setAttribute("aria-label", "Configuração por formulário");
     const head = node("div","am-form-editor-head");
     const title = label.querySelector("span");
-    head.appendChild(node("strong","",title?.textContent?.replace(/\\bJSON\\b/g,"").trim() || "Parâmetros"));
+    head.appendChild(node("strong","",(title?.textContent || "").replace(/JSON/gi,"").trim() || "Parâmetros"));
     head.appendChild(node("small","", "Preencha os campos; o aplicativo converterá os valores automaticamente."));
     editor.appendChild(head);
     const content = node("div","am-form-editor-content");

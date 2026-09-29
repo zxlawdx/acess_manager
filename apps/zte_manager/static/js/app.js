@@ -30,7 +30,7 @@ function normalizeApiErrorMessage(error, status = 0, type = "") {
     }
     if (type === "internal") {
         // Internal correlation IDs are the only safe technical identifiers to display.
-        const match = value.match(/\\b[0-9a-f]{32}\\b/i);
+        const match = value.match(/[0-9a-f]{32}/i);
         return match ? "Ocorreu um erro interno. Informe o código "+match[0]+" ao suporte." :
             "Ocorreu um erro interno. Tente novamente ou consulte o suporte.";
     }

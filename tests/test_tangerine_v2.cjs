@@ -57,5 +57,5 @@ test("native Wi-Fi, WAN and radio cards are explicitly redesigned",()=>{
   assert.ok(native.includes(name),name+" must be emitted by native renderer");
   assert.ok(cards.includes("."+name),name+" must have native component styles");
  }
- assert.match(html,/zte_manager\\/css\\/tangerine_cards\\.css/);
+ assert.ok(html.includes("zte_manager/css/tangerine_cards.css"));
 });
