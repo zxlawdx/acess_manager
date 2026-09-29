@@ -34,7 +34,7 @@ test("UI has ten page-specific visual headers, preserves actual session IDs",()=
  const sections=["wifi","wan","clients","supportDiagnostic","diagnostics",
  "profiles","tr069","advanced","device","management"];
  for(const id of sections){
-   const start=html.indexOf('<section id="page-'+id+'" class="page">');
+   const start=html.indexOf('<section id="page-'+id+'" class="page');
    assert.ok(start>0,id);
    const next=html.indexOf('<section id="page-',start+10);
    const chunk=html.slice(start,next<0?undefined:next);
