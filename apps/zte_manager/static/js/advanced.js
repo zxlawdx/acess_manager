@@ -507,11 +507,11 @@ function renderNativeDetection(catalog, results, model) {
         return {
             feature, label: spec.label || feature,
             status: !result || result.not_tested
-                ? "not_tested"
-                : result.available ? "detected" : "not_confirmed",
-            // Do not display raw HTTP/firmware error bodies.
+                ? "not_tested" : result.available ? "detected" :
+                  result.status === "inconclusive" ? "inconclusive" : "not_confirmed",
+            // A failed request is NOT evidence of an absent firmware feature.
             reason: result && !result.available && !result.not_tested
-                ? "unexpected_firmware_response" : undefined
+                ? (result.reason || "probe_inconclusive") : undefined
         };
     });
     const checked = rows.filter(row => row.status !== "not_tested").length;
@@ -648,17 +648,20 @@ function renderTrackerDiscovery(data) {
     ).length;
     const model = data.model || trackerDetectedModel || "Não identificado";
     status.textContent = data.reason ? normalizeApiErrorMessage(data.reason) :
-        `${model} • ${found} confirmado(s), ${notConfirmed} indisponível(is), ${features.length - found - notConfirmed} ainda não testado(s)`;
+        `${model} • ${found} confirmado(s), ${notConfirmed} não confirmado(s), ${features.length - found - notConfirmed} pendente(s)`;
     grid.innerHTML = features.length ? features.map(item => {
         const confirmed = item.status === "detected";
-        const unconfirmed = item.status === "not_confirmed";
+        const unconfirmed = item.status === "not_confirmed" || item.status === "inconclusive";
+        const absent = item.reason === "confirmed_absence";
         const reasonLabels = {
             session_expired: "Sessão expirada — reconecte",
             login_page_instead_of_data: "Firmware retornou página de login",
             invalid_xml: "Resposta do menu em formato inesperado",
             unexpected_firmware_response: "Objeto esperado não retornado",
             network_timeout: "O equipamento não respondeu a tempo",
-            not_exposed_or_permission_denied: "Menu ausente ou permissão insuficiente"
+            not_exposed_or_permission_denied: "O menu não pôde ser confirmado",
+            probe_inconclusive: "Sondagem inconclusiva. Revise a sessão e tente novamente.",
+            confirmed_absence: "Firmware confirmou ausência do recurso"
         };
         const label = confirmed ? "Confirmado neste equipamento"
             : unconfirmed
@@ -668,7 +671,7 @@ function renderTrackerDiscovery(data) {
             <div class="capability-head"><div>
                 <strong>${escapeHtml(item.label || item.feature)}</strong>
                 <p>${escapeHtml(label)}</p>
-            </div><i class="capability-state ${confirmed ? "available" : unconfirmed ? "unavailable" : ""}"></i></div>
+            </div><i class="capability-state ${confirmed ? "available" : absent ? "unavailable" : ""}"></i></div>
             <div class="operation-meta"><span>LEITURA</span><span>Perfil do equipamento: ${escapeHtml(data.family || "não identificado")}</span></div>
         </article>`;
     }).join("") : '<p class="muted">Nenhum endpoint documentado confirmado para este perfil.</p>';
@@ -1321,16 +1324,14 @@ function renderCapabilities(
                     key
                 );
 
-                const stateClass = state
-                    ? (state.not_tested ? "" : (
-                        state.available ? "available" : "unavailable"
-                    ))
-                    : "";
-
-                const stateText = state
-                    ? (state.not_tested ? "Não concluído (timeout)" :
-                        state.available ? "Confirmado" : "Não confirmado")
-                    : "Não testado";
+                const stateClass = state?.available ? "available" :
+                    state?.status === "absent" ? "unavailable" : "";
+                const stateText = !state ? "Não testado" :
+                    state.available ? "Confirmado nesta sessão" :
+                    state.status === "absent" ? "Ausência confirmada" :
+                    state.status === "inconclusive" ? "Sondagem inconclusiva" :
+                    state.probeable === false ? "Sem adaptador de leitura; não verificado" :
+                    "Não testado";
 
                 return `
                     <article class="capability-card">
