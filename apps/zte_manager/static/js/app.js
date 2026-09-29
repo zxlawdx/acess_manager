@@ -1,5 +1,38 @@
 const API_BASE = "/api";
 
+// Central operator-facing error policy. The router's technical HTTP messages,
+// internal URLs, query parameters and traceback remain OUT of the interface.
+// Genuine user-friendly firmware errors are preserved when safe and concise.
+function normalizeApiErrorMessage(error, status = 0) {
+    const original = typeof error === "string" ? error :
+        (typeof error?.message === "string" ? error.message : "");
+    const value = original.replace(/\s+/g, " ").trim();
+    if (error?.name === "AbortError" || /(?:timeout|timed? out|esgotou o tempo)/i.test(value)) {
+        return "A consulta excedeu o tempo de resposta. O equipamento pode continuar ocupado; aguarde antes de repetir.";
+    }
+    if (status === 401 || status === 403 ||
+        /(?:unauthori[sz]ed|forbidden|invalid credentials)/i.test(value)) {
+        return "Não foi possível autorizar a operação. Verifique a sessão e as credenciais do equipamento.";
+    }
+    if (status === 404 || status === 405 ||
+        /(?:not implemented|not supported|unsupported|capability unavailable|unknown endpoint)/i.test(value)) {
+        return "Este recurso não está disponível para a versão atual do aplicativo ou firmware. Nenhuma alteração foi confirmada.";
+    }
+    if (status >= 500) {
+        return "O serviço ou equipamento não conseguiu concluir esta operação. Verifique a conexão e tente novamente.";
+    }
+    if (/^(?:failed to fetch|networkerror|load failed|network request failed)$/i.test(value) ||
+        (error instanceof TypeError && /fetch/i.test(value))) {
+        return "Sem comunicação com o serviço local. Verifique a conexão com o equipamento e tente novamente.";
+    }
+    if (!value || value.length > 200 ||
+        /(?:\b(?:GET|POST|PUT|PATCH|DELETE)\s+\/|https?:\/\/|traceback|stack trace|\b(?:sql|querystring|request body)\b|\b(?:TypeError|KeyError|AttributeError|ValueError)\b|<\/?(?:html|body|pre|script)|\{["']|["']\s*:\s*["']|HTTP\/?\d|\b(?:500|404) Internal Server Error\b)/i.test(value)) {
+        return "Não foi possível concluir esta operação neste firmware. Confira os recursos detectados e tente novamente.";
+    }
+    return value; // Safe concise, human-readable feedback from the backend.
+}
+
+
 // Indicador independente do overlay: a operação continua visível quando
 // uma consulta demora ou quando o handler original não usava setBusy().
 let pendingApiRequests = 0;
@@ -175,9 +208,7 @@ async function apiRequest(
         && typeof data === "object"
         && data.error
     ) {
-        throw new Error(
-            data.error
-        );
+        throw new Error(normalizeApiErrorMessage(data.error));
     }
 
     if (!response.ok) {
@@ -199,15 +230,16 @@ async function apiRequest(
             message = data;
         }
 
-        throw new Error(
-            message
-        );
+        throw new Error(normalizeApiErrorMessage(message, response.status));
     }
 
     return data;
     } catch (error) {
-        updateRequestStatus(error?.message || "Erro desconhecido");
-        throw error;
+        const friendly = new Error(normalizeApiErrorMessage(error));
+        // Discovery timeout handlers check AbortError to keep session active.
+        if (error?.name === "AbortError") friendly.name = "AbortError";
+        updateRequestStatus(friendly.message);
+        throw friendly;
     } finally {
         clearTimeout(slowTimer);
         pendingApiRequests = Math.max(0, pendingApiRequests - 1);
