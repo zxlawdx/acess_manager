@@ -624,18 +624,22 @@ class ZTEService:
                 if not any(word in str(field).lower()
                            for word in ("pass", "secret", "token", "key"))
             ][:64]
+        classification = (
+            "verified" if summary["verified"] and ok
+            else "uncertain" if summary["uncertain"] or (
+                isinstance(outcome, dict) and outcome.get("partial")
+            )
+            else "accepted" if ok
+            else "failed"
+        )
         history_repository.save_change(
             self._history_session_id, operation=operation,
-            target=target, before=None, after=summary, success=ok,
-            message=None if ok else "device_result_not_confirmed",
+            target=target, before=None, after=summary,
+            success=classification == "verified", outcome=classification,
+            message=None if classification == "verified"
+                else "device_result_not_confirmed",
         )
         if isinstance(outcome, dict):
-            classification = (
-                "verified" if summary["verified"] and ok
-                else "uncertain" if summary["uncertain"] or outcome.get("partial")
-                else "accepted" if ok
-                else "failed"
-            )
             return {**outcome, "audit_outcome": classification}
         return outcome
 
