@@ -114,7 +114,7 @@ if not exist "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\app.js" (
     goto :error
 )
 
-for %%F in (core\api_errors.js workbench_tabs.js) do (
+for %%F in (core\api_errors.js workbench_tabs.js features\history.js) do (
     if not exist "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\%%F" (
         echo ERRO: modulo %%F do Access Manager ausente.
         goto :error
