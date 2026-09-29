@@ -44,6 +44,7 @@ jobs:
           node --check apps/zte_manager/static/js/adaptive_firmware.js
           node --check apps/zte_manager/static/js/f6201b_editor.js
           node --check apps/zte_manager/static/js/neutral_theme.js
+          node --check apps/zte_manager/static/js/tangerine_shell.js
           node --check apps/zte_manager/static/js/f6201b_workbench.js
           node --check apps/zte_manager/static/js/dhcp_module.js
           node --check apps/zte_manager/static/js/named_presets.js
@@ -69,6 +70,8 @@ jobs:
         run: |
           node tests/test_f6600p_advanced_ui.cjs
           node tests/test_f6600p_support_ui.cjs
+          node --check apps/zte_manager/static/js/tangerine_shell.js
+          node --test tests/test_tangerine_ui.cjs
           node tests/test_f6600p_light_popups.cjs
           node tests/test_tr069_preset_ui.cjs
           node --check apps/zte_manager/static/js/tr069_profiles.js
@@ -88,6 +91,9 @@ jobs:
 
       - name: Verify neutral theme and profile null guard
         run: node tests/test_neutral_theme.cjs
+
+      - name: Verify Tangerine navigation, theme persistence and safe errors
+        run: node --test tests/test_tangerine_ui.cjs
 
       - name: Verify workbench layout and model UI contracts
         run: node tests/test_brmodelo_workbench.cjs
