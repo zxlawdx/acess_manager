@@ -39,7 +39,23 @@
     backup_config:"Cópia de segurança",
     wifi_clients:"Clientes conectados ao Wi-Fi",
     lan_clients:"Clientes conectados por cabo",
-    wan:"Conexão de Internet"
+    wan:"Conexão de Internet",
+    device_info:"Informações do equipamento",
+    pon_optical:"Sinal óptico",
+    wifi_ssids:"Redes Wi-Fi configuradas",
+    wifi_radios:"Rádios Wi-Fi",
+    wifi_radio_advanced:"Configuração avançada dos rádios",
+    lan_ports:"Portas de rede",
+    wps:"Conexão simplificada WPS",
+    mesh:"Rede Mesh",
+    dns:"Resolução de nomes DNS",
+    dhcp:"Servidor DHCP",
+    arp:"Dispositivos identificados na rede",
+    voip_status:"Telefonia",
+    tr069_status:"Gerenciamento remoto",
+    upnp:"Abertura automática de portas",
+    ping_history:"Histórico de conectividade",
+    traceroute_history:"Histórico de rotas"
   });
   const DESCRIPTIONS=Object.freeze({
     tr069:"Consulte a ativação dos informes periódicos e o intervalo de comunicação. Endereços e credenciais permanecem ocultos.",
