@@ -119,6 +119,37 @@ class ProfileReportTests(unittest.TestCase):
         self.assertNotIn("technician", report)
         self.assertNotIn("SECRET", report)
 
+    def test_partial_default_profile_retains_only_public_attempted_stages(self):
+        history = SafeProfileHistory()
+        AuditedOperation(history).execute(
+            session_id=7, operation="profile_apply", target="technician",
+            before_reader=lambda: {"wifi": {}},
+            action=lambda: {"success": False, "steps": [
+                {"name": "Wi-Fi 2.4GHz", "success": True,
+                 "detail": "SSID=private; password=SECRET"},
+                {"name": "DNS", "success": False, "detail": "token=SECRET"},
+            ]},
+            after_reader=lambda: {"wifi": {}},
+        )
+        entry = history.events[0]
+        self.assertEqual(entry["outcome"], "uncertain")
+        self.assertEqual(entry["after"]["_profile_steps"], [
+            {"name": "Wi-Fi 2,4 GHz", "accepted": True},
+            {"name": "Servidores DNS", "accepted": False},
+        ])
+        self.assertNotIn("SECRET", str(entry))
+        report = AttendanceReportService().build(
+            diagnostic={"mode": "general"},
+            timeline={"changes": [{
+                **entry, "operation": "profile_apply", "target": "technician",
+                "before_json": entry["before"], "after_json": entry["after"],
+            }], "diagnostics": [], "snapshots": []},
+        )["text"]
+        self.assertIn("Wi-Fi 2,4 GHz (comando aceito)", report)
+        self.assertIn("Servidores DNS (falhou)", report)
+        self.assertIn("resultado incerto", report)
+        self.assertNotIn("SECRET", report)
+
     def test_without_success_does_not_invent_applied_changes(self):
         report = AttendanceReportService().build(
             diagnostic={"mode": "general"},
