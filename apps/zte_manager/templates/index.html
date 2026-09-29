@@ -154,72 +154,45 @@
          WORKSPACE
     ====================================================== -->
     <div class="workspace">
-        <div class="console-ribbon">
-            <div class="console-ribbon-left">
-                <span class="window-dot red"></span>
-                <span class="window-dot amber"></span>
-                <span class="window-dot green"></span>
-                <span class="console-signature">ACCESS MANAGER · CONSOLE ZTE</span>
-            </div>
 
-            <div class="console-ribbon-right">
-                <span class="console-session">
-                    <i id="consoleSessionDot"></i>
-                    <span id="consoleSessionState">DESCONECTADO</span>
-                </span>
+        <div class="console-ribbon am-session-bar" role="status" aria-label="Estado da sessão">
+            <span class="am-session-context"><span class="material-symbols-outlined" aria-hidden="true">lan</span> WORKSPACE <span class="am-context-separator">/</span> ZTE</span>
+            <span class="console-ribbon-right am-session-data">
+                <span class="console-session am-session-indicator"><i id="consoleSessionDot"></i><span id="consoleSessionState">DESCONECTADO</span></span>
                 <span id="consoleHostText" class="mono">SEM EQUIPAMENTO</span>
-            </div>
+            </span>
         </div>
 
-        <header class="topbar">
-            <div class="topbar-title">
-                <div class="eyebrow">ACCESS MANAGER · ATENDIMENTO</div>
+
+        <header class="topbar am-workspace-header">
+            <div class="topbar-title am-workspace-title">
+                <span class="eyebrow">ÁREA DE TRABALHO <span aria-hidden="true">/</span> <span id="amCurrentContext">EQUIPAMENTOS</span></span>
                 <h1 id="pageTitle">Conexão</h1>
                 <p id="pageSubtitle">Entre na ONT para iniciar o atendimento.</p>
             </div>
-
-            <div class="topbar-actions">
-                <div class="topbar-quick-actions">
-                    <button class="console-action" data-jump="advanced" type="button">
-                        <span class="material-symbols-outlined">radar</span>
-                        Recursos
-                    </button>
-                    <button class="console-action" data-jump="supportDiagnostic" type="button">
-                        <span class="material-symbols-outlined">troubleshoot</span>
-                        Auto diagnóstico
-                    </button>
-                    <button class="console-action primary" data-jump="management" type="button">
-                        <span class="material-symbols-outlined">hub</span>
-                        Gerenciamento
-                    </button>
+            <div class="topbar-actions am-workspace-tools">
+                <div class="topbar-quick-actions am-quick-tools" aria-label="Acesso rápido">
+                    <button class="console-action" data-jump="advanced" type="button"><span class="material-symbols-outlined">radar</span> Recursos</button>
+                    <button class="console-action" data-jump="supportDiagnostic" type="button"><span class="material-symbols-outlined">troubleshoot</span> Diagnóstico</button>
+                    <button class="console-action primary" data-jump="management" type="button"><span class="material-symbols-outlined">hub</span> Gerenciamento</button>
                 </div>
-
-                <button id="themeToggle" class="console-action" type="button" aria-label="Alternar modo de aparência" aria-pressed="true">Aparência</button>
-                <label class="appearance-control" for="appearanceSelect">
-                    <span>Aparência</span>
-                    <select id="appearanceSelect">
+                <label class="appearance-control am-appearance" for="appearanceSelect">
+                    <span class="material-symbols-outlined" aria-hidden="true">contrast</span>
+                    <span class="am-control-label">Tema</span>
+                    <select id="appearanceSelect" aria-label="Tema da interface">
                         <option value="light">Claro</option>
                         <option value="dark">Escuro</option>
                         <option value="auto">Automático</option>
                     </select>
                 </label>
+                <button id="themeToggle" class="console-action hidden" type="button" aria-label="Alternar tema">Alternar tema</button>
                 <div class="zoom-control" title="Zoom da interface: Ctrl + / Ctrl - / Ctrl 0">
                     <button id="zoomOutButton" class="zoom-button" type="button" aria-label="Diminuir interface">A−</button>
                     <span id="zoomLevel" class="zoom-level">100%</span>
                     <button id="zoomInButton" class="zoom-button" type="button" aria-label="Aumentar interface">A+</button>
                 </div>
-
-                <div id="topDeviceChip" class="device-chip hidden">
-                    <span class="material-symbols-outlined">router</span>
-                    <div>
-                        <strong id="topDeviceModel">ZTE</strong>
-                        <span id="topDeviceMeta" class="mono">-</span>
-                    </div>
-                </div>
-
-                <button id="refreshButton" class="icon-button hidden" type="button" title="Atualizar dados" aria-label="Atualizar dados">
-                    <span class="refresh-glyph" aria-hidden="true">↻</span>
-                </button>
+                <div id="topDeviceChip" class="device-chip hidden"><span class="material-symbols-outlined">router</span><div><strong id="topDeviceModel">ZTE</strong><span id="topDeviceMeta" class="mono">-</span></div></div>
+                <button id="refreshButton" class="icon-button hidden" type="button" title="Atualizar dados" aria-label="Atualizar dados"><span class="refresh-glyph" aria-hidden="true">↻</span></button>
             </div>
         </header>
 
@@ -230,22 +203,34 @@
             =================================================== -->
             <section id="page-connection" class="page active">
                 <div class="login-layout">
-                    <div class="login-hero">
-                        <div class="hero-badge">
-                            <span class="material-symbols-outlined">terminal</span>
-                            CENTRAL DE EQUIPAMENTOS
-                        </div>
-                        <h2>O controle da sua rede em um só lugar.</h2>
-                        <p>
-                            Conecte, identifique, diagnostique e configure equipamentos ZTE sem perder o contexto do atendimento.
-                        </p>
 
-                        <div class="hero-flow">
-                            <div><span>01</span><strong>Conectar</strong><small>sessão HTTP persistente</small></div>
-                            <i></i>
-                            <div><span>02</span><strong>Diagnosticar</strong><small>WAN, Wi-Fi, clientes e PON</small></div>
-                            <i></i>
-                            <div><span>03</span><strong>Provisionar</strong><small>perfil do atendente em poucos cliques</small></div>
+                    <div class="login-hero am-connect-story">
+                        <div class="am-story-top">
+                            <span class="am-story-chip"><span class="material-symbols-outlined" aria-hidden="true">bolt</span> ACCESS MANAGER</span>
+                            <h2>Conectar é só <em>o começo.</em></h2>
+                            <p>Uma área de trabalho para identificar, configurar e diagnosticar sua ONT, com cada etapa no mesmo lugar.</p>
+                        </div>
+                        <div class="am-story-art" aria-hidden="true">
+                            <svg viewBox="0 0 410 250" fill="none" role="presentation" focusable="false">
+                                <path d="M88 124H322M205 49V202" stroke="currentColor" stroke-width="1.6" stroke-dasharray="5 7" opacity=".33"/>
+                                <ellipse cx="205" cy="124" rx="130" ry="93" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 8" opacity=".22"/>
+                                <rect x="137" y="85" width="136" height="79" rx="21" fill="var(--am-surface)" stroke="var(--am-border)" stroke-width="2"/>
+                                <rect x="154" y="104" width="102" height="42" rx="12" fill="var(--am-primary)"/>
+                                <path d="M174 118a14 14 0 0121 0m-26-5a21 21 0 0131 0m-21 11h.1" stroke="var(--am-primary-ink)" stroke-width="3" stroke-linecap="round"/>
+                                <circle cx="224" cy="124" r="4" fill="var(--am-primary-ink)"/><circle cx="237" cy="124" r="4" fill="var(--am-primary-ink)"/>
+                                <rect x="32" y="108" width="80" height="40" rx="13" fill="var(--am-surface)" stroke="var(--am-border)" stroke-width="2"/>
+                                <rect x="298" y="108" width="80" height="40" rx="13" fill="var(--am-surface)" stroke="var(--am-border)" stroke-width="2"/>
+                                <path d="M50 127h44M50 135h27M316 127h44M316 135h27" stroke="var(--am-primary-deep)" stroke-width="3" stroke-linecap="round" opacity=".65"/>
+                                <circle cx="205" cy="35" r="16" fill="var(--am-primary-wash)" stroke="var(--am-primary)" stroke-width="2"/><path d="m199 35 4 4 8-9" stroke="var(--am-primary-deep)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                <circle cx="205" cy="212" r="16" fill="var(--am-primary-wash)" stroke="var(--am-primary)" stroke-width="2"/><path d="M197 212h16m-8-8v16" stroke="var(--am-primary-deep)" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="am-story-steps" aria-label="Etapas do atendimento">
+                            <span><b>01</b> Conecte</span>
+                            <span aria-hidden="true" class="am-step-line"></span>
+                            <span><b>02</b> Identifique</span>
+                            <span aria-hidden="true" class="am-step-line"></span>
+                            <span><b>03</b> Configure</span>
                         </div>
                     </div>
 
@@ -497,9 +482,9 @@
                  WIFI
             =================================================== -->
             <section id="page-wifi" class="page">
-                <div class="section-intro">
-                    <div>
-                        <span class="section-kicker">WIRELESS PROVISIONING</span>
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">wifi</span>
+                        <span class="section-kicker">REDES SEM FIO</span>
                         <h2>SSIDs e rádio</h2>
                         <p>Ative, desative, renomeie redes, altere senha e ajuste parâmetros de RF.</p>
                     </div>
@@ -551,9 +536,9 @@
                  WAN / LAN
             =================================================== -->
             <section id="page-wan" class="page">
-                <div class="section-intro">
-                    <div>
-                        <span class="section-kicker">NETWORK EDGE</span>
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">lan</span>
+                        <span class="section-kicker">CONFIGURAÇÃO DE REDE</span>
                         <h2>WAN, PPPoE e Ethernet</h2>
                         <p>Estado da Internet, autenticação e negociação das portas LAN.</p>
                     </div>
@@ -646,9 +631,9 @@
                  CLIENTS
             =================================================== -->
             <section id="page-clients" class="page">
-                <div class="section-intro compact">
-                    <div>
-                        <span class="section-kicker">ACTIVE ENDPOINTS</span>
+                <div class="section-intro am-section-intro compact">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">devices</span>
+                        <span class="section-kicker">DISPOSITIVOS</span>
                         <h2>Clientes conectados</h2>
                         <p>Visão de dispositivos wireless e cabeados.</p>
                     </div>
@@ -684,8 +669,8 @@
                  AUTOMATIC SUPPORT DIAGNOSTICS
             =================================================== -->
             <section id="page-supportDiagnostic" class="page">
-                <div class="section-intro">
-                    <div>
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">monitor_heart</span>
                         <span class="section-kicker">AUTOMATIC SUPPORT DIAGNOSTICS</span>
                         <h2>Diagnóstico automático do atendimento</h2>
                         <p>
@@ -855,8 +840,8 @@
                  DIAGNOSTICS
             =================================================== -->
             <section id="page-diagnostics" class="page">
-                <div class="section-intro">
-                    <div>
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">network_ping</span>
                         <span class="section-kicker">CPE DIAGNOSTICS</span>
                         <h2>Testes a partir da própria ONT</h2>
                         <p>O tráfego parte do equipamento, não do computador do atendente.</p>
@@ -907,8 +892,8 @@
                  PROFILES
             =================================================== -->
             <section id="page-profiles" class="page">
-                <div class="section-intro">
-                    <div>
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">tune</span>
                         <span class="section-kicker">TECHNICIAN PRESET</span>
                         <h2>Configuração padrão</h2>
                         <p>Perfil persistente do atendente para padronizar rádio e DNS.</p>
@@ -983,8 +968,8 @@
             =================================================== -->
             <!-- Gestão TR-069: credenciais de aplicação não são persistidas. -->
             <section id="page-tr069" class="page">
-                <div class="section-intro">
-                    <div><span class="section-kicker">ACS / CWMP</span>
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">settings_ethernet</span><span class="section-kicker">ACS / CWMP</span>
                         <h2>Gestão TR-069</h2>
                         <p>Perfis reutilizáveis por provedor, vinculados exclusivamente
                            a uma WAN PPPoE existente com serviço TR069.</p></div>
@@ -1051,9 +1036,9 @@
             </section>
 
             <section id="page-advanced" class="page">
-                <div class="section-intro">
-                    <div>
-                        <span class="section-kicker">MULTI-FIRMWARE OPERATIONS</span>
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">radar</span>
+                        <span class="section-kicker">RECURSOS DO EQUIPAMENTO</span>
                         <h2>Diagnóstico, LAN, NAT e inspeção ThinkLua</h2>
                         <p>Console orientada por capabilities para F6600P, F670L e outros firmwares compatíveis.</p>
                     </div>
@@ -1328,8 +1313,8 @@
                  DEVICE
             =================================================== -->
             <section id="page-device" class="page">
-                <div class="section-intro">
-                    <div>
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">router</span>
                         <span class="section-kicker">DEVICE MANAGEMENT</span>
                         <h2>Equipamento e PON</h2>
                         <p>Telemetria óptica, conta administrativa e ações da ONT.</p>
@@ -1371,9 +1356,9 @@
                  CPE MANAGEMENT PLATFORM
             =================================================== -->
             <section id="page-management" class="page">
-                <div class="section-intro management-intro">
-                    <div>
-                        <span class="section-kicker">CPE MANAGEMENT PLATFORM</span>
+                <div class="section-intro am-section-intro management-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">hub</span>
+                        <span class="section-kicker">GERENCIAMENTO DE REDE</span>
                         <h2>Gerenciamento de frota e rede</h2>
                         <p>
                             Inventário, configuração em lote, acesso remoto, monitoramento,
@@ -1448,7 +1433,7 @@
                     <article class="panel">
                         <div class="panel-header">
                             <div>
-                                <span class="section-kicker">FLEET INVENTORY</span>
+                                <span class="section-kicker">INVENTÁRIO</span>
                                 <h3>Equipamentos conhecidos</h3>
                             </div>
                             <input id="managementInventorySearch" class="management-search" type="search" placeholder="cliente, serial, MAC, OLT, CTO...">
@@ -1522,7 +1507,7 @@
                 <div class="management-pane" data-management-pane="remote">
                     <div class="management-grid two">
                         <article class="panel">
-                            <div class="panel-header"><div><span class="section-kicker">GATEWAY AGENT</span><h3>Linux / SSH / VPN</h3></div></div>
+                            <div class="panel-header"><div><span class="section-kicker">ACESSO REMOTO</span><h3>Linux / SSH / VPN</h3></div></div>
                             <div class="management-form-grid">
                                 <label class="field"><span>NOME</span><input id="managementAgentName" type="text" placeholder="POP-PVH-01"></label>
                                 <label class="field"><span>HOST</span><input id="managementAgentHost" type="text" placeholder="172.30.0.201"></label>
@@ -1543,7 +1528,7 @@
                         </article>
 
                         <article class="panel">
-                            <div class="panel-header"><div><span class="section-kicker">REMOTE SESSION</span><h3>Acesso temporário à ONT</h3></div></div>
+                            <div class="panel-header"><div><span class="section-kicker">SESSÃO REMOTA</span><h3>Acesso temporário à ONT</h3></div></div>
                             <p class="muted">Usa o Agent associado à ONT selecionada. O túnel é local e expira automaticamente.</p>
                             <div class="management-form-grid">
                                 <label class="field"><span>TTL (MIN)</span><input id="managementRemoteTtl" type="number" value="30" min="5" max="240"></label>
@@ -1609,7 +1594,7 @@
                         </article>
 
                         <article class="panel">
-                            <div class="panel-header"><div><span class="section-kicker">INCIDENT CORRELATION</span><h3>POP / OLT / CTO</h3></div></div>
+                            <div class="panel-header"><div><span class="section-kicker">OCORRÊNCIAS</span><h3>POP / OLT / CTO</h3></div></div>
                             <div class="management-action-row">
                                 <button id="managementIncidentCorrelate" class="button primary" type="button">Correlacionar agora</button>
                                 <button id="managementIncidentRefresh" class="button ghost" type="button">Atualizar</button>
@@ -1814,7 +1799,7 @@
                 <div class="management-pane" data-management-pane="lifecycle">
                     <div class="management-grid two">
                         <article class="panel">
-                            <div class="panel-header"><div><span class="section-kicker">CONFIG BACKUP</span><h3>Backup / restore</h3></div></div>
+                            <div class="panel-header"><div><span class="section-kicker">CÓPIA DE SEGURANÇA</span><h3>Backup / restore</h3></div></div>
                             <label class="field"><span>MOTIVO</span><input id="managementBackupReason" type="text" value="manual"></label>
                             <div class="management-action-row">
                                 <button id="managementBackupCreate" class="button primary" type="button">Criar backup</button>
@@ -1830,7 +1815,7 @@
                         </article>
 
                         <article class="panel">
-                            <div class="panel-header"><div><span class="section-kicker">FIRMWARE MANAGER</span><h3>Catálogo aprovado</h3></div></div>
+                            <div class="panel-header"><div><span class="section-kicker">ATUALIZAÇÃO DO EQUIPAMENTO</span><h3>Catálogo aprovado</h3></div></div>
                             <div class="management-form-grid">
                                 <label class="field"><span>MODELO</span><input id="managementFirmwareModel" type="text" placeholder="F670L"></label>
                                 <label class="field"><span>VERSÃO</span><input id="managementFirmwareVersion" type="text" placeholder="V9.x"></label>
