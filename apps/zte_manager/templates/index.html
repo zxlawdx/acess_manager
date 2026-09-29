@@ -15,6 +15,16 @@
     var isDark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
     document.documentElement.dataset.appearance = pref;
     document.documentElement.dataset.theme = pref === "auto" ? (isDark ? "dark" : "light") : pref;
+    // Sidebar width and Qt scaling must be resolved before the first paint.
+    try {
+        document.documentElement.dataset.sidebarCollapsed =
+            String(localStorage.getItem("access-manager-sidebar-collapsed") === "true");
+        var savedZoom = Number(localStorage.getItem("zteAutomatic.uiZoom")) || 1;
+        document.documentElement.style.setProperty("--am-zoom",
+            String(Math.min(1.6, Math.max(.8, savedZoom))));
+    } catch (e) {
+        document.documentElement.dataset.sidebarCollapsed = "false";
+    }
 })();
 </script>
 <link rel="stylesheet" href="{{ static('zte_manager/css/style.css') }}">
@@ -33,6 +43,8 @@
 <link rel="stylesheet" href="{{ static('zte_manager/css/tangerine_forms.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/tangerine_cards.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/tangerine_workflows.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/components/topology.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/components/firmware_inspector.css') }}">
 
 <div class="app-shell">
 
@@ -650,6 +662,30 @@
                     </div>
                 </div>
 
+                <section id="topologySection" class="am-topology-section" aria-label="Grafo dos dispositivos">
+                    <header class="am-topology-header">
+                        <div>
+                            <span class="section-kicker">MAPA DE ASSOCIAÇÕES</span>
+                            <h3>Dispositivos conectados</h3>
+                            <p>Grafo lógico construído com as leituras reais de clientes Wi-Fi e Ethernet da ONT. As posições não representam localização física.</p>
+                        </div>
+                        <span id="topologyDeviceCount" class="am-topology-count" aria-live="polite">Aguardando leitura</span>
+                    </header>
+                    <div class="am-topology-layout">
+                        <div id="topologyGraph" class="am-topology-stage" role="region" aria-label="Clientes e conexões" aria-live="polite">Aguardando leitura dos clientes conectados...</div>
+                        <aside id="topologyDetails" class="am-topology-details" aria-live="polite">Selecione um dispositivo após carregar os clientes.</aside>
+                    </div>
+                    <div class="am-topology-calibration">
+                        <label>RSSI real a 1 metro (dBm)
+                            <input type="number" id="topologyRssiOneMeter" min="-110" max="-10" step="1" placeholder="Ex.: -45" inputmode="decimal">
+                        </label>
+                        <label>Fator do ambiente (n)
+                            <input type="number" id="topologyPathLoss" min="1.6" max="6" step="0.1" placeholder="Ex.: 3,0" inputmode="decimal">
+                        </label>
+                        <p>Opcional. Só apresenta distância estimada após calibração no ambiente. RSSI sozinho não permite medir metros, e redes cabeadas não possuem RSSI.</p>
+                    </div>
+                </section>
+
                 <div class="am-client-workbench">
                     <div class="am-workbench-tabs" role="tablist" aria-label="Tipo de dispositivo">
                         <button class="am-workbench-tab" id="client-tab-wireless" type="button"
@@ -1102,7 +1138,7 @@
                     <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">radar</span>
                         <span class="section-kicker">RECURSOS DO EQUIPAMENTO</span>
                         <h2>Diagnóstico, LAN, NAT e inspeção ThinkLua</h2>
-                        <p>Console orientada por capabilities para F6600P, F670L e outros firmwares compatíveis.</p>
+                        <p>Identifique os recursos da sessão e configure apenas os parâmetros aceitos pelo equipamento.</p>
                     </div>
                     <div class="advanced-actions">
                         <button id="probeCapabilitiesButton" class="button ghost" type="button">
@@ -1195,7 +1231,7 @@
                         </div>
                     </section>
                     <div class="with-top-space"><span class="section-kicker">
-                        INSPEÇÃO AVANÇADA DO FIRMWARE ATUAL — MENUS THINKLUA
+                        RECURSOS RECONHECIDOS NESTE EQUIPAMENTO
                     </span></div>
                     <div id="capabilityGrid" class="capability-grid">
                         <div class="loading">Abra a detecção para validar os menus disponíveis neste firmware.</div>
@@ -1205,9 +1241,9 @@
                             Relatório estrutural: nomes dos campos e contagens, sem valores.
                             Revise antes de compartilhar.
                         </p>
-                        <textarea id="firmwareShapeOutput" class="selectable-output" rows="10" readonly
-                                  style="width:100%;max-width:100%;box-sizing:border-box;resize:vertical;"
-                                  aria-label="Estrutura do firmware"></textarea>
+                        <div id="firmwareShapeOutput" class="am-firmware-map" role="status" aria-live="polite">
+                            Identifique os recursos para consultar o mapa de funcionalidades.
+                        </div>
                     </div>
                 </article>
                     </section>
@@ -1371,33 +1407,26 @@
                     <section class="am-toolpanel" role="tabpanel" id="advanced-panel-inspector" aria-labelledby="advanced-tab-inspector" data-am-panel="inspector" hidden>
 
                 <div class="subsection-title with-top-space">
-                    <div><span class="material-symbols-outlined">manage_search</span><h3>Inspeção do firmware</h3></div>
-                    <span>Leitura segura; TR-069 e campos secretos são mascarados.</span>
+                    <div><span class="material-symbols-outlined">manage_search</span><h3>Funcionalidades e permissões</h3></div>
+                    <span>Selecione uma funcionalidade para ver o estado de leitura e abrir seu formulário de configuração, quando existente.</span>
                 </div>
 
                 <article class="panel">
-                    <div id="featureInspectorButtons" class="feature-inspector-actions">
-                        <button class="button ghost" data-feature-read="service_control_ipv4" type="button">Serviços IPv4</button>
-                        <button class="button ghost" data-feature-read="service_control_ipv6" type="button">Serviços IPv6</button>
-                        <button class="button ghost" data-feature-read="firewall" type="button">Firewall</button>
-                        <button class="button ghost" data-feature-read="firewall_filters" type="button">Filtros</button>
-                        <button class="button ghost" data-feature-read="ip_filter" type="button">Filtro IP</button>
-                        <button class="button ghost" data-feature-read="mac_filter" type="button">Filtro MAC</button>
-                        <button class="button ghost" data-feature-read="parental_control" type="button">Controle parental</button>
-                        <button class="button ghost" data-feature-read="upnp_port_map" type="button">UPnP PortMap</button>
-                        <button class="button ghost" data-feature-read="ddns" type="button">DDNS</button>
-                        <button class="button ghost" data-feature-read="sntp" type="button">SNTP</button>
-                        <button class="button ghost" data-feature-read="tr069" type="button">TR-069</button>
-                        <button class="button ghost" data-feature-read="route_table" type="button">Rotas</button>
-                        <button class="button ghost" data-feature-read="qos_queue" type="button">QoS filas</button>
-                        <button class="button ghost" data-feature-read="qos_speed" type="button">QoS policer</button>
-                        <button class="button ghost" data-feature-read="qos_shaper" type="button">QoS shaper</button>
-                        <button class="button ghost" data-feature-read="syslog" type="button">Logs</button>
-                        <button class="button ghost" data-feature-read="firmware_management" type="button">Firmware</button>
-                        <button class="button ghost" data-feature-read="restore_config" type="button">Restore (probe)</button>
-                        <button class="button ghost" data-feature-read="factory_reset" type="button">Factory Reset (probe)</button>
+                    <div id="featureInspectorButtons" class="feature-inspector-actions am-inspector-selector">
+                        <label class="field" for="firmwareFeatureSelect">
+                            <span>FUNCIONALIDADE DO EQUIPAMENTO</span>
+                            <select id="firmwareFeatureSelect" aria-label="Funcionalidade para inspeção" disabled>
+                                <option value="">Identifique o equipamento para listar os recursos</option>
+                            </select>
+                        </label>
+                        <button id="firmwareInspectButton" class="button primary" type="button" disabled>
+                            <span class="material-symbols-outlined" aria-hidden="true">manage_search</span> Consultar
+                        </button>
+                        <p id="firmwareInspectorNotice" class="muted">
+                            A lista reflete as funcionalidades declaradas pelo equipamento. A leitura é separada da configuração.
+                        </p>
                     </div>
-                    <div id="featureInspectorOutput" class="am-inspector-result" role="region" aria-live="polite">Selecione um recurso para consultar suas informações.</div>
+                    <div id="featureInspectorOutput" class="am-inspector-result" role="region" aria-live="polite">Escolha uma funcionalidade na lista e clique em Consultar.</div>
                     <div id="backupResult" class="operations-output"></div>
                 </article>
                     </section>
@@ -2001,6 +2030,8 @@
 <script src="{{ static('zte_manager/js/advanced.js') }}"></script>
 <script src="{{ static('zte_manager/js/features/history.js') }}"></script>
 <script src="{{ static('zte_manager/js/features/connection_inventory.js') }}"></script>
+<script src="{{ static('zte_manager/js/features/device_topology.js') }}"></script>
+<script src="{{ static('zte_manager/js/features/firmware_inspector.js') }}"></script>
 <script src="{{ static('zte_manager/js/desktop_clipboard.js') }}"></script>
 <script src="{{ static('zte_manager/js/support_diagnostics.js') }}"></script>
 <script src="{{ static('zte_manager/js/tangerine_results.js') }}"></script>
