@@ -45,13 +45,17 @@ test("Vela template mounts the real topology and operator inspection modules",()
     "graph must use existing real /clients/wifi and /clients/lan responses");
   assert.doesNotMatch(advanced,/output\.value\s*=\s*JSON\.stringify\(report/);
 });
-test("zoom scales only the grid shell, never the viewport body",()=>{
+test("font controls do not scale the document or sidebar coordinates",()=>{
   const part=app.slice(app.indexOf("function applyUiZoom("),
     app.indexOf("function changeUiZoom("));
-  assert.match(part,/shell\.style\.zoom/);
+  const shellCSS=fs.readFileSync(root+"static/css/components/shell_layout.css","utf8");
+  assert.match(part,/--am-font-scale/);
+  assert.match(part,/shell\.style\.zoom = ""/);
+  assert.doesNotMatch(part,/shell\.style\.zoom\s*=\s*String\(uiZoom\)/);
   assert.doesNotMatch(part,/document\.body\.style\.zoom\s*=\s*String\(uiZoom\)/);
-  assert.match(css,/grid-template-columns:var\(--am-current-sidebar\) minmax\(0,1fr\)/);
-  assert.match(css,/width:calc\(100% \/ var\(--am-zoom,1\)\)/);
+  assert.match(shellCSS,/grid-template-columns:var\(--am-shell-column\) minmax\(0,1fr\)/);
+  assert.match(shellCSS,/container-type:inline-size/);
+  assert.doesNotMatch(css,/width:calc\(100% \/ var\(--am-zoom,1\)\)/);
 });
 test("RSSI estimates require actual calibration, never imply measured distance",()=>{
   const doc={readyState:"loading",addEventListener(){}},w={};
