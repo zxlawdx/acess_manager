@@ -212,6 +212,11 @@ class ThinkLuaCapabilityGateway:
             return {
                 "feature": feature_key,
                 "available": bool(data.get("available")),
+                "status": (
+                    "confirmed" if data.get("available")
+                    else "not_tested"
+                ),
+                "probeable": bool(data.get("probeable", bool(data.get("endpoint")))),
                 "writable": data.get("writable", False),
                 "dangerous": data.get("dangerous", False),
                 "notes": data.get("notes", ""),
@@ -224,6 +229,9 @@ class ThinkLuaCapabilityGateway:
             return {
                 "feature": feature_key,
                 "available": False,
+                "status": "inconclusive",
+                "reason": "probe_inconclusive",
+                "probeable": bool(spec.endpoints),
                 "writable": spec.writable,
                 "dangerous": spec.dangerous,
                 "notes": spec.notes,
