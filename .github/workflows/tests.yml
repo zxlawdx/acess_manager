@@ -37,6 +37,16 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
+      - name: Bootstrapping and static assets smoke test
+        run: |
+          python manage.py collectstatic --no-tailwind
+          python launcher.py --self-test
+          test -f staticfiles/zte_manager/js/core/api_errors.js
+          test -f staticfiles/zte_manager/js/features/history.js
+          test -f staticfiles/zte_manager/js/features/connection_inventory.js
+          test -f staticfiles/zte_manager/css/tangerine.css
+          test -f staticfiles/zte_manager/css/tangerine_cards.css
+
       - name: Check JavaScript syntax
         run: |
           node --check apps/zte_manager/static/js/app.js
