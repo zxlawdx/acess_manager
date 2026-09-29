@@ -30,7 +30,8 @@ class SavedProfileServiceTests(unittest.TestCase):
             return_value=expected
         ) as command:
             report = self.service.f6201b_profile_apply_saved("other-tech")
-        self.assertEqual(report, expected)
+        # A write request being accepted is not proof of device readback.
+        self.assertEqual(report, {**expected, "audit_outcome": "accepted"})
         storage.assert_called_once_with("other-tech")
         self.assertIs(command.call_args.args[0], fake)
 
@@ -51,7 +52,7 @@ class SavedProfileServiceTests(unittest.TestCase):
             return_value=expected
         ) as command:
             report = self.service.f6201b_profile_apply_saved("tech-synthetic")
-        self.assertEqual(report, expected)
+        self.assertEqual(report, {**expected, "audit_outcome": "verified"})
         storage.assert_called_once_with("tech-synthetic")
         kwargs = command.call_args.kwargs
         self.assertIs(command.call_args.args[0], fake_ont)
