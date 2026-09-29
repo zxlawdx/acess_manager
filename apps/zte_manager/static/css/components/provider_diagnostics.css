@@ -1,0 +1,112 @@
+/* Diagnostic presets and PC comparison share the existing Tangerine tokens.
+   Grid children can shrink; never put vertical text in tiny nested columns. */
+html[data-theme] #page-supportDiagnostic .am-provider-triage {
+    display:grid;gap:12px;margin:0 0 16px;padding:15px 17px;
+    background:var(--am-surface);border:1px solid var(--am-border);
+    border-radius:13px;min-width:0;
+}
+html[data-theme] #page-supportDiagnostic .am-provider-triage-head h3 {
+    margin:4px 0;font:760 17px/1.35 var(--font-sans);
+    color:var(--am-text);
+}
+html[data-theme] #page-supportDiagnostic .am-provider-triage-head p {
+    margin:0;color:var(--am-text-2);
+    font:490 12px/1.55 var(--font-sans);
+}
+html[data-theme] #page-supportDiagnostic .am-provider-preset-grid {
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(min(164px,100%),1fr));
+    gap:8px;min-width:0;
+}
+html[data-theme] #page-supportDiagnostic .am-provider-preset-grid button {
+    display:grid;gap:4px;align-content:center;text-align:left;
+    width:100%;min-height:65px;padding:10px 12px;
+    color:var(--am-text);background:var(--am-bg);
+    border:1px solid var(--am-border);border-radius:10px;
+    white-space:normal;word-break:normal;overflow-wrap:break-word;
+    cursor:pointer;
+}
+html[data-theme] #page-supportDiagnostic .am-provider-preset-grid button:hover,
+html[data-theme] #page-supportDiagnostic .am-provider-preset-grid button:focus-visible {
+    border-color:var(--am-primary);outline-offset:2px;
+}
+html[data-theme] #page-supportDiagnostic .am-provider-preset-grid button[aria-pressed=true] {
+    background:var(--am-primary-wash);
+    box-shadow:inset 3px 0 var(--am-primary);
+    border-color:var(--am-selected);
+}
+html[data-theme] #page-supportDiagnostic .am-provider-preset-grid strong {
+    font:750 12px/1.3 var(--font-sans);color:var(--am-text);
+}
+html[data-theme] #page-supportDiagnostic .am-provider-preset-grid span {
+    font:450 10.5px/1.4 var(--font-sans);color:var(--am-text-2);
+}
+html[data-theme] #page-supportDiagnostic .am-provider-preset-help {
+    margin:0;font:530 11.5px/1.55 var(--font-sans);
+    color:var(--am-text-2);
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-compare {
+    display:grid;grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;gap:12px 18px;min-width:0;
+    background:var(--am-surface);border:1px solid var(--am-border);
+    border-radius:13px;padding:16px 18px;
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-compare h3 {
+    margin:4px 0 5px;color:var(--am-text);
+    font:750 16px/1.45 var(--font-sans);
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-compare p {
+    margin:0;font:480 11.5px/1.6 var(--font-sans);color:var(--am-text-2);
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-compare button {
+    white-space:normal;min-height:40px;
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-output {
+    grid-column:1/-1;padding:12px 14px;
+    background:var(--am-bg);color:var(--am-text-2);
+    border:1px dashed var(--am-border);border-radius:9px;
+    font:500 12px/1.5 var(--font-sans);
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-metrics {
+    margin:0;display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(min(175px,100%),1fr));
+    gap:9px;
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-metric {
+    min-width:0;display:grid;gap:5px;
+    padding:9px 11px;border:1px solid var(--am-border);
+    border-radius:8px;background:var(--am-surface);
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-metric dt {
+    color:var(--am-text-2);font:650 10px/1.4 var(--font-sans);
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-metric dd {
+    margin:0;color:var(--am-text);font:720 13px/1.4 var(--font-sans);
+    overflow-wrap:break-word;
+}
+html[data-theme] #page-supportDiagnostic .am-workstation-caution {
+    margin:11px 0 0!important;color:var(--am-text-2);
+    font:450 10.5px/1.6 var(--font-sans);
+}
+html[data-theme] #page-supportDiagnostic .am-remediation-list {
+    margin:11px 0 0;padding:0;display:grid;gap:9px;list-style:none;
+}
+html[data-theme] #page-supportDiagnostic .am-remediation-list li {
+    min-width:0;display:flex;gap:9px;flex-wrap:wrap;
+    justify-content:space-between;align-items:center;
+    border:1px solid var(--am-border);border-radius:8px;
+    padding:10px 12px;
+}
+html[data-theme] #page-supportDiagnostic .am-remediation-list strong {
+    font:720 12px/1.5 var(--font-sans);color:var(--am-text);
+}
+html[data-theme] #page-supportDiagnostic .am-remediation-list span {
+    font:550 11px/1.45 var(--font-sans);color:var(--am-text-2);
+}
+@media(max-width:700px) {
+    html[data-theme] #page-supportDiagnostic .am-workstation-compare {
+        grid-template-columns:minmax(0,1fr);
+    }
+    html[data-theme] #page-supportDiagnostic .am-workstation-compare button {
+        justify-self:start;
+    }
+}
