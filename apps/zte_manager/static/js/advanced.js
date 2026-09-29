@@ -480,6 +480,39 @@ async function saveWifiSchedule(event) {
 // CAPABILITIES
 // =========================================================
 
+function populateFirmwareSelector(features) {
+    const select = document.getElementById("firmwareFeatureSelect");
+    const button = document.getElementById("firmwareInspectButton");
+    if (!select) return;
+    const previous = select.value;
+    select.replaceChildren();
+    const catalog = Object.entries(features || {}).sort((a, b) => {
+        const operator = window.AccessManagerInspector;
+        const left = operator?.label(a[0], a[1]?.label) || a[1]?.label || a[0];
+        const right = operator?.label(b[0], b[1]?.label) || b[1]?.label || b[0];
+        return left.localeCompare(right, "pt-BR");
+    });
+    const intro = document.createElement("option");
+    intro.value = "";
+    intro.textContent = catalog.length
+        ? "Selecione uma funcionalidade" : "Nenhuma funcionalidade catalogada";
+    select.appendChild(intro);
+    for (const [feature, spec] of catalog) {
+        const option = document.createElement("option");
+        option.value = feature;
+        option.textContent = window.AccessManagerInspector?.label(feature, spec.label) ||
+            "Funcionalidade do equipamento";
+        select.appendChild(option);
+    }
+    if (catalog.some(([name]) => name === previous)) select.value = previous;
+    select.disabled = !catalog.length;
+    if (button) button.disabled = !select.value;
+    const notice = document.getElementById("firmwareInspectorNotice");
+    if (notice) notice.textContent = catalog.length
+        ? catalog.length + " funcionalidades catalogadas. A disponibilidade de cada uma só é confirmada após a consulta."
+        : "Este modelo não forneceu uma lista de funcionalidades. Revise a identificação.";
+}
+
 async function loadCapabilityCatalog() {
     const data = await apiRequest(
         "/device/capabilities"
@@ -491,7 +524,8 @@ async function loadCapabilityCatalog() {
     }
     advancedState.capabilities = data;
     const badge = document.getElementById("adapterBadge");
-    if (badge) badge.textContent = data.adapter || "ThinkLua";
+    if (badge) badge.textContent = "Catálogo carregado";
+    populateFirmwareSelector(data.features);
 
     renderCapabilities(data.features, null);
     return data;
@@ -669,10 +703,10 @@ function renderTrackerDiscovery(data) {
                 : "Documentado, ainda não testado";
         return `<article class="capability-card">
             <div class="capability-head"><div>
-                <strong>${escapeHtml(item.label || item.feature)}</strong>
+                <strong>${escapeHtml(window.AccessManagerInspector?.label(item.feature, item.label) || "Funcionalidade do equipamento")}</strong>
                 <p>${escapeHtml(label)}</p>
             </div><i class="capability-state ${confirmed ? "available" : absent ? "unavailable" : ""}"></i></div>
-            <div class="operation-meta"><span>LEITURA</span><span>Perfil do equipamento: ${escapeHtml(data.family || "não identificado")}</span></div>
+            <div class="operation-meta"><span>IDENTIFICAÇÃO</span><span>Leitura vinculada à sessão atual</span></div>
         </article>`;
     }).join("") : '<p class="muted">Nenhum endpoint documentado confirmado para este perfil.</p>';
 }
@@ -1337,7 +1371,7 @@ function renderCapabilities(
                     <article class="capability-card">
                         <div class="capability-head">
                             <div>
-                                <strong>${escapeHtml(spec.label || key)}</strong>
+                                <strong>${escapeHtml(window.AccessManagerInspector?.label(key, spec.label) || "Funcionalidade do equipamento")}</strong>
                                 <p>${escapeHtml(stateText)}</p>
                             </div>
                             <i class="capability-state ${stateClass}"></i>
@@ -1348,7 +1382,7 @@ function renderCapabilities(
                             ${spec.dangerous ? "<span>CONFIRMAÇÃO</span>" : ""}
                         </div>
 
-                        ${spec.notes ? `<p>${escapeHtml(spec.notes)}</p>` : ""}
+                        
                     </article>
                 `;
             }
@@ -2113,39 +2147,51 @@ async function saveDmz(event) {
 // =========================================================
 
 async function readFirmwareFeature(event) {
-    const feature = event.currentTarget.dataset.featureRead;
-
-    setBusy(
-        true,
-        `Lendo ${feature}...`
-    );
-
+    const feature = event.currentTarget?.dataset?.featureRead ||
+        document.getElementById("firmwareFeatureSelect")?.value || "";
+    if (!feature || !ontConnected) {
+        showToast("Conecte-se e selecione uma funcionalidade.");
+        return;
+    }
+    const button = document.getElementById("firmwareInspectButton");
+    const output = document.getElementById("featureInspectorOutput");
+    const catalog = advancedState.capabilities?.features || {};
+    if (!Object.prototype.hasOwnProperty.call(catalog, feature)) {
+        if (output) output.textContent = "Este recurso não consta do catálogo confirmado nesta sessão.";
+        return;
+    }
+    if (button) {
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+    }
+    setBusy(true, "Consultando funcionalidade...");
+    if (output) output.textContent = "Aguardando resposta do equipamento...";
     try {
         const data = await apiRequest(
-            `/features/read?feature=${encodeURIComponent(feature)}`
+            "/features/read?feature=" + encodeURIComponent(feature),
+            {expected:"object"}
         );
-
-        const output = document.getElementById("featureInspectorOutput");
-        if (window.renderAdaptiveDiagnostic) {
-            window.renderAdaptiveDiagnostic({
-                model: trackerDetectedModel || "ZTE",
-                sections: { [feature]: {
-                    available: data.available === true,
-                    data: data.available === true ? data : null
-                }}
-            }, output);
-        } else {
-            output.textContent = "Inspeção indisponível.";
+        if (!window.AccessManagerInspector) {
+            throw new Error("O componente de inspeção não foi carregado.");
         }
+        window.AccessManagerInspector.render(feature, data, output);
     } catch (error) {
-        document.getElementById(
-            "featureInspectorOutput"
-        ).textContent = error.message;
+        if (output) {
+            output.replaceChildren();
+            const note = document.createElement("p");
+            note.className = "am-inspector-alert";
+            note.textContent = "Não foi possível confirmar a funcionalidade: " +
+                normalizeApiErrorMessage(error);
+            output.appendChild(note);
+        }
     } finally {
         setBusy(false);
+        if (button) {
+            button.disabled = false;
+            button.setAttribute("aria-busy", "false");
+        }
     }
 }
-
 
 // History actions live in a separate presentation module. Keep these
 // public function names to preserve all legacy event listener contracts.
@@ -2512,16 +2558,15 @@ function initAdvancedOperations() {
             saveDmz
         );
 
-    document
-        .querySelectorAll(
-            "[data-feature-read]"
-        )
-        .forEach(
-            button => button.addEventListener(
-                "click",
-                readFirmwareFeature
-            )
-        );
+    const featureSelect = document.getElementById("firmwareFeatureSelect");
+    const inspectButton = document.getElementById("firmwareInspectButton");
+    featureSelect?.addEventListener("change", () => {
+        if (inspectButton) {
+            inspectButton.disabled = !featureSelect.value;
+            inspectButton.dataset.featureRead = featureSelect.value;
+        }
+    });
+    inspectButton?.addEventListener("click", readFirmwareFeature);
 }
 
 
