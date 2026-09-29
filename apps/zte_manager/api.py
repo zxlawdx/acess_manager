@@ -1228,6 +1228,12 @@ def remediate_diagnostic(context=None):
     )
 
 
+@api.get("/diagnostics/workstation")
+def workstation_diagnostic(context=None):
+    """Read-only comparison from the technician's computer (not the ONT)."""
+    return _safe_call(zte_service.workstation_diagnostic)
+
+
 @api.post("/diagnostics/speedtest")
 def speedtest(context=None):
     def action():
