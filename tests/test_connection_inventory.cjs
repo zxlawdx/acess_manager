@@ -53,7 +53,7 @@ test("inventory API is the sole source: unsafe/duplicate hosts excluded",async()
   {host:"http://admin:secret@router.example",model:"F680"},
   {host:"192.0.2.19:8080",model:"F680"}
  ]}));
- await ready();
+ await h.ctx.window.AccessManagerConnectionInventory.refresh();
  const list=h.nodes.get("connectionInventoryList");
  assert.equal(h.requests[0].url,"/management/inventory?limit=100");
  assert.equal(h.requests[0].options.expected,"object");
@@ -76,7 +76,7 @@ test("inventory API is the sole source: unsafe/duplicate hosts excluded",async()
 });
 test("inventory failure leaves connection form usable",async()=>{
  const h=mount(async()=>{throw new Error("GET /api?password=secret");});
- await ready();
+ await h.ctx.window.AccessManagerConnectionInventory.refresh();
  assert.match(content(h.nodes.get("connectionInventoryList")),
    /conexão manual continua disponível/);
  assert.doesNotMatch(content(h.nodes.get("connectionInventoryList")),/secret|GET/);
