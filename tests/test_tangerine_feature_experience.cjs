@@ -92,7 +92,7 @@ test("graph shows only live client fields, supports keyboard, averages real samp
   assert.equal(chip.attrs.tabindex,"0");
   chip.handlers.keydown({key:"Enter",preventDefault(){}});
   assert.match(allText(ids.topologyDetails),/192\.0\.2\.8/);
-  assert.match(allText(ids.topologyDetails),/10\.0 m/);
+  assert.match(allText(ids.topologyDetails),/≈ 10 m/);
   api.render([{...device,rssi:-62}],[]);
   assert.match(allText(ids.topologyDetails),/média de 2 leituras/);
   api.reset();
