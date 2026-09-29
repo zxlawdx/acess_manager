@@ -30,6 +30,7 @@ assert.ok(lightCss.includes('.kpi-card.cyan') &&
           lightCss.includes('.detail-tile') &&
           lightCss.includes('.adaptive-choice-group'),
     "Light mode must override dark-only high-specificity console surfaces");
-assert.ok(theme.includes("localStorage.setItem(STORAGE,next)"),
-    "Preference must be persisted");
+assert.ok(theme.includes("localStorage.setItem(STORAGE, preference)") &&
+          theme.includes('"auto"') && theme.includes("media.addEventListener"),
+    "Light/dark/automatic preference must be persisted and track the system");
 console.log("Profile null guard and neutral UI theme contracts OK");
