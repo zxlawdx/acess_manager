@@ -161,7 +161,8 @@ html[data-theme] .app-shell textarea,
 html[data-theme] .app-shell button {
   font-size:calc(12px * var(--am-font-scale,1))!important;
 }
-html[data-theme] .app-shell .material-symbols-outlined {
+html[data-theme] .app-shell .sidebar .menu-item .material-symbols-outlined,
+html[data-theme] .app-shell .am-workspace-tools .material-symbols-outlined {
   font-size:19px!important;
 }
 html[data-theme] .app-shell>.workspace .am-workspace-tools .zoom-control {
