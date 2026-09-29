@@ -1138,7 +1138,7 @@ class ChannelRule(DiagnosticRule):
                             + (
                                 "o rádio já está em Auto."
                                 if analysis.get("auto_channel")
-                                else "canal automático é a opção mais segura."
+                                else "nenhuma alteração automática será feita sem evidências."
                             )
                         ),
                         # Insufficient evidence is a manual check, not a
