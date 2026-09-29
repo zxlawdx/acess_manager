@@ -64,9 +64,47 @@
     });
     return { activate };
   }
+  function setupClients(section) {
+    if (!section) return;
+    const tabs=setupWorkbench(section);
+    const search=document.getElementById("clientsSearch");
+    const button=document.getElementById("clientsRefreshButton");
+    function filterRows() {
+      const term=(search?.value||"").toLocaleLowerCase("pt-BR").trim();
+      for(const id of ["wifiClientsTable","lanClientsTable"]){
+        const table=document.getElementById(id);
+        if(!table)continue;
+        for(const row of table.querySelectorAll("tr")){
+          if(row.querySelector(".empty-table"))continue;
+          row.hidden=Boolean(term) && !row.textContent.toLocaleLowerCase("pt-BR").includes(term);
+        }
+      }
+    }
+    search?.addEventListener("input",filterRows);
+    if(typeof MutationObserver==="function") {
+      for(const id of ["wifiClientsTable","lanClientsTable"]){
+        const target=document.getElementById(id);
+        if(target)new MutationObserver(filterRows).observe(target,{childList:true});
+      }
+    }
+    button?.addEventListener("click",async()=>{
+      if(button.disabled || !document.body?.classList.contains("ont-connected"))return;
+      const adaptive=section.querySelector(".adaptive-page-panel .adaptive-refresh");
+      if(adaptive){adaptive.click();return;}
+      if(typeof loadClients!=="function")return;
+      button.disabled=true;
+      button.setAttribute("aria-busy","true");
+      try {await loadClients();filterRows();}
+      catch(error) {if(typeof showToast==="function")showToast(error.message);}
+      finally {button.disabled=false;button.setAttribute("aria-busy","false");}
+    });
+    if(typeof window!=="undefined")
+      window.AccessManagerClientsWorkbench=Object.freeze({activate:tabs?.activate,filterRows});
+  }
   function init() {
     const advanced = document.getElementById("page-advanced");
     const api = setupWorkbench(advanced);
+    setupClients(document.getElementById("page-clients"));
     if (typeof window !== "undefined") window.AccessManagerWorkbench = api;
   }
   if (document.readyState === "loading") {
