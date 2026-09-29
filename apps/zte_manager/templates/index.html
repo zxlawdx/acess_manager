@@ -875,7 +875,21 @@
                     </div>
                 </div>
 
-                <div class="diagnostic-grid am-diagnostic-workspace">
+                <div class="diagnostic-grid am-diagnostic-workspace am-diagnostic-tabbed">
+                    <div class="am-workbench-tabs am-diagnostic-tabs" role="tablist" aria-label="Tipos de diagnóstico">
+                        <button id="diagnostic-tab-ping" class="am-workbench-tab" type="button"
+                                role="tab" aria-selected="true" aria-controls="diagnostic-panel-ping"
+                                data-am-tab="ping">
+                            <span class="material-symbols-outlined" aria-hidden="true">network_ping</span> Ping
+                        </button>
+                        <button id="diagnostic-tab-trace" class="am-workbench-tab" type="button"
+                                role="tab" aria-selected="false" aria-controls="diagnostic-panel-trace"
+                                data-am-tab="trace">
+                            <span class="material-symbols-outlined" aria-hidden="true">route</span> Traceroute
+                        </button>
+                    </div>
+                    <section id="diagnostic-panel-ping" class="am-toolpanel" data-am-panel="ping"
+                             role="tabpanel" aria-labelledby="diagnostic-tab-ping">
                     <article class="panel diagnostic-card">
                         <div class="panel-header"><div class="panel-title-inline"><span class="material-symbols-outlined panel-icon">network_ping</span><h3>Ping</h3></div></div>
                         <form id="pingForm" class="form-stack">
@@ -897,6 +911,9 @@
                         <pre id="pingOutput" class="terminal-output">Aguardando teste...</pre>
                     </article>
 
+                    </section>
+                    <section id="diagnostic-panel-trace" class="am-toolpanel" data-am-panel="trace"
+                             role="tabpanel" aria-labelledby="diagnostic-tab-trace" hidden>
                     <article class="panel diagnostic-card">
                         <div class="panel-header"><div class="panel-title-inline"><span class="material-symbols-outlined panel-icon">route</span><h3>Traceroute</h3></div></div>
                         <form id="tracerouteForm" class="form-stack">
@@ -911,6 +928,7 @@
                         </form>
                         <pre id="tracerouteOutput" class="terminal-output">Aguardando teste...</pre>
                     </article>
+                    </section>
                 </div>
             </section>
 
