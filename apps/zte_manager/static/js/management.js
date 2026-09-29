@@ -64,6 +64,11 @@ function managementOutput(id, value) {
     // Saídas técnicas passam pela mesma UI responsiva das outras abas.
     // Campos são inseridos com textContent (sem interpretar HTML do firmware).
     if (value && typeof value === "object" &&
+        typeof window.TangerineResults?.render === "function") {
+        window.TangerineResults.render(value, element);
+        return;
+    }
+    if (value && typeof value === "object" &&
         typeof window.renderAdaptiveDiagnostic === "function" &&
         !["TEXTAREA", "INPUT"].includes(element.tagName)) {
         const report = {

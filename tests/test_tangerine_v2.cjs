@@ -59,3 +59,15 @@ test("native Wi-Fi, WAN and radio cards are explicitly redesigned",()=>{
  }
  assert.ok(html.includes("zte_manager/css/tangerine_cards.css"));
 });
+
+test("management results are readable and redact unsafe data",()=>{
+ const script=fs.readFileSync(root+"static/js/tangerine_results.js","utf8");
+ const sandbox={window:{}};vm.runInNewContext(script,sandbox);
+ const sample=sandbox.window.TangerineResults.sanitize({
+  device_id:12,password:"PRIVATE_SECRET",nested:{model:"F6600P",endpoint:"/private",
+  message:"POST /hidden?password=PRIVATE_SECRET"}});
+ const text=JSON.stringify(sample);
+ assert.doesNotMatch(text,/PRIVATE_SECRET|POST|endpoint/);
+ assert.match(text,/F6600P/);
+ assert.match(html,/tangerine_results\\.js/);
+});
