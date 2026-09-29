@@ -797,6 +797,7 @@ function renderSupportDiagnostic(result) {
     const sections = [
         ["Resumo", () => renderDiagnosticSummary(result, finalResult)],
         ["Alterações", () => renderRemediationAudit(result)],
+        ["Indicadores", () => renderNetworkIndicators(finalResult)],
         ["Cliente", () => renderAffectedClient(finalResult)],
         ["Conclusões", () => renderFindings(finalResult)],
         ["Wi-Fi", () => renderWifiEnvironment(finalResult)],
@@ -892,6 +893,63 @@ function renderRemediationAudit(result) {
                 '</span></li>';
         }).join("") +
         '</ul></article>';
+}
+
+
+function renderNetworkIndicators(result) {
+    const sections = result.sections || {};
+    const optical = sections.optical || {};
+    const wan = sections.wan || [];
+    const ping = sections.ping || {};
+    const dns = sections.dns_health || {};
+    const lan = sections.lan_ports || [];
+    const trace = sections.traceroute || {};
+    if (![optical, ping, dns, trace].some(value =>
+        value && Object.keys(value).length) && !wan.length && !lan.length)
+        return "";
+
+    const count = Number(ping.sucesso);
+    const failed = Number(ping.falha);
+    const hasPackets = ping.sucesso !== undefined && ping.falha !== undefined &&
+        Number.isFinite(count) && Number.isFinite(failed) &&
+        count >= 0 && failed >= 0 && count + failed > 0;
+    const packetLoss = hasPackets
+        ? (failed / (count + failed) * 100).toFixed(1) + "%"
+        : "Não medido";
+    const list = Array.isArray(wan) ? wan : [wan];
+    const up = list.filter(item => /^(?:up|connected|online|1)$/i.test(
+        String(item?.status || "").trim()));
+    const links = Array.isArray(lan) ? lan : [];
+    const active = links.filter(port =>
+        /^(?:up|connected|online|linkup|1)$/i.test(
+            String(port?.status || port?.link || "").trim()));
+    const values = [
+        metric("GPON", optical.registration_status || "Não informado"),
+        metric("RX óptico", optical.rx_power_dbm != null
+            ? optical.rx_power_dbm + " dBm" : null),
+        metric("WAN conectadas", list.length
+            ? up.length + " de " + list.length : "Não verificado"),
+        metric("Portas Ethernet ativas", links.length
+            ? active.length + " de " + links.length : "Não verificado"),
+        metric("Ping médio da ONT", ping.medio_ms != null
+            ? ping.medio_ms + " ms" : "Não medido"),
+        metric("Perda ICMP da ONT", packetLoss),
+        metric("DNS consultado pela ONT", dns.lookup
+            ? (dns.lookup.success === true ? "Resolveu" :
+               dns.lookup.success === false ? "Não resolveu" : "Sem confirmação")
+            : "Não verificado"),
+        metric("Traceroute da ONT", trace.hops != null
+            ? String(trace.hops) + " saltos informados" : "Não executado")
+    ];
+    return '<article class="support-result-card">' +
+        '<div class="support-card-head"><div>' +
+        '<span class="section-kicker">MEDIÇÕES DO EQUIPAMENTO</span>' +
+        '<h3>Visão de rede e estabilidade</h3></div></div>' +
+        '<div class="support-metric-grid">' + values.join("") + '</div>' +
+        '<p class="muted with-top-space">Somente valores recebidos pela ONT. ' +
+        'A perda ICMP utiliza as respostas e falhas do teste executado; ' +
+        'não descreve necessariamente a conexão de um dispositivo Wi-Fi.</p>' +
+        '</article>';
 }
 
 
