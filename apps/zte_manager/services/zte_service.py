@@ -578,6 +578,10 @@ class ZTEService:
             # The device changed between initial preflight and action.
             self._disable_session_writes()
             raise
+        # Preserve every legacy field while exposing the audit classification
+        # to the UI. A firmware success flag alone does not prove readback.
+        if isinstance(audited.value, dict):
+            return {**audited.value, "audit_outcome": audited.outcome.value}
         return audited.value
 
     def _audit_device_command(self, operation, target, command):
@@ -625,6 +629,14 @@ class ZTEService:
             target=target, before=None, after=summary, success=ok,
             message=None if ok else "device_result_not_confirmed",
         )
+        if isinstance(outcome, dict):
+            classification = (
+                "verified" if summary["verified"] and ok
+                else "uncertain" if summary["uncertain"] or outcome.get("partial")
+                else "accepted" if ok
+                else "failed"
+            )
+            return {**outcome, "audit_outcome": classification}
         return outcome
 
     def _snapshot_payload(self):
