@@ -33,9 +33,14 @@ test("Vela page contracts survive the Tangerine navigation change", () => {
 test("Tangerine tokens include both Figma palettes and reduced-motion support", () => {
   for (const fragment of ["--am-bg:#FFFDF8", "--am-primary:#FF6C37",
     "--am-sidebar:#FFF3E8","--am-bg:#211C19","--am-primary:#FF8654",
-    "--am-sidebar:#28211D","prefers-reduced-motion","is-collapsed"]) {
+    "--am-sidebar:#28211D","prefers-reduced-motion"]) {
     assert.ok(css.includes(fragment),fragment);
   }
+  // Collapse geometry moved into its own component; paint stays in tokens.
+  const layout=fs.readFileSync(
+    root+"/static/css/components/shell_layout.css","utf8");
+  assert.match(layout,/is-collapsed/);
+  assert.match(layout,/grid-template-columns:var\(--am-shell-column\)/);
 });
 
 test("HTTP/firmware raw errors are not rendered by the common API helper", () => {
