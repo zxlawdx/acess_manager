@@ -1001,13 +1001,15 @@
                         <p>Perfis reutilizáveis por provedor, vinculados exclusivamente
                            a uma WAN PPPoE existente com serviço TR069.</p></div>
                 </div>
-                <div class="advanced-grid">
+                <div class="advanced-grid am-tr069-workspace">
                     <article class="panel">
                         <div class="panel-header"><div>
                             <span class="section-kicker">PROVIDER PROFILE</span>
                             <h3>Criar e editar perfil ACS</h3>
                         </div></div>
-                        <div class="form-stack">
+                        <div class="form-stack am-tr069-form">
+                            <fieldset class="am-tr069-group">
+                                <legend>Perfil e endereço</legend>
                             <label class="field"><span>PERFIL</span>
                                 <select id="tr069ProviderSelect"></select></label>
                             <label class="field"><span>NOME DO PROVEDOR</span>
@@ -1015,16 +1017,30 @@
                             <label class="field"><span>URL ACS</span>
                                 <input type="url" id="tr069ProviderUrl" maxlength="500"
                                     placeholder="https://exemplo.com/tr069" autocomplete="off"></label>
+                            </fieldset>
+                            <fieldset class="am-tr069-group">
+                                <legend>Autenticação ACS</legend>
                             <label class="field"><span>USUÁRIO ACS</span>
                                 <input type="text" id="tr069ProviderUser" autocomplete="off"></label>
                             <label class="field"><span>SENHA ACS (SOMENTE ESTA APLICAÇÃO)</span>
                                 <input type="password" id="tr069ProviderPassword"
                                     autocomplete="new-password" placeholder="Em branco: preservar senha atual"></label>
+                            </fieldset>
+                            <details class="am-tr069-credentials">
+                                <summary>
+                                    <span class="material-symbols-outlined" aria-hidden="true">key</span>
+                                    Credenciais da solicitação de conexão
+                                </summary>
+                                <div class="am-tr069-credentials-inner">
                             <label class="field"><span>USUÁRIO DE SOLICITAÇÃO DE CONEXÃO</span>
                                 <input type="text" id="tr069ProviderRequestUser" autocomplete="off"></label>
                             <label class="field"><span>SENHA DA SOLICITAÇÃO DE CONEXÃO (SOMENTE ESTA APLICAÇÃO)</span>
                                 <input type="password" id="tr069ProviderRequestPassword"
                                     autocomplete="new-password" placeholder="Em branco: preservar senha atual"></label>
+                                </div>
+                            </details>
+                            <fieldset class="am-tr069-group">
+                                <legend>Sincronização</legend>
                             <label class="check-row"><input type="checkbox"
                                 id="tr069ProviderPeriodic" checked>
                                 <span>Habilitar informação periódica</span></label>
@@ -1033,6 +1049,7 @@
                                     <option value="300">300 s — configuração antiga</option>
                                     <option value="1200" selected>1200 s — configuração nova</option>
                                 </select></label>
+                            </fieldset>
                             <p class="muted">As senhas não são armazenadas em arquivos de perfis,
                                logs ou armazenamento do navegador.</p>
                             <div class="profile-actions">
@@ -1382,7 +1399,28 @@
                     </div>
                 </div>
 
-                <div class="device-grid">
+                <section class="am-device-summary" aria-label="Equipamento autenticado">
+                    <div class="am-device-identity">
+                        <span class="am-device-emblem material-symbols-outlined" aria-hidden="true">router</span>
+                        <div>
+                            <span id="deviceIdentityState" class="am-device-state">Verificando sessão...</span>
+                            <h3 id="deviceIdentityModel">Equipamento não identificado</h3>
+                            <span id="deviceIdentityHost" class="mono">Sem endereço confirmado</span>
+                        </div>
+                    </div>
+                    <div class="am-device-tools">
+                        <button type="button" class="button primary" data-jump="advanced">
+                            <span class="material-symbols-outlined" aria-hidden="true">radar</span>
+                            Identificar recursos
+                        </button>
+                        <button type="button" class="button" data-jump="supportDiagnostic">
+                            <span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span>
+                            Executar diagnóstico
+                        </button>
+                    </div>
+                </section>
+
+                <div class="device-grid am-device-stats">
                     <article class="panel">
                         <div class="panel-header"><div><span class="section-kicker">HARDWARE</span><h3>Informações da ONT</h3></div></div>
                         <div id="deviceDetails"><div class="loading">Carregando...</div></div>
@@ -1394,7 +1432,13 @@
                     </article>
                 </div>
 
-                <div class="two-column-layout with-top-space">
+                <details class="am-device-maintenance">
+                    <summary>
+                        <span class="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>
+                        <span><strong>Segurança e manutenção</strong><small>Senha administrativa e reinicialização da ONT</small></span>
+                        <span class="material-symbols-outlined am-device-chevron" aria-hidden="true">expand_more</span>
+                    </summary>
+                    <div class="two-column-layout am-device-maintenance-body with-top-space">
                     <article class="panel">
                         <div class="panel-header"><div><span class="section-kicker">ACCOUNT MANAGER</span><h3>Senha administrativa</h3></div><span class="badge warning">Avançado</span></div>
                         <div id="accountDetails" class="account-list"><div class="loading">Carregando...</div></div>
@@ -1410,7 +1454,8 @@
                         <p>Envia o mesmo comando de Restart da interface original. A sessão será perdida enquanto a ONT reinicia.</p>
                         <button id="rebootDeviceButton" class="button danger" type="button"><span class="material-symbols-outlined">restart_alt</span>Reiniciar equipamento</button>
                     </article>
-                </div>
+                    </div>
+                </details>
             </section>
 
             <!-- ==================================================
