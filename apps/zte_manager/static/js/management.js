@@ -56,15 +56,20 @@ function managementJson(value) {
 
 
 function managementParseJson(id) {
+    // Form state is authoritative. Do NOT send the last valid hidden JSON
+    // when the technician currently sees an invalid or unfinished field.
+    window.TangerineFormController?.assertValid(id);
     const raw = document.getElementById(id)?.value.trim() || "{}";
-
+    let config;
     try {
-        return JSON.parse(raw);
-    } catch (error) {
-        throw new Error(
-            "JSON inválido: " + error.message
-        );
+        config = JSON.parse(raw);
+    } catch {
+        // Never show rejected credentials or copied firmware snippets.
+        throw new Error("Não foi possível interpretar a configuração atual.");
     }
+    // Reject prototype-injection keys even if structured enhancement failed.
+    window.TangerineFormsCore?.validateConfig(config);
+    return config;
 }
 
 
