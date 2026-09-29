@@ -34,7 +34,19 @@
         transport: "Transporte", name: "Nome da conexão",
         rx_errors: "Erros RX", tx_errors: "Erros TX",
         average_ms: "Ping médio (ms)", successes: "Respostas",
-        failures: "Perdas", registration_status: "Registro"
+        failures: "Perdas", registration_status: "Registro",
+        wifi_advanced: "Configurações avançadas do Wi-Fi",
+        wifi_neighbor_scan: "Redes próximas e interferência",
+        wifi_interference_schedule: "Controle de interferência",
+        dhcp_basic: "Servidor DHCP", dhcp_reservations: "Reservas DHCP",
+        ddns: "DNS dinâmico", sntp: "Sincronização de horário",
+        upnp_port_map: "Mapeamento automático de portas",
+        qos_queue: "Priorização de tráfego",
+        qos_shaper: "Limite de banda",
+        service_control_ipv4: "Serviços IPv4",
+        service_control_ipv6: "Serviços IPv6",
+        firewall_filters: "Regras do firewall",
+        channel: "Canal", auto_channel: "Seleção automática de canal"
     };
     const PAGE_SECTIONS = {
         dashboard: ["device", "optical", "wan", "wifi_clients"],
@@ -81,7 +93,11 @@
         if (value !== undefined && value !== null) node.textContent = String(value);
         return node;
     };
-    const pretty = name => LABELS[name] || String(name).replace(/_/g, " ");
+    // Public labels come from an explicit operator vocabulary, never a Lua
+    // filename, undocumented route or a raw backend property key.
+    const pretty = name => LABELS[name] ||
+        window.AccessManagerInspector?.label?.(name) ||
+        "Funcionalidade adicional";
     const scalar = value => {
         if (typeof value === "boolean") return value ? "Sim" : "Não";
         if (value == null || value === "") return "Não informado";
@@ -142,8 +158,18 @@
         head.append(el("span", "adaptive-badge " + (available ? "is-ok" : "is-muted"),
             available ? "Leitura confirmada" : absent ? "Ausência confirmada" : "Não confirmado"));
         card.append(head);
-        if (available) renderFields(section.data, card);
-        else {
+        if (available) {
+            // Probe confirmation is evidence of a working reader, not useful
+            // output by itself. Never render "GET confirmado" as a card.
+            const data = section.data;
+            const synthetic = !data ||
+                (typeof data === "object" && data.status === "GET confirmado") ||
+                (typeof data === "object" && !Object.keys(data).length);
+            if (!synthetic) renderFields(data, card);
+            else card.append(el("p", "adaptive-empty",
+                "A leitura deste recurso foi confirmada. Abra o diagnóstico " +
+                "direcionado para consultar informações operacionais."));
+        } else {
             const messages = {
                 no_data_from_firmware: "O menu respondeu, mas não trouxe dados nesta leitura.",
                 session_expired: "A sessão do equipamento expirou. Reconecte para continuar.",
