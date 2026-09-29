@@ -31,6 +31,46 @@ test("A+/A- change typography without changing layout viewport coordinates",()=>
   assert.match(html,/aria-label="Aumentar tamanho do texto"/);
   assert.match(nav,/sidebarCollapsed/);
 });
+test("narrow window uses a drawer without persisting an accidental collapse",()=>{
+  const listeners={},classes=new Set(),shellClasses=new Set(),stored=new Map();
+  const sidebar={
+    classList:{toggle(k,v){if(v)classes.add(k);else classes.delete(k)}},
+    closest:()=>({classList:{toggle(k,v){if(v)shellClasses.add(k);
+      else shellClasses.delete(k)}}}),
+    querySelectorAll:()=>[]
+  };
+  const glyph={textContent:""};
+  const toggle={setAttribute(){},
+    querySelector:()=>glyph,addEventListener:(kind,cb)=>listeners[kind]=cb};
+  const backdrop={hidden:true,setAttribute(){},addEventListener:(kind,cb)=>
+    listeners["backdrop_"+kind]=cb};
+  const media={matches:true,addEventListener:(kind,cb)=>listeners.media=cb};
+  const root={dataset:{}};
+  const doc={
+    readyState:"complete",documentElement:root,
+    body:{appendChild(){},classList:{contains:()=>false}},
+    querySelector:()=>sidebar,
+    getElementById:id=>id==="sidebarCollapseToggle"?toggle:null,
+    createElement:()=>backdrop,
+    addEventListener(){}
+  };
+  const ctx={document:doc,window:{matchMedia:()=>media},
+    localStorage:{getItem:k=>stored.get(k)||null,
+      setItem:(k,v)=>stored.set(k,v)}};
+  vm.runInNewContext(nav,ctx);
+  assert.equal(classes.has("is-collapsed"),true);
+  assert.equal(root.dataset.sidebarCollapsed,"true");
+  listeners.click();
+  assert.equal(classes.has("am-mobile-open"),true);
+  assert.equal(backdrop.hidden,false);
+  assert.equal(stored.has("access-manager-sidebar-collapsed"),false);
+  listeners.backdrop_click();
+  assert.equal(backdrop.hidden,true);
+  media.matches=false;
+  listeners.media();
+  assert.equal(classes.has("is-collapsed"),false);
+  assert.equal(root.dataset.sidebarCollapsed,"false");
+});
 test("support workbench uses full width and compact progressive disclosure",()=>{
   assert.match(diagnostics,/\.am-support-workspace\s*\{[\s\S]{0,160}grid-template-columns:minmax\(0,1fr\)/);
   assert.match(diagnostics,/#firmwareDiagnosticChoices/);
