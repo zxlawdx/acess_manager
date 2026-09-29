@@ -232,25 +232,20 @@ async function managementRequest(
 
 
 function switchManagementTab(name) {
-    document.querySelectorAll(
-        ".management-tab"
-    ).forEach(
-        item => item.classList.toggle(
-            "active",
-            item.dataset.managementTab === name
-        )
-    );
-
-    document.querySelectorAll(
-        ".management-pane"
-    ).forEach(
-        item => item.classList.toggle(
-            "active",
-            item.dataset.managementPane === name
-        )
-    );
+    const controls=[...document.querySelectorAll(".management-tab")];
+    if(!controls.some(tab=>tab.dataset.managementTab===name))return;
+    controls.forEach(tab=>{
+        const active=tab.dataset.managementTab===name;
+        tab.classList.toggle("active",active);
+        tab.tabIndex=active?0:-1;
+        tab.setAttribute?.("aria-selected",String(active));
+    });
+    document.querySelectorAll(".management-pane").forEach(panel=>{
+        const active=panel.dataset.managementPane===name;
+        panel.classList.toggle("active",active);
+        panel.hidden=!active;
+    });
 }
-
 
 async function refreshManagement() {
     setBusy(
@@ -2827,16 +2822,23 @@ async function runManagementZeroTouch() {
 // BINDINGS
 // =========================================================
 
-document.querySelectorAll(
-    ".management-tab"
-).forEach(
-    button => button.addEventListener(
-        "click",
-        () => switchManagementTab(
-            button.dataset.managementTab
-        )
-    )
-);
+document.querySelectorAll(".management-tab").forEach(button=>{
+    button.addEventListener("click",()=>switchManagementTab(button.dataset.managementTab));
+    button.addEventListener("keydown",event=>{
+        const tabs=[...document.querySelectorAll(".management-tab")];
+        const i=tabs.indexOf(button);
+        let next=i;
+        if(event.key==="ArrowRight"||event.key==="ArrowDown")next=(i+1)%tabs.length;
+        else if(event.key==="ArrowLeft"||event.key==="ArrowUp")next=(i-1+tabs.length)%tabs.length;
+        else if(event.key==="Home")next=0;
+        else if(event.key==="End")next=tabs.length-1;
+        else return;
+        event.preventDefault();
+        const target=tabs[next];
+        switchManagementTab(target.dataset.managementTab);
+        target.focus();
+    });
+});
 
 
 document.addEventListener("zte:page-open", event => {
