@@ -234,6 +234,48 @@
     }
     root.appendChild(card);
   }
+  function renderMap(report,root){
+    if(!root)return;
+    root.replaceChildren();
+    const records=new Map();
+    const insert=(entry)=>{
+      if(!entry||typeof entry!=="object"||typeof entry.feature!=="string")return;
+      const name=entry.feature;
+      const state=entry.available===true||entry.status==="detected"?"confirmed":
+        entry.status==="not_tested"?"untested":"unconfirmed";
+      const before=records.get(name);
+      if(!before||state==="confirmed"||
+        (state==="unconfirmed"&&before.state==="untested"))
+        records.set(name,{name:label(name,entry.label),feature:name,state});
+    };
+    for(const item of report?.tracker?.capabilities||[])insert(item);
+    for(const item of report?.tracker?.candidate_features||[])insert(item);
+    for(const item of report?.features||[])insert(item);
+    const values=[...records.values()].sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+    const counts={confirmed:0,unconfirmed:0,untested:0};
+    values.forEach(item=>counts[item.state]++);
+    root.appendChild(el("h4","am-inspector-map-heading",
+      "Funcionalidades reconhecidas pela sessão"));
+    root.appendChild(el("p","am-inspector-map-summary",
+      counts.confirmed+" confirmadas · "+counts.unconfirmed+
+      " sem confirmação · "+counts.untested+" ainda não testadas"));
+    const list=el("ul","am-inspector-map-list");
+    for(const item of values){
+      const row=el("li","am-inspector-map-item");
+      row.appendChild(el("strong","",item.name));
+      row.appendChild(el("span","am-inspector-map-state "+item.state,
+        item.state==="confirmed"?"Leitura confirmada":
+        item.state==="untested"?"Não testado":"Não confirmado"));
+      row.appendChild(el("small","",
+        Object.prototype.hasOwnProperty.call(EDITORS,item.feature)?
+        "Possui formulário separado, sujeito à autorização da sessão":
+        "Consulta neste aplicativo"));
+      list.appendChild(row);
+    }
+    if(!values.length)list.appendChild(el("li","am-inspector-quiet",
+      "Ainda não há recursos identificados para apresentar."));
+    root.appendChild(list);
+  }
   if(typeof window!=="undefined")window.AccessManagerInspector=
-    Object.freeze({render,label,summary,safeScalar,goToEditor});
+    Object.freeze({render,label,summary,safeScalar,goToEditor,renderMap});
 })();
