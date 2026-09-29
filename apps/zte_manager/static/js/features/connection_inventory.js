@@ -75,7 +75,7 @@
     mount.textContent="Consultando equipamentos registrados...";
     pending=(async()=>{
       try {
-        const result=await apiRequest("/management/inventory?limit="+LIMIT,{expected:"object"});
+        const result=await apiRequest("/management/inventory?limit="+LIMIT,{expected:"object",silent:true});
         if(revision!==generation)return;
         if(!Array.isArray(result.devices)) {
           throw new Error("Formato inesperado.");
