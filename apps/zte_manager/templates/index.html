@@ -1080,10 +1080,29 @@
                     </div>
                 </div>
 
+                <div class="am-workbench">
+                    <div class="am-workbench-tabs" role="tablist" aria-label="Ferramentas avançadas">
+                        <button class="am-workbench-tab" type="button" role="tab" id="advanced-tab-discovery" aria-controls="advanced-panel-discovery" aria-selected="true" data-am-tab="discovery">
+                            <span class="material-symbols-outlined" aria-hidden="true">radar</span> Identificação
+                        </button>
+                        <button class="am-workbench-tab" type="button" role="tab" id="advanced-tab-diagnostics" aria-controls="advanced-panel-diagnostics" aria-selected="false" data-am-tab="diagnostics">
+                            <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span> Diagnóstico e histórico
+                        </button>
+                        <button class="am-workbench-tab" type="button" role="tab" id="advanced-tab-dhcp" aria-controls="advanced-panel-dhcp" aria-selected="false" data-am-tab="dhcp">
+                            <span class="material-symbols-outlined" aria-hidden="true">lan</span> DHCP
+                        </button>
+                        <button class="am-workbench-tab" type="button" role="tab" id="advanced-tab-nat" aria-controls="advanced-panel-nat" aria-selected="false" data-am-tab="nat">
+                            <span class="material-symbols-outlined" aria-hidden="true">device_hub</span> NAT e DMZ
+                        </button>
+                        <button class="am-workbench-tab" type="button" role="tab" id="advanced-tab-inspector" aria-controls="advanced-panel-inspector" aria-selected="false" data-am-tab="inspector">
+                            <span class="material-symbols-outlined" aria-hidden="true">manage_search</span> Inspeção
+                        </button>
+                    </div>
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-discovery" aria-labelledby="advanced-tab-discovery" data-am-panel="discovery">
                 <article class="panel">
                     <div class="panel-header">
                         <div>
-                            <span class="section-kicker">DEVICE CAPABILITIES</span>
+                            <span class="section-kicker">IDENTIFICAÇÃO DO EQUIPAMENTO</span>
                             <h3>Recursos detectados</h3>
                         </div>
                         <span id="adapterBadge" class="badge">Não detectado</span>
@@ -1131,6 +1150,8 @@
                     </div>
                 </article>
 
+                    </section>
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-diagnostics" aria-labelledby="advanced-tab-diagnostics" data-am-panel="diagnostics" hidden>
                 <div class="advanced-grid with-top-space">
                     <article class="panel">
                         <div class="panel-header">
@@ -1199,6 +1220,12 @@
                     </article>
                 </div>
 
+                    </section>
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-dhcp" aria-labelledby="advanced-tab-dhcp" data-am-panel="dhcp" hidden>
+                    </section>
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-nat" aria-labelledby="advanced-tab-nat" data-am-panel="nat" hidden>
+                    </section>
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-inspector" aria-labelledby="advanced-tab-inspector" data-am-panel="inspector" hidden>
                 <div class="subsection-title with-top-space">
                     <div><span class="material-symbols-outlined">lan</span><h3>DHCP / LAN</h3></div>
                     <span>Pool, DNS, leases e reservas por MAC.</span>
@@ -1305,9 +1332,11 @@
                         <button class="button ghost" data-feature-read="restore_config" type="button">Restore (probe)</button>
                         <button class="button ghost" data-feature-read="factory_reset" type="button">Factory Reset (probe)</button>
                     </div>
-                    <pre id="featureInspectorOutput" class="firmware-json">Selecione um recurso para ler o menu ThinkLua correspondente.</pre>
+                    <div id="featureInspectorOutput" class="am-inspector-result" role="region" aria-live="polite">Selecione um recurso para consultar suas informações.</div>
                     <div id="backupResult" class="operations-output"></div>
                 </article>
+                    </section>
+                </div>
             </section>
 
 
@@ -1884,6 +1913,7 @@
 <script src="{{ static('zte_manager/js/f6201b_editor.js') }}"></script>
 <script src="{{ static('zte_manager/js/neutral_theme.js') }}"></script>
 <script src="{{ static('zte_manager/js/tangerine_shell.js') }}"></script>
+<script src="{{ static('zte_manager/js/workbench_tabs.js') }}"></script>
 <script src="{{ static('zte_manager/js/tangerine_forms.js') }}"></script>
 <script src="{{ static('zte_manager/js/f6201b_workbench.js') }}"></script>
 <script src="{{ static('zte_manager/js/dhcp_module.js') }}"></script>
