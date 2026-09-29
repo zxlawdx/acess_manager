@@ -2,7 +2,18 @@
 .adaptive-hide-legacy { display: none !important; }
 .adaptive-page-panel { margin-top: 18px; min-width: 0; }
 .adaptive-refresh { margin-bottom: 14px; }
-.adaptive-report { min-width: 0; max-width: 100%; color: #e7edf3; font: inherit; }
+.adaptive-report { min-width: 0; max-width: 100%; color: var(--am-text,var(--text)); font: inherit; }
+.adaptive-probe-result {
+    display:grid;gap:8px;padding:16px 18px;
+    background:var(--am-primary-wash,var(--surface));border:1px solid
+    var(--am-border,var(--border));border-radius:12px;min-width:0;
+}
+.adaptive-probe-result strong {
+    color:var(--am-text,var(--text));font-size:14px;line-height:1.5;
+}
+.adaptive-probe-result p {
+    margin:0;color:var(--am-text-2,var(--muted));font-size:12px;line-height:1.6;
+}
 .adaptive-summary {
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
     border: 1px solid rgba(46, 214, 168, .22); border-radius: 14px;
