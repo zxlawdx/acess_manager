@@ -87,7 +87,8 @@
       wrapped.name="AbortError"; // preserve discovery cancellation branch
       return wrapped;
     }
-    if (error instanceof TypeError && /fetch|network|load failed/i.test(error.message||"")) {
+    if ((error instanceof TypeError || error?.name === "TypeError") &&
+        /fetch|network|load failed/i.test(error.message||"")) {
       return new OperationError("NETWORK_UNREACHABLE");
     }
     return new OperationError("OPERATION_STATE");
