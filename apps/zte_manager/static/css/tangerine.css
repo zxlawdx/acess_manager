@@ -741,3 +741,45 @@ html[data-theme] #firmwareShapeOutput {
 @media(prefers-reduced-motion:reduce) {
   html[data-theme] .am-toolpanel{animation:none!important;}
 }
+
+/* Historic operations share one accessible timeline across advanced tools. */
+html[data-theme] .am-history-timeline {
+  list-style:none;margin:0;padding:0 0 0 18px;display:grid;gap:0;
+  border-left:2px solid var(--am-selected);min-width:0;
+}
+html[data-theme] .am-history-item {
+  display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;
+  gap:5px 14px;position:relative;padding:13px 12px 13px 21px;
+  border-bottom:1px solid var(--am-border);min-width:0;
+}
+html[data-theme] .am-history-item::before {
+  content:"";width:10px;height:10px;border-radius:50%;
+  background:var(--am-primary);border:2px solid var(--am-surface);
+  position:absolute;left:-24px;top:17px;box-shadow:0 0 0 1px var(--am-selected);
+}
+html[data-theme] .am-history-item strong {
+  color:var(--am-text)!important;font:700 12px/1.45 var(--font-sans)!important;
+  min-width:0;overflow-wrap:anywhere;
+}
+html[data-theme] .am-history-state {
+  font:700 11px/1.5 var(--font-sans);
+  color:var(--am-primary-deep);background:var(--am-primary-wash);
+  border-radius:50px;padding:2px 9px;
+}
+html[data-theme] .am-history-item time {
+  grid-column:1/-1;color:var(--am-text-2)!important;
+  font:500 10px/1.5 var(--font-mono)!important;
+}
+html[data-theme] .am-history-empty {
+  padding:24px;text-align:center;color:var(--am-text-2)!important;
+  border-radius:11px;border:1px dashed var(--am-border);
+}
+html[data-theme] .am-history-backup {
+  border-radius:11px;padding:14px 17px;border:1px solid var(--am-border);
+  background:var(--am-bg)!important;color:var(--am-text)!important;
+  font:650 12px/1.5 var(--font-sans)!important;overflow-wrap:anywhere;
+}
+@media(max-width:640px){
+  html[data-theme] .am-history-item{grid-template-columns:minmax(0,1fr);}
+  html[data-theme] .am-history-state{justify-self:start;}
+}
