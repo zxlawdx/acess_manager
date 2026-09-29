@@ -23,7 +23,7 @@
    }
    if(typeof value==="boolean")return value?"Sim":"Não";
    const text=String(value);
-   if(/(?:\\b(?:GET|POST|PUT|PATCH|DELETE)\\s+\\/|https?:\\/\\/|\\b(?:password|token|secret|authorization)\\s*[:=]|traceback|<script)/i.test(text))
+   if (/(?:\b(?:GET|POST|PUT|PATCH|DELETE)\s+\/|https?:\/\/|\b(?:password|token|secret|authorization)\s*[:=]|traceback|<script)/i.test(text))
      return "Informação técnica reservada.";
    return text.length>220?text.slice(0,217)+"...":text;
  }
