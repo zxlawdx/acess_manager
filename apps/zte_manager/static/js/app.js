@@ -186,79 +186,76 @@ async function apiRequest(
     renderBusyOverlay();
     const slowTimer = setTimeout(updateRequestStatus, 180);
     try {
+    const { expected, ...fetchOptions } = options;
     const config = {
         method: "GET",
         headers: {
             "Content-Type": "application/json",
             ...(options.headers || {})
         },
-        ...options
+        ...fetchOptions
     };
-
-    const response = await fetch(
-        `${API_BASE}${endpoint}`,
-        config
-    );
-
+    const errors = typeof window === "object" ? window.AccessManagerErrors : null;
+    const response = await fetch(`${API_BASE}${endpoint}`, config);
+    const contentType = response.headers.get("content-type") || "";
     let data = null;
-    const contentType = response.headers.get(
-        "content-type"
-    );
-
-    try {
-        if (
-            contentType
-            && contentType.includes("application/json")
-        ) {
-            data = await response.json();
+    if (response.status !== 204) {
+        if (contentType.includes("application/json")) {
+            try { data = await response.json(); }
+            catch {
+                if (response.ok) {
+                    throw errors
+                        ? new errors.OperationError("INVALID_DEVICE_RESPONSE")
+                        : new Error("O equipamento enviou uma resposta inesperada.");
+                }
+            }
         } else {
-            data = await response.text();
+            try { data = await response.text(); }
+            catch { data = null; }
         }
-    } catch {
-        data = null;
     }
-
-    if (
-        response.ok
-        && data
-        && typeof data === "object"
-        && data.error
-    ) {
-        throw new Error(normalizeApiErrorMessage(data.error, 0, data.type || ""));
-    }
-
-    if (!response.ok) {
-        let message = `Erro HTTP ${response.status}`;
-
-        if (
-            data
-            && typeof data === "object"
-        ) {
-            message = (
-                data.detail
-                || data.message
-                || message
+    if (!response.ok || (data && typeof data === "object" &&
+        !Array.isArray(data) && (data.error || data.success === false))) {
+        if (errors) {
+            const payload = data && typeof data === "object" ? data :
+                { error: "" };
+            throw errors.fromPayload(
+                payload.error ? payload :
+                    { ...payload, error: payload.message || "" },
+                {status: response.status}
             );
-        } else if (
-            typeof data === "string"
-            && data.trim()
-        ) {
-            message = data;
         }
-
         throw new Error(normalizeApiErrorMessage(
-            message,
+            data && typeof data === "object"
+                ? (data.error || data.message || "")
+                : "",
             response.status,
             data && typeof data === "object" ? data.type || "" : ""
         ));
     }
-
+    if (expected === "object") {
+        if (errors) errors.ensureObject(data);
+        else if (!data || typeof data !== "object" || Array.isArray(data)) {
+            throw new Error("A resposta do equipamento não pôde ser interpretada.");
+        }
+    }
     return data;
     } catch (error) {
-        const friendly = new Error(normalizeApiErrorMessage(error));
-        // Discovery timeout handlers check AbortError to keep session active.
-        if (error?.name === "AbortError") friendly.name = "AbortError";
+        const errors = typeof window === "object" ? window.AccessManagerErrors : null;
+        const friendly = errors ? errors.fromThrown(error) :
+            new Error(normalizeApiErrorMessage(error));
+        if (!errors && error?.name === "AbortError") friendly.name = "AbortError";
         updateRequestStatus(friendly.message);
+        // An isolated expired probe must not force a logout.
+        if (typeof document.dispatchEvent === "function" &&
+            typeof CustomEvent === "function" && friendly.code) {
+            document.dispatchEvent(new CustomEvent("am:api-failure", {
+                detail:{
+                    code:friendly.code,kind:friendly.kind,
+                    status:friendly.status || 0,retryable:friendly.retryable
+                }
+            }));
+        }
         throw friendly;
     } finally {
         clearTimeout(slowTimer);
