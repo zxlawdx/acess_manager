@@ -21,6 +21,30 @@
                     </div>
                 </div>
 
+                <section id="topologySection" class="am-topology-section" aria-label="Grafo dos dispositivos">
+                    <header class="am-topology-header">
+                        <div>
+                            <span class="section-kicker">MAPA DE ASSOCIAÇÕES</span>
+                            <h3>Dispositivos conectados</h3>
+                            <p>Grafo lógico construído com as leituras reais de clientes Wi-Fi e Ethernet da ONT. As posições não representam localização física.</p>
+                        </div>
+                        <span id="topologyDeviceCount" class="am-topology-count" aria-live="polite">Aguardando leitura</span>
+                    </header>
+                    <div class="am-topology-layout">
+                        <div id="topologyGraph" class="am-topology-stage" role="region" aria-label="Clientes e conexões" aria-live="polite">Aguardando leitura dos clientes conectados...</div>
+                        <aside id="topologyDetails" class="am-topology-details" aria-live="polite">Selecione um dispositivo após carregar os clientes.</aside>
+                    </div>
+                    <div class="am-topology-calibration">
+                        <label>RSSI real a 1 metro (dBm)
+                            <input type="number" id="topologyRssiOneMeter" min="-110" max="-10" step="1" placeholder="Ex.: -45" inputmode="decimal">
+                        </label>
+                        <label>Fator do ambiente (n)
+                            <input type="number" id="topologyPathLoss" min="1.6" max="6" step="0.1" placeholder="Ex.: 3,0" inputmode="decimal">
+                        </label>
+                        <p>Opcional. Só apresenta distância estimada após calibração no ambiente. RSSI sozinho não permite medir metros, e redes cabeadas não possuem RSSI.</p>
+                    </div>
+                </section>
+
                 <div class="am-client-workbench">
                     <div class="am-workbench-tabs" role="tablist" aria-label="Tipo de dispositivo">
                         <button class="am-workbench-tab" id="client-tab-wireless" type="button"
