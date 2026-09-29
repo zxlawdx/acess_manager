@@ -629,3 +629,115 @@ html[data-theme] .management-status-strip strong{color:var(--am-text)!important;
  html[data-theme] .am-section-intro .advanced-actions{max-width:100%;}
  html[data-theme] .am-control-label{display:none;}
 }
+
+/* Semantically distinct advanced workbench: 5 native tool panels. */
+html[data-theme] #page-advanced .advanced-actions {
+  display:flex!important;flex-wrap:wrap;align-items:center;gap:8px!important;
+  width:100%;margin:20px 0 2px;
+}
+html[data-theme] #page-advanced .advanced-actions button {
+  display:inline-flex!important;align-items:center;justify-content:center;
+  text-align:center!important;min-height:40px!important;padding:9px 13px!important;
+  border:1px solid var(--am-border)!important;border-radius:9px!important;
+  background:var(--am-surface)!important;color:var(--am-text)!important;
+  font:650 12px/1.4 var(--font-sans)!important;white-space:normal;
+}
+html[data-theme] #page-advanced .advanced-actions button:focus-visible {
+  outline:2px solid var(--am-primary-deep);outline-offset:2px;
+}
+html[data-theme] #page-advanced .advanced-actions button:hover:not(:disabled) {
+  border-color:var(--am-primary)!important;background:var(--am-primary-wash)!important;
+}
+html[data-theme] .am-workbench {
+  min-width:0;margin-top:20px;display:flex;flex-direction:column;gap:20px;
+}
+html[data-theme] .am-workbench-tabs {
+  position:sticky;top:var(--topbar-height,78px);z-index:22;
+  display:flex;gap:5px;overflow-x:auto;scrollbar-width:thin;min-height:54px;
+  background:var(--am-bg);padding:5px 4px 12px;
+  border-bottom:1px solid var(--am-border);
+}
+html[data-theme] .am-workbench-tab {
+  display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;
+  padding:11px 15px!important;color:var(--am-text-2)!important;
+  background:transparent!important;border:1px solid transparent!important;
+  border-radius:10px!important;cursor:pointer;
+  font:700 12px/1.35 var(--font-sans)!important;min-height:42px;
+}
+html[data-theme] .am-workbench-tab .material-symbols-outlined {
+  color:inherit;font-size:19px;
+}
+html[data-theme] .am-workbench-tab.is-active,
+html[data-theme] .am-workbench-tab[aria-selected="true"] {
+  background:var(--am-selected)!important;color:var(--am-primary-deep)!important;
+  border-color:var(--am-selected)!important;
+}
+html[data-theme] .am-workbench-tab:hover:not(.is-active) {
+  background:var(--am-primary-wash)!important;color:var(--am-text)!important;
+}
+html[data-theme] .am-workbench-tab:focus-visible {
+  outline:2px solid var(--am-primary-deep)!important;outline-offset:2px!important;
+}
+html[data-theme] .am-toolpanel[hidden] {display:none!important;}
+html[data-theme] .am-toolpanel {
+  min-width:0;display:grid;gap:14px;
+  animation:am-content-enter .22s ease-out;
+}
+html[data-theme] .am-toolpanel > .advanced-grid {margin:0!important;}
+html[data-theme] .am-toolpanel .subsection-title {margin:7px 0 0!important;}
+html[data-theme] .am-toolpanel .panel {min-width:0;}
+html[data-theme] .am-toolpanel .capability-grid {
+  display:grid!important;gap:11px!important;
+  grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr))!important;
+  align-items:start;
+}
+html[data-theme] .am-toolpanel .capability-card {
+  background:var(--am-surface)!important;border:1px solid var(--am-border)!important;
+  border-radius:11px!important;padding:14px 16px!important;min-width:0;
+}
+html[data-theme] .am-toolpanel .capability-card strong {
+  color:var(--am-text)!important;font:750 13px/1.4 var(--font-sans)!important;
+}
+html[data-theme] .am-toolpanel .operation-meta {
+  color:var(--am-text-2)!important;font:550 11px var(--font-sans)!important;
+}
+html[data-theme] .am-toolpanel .operations-form {
+  display:grid;gap:12px;min-width:0;
+}
+html[data-theme] .am-toolpanel .field-grid {
+  grid-template-columns:repeat(auto-fit,minmax(min(155px,100%),1fr))!important;
+  gap:12px!important;
+}
+html[data-theme] .am-toolpanel .operations-output,
+html[data-theme] .am-inspector-result {
+  overflow:auto;max-width:100%;min-width:0;border-radius:11px!important;
+  border:1px solid var(--am-border)!important;background:var(--am-bg)!important;
+  color:var(--am-text)!important;padding:14px!important;
+}
+html[data-theme] .am-toolpanel #featureInspectorButtons {
+  display:flex!important;flex-wrap:wrap;gap:8px;padding-bottom:16px;
+  border-bottom:1px solid var(--am-border);margin-bottom:15px;
+}
+html[data-theme] .am-toolpanel #featureInspectorButtons button {
+  border-radius:9px!important;padding:9px 13px!important;min-height:36px;
+  white-space:normal;
+}
+html[data-theme] .am-inspector-result :is(table,pre,dl) {
+  max-width:100%;overflow:auto;min-width:0;
+}
+html[data-theme] #firmwareShapeOutput {
+  background:var(--am-surface)!important;border:1px solid var(--am-border)!important;
+  color:var(--am-text)!important;font:12px/1.6 var(--font-mono)!important;
+}
+@keyframes am-content-enter {
+  from {opacity:.55;transform:translateY(3px);}
+  to {opacity:1;transform:translateY(0);}
+}
+@media(max-width:760px) {
+  html[data-theme] .am-workbench-tabs{top:0;position:relative;}
+  html[data-theme] #page-advanced .advanced-actions button{flex:1 1 125px!important;}
+  html[data-theme] .am-toolpanel .advanced-grid{grid-template-columns:minmax(0,1fr)!important;}
+}
+@media(prefers-reduced-motion:reduce) {
+  html[data-theme] .am-toolpanel{animation:none!important;}
+}
