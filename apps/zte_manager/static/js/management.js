@@ -33,11 +33,25 @@ function managementEscape(value) {
 
 
 function managementJson(value) {
-    return JSON.stringify(
-        value,
-        null,
-        2
-    );
+    // Only explicit technical-copy operations receive JSON. Keep types
+    // intact but redact secrets recursively before presenting or copying.
+    const secrets = /pass(?:word|wd|phrase)?|secret|token|cookie|authorization|api[_-]?key|credential|session[_-]?key/i;
+    const seen = new WeakSet();
+    return JSON.stringify(value, (key, item) => {
+        if (secrets.test(key)) return "[reservado]";
+        if (typeof item === "string") {
+            const lower = item.toLowerCase();
+            if (["password=", "password:", "token=", "token:",
+                 "secret=", "secret:", "cookie="].some(k => lower.includes(k)) ||
+                (lower.startsWith("http") && lower.includes("@")))
+                return "[reservado]";
+        }
+        if (item && typeof item === "object") {
+            if (seen.has(item)) return "[referência circular]";
+            seen.add(item);
+        }
+        return item;
+    }, 2);
 }
 
 
@@ -82,9 +96,17 @@ function managementOutput(id, value) {
             }
         };
         window.renderAdaptiveDiagnostic(report, element);
+    } else if (value && typeof value === "object") {
+        // Never show arbitrary nested firmware data when the card renderer
+        // failed to load. The technician can retry without session loss.
+        element.textContent = "Visualização indisponível. Atualize a interface.";
     } else {
-        element.textContent = typeof value === "string"
-            ? value : managementJson(value);
+        const message=String(value ?? "");
+        const lower=message.toLowerCase();
+        element.textContent = ["password=", "password:", "token=", "token:",
+            "secret=", "secret:", "/api/"].some(k => lower.includes(k))
+            ? "Resultado técnico reservado. Consulte os registros internos."
+            : message;
     }
 }
 
