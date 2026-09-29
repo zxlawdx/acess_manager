@@ -552,8 +552,8 @@ function renderNativeDetection(catalog, results, model) {
     const confirmed = rows.filter(row => row.status === "detected").length;
     renderTrackerDiscovery({
         model, family: "thinklua_native", candidate_features: rows,
-        reason: `Menus nativos: ${checked}/${rows.length} testados, ${confirmed} confirmados. ` +
-            "Uma falha de GET não retira permissão de configuração."
+        reason: `Recursos consultados: ${checked}/${rows.length}, ${confirmed} confirmados. ` +
+            "Uma consulta sem resposta não comprova ausência de funcionalidade."
     });
 }
 
@@ -852,7 +852,7 @@ async function detectConnectedModel() {
             return;
         }
         const message = `Modelo: ${profile.model} · Firmware: ${bootstrap.firmware || "não informado"}` +
-            ` · Perfil: ${profile.family}. Identificação confirmada no login. ` +
+            " · Identificação confirmada no login. " +
             "Use Detectar recursos para validar os GETs disponíveis.";
         if (output) output.textContent = message;
         if (status) status.textContent = message;
@@ -1378,7 +1378,7 @@ function renderCapabilities(
                         </div>
 
                         <div class="operation-meta">
-                            ${spec.writable ? "<span>ALTERAÇÃO</span>" : "<span>LEITURA</span>"}
+                            ${spec.writable ? "<span>Configuração prevista no perfil</span>" : "<span>Consulta neste aplicativo</span>"}
                             ${spec.dangerous ? "<span>CONFIRMAÇÃO</span>" : ""}
                         </div>
 
