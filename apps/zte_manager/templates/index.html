@@ -634,12 +634,37 @@
                         <h2>Clientes conectados</h2>
                         <p>Visão de dispositivos wireless e cabeados.</p>
                     </div>
+                    <div class="am-client-header-actions">
+                        <label class="am-client-search" for="clientsSearch">
+                            <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                            <input id="clientsSearch" type="search" placeholder="Buscar por nome, IP ou MAC" autocomplete="off">
+                        </label>
+                        <button id="clientsRefreshButton" class="button" type="button">
+                            <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                            Atualizar
+                        </button>
+                    </div>
                     <div class="client-counter-row">
                         <div><span>Wi-Fi</span><strong id="wifiClientCount">0</strong></div>
                         <div><span>LAN</span><strong id="lanClientCount">0</strong></div>
                     </div>
                 </div>
 
+                <div class="am-client-workbench">
+                    <div class="am-workbench-tabs" role="tablist" aria-label="Tipo de dispositivo">
+                        <button class="am-workbench-tab" id="client-tab-wireless" type="button"
+                                data-am-tab="wireless" role="tab" aria-selected="true"
+                                aria-controls="client-panel-wireless">
+                            <span class="material-symbols-outlined" aria-hidden="true">wifi</span> Wi-Fi
+                        </button>
+                        <button class="am-workbench-tab" id="client-tab-ethernet" type="button"
+                                data-am-tab="ethernet" role="tab" aria-selected="false"
+                                aria-controls="client-panel-ethernet">
+                            <span class="material-symbols-outlined" aria-hidden="true">lan</span> Ethernet
+                        </button>
+                    </div>
+                    <section id="client-panel-wireless" class="am-toolpanel" role="tabpanel"
+                             data-am-panel="wireless" aria-labelledby="client-tab-wireless">
                 <article class="panel table-panel">
                     <div class="panel-header"><div><span class="section-kicker">WIRELESS</span><h3>Clientes Wi-Fi</h3></div></div>
                     <div class="table-wrap">
@@ -650,6 +675,9 @@
                     </div>
                 </article>
 
+                    </section>
+                    <section id="client-panel-ethernet" class="am-toolpanel" role="tabpanel"
+                             data-am-panel="ethernet" aria-labelledby="client-tab-ethernet" hidden>
                 <article class="panel table-panel">
                     <div class="panel-header"><div><span class="section-kicker">ETHERNET</span><h3>Clientes LAN</h3></div></div>
                     <div class="table-wrap">
@@ -659,6 +687,8 @@
                         </table>
                     </div>
                 </article>
+                    </section>
+                </div>
             </section>
 
 
