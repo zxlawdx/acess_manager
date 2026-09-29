@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 from typing import Any, Iterable
@@ -10,31 +11,36 @@ from apps.zte_manager.model.device_adapters import DeviceAdapter
 from apps.zte_manager.services.error_policy import CapabilityUnconfirmed
 
 
+# The operator's generic firmware inspector is *not* a configuration dump.
+# URL/ACS fields frequently carry embedded session tokens or private endpoints.
+# The full response is retained only inside the authenticated device transport.
 _SECRET_MARKERS = (
-    "password", "passwd", "passphrase", "secret",
-    "token", "cookie", "credential", "authorization",
-    "private_key", "sessionid", "session_key",
+    "password", "passwd", "passphrase", "secret", "credential",
+    "token", "cookie", "authorization", "username", "userid",
+    "url", "uri", "acs", "privatekey", "apikey", "logstr",
+)
+_INLINE_SECRET = re.compile(
+    r"https?://|(?:password|passwd|secret|token|cookie|authorization|"
+    r"credential)\\s*[:=]|\\b[a-z0-9+/]{44,}={0,2}\\b",
+    re.IGNORECASE,
 )
 
 
 def _mask_secrets(value: Any) -> Any:
-    """Remove segredos antes de qualquer retorno genérico de capability."""
+    """Allow structural introspection, never forward credentials/ACS URLs."""
     if isinstance(value, dict):
         sanitized = {}
-
         for key, item in value.items():
-            lower = str(key).lower()
-
+            lower = str(key).lower().replace("_", "").replace("-", "")
             if any(marker in lower for marker in _SECRET_MARKERS):
                 sanitized[key] = "••••••••" if item not in (None, "") else ""
             else:
                 sanitized[key] = _mask_secrets(item)
-
         return sanitized
-
     if isinstance(value, list):
         return [_mask_secrets(item) for item in value]
-
+    if isinstance(value, str) and _INLINE_SECRET.search(value):
+        return "••••••••"
     return value
 
 
