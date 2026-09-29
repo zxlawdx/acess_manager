@@ -1305,28 +1305,45 @@ function formatNumber(value) {
 
 
 function renderDiagnosticErrors(result) {
-    const entries = Object.entries(
-        result.errors || {}
-    );
-
-    if (!entries.length) {
-        return "";
-    }
-
+    const entries = Object.keys(result.errors || {});
+    if (!entries.length) return "";
+    const descriptions = {
+        device: "Informações do equipamento",
+        optical: "Sinal óptico e registro da fibra",
+        wan: "Conexão de Internet",
+        pppoe: "Sessão PPPoE",
+        lan_ports: "Portas Ethernet",
+        wifi_clients: "Clientes Wi-Fi",
+        lan_clients: "Clientes Ethernet",
+        ping: "Ping executado pela ONT",
+        traceroute: "Caminho da conexão",
+        wifi_radios: "Rádios Wi-Fi",
+        wifi_environment: "Interferência Wi-Fi",
+        dns_health: "Resolução DNS",
+        dhcp: "Servidor DHCP",
+        firmware_health: "Saúde do equipamento",
+        speedtest: "Teste de velocidade"
+    };
+    const label = raw => {
+        const name = String(raw).replace(/^rule:/, "")
+            .replace(/^validation_/, "");
+        return descriptions[name] || "Etapa complementar";
+    };
+    // The backend may return exception strings that contain router details.
+    // Keep the safe stage category, never echo the raw key or exception text.
     return `
         <details class="support-result-card support-details">
             <summary>
-                ${entries.length} coleta(s) indisponível(is) neste firmware/login
+                ${entries.length} etapa(s) sem confirmação
             </summary>
             <div class="error-list">
-                ${entries.map(
-                    ([name, message]) => `
-                        <div>
-                            <strong>${supportEscape(name)}</strong>
-                            <span>${supportEscape(message)}</span>
-                        </div>
-                    `
-                ).join("")}
+                ${entries.map(name => `
+                    <div>
+                        <strong>${supportEscape(label(name))}</strong>
+                        <span>Não foi possível concluir esta leitura. Isso não
+                            comprova incompatibilidade do firmware.</span>
+                    </div>
+                `).join("")}
             </div>
         </details>
     `;
