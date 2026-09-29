@@ -76,3 +76,40 @@ def verify_ssid(
         # never compare masked placeholders or expose the password in history.
         checked += 1
     return checked > 0
+
+
+def verify_channel_choice(
+    band: str, config: Mapping[str, Any],
+    before: Any, response: Any, after: Any,
+) -> bool:
+    """Confirm the exact channel/Auto setting in a *fresh* ZTE readback.
+
+    Do not assert unrelated radio parameters or infer success from HTTP 200.
+    This verifier is for channel-only remediation, not the entire Wi-Fi form.
+    """
+    if (not isinstance(response, Mapping)
+            or response.get("success") is not True
+            or not isinstance(after, list)):
+        return False
+    expected = next((
+        radio for radio in after
+        if isinstance(radio, Mapping)
+        and str(radio.get("banda", radio.get("band", ""))).lower() == band.lower()
+    ), None)
+    if not isinstance(expected, Mapping):
+        return False
+    actual_auto = expected.get("canal_automatico", expected.get("auto_channel"))
+    if isinstance(actual_auto, str):
+        actual_auto = actual_auto.strip().lower() in {"true", "1", "on"}
+    if "auto_channel" in config:
+        if actual_auto is None or bool(actual_auto) != bool(config["auto_channel"]):
+            return False
+    if config.get("auto_channel") is True:
+        # The actual RF channel can still change while Auto is enabled.
+        return actual_auto is True
+    if config.get("channel") not in (None, "", "Auto"):
+        try:
+            return int(expected.get("canal", expected.get("channel"))) == int(config["channel"])
+        except (TypeError, ValueError):
+            return False
+    return False
