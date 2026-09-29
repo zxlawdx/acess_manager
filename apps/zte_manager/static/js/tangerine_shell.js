@@ -66,6 +66,13 @@
       });
     });
     compactMedia?.addEventListener?.("change", render);
+    document.addEventListener?.("keydown", event => {
+      if (event.key === "Escape" && mobileOpen) {
+        mobileOpen = false;
+        render();
+        toggle.focus?.();
+      }
+    });
     document.getElementById("appearanceSidebarButton")?.addEventListener("click", () => {
       if (isCompact() && mobileOpen) {
         mobileOpen = false;
