@@ -116,6 +116,26 @@ function managementOutput(id, value) {
 }
 
 
+function managementNotifyOutcome(result, verifiedMessage) {
+    // The audit outcome is authoritative when present: a successful POST
+    // without confirmed firmware readback must never be labelled "updated".
+    const outcome = result?.audit_outcome ||
+        (result?.verified === true ? "verified" :
+         result?.partial || result?.uncertain ? "uncertain" :
+         result?.success === false ? "failed" : "accepted");
+    if (outcome === "verified") showToast(verifiedMessage);
+    else if (outcome === "failed") showToast(
+        "O equipamento não confirmou esta operação. Confira o estado atual."
+    );
+    else if (outcome === "uncertain") showToast(
+        "A operação pode ter sido aplicada parcialmente. Verifique a configuração antes de repetir."
+    );
+    else showToast(
+        "Solicitação aceita. A alteração ainda aguarda confirmação por nova leitura."
+    );
+}
+
+
 async function managementCopyText(
     text,
     successMessage = "Conteúdo copiado."
@@ -2106,9 +2126,7 @@ async function saveManagementQos() {
             result
         );
 
-        showToast(
-            "QoS atualizado."
-        );
+        managementNotifyOutcome(result, "QoS atualizado.");
     } catch (error) {
         showToast(
             error.message
@@ -2148,9 +2166,7 @@ async function saveManagementFirewall() {
             result
         );
 
-        showToast(
-            "Firewall atualizado."
-        );
+        managementNotifyOutcome(result, "Firewall atualizado.");
     } catch (error) {
         showToast(
             error.message
@@ -2188,9 +2204,7 @@ async function saveManagementFirewallRule() {
             result
         );
 
-        showToast(
-            "Filtro de firewall salvo."
-        );
+        managementNotifyOutcome(result, "Filtro de firewall salvo.");
     } catch (error) {
         showToast(
             error.message
@@ -2239,9 +2253,7 @@ async function deleteManagementFirewallRule() {
             result
         );
 
-        showToast(
-            "Filtro removido."
-        );
+        managementNotifyOutcome(result, "Filtro removido.");
     } catch (error) {
         showToast(
             error.message
@@ -2276,9 +2288,7 @@ async function saveManagementFilterGlobal() {
             result
         );
 
-        showToast(
-            "Política global atualizada."
-        );
+        managementNotifyOutcome(result, "Política global atualizada.");
     } catch (error) {
         showToast(
             error.message
@@ -2306,9 +2316,7 @@ async function saveManagementSntp() {
             result
         );
 
-        showToast(
-            "SNTP atualizado."
-        );
+        managementNotifyOutcome(result, "SNTP atualizado.");
     } catch (error) {
         showToast(
             error.message
@@ -2343,9 +2351,7 @@ async function saveManagementTr069() {
             result
         );
 
-        showToast(
-            "TR-069 atualizado."
-        );
+        managementNotifyOutcome(result, "TR-069 atualizado.");
     } catch (error) {
         showToast(
             error.message
@@ -2380,9 +2386,7 @@ async function createManagementWan() {
             result
         );
 
-        showToast(
-            "Nova WAN criada."
-        );
+        managementNotifyOutcome(result, "Nova WAN criada.");
     } catch (error) {
         showToast(
             error.message
@@ -2420,9 +2424,7 @@ async function updateManagementWan() {
             result
         );
 
-        showToast(
-            "WAN atualizada."
-        );
+        managementNotifyOutcome(result, "WAN atualizada.");
     } catch (error) {
         showToast(
             error.message
@@ -2466,9 +2468,7 @@ async function deleteManagementWan() {
             result
         );
 
-        showToast(
-            "WAN removida."
-        );
+        managementNotifyOutcome(result, "WAN removida.");
     } catch (error) {
         showToast(
             error.message
