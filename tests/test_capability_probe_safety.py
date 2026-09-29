@@ -29,6 +29,10 @@ class ProbeSafetyTests(unittest.TestCase):
         gateway=ThinkLuaCapabilityGateway(Device(),Adapter())
         result=gateway.probe("wifi_status")
         self.assertFalse(result["available"])
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertEqual(result["reason"], "probe_inconclusive")
+        self.assertTrue(result["probeable"])
+
         message=result["error"].lower()
         for secret in ("post","secretview","very_secret","http","query",".lua"):
             self.assertNotIn(secret,message)
