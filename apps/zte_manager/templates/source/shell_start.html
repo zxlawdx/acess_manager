@@ -20,7 +20,7 @@
         document.documentElement.dataset.sidebarCollapsed =
             String(localStorage.getItem("access-manager-sidebar-collapsed") === "true");
         var savedZoom = Number(localStorage.getItem("zteAutomatic.uiZoom")) || 1;
-        document.documentElement.style.setProperty("--am-zoom",
+        document.documentElement.style.setProperty("--am-font-scale",
             String(Math.min(1.6, Math.max(.8, savedZoom))));
     } catch (e) {
         document.documentElement.dataset.sidebarCollapsed = "false";
@@ -45,6 +45,7 @@
 <link rel="stylesheet" href="{{ static('zte_manager/css/tangerine_workflows.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/components/topology.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/components/firmware_inspector.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/components/shell_layout.css') }}">
 
 <div class="app-shell">
 
