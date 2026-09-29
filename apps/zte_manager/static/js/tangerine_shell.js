@@ -67,6 +67,10 @@
     });
     compactMedia?.addEventListener?.("change", render);
     document.getElementById("appearanceSidebarButton")?.addEventListener("click", () => {
+      if (isCompact() && mobileOpen) {
+        mobileOpen = false;
+        render();
+      }
       const control = document.getElementById("appearanceSelect");
       control?.focus();
     });
