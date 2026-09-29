@@ -1300,7 +1300,14 @@ class ChannelAnalyzer:
             for channel in candidates
         } if scan_confirmed and neighbors else {}
         best = min(scores, key=scores.get) if scores else None
-        current_score = scores.get(int(current)) if current is not None else None
+        # An existing manual channel may be 3/4/8 rather than one of the
+        # non-overlapping candidate channels. Score its observed interference
+        # separately; never add it to the set of recommended destinations.
+        current_score = (
+            self._score(band, int(current), neighbors)
+            if current is not None and scan_confirmed and neighbors
+            and candidates else None
+        )
         best_score = scores.get(best) if best is not None else None
         recommendation: dict[str, Any] = {}
         if (
