@@ -207,35 +207,29 @@
             <section id="page-connection" class="page active">
                 <div class="login-layout">
 
-                    <div class="login-hero am-connect-story">
-                        <div class="am-story-top">
-                            <span class="am-story-chip"><span class="material-symbols-outlined" aria-hidden="true">bolt</span> ACCESS MANAGER</span>
-                            <h2>Conectar é só <em>o começo.</em></h2>
-                            <p>Uma área de trabalho para identificar, configurar e diagnosticar sua ONT, com cada etapa no mesmo lugar.</p>
+                    <aside class="login-hero am-connect-story am-inventory-panel" aria-label="Equipamentos registrados">
+                        <div class="am-inventory-header">
+                            <div>
+                                <span class="section-kicker">ACESSO RÁPIDO</span>
+                                <h2>Seus <em>equipamentos.</em></h2>
+                                <p>Selecione uma ONT do inventário local ou informe outro endereço.</p>
+                            </div>
+                            <button id="connectionNewTarget" class="am-inventory-new" type="button" title="Adicionar outra ONT" aria-label="Informar novo equipamento">
+                                <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                            </button>
                         </div>
-                        <div class="am-story-art" aria-hidden="true">
-                            <svg viewBox="0 0 410 250" fill="none" role="presentation" focusable="false">
-                                <path d="M88 124H322M205 49V202" stroke="currentColor" stroke-width="1.6" stroke-dasharray="5 7" opacity=".33"/>
-                                <ellipse cx="205" cy="124" rx="130" ry="93" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 8" opacity=".22"/>
-                                <rect x="137" y="85" width="136" height="79" rx="21" fill="var(--am-surface)" stroke="var(--am-border)" stroke-width="2"/>
-                                <rect x="154" y="104" width="102" height="42" rx="12" fill="var(--am-primary)"/>
-                                <path d="M174 118a14 14 0 0121 0m-26-5a21 21 0 0131 0m-21 11h.1" stroke="var(--am-primary-ink)" stroke-width="3" stroke-linecap="round"/>
-                                <circle cx="224" cy="124" r="4" fill="var(--am-primary-ink)"/><circle cx="237" cy="124" r="4" fill="var(--am-primary-ink)"/>
-                                <rect x="32" y="108" width="80" height="40" rx="13" fill="var(--am-surface)" stroke="var(--am-border)" stroke-width="2"/>
-                                <rect x="298" y="108" width="80" height="40" rx="13" fill="var(--am-surface)" stroke="var(--am-border)" stroke-width="2"/>
-                                <path d="M50 127h44M50 135h27M316 127h44M316 135h27" stroke="var(--am-primary-deep)" stroke-width="3" stroke-linecap="round" opacity=".65"/>
-                                <circle cx="205" cy="35" r="16" fill="var(--am-primary-wash)" stroke="var(--am-primary)" stroke-width="2"/><path d="m199 35 4 4 8-9" stroke="var(--am-primary-deep)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                <circle cx="205" cy="212" r="16" fill="var(--am-primary-wash)" stroke="var(--am-primary)" stroke-width="2"/><path d="M197 212h16m-8-8v16" stroke="var(--am-primary-deep)" stroke-width="2" stroke-linecap="round"/>
-                            </svg>
+                        <label class="am-inventory-search" for="connectionInventorySearch">
+                            <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                            <input id="connectionInventorySearch" type="search" placeholder="Pesquisar por modelo ou IP" autocomplete="off">
+                        </label>
+                        <div id="connectionInventoryList" class="am-inventory-list" aria-live="polite" aria-busy="false">
+                            <p class="am-inventory-empty">Consultando equipamentos registrados...</p>
                         </div>
-                        <div class="am-story-steps" aria-label="Etapas do atendimento">
-                            <span><b>01</b> Conecte</span>
-                            <span aria-hidden="true" class="am-step-line"></span>
-                            <span><b>02</b> Identifique</span>
-                            <span aria-hidden="true" class="am-step-line"></span>
-                            <span><b>03</b> Configure</span>
+                        <div class="am-inventory-footer">
+                            <span id="connectionInventoryCount">Inventário local</span>
+                            <span class="material-symbols-outlined" aria-hidden="true">router</span>
                         </div>
-                    </div>
+                    </aside>
 
                     <div class="panel login-panel">
                         <div class="panel-heading">
