@@ -104,7 +104,9 @@ test("dashboard mirrors real session and hides untrusted history payloads", asyn
   element("connectedHost","192.0.2.4");
   const doc={
     readyState:"complete",body:{classList:{contains:()=>true}},
-    querySelector:()=>({classList:{toggle(){}},querySelectorAll:()=>[]}),
+    documentElement:{dataset:{}},
+    querySelector:()=>({classList:{toggle(){}},querySelectorAll:()=>[],
+      closest:()=>({classList:{toggle(){}}})}),
     getElementById:id=>elements.get(id)||null,addEventListener(){},
     createElement:tag=>({tagName:tag,textContent:"",children:[],
       append(...items){this.children.push(...items);}})
@@ -135,12 +137,19 @@ test("dashboard mirrors real session and hides untrusted history payloads", asyn
 
 test("collapse persists without triggering backend navigation", () => {
   const saved = new Map(),listeners={},classes = new Set();
+  const shellClasses=new Set();
+  const appShell={classList:{toggle:(name,enabled)=>
+    enabled?shellClasses.add(name):shellClasses.delete(name)}};
   const sidebar = {classList:{toggle:(name,enabled)=>enabled?classes.add(name):classes.delete(name)},
-    querySelectorAll:()=>[]};
+    querySelectorAll:()=>[],closest:selector=>{
+      assert.equal(selector,".app-shell");
+      return appShell;
+    }};
   const glyph={textContent:""};
   const toggle={setAttribute:()=>{},querySelector:()=>glyph,
     addEventListener:(type,fn)=>listeners.click=fn};
   const doc={readyState:"complete",querySelector:()=>sidebar,
+    documentElement:{dataset:{}},
     getElementById:id=>id==="sidebarCollapseToggle"?toggle:null};
   vm.runInNewContext(shell,{document:doc,localStorage:{
     getItem:key=>saved.get(key)||null,setItem:(key,v)=>saved.set(key,v)
@@ -148,5 +157,7 @@ test("collapse persists without triggering backend navigation", () => {
   assert.equal(classes.has("is-collapsed"),false);
   listeners.click();
   assert.equal(classes.has("is-collapsed"),true);
+  assert.equal(shellClasses.has("am-shell-collapsed"),true);
+  assert.equal(doc.documentElement.dataset.sidebarCollapsed,"true");
   assert.equal(saved.get("access-manager-sidebar-collapsed"),"true");
 });
