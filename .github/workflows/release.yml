@@ -60,7 +60,10 @@ jobs:
           node --check apps/zte_manager/static/js/app.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/neutral_theme.js
+          node --check apps/zte_manager/static/js/core/api_errors.js
+          node --check apps/zte_manager/static/js/workbench_tabs.js
           node --check apps/zte_manager/static/js/tangerine_shell.js
+          node --test tests/test_api_client_ui.cjs tests/test_advanced_workbench.cjs
           node --check apps/zte_manager/static/js/tangerine_forms.js
           node --test tests/test_tangerine_v2.cjs
           node --test tests/test_tangerine_ui.cjs
@@ -153,6 +156,8 @@ jobs:
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/tangerine_cards.css
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/tangerine_forms.css
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/tangerine_shell.js
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/core/api_errors.js
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/workbench_tabs.js
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/tangerine_forms.js
 
       - name: Package Linux build
@@ -211,6 +216,8 @@ jobs:
           if (-not (Test-Path "dist\ZTEAutomatic\ZTEAutomatic.exe")) { throw "Executavel nao encontrado em dist\ZTEAutomatic\ZTEAutomatic.exe" }
           if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\css\tangerine.css")) { throw "Tangerine CSS nao encontrado no bundle Windows" }
           if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\tangerine_shell.js")) { throw "Tangerine JS nao encontrado no bundle Windows" }
+          if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\core\api_errors.js")) { throw "API errors module nao encontrado no bundle Windows" }
+          if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\workbench_tabs.js")) { throw "Advanced tabs nao encontradas no bundle Windows" }
           Compress-Archive -Path "dist\ZTEAutomatic" -DestinationPath $zip -Force
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256"
