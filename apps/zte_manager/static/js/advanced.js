@@ -1293,8 +1293,14 @@ async function exportFeatureShapes() {
     };
     // O tracker já entregou campos/contagens sem valores pessoais. Isto
     // também funciona quando não existe um adaptador ThinkLua nativo.
-    document.getElementById("firmwareShapeOutput").value =
-        JSON.stringify(report, null, 2);
+    const drawMap = () => {
+        if (window.AccessManagerInspector?.renderMap) {
+            window.AccessManagerInspector.renderMap(report, output);
+        } else {
+            output.textContent = "A visualização dos recursos não está disponível nesta instalação.";
+        }
+    };
+    drawMap();
 
     setBusy(true, "Lendo estrutura do firmware...");
 
@@ -1315,17 +1321,11 @@ async function exportFeatureShapes() {
                 console.warn("Estrutura não disponível:", feature, error);
             }
 
-            output.value = JSON.stringify(report, null, 2);
-            showToast(
-                `Estruturas analisadas: ${index + 1}/${available.length}`
-            );
+            drawMap();
         }
 
-        showToast(
-            tracker && !available.length
-                ? "Mapa estrutural do modelo gerado. Revise antes de compartilhar."
-                : "Mapa estrutural gerado. Revise antes de compartilhar."
-        );
+        drawMap();
+        showToast("Mapa atualizado com as leituras confirmadas da sessão.");
     } finally {
         setBusy(false);
     }
