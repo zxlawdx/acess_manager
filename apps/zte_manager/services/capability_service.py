@@ -18,6 +18,7 @@ _SECRET_MARKERS = (
     "password", "passwd", "passphrase", "secret", "credential",
     "token", "cookie", "authorization", "username", "userid",
     "url", "uri", "acs", "privatekey", "apikey", "logstr",
+    "key", "psk", "pin", "cert", "connectionrequest", "community",
 )
 _INLINE_SECRET = re.compile(
     r"https?://|(?:password|passwd|secret|token|cookie|authorization|"
