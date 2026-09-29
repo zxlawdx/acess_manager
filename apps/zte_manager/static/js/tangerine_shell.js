@@ -8,29 +8,64 @@
     const sidebar = document.querySelector(".sidebar");
     const toggle = document.getElementById("sidebarCollapseToggle");
     if (!sidebar || !toggle) return;
-    let collapsed = false;
-    try { collapsed = localStorage.getItem(STORAGE) === "true"; } catch {}
+    let preferredCollapsed = false;
+    let mobileOpen = false;
+    try {
+      preferredCollapsed = localStorage.getItem(STORAGE) === "true";
+    } catch {}
+    const compactMedia = typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(max-width: 920px)") : null;
+    const isCompact = () => Boolean(compactMedia?.matches);
+    let backdrop = null;
+    if (compactMedia && document.createElement && document.body?.appendChild) {
+      backdrop = document.createElement("button");
+      backdrop.id = "amSidebarBackdrop";
+      backdrop.type = "button";
+      backdrop.hidden = true;
+      backdrop.setAttribute("aria-label", "Fechar menu lateral");
+      backdrop.addEventListener("click", () => {
+        mobileOpen = false;
+        render();
+      });
+      document.body.appendChild(backdrop);
+    }
     function render() {
+      if (!isCompact()) mobileOpen = false;
+      const collapsed = isCompact() ? !mobileOpen : preferredCollapsed;
       sidebar.classList.toggle("is-collapsed", collapsed);
-      const shell = sidebar.closest(".app-shell");
-      shell?.classList.toggle("am-shell-collapsed", collapsed);
-      document.documentElement.dataset.sidebarCollapsed = String(collapsed);
+      sidebar.classList.toggle("am-mobile-open", isCompact() && mobileOpen);
+      const shell = sidebar.closest?.(".app-shell");
+      shell?.classList.toggle("am-shell-collapsed", isCompact() || preferredCollapsed);
+      document.documentElement.dataset.sidebarCollapsed = String(isCompact() || preferredCollapsed);
+      if (backdrop) backdrop.hidden = !(isCompact() && mobileOpen);
       toggle.setAttribute("aria-expanded", String(!collapsed));
-      toggle.setAttribute("aria-label", collapsed ? "Expandir menu lateral" : "Recolher menu lateral");
-      toggle.title = collapsed ? "Expandir menu lateral" : "Recolher menu lateral";
+      toggle.setAttribute("aria-label", collapsed ? "Abrir menu lateral" : "Recolher menu lateral");
+      toggle.title = collapsed ? "Abrir menu lateral" : "Recolher menu lateral";
       const glyph = toggle.querySelector(".material-symbols-outlined");
       if (glyph) glyph.textContent = collapsed ? "menu_open" : "menu";
-      // Native browser tooltip keeps collapsed destinations understandable.
       sidebar.querySelectorAll(".menu-item[data-page]").forEach(button => {
         const text = button.querySelector("span:not(.material-symbols-outlined)");
         if (text) button.title = text.textContent.trim();
       });
     }
     toggle.addEventListener("click", () => {
-      collapsed = !collapsed;
-      try { localStorage.setItem(STORAGE, String(collapsed)); } catch {}
+      if (isCompact()) {
+        mobileOpen = !mobileOpen;
+      } else {
+        preferredCollapsed = !preferredCollapsed;
+        try { localStorage.setItem(STORAGE, String(preferredCollapsed)); } catch {}
+      }
       render();
     });
+    sidebar.querySelectorAll(".menu-item[data-page]").forEach(button => {
+      button.addEventListener?.("click", () => {
+        if (isCompact() && mobileOpen) {
+          mobileOpen = false;
+          render();
+        }
+      });
+    });
+    compactMedia?.addEventListener?.("change", render);
     document.getElementById("appearanceSidebarButton")?.addEventListener("click", () => {
       const control = document.getElementById("appearanceSelect");
       control?.focus();
