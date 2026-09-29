@@ -4,6 +4,7 @@ from typing import Any
 
 
 _OPERATION_LABELS = {
+    "profile_apply": "Aplicação da configuração padrão",
     "wifi_radio_update": "Ajuste de rádio Wi-Fi",
     "wifi_auto_optimization": "Otimização automática de canal Wi-Fi",
     "ssid_update": "Alteração de SSID",
@@ -137,8 +138,12 @@ class AttendanceReportService:
             operation = str(change.get("operation") or "operação")
             label = _OPERATION_LABELS.get(operation, operation.replace("_", " "))
             target = change.get("target")
-            description = label + (" (" + self._safe_target(target) + ")"
-                                   if target else "")
+            # Never include the attendant's saved profile identifier as a
+            # hardware target in a customer-facing copy of the report.
+            description = label + (
+                " (" + self._safe_target(target) + ")"
+                if target and operation != "profile_apply" else ""
+            )
             outcome = change.get("outcome") or (
                 "legacy_success_unverified" if change.get("success") else "failed"
             )
@@ -148,7 +153,55 @@ class AttendanceReportService:
             ) if (outcome == "verified" or (
                 outcome == "legacy_success_unverified" and change.get("success")
             )) else ""
-            if difference:
+            if operation == "profile_apply":
+                details = self._profile_change_summary(
+                    change.get("before_json"), change.get("after_json")
+                )
+                if details:
+                    description += ": " + details
+                # List executed steps even when the generic ZTE POST/readback
+                # cannot certify every field. Do not call an accepted write
+                # "modified" without specific verification evidence.
+                stages = (change.get("after_json") or {}).get("_profile_steps", [])
+                if isinstance(stages, list):
+                    readable = [
+                        step["name"] + (
+                            " (comando aceito)" if step.get("accepted")
+                            else " (falhou)"
+                        )
+                        for step in stages
+                        if isinstance(step, dict) and step.get("name") in {
+                            "Wi-Fi 2,4 GHz", "Wi-Fi 5 GHz", "Servidores DNS",
+                        }
+                    ]
+                    if readable:
+                        description += "; etapas: " + ", ".join(readable)
+            elif operation == "f6201b_profile_apply":
+                safe = change.get("after_json") or {}
+                stages = safe.get("stages", [])
+                if isinstance(stages, list):
+                    labels = []
+                    for stage in stages:
+                        if not isinstance(stage, dict):
+                            continue
+                        name = str(stage.get("name") or "").lower()
+                        if "2.4" in name or "2,4" in name:
+                            title = "Wi-Fi 2,4 GHz"
+                        elif "5ghz" in name or "5 ghz" in name:
+                            title = "Wi-Fi 5 GHz"
+                        elif "dns" in name:
+                            title = "Servidores DNS"
+                        else:
+                            continue
+                        labels.append(title + (
+                            " (verificada)" if stage.get("verified")
+                            else " (não confirmada)"
+                        ))
+                    if labels:
+                        description += "; etapas: " + ", ".join(labels)
+                elif safe.get("noop") is True:
+                    description += "; o equipamento já correspondia ao perfil"
+            if difference and operation not in {"profile_apply", "f6201b_profile_apply"}:
                 description += ": " + difference
             description += {
                 "verified": " — alteração verificada por releitura",
@@ -271,6 +324,55 @@ class AttendanceReportService:
                 changes
             ),
         }
+
+    @staticmethod
+    def _profile_change_summary(before, after) -> str:
+        """Only safe, explicit configuration fields from pre/post readback.
+
+        These differences are observations, not proof that a write succeeded:
+        a parallel management client might have changed the equipment.
+        """
+        if not isinstance(before, dict) or not isinstance(after, dict):
+            return ""
+        previous = before.get("wifi") or {}
+        current = after.get("wifi") or {}
+        observed = []
+        names = {
+            "auto_channel": "modo do canal",
+            "channel": "canal",
+            "bandwidth": "largura",
+            "standard": "padrão",
+            "tx_power": "potência",
+        }
+        for band, public_band in (
+            ("2.4GHz", "Wi-Fi 2,4 GHz"), ("5GHz", "Wi-Fi 5 GHz")
+        ):
+            prior = previous.get(band) if isinstance(previous, dict) else None
+            latest = current.get(band) if isinstance(current, dict) else None
+            if not isinstance(prior, dict) or not isinstance(latest, dict):
+                continue
+            changed = [
+                description for key, description in names.items()
+                if key in prior and key in latest
+                and prior[key] != latest[key]
+                # Channel is irrelevant when both readings still say Auto.
+                and not (
+                    key == "channel"
+                    and prior.get("auto_channel") is True
+                    and latest.get("auto_channel") is True
+                )
+            ]
+            if changed:
+                observed.append(public_band + ": " + ", ".join(changed))
+        old_dns = before.get("dns")
+        new_dns = after.get("dns")
+        if isinstance(old_dns, dict) and isinstance(new_dns, dict):
+            fields = ("ipv4_1", "ipv4_2", "ipv6_1", "ipv6_2", "domain_name")
+            if any(key in old_dns and key in new_dns
+                   and old_dns[key] != new_dns[key] for key in fields):
+                observed.append("Servidores DNS: parâmetros diferentes")
+        return ("diferenças observadas na releitura (não comprovam a "
+                "origem da alteração): " + "; ".join(observed)) if observed else ""
 
     @staticmethod
     def _safe_target(value):
