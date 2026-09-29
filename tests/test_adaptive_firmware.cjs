@@ -59,7 +59,8 @@ const body = flatten(mount);
 assert.match(body, /F6201B/);
 assert.match(body, /Clientes Wi-Fi/);
 assert.match(body, /Leases DHCP/);
-assert.match(body, /Indisponível/);
+assert.match(body, /Não confirmado/);
+assert.ok(!body.includes("Indisponível"), "A failed GET cannot prove incompatibility");
 assert.ok(!body.includes("do-not-display"), "Nunca renderizar credenciais");
 assert.ok(!body.includes('"sections"'), "Não despejar JSON bruto");
 
