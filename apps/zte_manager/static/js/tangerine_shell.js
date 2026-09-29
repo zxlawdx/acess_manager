@@ -49,6 +49,17 @@
         ? (read("connectedHost") || "Endereço indisponível")
         : "Aguardando conexão";
       if (status) status.textContent = connected ? "Sessão ativa" : "Desconectado";
+      const deviceModel = document.getElementById("deviceIdentityModel");
+      const deviceHost = document.getElementById("deviceIdentityHost");
+      const deviceState = document.getElementById("deviceIdentityState");
+      if (deviceModel) deviceModel.textContent = connected
+        ? (read("connectedModel") || "Modelo não identificado")
+        : "Nenhum equipamento conectado";
+      if (deviceHost) deviceHost.textContent = connected
+        ? (read("connectedHost") || "Endereço indisponível")
+        : "Sem endereço confirmado";
+      if (deviceState) deviceState.textContent = connected
+        ? "Equipamento autenticado" : "Sem sessão ativa";
     }
     syncOverview();
     if (typeof MutationObserver === "function") {
