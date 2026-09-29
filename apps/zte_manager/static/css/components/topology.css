@@ -1,0 +1,79 @@
+/* Network topology component — logical associations from current ONT readings.
+   The SVG never implies physical position or measured distance. */
+.am-topology-section{
+  min-width:0;display:grid;gap:14px;margin:5px 0 26px;padding:clamp(16px,2vw,24px);
+  border:1px solid var(--am-border);background:var(--am-surface);
+  border-radius:16px;
+}
+.am-topology-header{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  padding-bottom:13px;border-bottom:1px solid var(--am-border);
+}
+.am-topology-header h3{color:var(--am-text);font:790 18px/1.35 var(--font-sans);margin:3px 0;}
+.am-topology-header p{font:450 12px/1.55 var(--font-sans);color:var(--am-text-2);
+  max-width:65ch;margin:6px 0 0;}
+.am-topology-count{align-self:center;font:750 11px var(--font-sans);
+  color:var(--am-primary-deep);background:var(--am-primary-wash);
+  border:1px solid var(--am-selected);padding:7px 12px;border-radius:25px;}
+.am-topology-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(245px,310px);
+  gap:15px;align-items:start;min-width:0;}
+.am-topology-stage{min-width:0;border:1px solid var(--am-border);
+  border-radius:12px;overflow:auto;background:var(--am-bg);max-height:660px;}
+.am-topology-svg{display:block;min-width:750px;width:100%;height:auto;
+  font-family:var(--font-sans);background:transparent;}
+.am-topology-line{fill:none;stroke:var(--am-border);stroke-width:2;stroke-linejoin:round;}
+.am-topology-node rect{fill:var(--am-surface);stroke:var(--am-border);stroke-width:1.6;}
+.am-topology-node .am-topology-icon{fill:var(--am-primary-wash);stroke:var(--am-selected);}
+.am-topology-node .am-topology-symbol{fill:var(--am-primary-deep);font-size:17px;font-weight:800;}
+.am-topology-node .am-topology-name{fill:var(--am-text);font-size:12px;font-weight:760;}
+.am-topology-node .am-topology-sub{fill:var(--am-text-2);font-size:10px;}
+.am-topology-router rect{fill:var(--am-primary-wash);stroke:var(--am-primary);}
+.am-topology-hub rect{fill:var(--am-selected);}
+.am-topology-client{cursor:pointer;outline:none;}
+.am-topology-client:hover rect,.am-topology-client:focus-visible rect{
+ stroke:var(--am-primary);stroke-width:3;fill:var(--am-primary-wash);
+}
+.am-topology-client.is-selected rect{stroke:var(--am-primary-deep);
+  stroke-width:3;fill:var(--am-selected);}
+.am-topology-details{
+  min-width:0;max-height:640px;overflow-y:auto;
+  background:var(--am-surface);border:1px solid var(--am-border);
+  border-radius:12px;padding:17px;color:var(--am-text);
+  font:500 12px/1.55 var(--font-sans);overflow-wrap:anywhere;
+}
+.am-topology-eyebrow{display:block;color:var(--am-primary-deep);
+  font:800 10px var(--font-sans);letter-spacing:.08em;}
+.am-topology-details h3{font:760 16px/1.4 var(--font-sans);
+  margin:7px 0 13px;}
+.am-topology-details-grid{display:grid;gap:0;}
+.am-topology-detail{display:grid;gap:3px;padding:10px 0;
+  border-bottom:1px solid var(--am-border);min-width:0;}
+.am-topology-detail dt{font:750 10px var(--font-sans);color:var(--am-text-2);}
+.am-topology-detail dd{font:570 12px/1.55 var(--font-sans);margin:0;
+  color:var(--am-text);overflow-wrap:anywhere;}
+.am-topology-hint{color:var(--am-text-2);font:470 10px/1.6 var(--font-sans);
+  margin:14px 0 0;}
+.am-topology-empty{text-align:center;color:var(--am-text-2);font:540 13px var(--font-sans);
+  padding:65px 20px;}
+.am-topology-calibration{
+  display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;
+  background:var(--am-primary-wash);border:1px solid var(--am-selected);
+  border-radius:12px;padding:14px;
+}
+.am-topology-calibration label{display:grid;gap:5px;
+  font:650 10px var(--font-sans);color:var(--am-text-2);}
+.am-topology-calibration input{
+  background:var(--am-surface);color:var(--am-text);border:1px solid var(--am-border);
+  border-radius:8px;min-height:37px;width:148px;max-width:100%;
+  padding:6px 10px;font:530 12px var(--font-sans);
+}
+.am-topology-calibration p{flex:1 1 220px;min-width:0;
+  font:450 11px/1.6 var(--font-sans);color:var(--am-text-2);margin:0;}
+@media(max-width:1100px){
+  .am-topology-layout{grid-template-columns:minmax(0,1fr);}
+  .am-topology-details{max-height:none;}
+}
+@media(max-width:650px){
+  .am-topology-section{padding:12px;}
+  .am-topology-calibration input{width:120px;}
+}
