@@ -178,15 +178,19 @@ async function apiRequest(
     endpoint,
     options = {}
 ) {
-    if (!pendingApiRequests && !explicitBusy && Date.now() >= clickFeedbackUntil) {
-        lastActionText = "Consultando equipamento...";
+    // Optional local/background queries never block the equipment workflow.
+    const silent = options.silent === true;
+    if (!silent) {
+        if (!pendingApiRequests && !explicitBusy && Date.now() >= clickFeedbackUntil) {
+            lastActionText = "Consultando equipamento...";
+        }
+        pendingApiRequests++;
+        lastActionText = explicitBusy ? explicitBusyText : lastActionText;
+        renderBusyOverlay();
     }
-    pendingApiRequests++;
-    lastActionText = explicitBusy ? explicitBusyText : lastActionText;
-    renderBusyOverlay();
-    const slowTimer = setTimeout(updateRequestStatus, 180);
+    const slowTimer = silent ? null : setTimeout(updateRequestStatus, 180);
     try {
-    const { expected, ...fetchOptions } = options;
+    const { expected, silent: _background, ...fetchOptions } = options;
     const config = {
         method: "GET",
         headers: {
@@ -245,9 +249,9 @@ async function apiRequest(
         const friendly = errors ? errors.fromThrown(error) :
             new Error(normalizeApiErrorMessage(error));
         if (!errors && error?.name === "AbortError") friendly.name = "AbortError";
-        updateRequestStatus(friendly.message);
+        if (!silent) updateRequestStatus(friendly.message);
         // An isolated expired probe must not force a logout.
-        if (typeof document.dispatchEvent === "function" &&
+        if (!silent && typeof document.dispatchEvent === "function" &&
             typeof CustomEvent === "function" && friendly.code) {
             document.dispatchEvent(new CustomEvent("am:api-failure", {
                 detail:{
@@ -258,14 +262,16 @@ async function apiRequest(
         }
         throw friendly;
     } finally {
-        clearTimeout(slowTimer);
-        pendingApiRequests = Math.max(0, pendingApiRequests - 1);
-        renderBusyOverlay();
-        // Preserve a mensagem de falha até expirar, mesmo após finalizar.
-        if (!pendingApiRequests) {
-            const badge = document.getElementById("requestStatusIndicator");
-            if (!badge?.classList.contains("is-error")) {
-                updateRequestStatus();
+        if (!silent) {
+            clearTimeout(slowTimer);
+            pendingApiRequests = Math.max(0, pendingApiRequests - 1);
+            renderBusyOverlay();
+            // Keep error messages visible independently of other requests.
+            if (!pendingApiRequests) {
+                const badge = document.getElementById("requestStatusIndicator");
+                if (!badge?.classList.contains("is-error")) {
+                    updateRequestStatus();
+                }
             }
         }
     }
