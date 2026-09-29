@@ -36,26 +36,23 @@ class UIActionRegressions(unittest.TestCase):
                 self.assertIn('id="' + button + '"', html)
                 self.assertIn('"' + button + '"', source)
 
-    def test_zoom_reflows_the_grid_shell_without_clipping_the_viewport(self):
+    def test_font_scale_keeps_sidebar_and_workspace_in_one_layout(self):
         source = js("app.js")
-        tangerine = (
-            STATIC / "css" / "tangerine.css"
+        shell = (
+            STATIC / "css" / "components" / "shell_layout.css"
         ).read_text(encoding="utf-8")
-        # QtWebEngine must never magnify <body> and clip the sidebar/topbar.
+        # Body/shell CSS zoom caused the broken Qt viewport seen on Windows.
         self.assertIn('document.documentElement.style.zoom = "";', source)
         self.assertIn('document.body.style.zoom = "";', source)
-        self.assertIn('document.body.style.width = "";', source)
-        self.assertIn('shell.style.zoom = String(uiZoom);', source)
-        self.assertNotIn(
-            "document.body.style.zoom = String(uiZoom);", source
-        )
+        self.assertIn('shell.style.zoom = "";', source)
+        self.assertIn('"--am-font-scale"', source)
+        self.assertNotIn("shell.style.zoom = String(uiZoom);", source)
+        self.assertNotIn("document.body.style.zoom = String(uiZoom);", source)
         self.assertIn(
-            "grid-template-columns:var(--am-current-sidebar) minmax(0,1fr)",
-            tangerine,
+            "grid-template-columns:var(--am-shell-column) minmax(0,1fr)",
+            shell,
         )
-        self.assertIn(
-            "width:calc(100% / var(--am-zoom,1))", tangerine
-        )
+        self.assertIn("container-type:inline-size", shell)
         self.assertIn('"zoomInButton"', source)
         self.assertIn('"zoomOutButton"', source)
 
