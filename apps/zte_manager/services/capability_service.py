@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 from typing import Any, Iterable
 
 from apps.zte_manager.model.device_adapters import DeviceAdapter
+from apps.zte_manager.services.error_policy import CapabilityUnconfirmed
 
 
 _SECRET_MARKERS = (
@@ -151,11 +152,7 @@ class ThinkLuaCapabilityGateway:
             len(errors),
             ",".join(sorted(set(errors)))[:100],
         )
-        raise RuntimeError(
-            "Não foi possível confirmar este recurso no equipamento atual. "
-            "Verifique a sessão e tente detectar novamente. "
-            "Nenhuma alteração foi realizada."
-        )
+        raise CapabilityUnconfirmed()
 
     @staticmethod
     def _scalar_meta(
