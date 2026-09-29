@@ -3,7 +3,7 @@ const API_BASE = "/api";
 // Central operator-facing error policy. The router's technical HTTP messages,
 // internal URLs, query parameters and traceback remain OUT of the interface.
 // Genuine user-friendly firmware errors are preserved when safe and concise.
-function normalizeApiErrorMessage(error, status = 0) {
+function normalizeApiErrorMessage(error, status = 0, type = "") {
     const original = typeof error === "string" ? error :
         (typeof error?.message === "string" ? error.message : "");
     const value = original.replace(/\s+/g, " ").trim();
@@ -14,9 +14,25 @@ function normalizeApiErrorMessage(error, status = 0) {
         /(?:unauthori[sz]ed|forbidden|invalid credentials)/i.test(value)) {
         return "Não foi possível autorizar a operação. Verifique a sessão e as credenciais do equipamento.";
     }
-    if (status === 404 || status === 405 ||
-        /(?:not implemented|not supported|unsupported|capability unavailable|unknown endpoint)/i.test(value)) {
-        return "Este recurso não está disponível para a versão atual do aplicativo ou firmware. Nenhuma alteração foi confirmada.";
+    // HTTP 404/405 may come from the local app, proxy, session or firmware.
+    // NEVER equate an HTTP status alone with missing firmware capability.
+    if (type === "unsupported" || type === "capability_unavailable") {
+        return "Esta funcionalidade não está disponível na implementação identificada. As demais funções continuam disponíveis.";
+    }
+    if (status === 404 || status === 405) {
+        return "Esta operação não está disponível no serviço atual. Verifique a sessão e a versão do aplicativo; o suporte do firmware ainda não foi confirmado.";
+    }
+    if (/(?:not implemented|not supported|unsupported|capability unavailable|unknown endpoint)/i.test(value)) {
+        return "Não foi possível confirmar a disponibilidade deste recurso. Identifique novamente as capacidades do equipamento.";
+    }
+    if (type === "timeout") {
+        return "A consulta excedeu o tempo de resposta. O equipamento pode continuar ocupado; aguarde antes de repetir.";
+    }
+    if (type === "internal") {
+        // Internal correlation IDs are the only safe technical identifiers to display.
+        const match = value.match(/\\b[0-9a-f]{32}\\b/i);
+        return match ? "Ocorreu um erro interno. Informe o código "+match[0]+" ao suporte." :
+            "Ocorreu um erro interno. Tente novamente ou consulte o suporte.";
     }
     if (status >= 500) {
         return "O serviço ou equipamento não conseguiu concluir esta operação. Verifique a conexão e tente novamente.";
@@ -208,7 +224,7 @@ async function apiRequest(
         && typeof data === "object"
         && data.error
     ) {
-        throw new Error(normalizeApiErrorMessage(data.error));
+        throw new Error(normalizeApiErrorMessage(data.error, 0, data.type || ""));
     }
 
     if (!response.ok) {
@@ -230,7 +246,11 @@ async function apiRequest(
             message = data;
         }
 
-        throw new Error(normalizeApiErrorMessage(message, response.status));
+        throw new Error(normalizeApiErrorMessage(
+            message,
+            response.status,
+            data && typeof data === "object" ? data.type || "" : ""
+        ));
     }
 
     return data;
@@ -1230,7 +1250,7 @@ function renderWanCard(wan) {
     );
 
     return `
-        <article class="panel wan-card ${connected ? "connected" : "disconnected"}">
+        <article class="panel wan-card am-wan-card ${connected ? "connected" : "disconnected"}">
             <div class="wan-card-head">
                 <div class="wan-title-group">
                     <span class="wan-icon ${connected ? "online" : "offline"}">
@@ -1857,7 +1877,7 @@ function renderSsidEditor(network) {
     );
 
     return `
-        <article class="panel ssid-card ${network.ativo ? "ssid-online" : "ssid-offline"}">
+        <article class="panel ssid-card am-wifi-card ${network.ativo ? "ssid-online" : "ssid-offline"}">
             <div class="ssid-card-head">
                 <div class="ssid-title">
                     <span class="ssid-icon">
@@ -2158,7 +2178,7 @@ function renderRadioEditor(radio) {
     );
 
     return `
-        <article class="panel radio-card">
+        <article class="panel radio-card am-radio-card">
             <div class="radio-card-hero">
                 <div>
                     <span class="section-kicker">RF ${escapeHtml(radio.banda)}</span>

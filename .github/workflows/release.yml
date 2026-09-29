@@ -147,7 +147,10 @@ jobs:
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/app.js
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/style.css
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/tangerine.css
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/tangerine_cards.css
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/tangerine_forms.css
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/tangerine_shell.js
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/tangerine_forms.js
 
       - name: Package Linux build
         run: |

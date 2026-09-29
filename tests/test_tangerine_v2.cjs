@@ -48,3 +48,14 @@ test("UI has ten page-specific visual headers, preserves actual session IDs",()=
  assert.match(html,/class="login-hero am-connect-story"/);
  assert.doesNotMatch(html,/window-dot red/);
 });
+
+
+test("native Wi-Fi, WAN and radio cards are explicitly redesigned",()=>{
+ const native=fs.readFileSync(root+"static/js/app.js","utf8");
+ const cards=fs.readFileSync(root+"static/css/tangerine_cards.css","utf8");
+ for(const name of ["am-wifi-card","am-radio-card","am-wan-card"]){
+  assert.ok(native.includes(name),name+" must be emitted by native renderer");
+  assert.ok(cards.includes("."+name),name+" must have native component styles");
+ }
+ assert.match(html,/zte_manager\\/css\\/tangerine_cards\\.css/);
+});

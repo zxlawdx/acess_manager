@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+import logging
+
+logger = logging.getLogger(__name__)
 from typing import Any, Iterable
 
 from apps.zte_manager.model.device_adapters import DeviceAdapter
@@ -138,13 +141,21 @@ class ThinkLuaCapabilityGateway:
             except Exception as error:
                 # Retornar o TIPO, jamais HTML, parâmetros ou tokens
                 # contidos em exceções HTTP.
-                errors.append(
-                    f"{endpoint.view}/{endpoint.tag}: {type(error).__name__}"
-                )
+                errors.append(type(error).__name__)
 
+        # Never expose ThinkLua paths, queries, HTTP methods or driver
+        # exceptions to the operator. A failed probe is INCONCLUSIVE: it can
+        # indicate an unavailable feature, expired session or transport error.
+        logger.warning(
+            "capability_probe_inconclusive feature=%s attempts=%d failure_types=%s",
+            feature_key if feature_key in self.adapter.features else "unknown",
+            len(errors),
+            ",".join(sorted(set(errors)))[:100],
+        )
         raise RuntimeError(
-            f"{spec.label} não está disponível para este login/firmware. "
-            + " | ".join(errors)
+            "Não foi possível confirmar este recurso no equipamento atual. "
+            "Verifique a sessão e tente detectar novamente. "
+            "Nenhuma alteração foi realizada."
         )
 
     @staticmethod

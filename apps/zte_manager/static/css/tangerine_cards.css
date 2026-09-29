@@ -1,0 +1,134 @@
+/* Tangerine configuration cards: native renderers, real backend contracts. */
+html[data-theme] .am-wifi-card,
+html[data-theme] .am-radio-card,
+html[data-theme] .am-wan-card,
+html[data-theme] .profile-radio-card{
+ border:1px solid var(--am-border)!important;
+ border-radius:17px!important;background:var(--am-surface)!important;
+ box-shadow:none!important;padding:0!important;overflow:hidden;min-width:0;
+}
+html[data-theme] #wifiNetworks,
+html[data-theme] #wifiRadios,
+html[data-theme] #wanConnections{
+ display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr))!important;
+ align-items:start;gap:14px!important;
+}
+html[data-theme] .am-wifi-card .ssid-card-head,
+html[data-theme] .am-radio-card .radio-card-hero,
+html[data-theme] .am-wan-card .wan-card-head{
+ display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;
+ border-bottom:1px solid var(--am-border)!important;
+ background:var(--am-primary-wash)!important;border-radius:0!important;
+ padding:19px clamp(16px,2vw,23px)!important;margin:0!important;
+ min-height:90px!important;
+}
+html[data-theme] .am-wifi-card .ssid-icon,
+html[data-theme] .am-wan-card .wan-icon,
+html[data-theme] .am-radio-card .radio-card-hero .material-symbols-outlined{
+ color:var(--am-primary-deep)!important;background:var(--am-surface)!important;
+ border:1px solid var(--am-border)!important;border-radius:12px!important;
+}
+html[data-theme] .am-wifi-card .ssid-title strong,
+html[data-theme] .am-wan-card .wan-title-group h3,
+html[data-theme] .am-radio-card .radio-card-hero h3{
+ font:780 15px/1.45 var(--font-sans)!important;letter-spacing:-.03em!important;
+ color:var(--am-text)!important;overflow-wrap:anywhere;
+}
+html[data-theme] .am-wifi-card .ssid-title small,
+html[data-theme] .am-wan-card .wan-title-group p,
+html[data-theme] .am-radio-card .radio-card-hero p{
+ font:470 10px/1.65 var(--font-mono)!important;color:var(--am-text-2)!important;
+}
+html[data-theme] .am-wifi-card .ssid-meta,
+html[data-theme] .am-radio-card .radio-capabilities{
+ display:flex!important;flex-wrap:wrap;gap:6px!important;
+ padding:14px clamp(16px,2vw,23px) 0!important;
+}
+html[data-theme] .am-wifi-card .meta-pill,
+html[data-theme] .am-radio-card .capability-pill{
+ font:700 10px/1.35 var(--font-sans)!important;border-radius:50px!important;
+ border:1px solid var(--am-border)!important;
+ background:var(--am-bg)!important;color:var(--am-text-2)!important;
+ padding:5px 9px!important;
+}
+html[data-theme] .am-wifi-card .ssid-form,
+html[data-theme] .am-radio-card .radio-form{
+ display:grid!important;gap:14px!important;padding:0 0 0!important;
+}
+html[data-theme] .am-wifi-card .form-grid,
+html[data-theme] .am-radio-card .form-grid,
+html[data-theme] .am-wifi-card .switch-row{
+ padding:0 clamp(16px,2vw,23px)!important;gap:11px!important;margin:0!important;
+}
+html[data-theme] .am-wifi-card .form-grid,
+html[data-theme] .am-radio-card .form-grid{
+ display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;
+}
+html[data-theme] .am-wifi-card .form-group,
+html[data-theme] .am-radio-card .form-group{min-width:0;}
+html[data-theme] .am-wifi-card .form-group label,
+html[data-theme] .am-radio-card .form-group label{
+ display:block!important;margin-bottom:6px!important;
+ font:750 10px/1.4 var(--font-sans)!important;color:var(--am-text-2)!important;
+}
+html[data-theme] .am-wifi-card :is(input,select),
+html[data-theme] .am-radio-card :is(input,select){
+ min-width:0;max-width:100%;min-height:39px!important;border-radius:8px!important;
+ border:1px solid var(--am-border)!important;background:var(--am-surface)!important;color:var(--am-text)!important;
+}
+html[data-theme] .am-wifi-card .form-footer,
+html[data-theme] .am-radio-card .radio-form-footer{
+ display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px;
+ margin:4px 0 0!important;padding:14px clamp(16px,2vw,23px)!important;
+ background:var(--am-bg)!important;border-top:1px solid var(--am-border)!important;
+}
+html[data-theme] .am-wifi-card .form-footer .button.primary,
+html[data-theme] .am-radio-card .radio-form-footer .button.primary{
+ flex:none;min-height:39px!important;border-radius:9px!important;
+}
+html[data-theme] .am-wan-card .wan-address{
+ background:var(--am-surface)!important;border:0!important;border-bottom:1px solid var(--am-border)!important;
+ padding:15px clamp(16px,2vw,23px)!important;border-radius:0!important;
+}
+html[data-theme] .am-wan-card .detail-grid{
+ display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;
+ gap:0!important;padding:12px clamp(16px,2vw,23px)!important;
+}
+html[data-theme] .am-wan-card .detail-tile{
+ border:0!important;border-bottom:1px solid var(--am-border)!important;
+ border-radius:0!important;padding:12px 8px!important;min-width:0;background:transparent!important;
+}
+html[data-theme] .am-wan-card .wan-ipv6,
+html[data-theme] .am-wan-card .wan-error{margin:0 20px 17px!important;overflow-wrap:anywhere;}
+html[data-theme] .badge,
+html[data-theme] .status-badge{font:750 10px/1.35 var(--font-sans)!important;border-radius:50px!important;white-space:nowrap;}
+html[data-theme] .support-panel,
+html[data-theme] .diagnostic-card,
+html[data-theme] .profile-card,
+html[data-theme] .management-pane .panel{min-width:0;}
+html[data-theme] .dashboard-grid{
+ display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:13px!important;
+}
+html[data-theme] .dashboard-grid .span-2{grid-column:1/-1!important;}
+html[data-theme] #page-advanced .advanced-actions button{min-height:36px!important;white-space:normal;text-align:left;}
+html[data-theme] .kpi-grid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr))!important;}
+html[data-theme] .kpi-card{border:0!important;border-top:3px solid var(--am-primary)!important;
+ border-radius:9px!important;background:var(--am-surface)!important;box-shadow:none!important;}
+html[data-theme] .management-code-output{
+ overflow-wrap:anywhere;max-width:100%;font-size:11px!important;
+ border:1px solid var(--am-border)!important;border-radius:9px!important;
+ background:var(--am-bg)!important;color:var(--am-text)!important;
+}
+@media(max-width:900px){
+ html[data-theme] .dashboard-grid{grid-template-columns:minmax(0,1fr)!important;}
+ html[data-theme] #wifiNetworks,
+ html[data-theme] #wifiRadios,
+ html[data-theme] #wanConnections{grid-template-columns:minmax(0,1fr)!important;}
+}
+@media(max-width:640px){
+ html[data-theme] .am-wifi-card .form-grid,
+ html[data-theme] .am-radio-card .form-grid,
+ html[data-theme] .am-wan-card .detail-grid{grid-template-columns:minmax(0,1fr)!important;}
+ html[data-theme] .am-wifi-card .form-footer,
+ html[data-theme] .am-radio-card .radio-form-footer{flex-wrap:wrap;}
+}
