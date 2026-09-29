@@ -15,7 +15,7 @@ test("single app-shell geometry owns sidebar and workspace",()=>{
   assert.match(shell,/grid-template-columns:var\(--am-shell-column\) minmax\(0,1fr\)/);
   assert.match(shell,/\.app-shell>.workspace\s*\{[\s\S]*?margin:0!important/);
   assert.match(shell,/\.app-shell>.sidebar\s*\{[\s\S]*?position:sticky!important/);
-  assert.match(shell,/@media\(max-width:920px\)/);
+  assert.match(shell,/@media\(max-width:930px\)/);
   assert.match(nav,/document\.documentElement\.dataset\.sidebarCollapsed/);
   assert.doesNotMatch(tangerine,/width:calc\(100% \/ var\(--am-zoom/);
   assert.doesNotMatch(telecom,/width: calc\(100% - var\(--sidebar-width\)\)/);
