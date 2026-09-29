@@ -76,8 +76,8 @@ SAFE_WORDS = re.compile(
     re.UNICODE,
 )
 SENSITIVE = re.compile(
-    r"(?:https?://|/api/|\\|<|>|\{|\}|=|\\b(?:password|passwd|token|"
-    r"credential|senha|secret|traceback|post|put|get|delete|cookie)\\b)",
+    r"(?:https?://|/api/|\\|<|>|\{|\}|=|\b(?:password|passwd|token|"
+    r"credential|senha|secret|traceback|post|put|get|delete|cookie)\b)",
     re.IGNORECASE,
 )
 
