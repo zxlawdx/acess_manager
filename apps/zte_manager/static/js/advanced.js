@@ -2225,40 +2225,43 @@ async function operationRequest(
     successText,
     after
 ) {
-    setBusy(
-        true,
-        busyText
-    );
-
+    setBusy(true, busyText);
     try {
-        await apiRequest(
-            endpoint,
-            {
-                method: "POST",
-                body: JSON.stringify(
-                    payload
-                )
-            }
-        );
-
-        showToast(
-            successText
-        );
-
+        const result = await apiRequest(endpoint, {
+            method: "POST", body: JSON.stringify(payload), expected:"object"
+        });
+        // Accepted != verified: the service annotates post-write readback.
+        // A response without proof must never trigger a success notice.
+        const outcome = result.audit_outcome ||
+            (result.verified === true ? "verified" :
+             result.uncertain || result.partial ? "uncertain" : "accepted");
+        let refreshed = true;
         if (after) {
-            await after();
+            try {
+                const latest = await after();
+                refreshed = latest !== false;
+            } catch (_error) { refreshed = false; }
         }
-
-        await loadHistory();
-    } catch (error) {
-        showToast(
-            error.message
+        if (outcome === "verified") {
+            showToast(successText);
+        } else if (outcome === "failed") {
+            showToast("O equipamento não confirmou a operação. Revise os dados e tente novamente.");
+        } else if (outcome === "uncertain") {
+            showToast("O equipamento pode ter aplicado parte da alteração. Consulte o estado atual antes de repetir.");
+        } else {
+            showToast("Solicitação recebida. A confirmação da alteração ainda está pendente.");
+        }
+        if (!refreshed) showToast(
+            "Não foi possível atualizar o estado do equipamento; evite repetir a alteração sem conferir a configuração."
         );
+        try { await loadHistory(); }
+        catch (_error) { /* history must not change the actual write result */ }
+    } catch (error) {
+        showToast(error.message);
     } finally {
         setBusy(false);
     }
 }
-
 
 function valueOrNull(id) {
     const value = document.getElementById(
