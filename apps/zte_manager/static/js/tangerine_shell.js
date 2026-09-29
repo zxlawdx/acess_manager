@@ -66,7 +66,7 @@
     let historyGeneration = 0, historyBusy = false;
     function historyTitle(raw, fallback) {
       return typeof raw === "string" &&
-        /^[\\p{L}][\\p{L}\\p{N} _-]{0,54}$/u.test(raw)
+        /^[\p{L}][\p{L}\p{N} _-]{0,54}$/u.test(raw)
           ? raw : fallback;
     }
     async function refreshOverviewHistory() {
@@ -113,7 +113,7 @@
           const title=document.createElement("strong");
           title.textContent=row.title;
           const time=document.createElement("small");
-          const safeTime=/^\\d{4}-\\d{2}-\\d{2}/.test(row.date)
+          const safeTime=/^\d{4}-\d{2}-\d{2}/.test(row.date)
             ? row.date.slice(0,19).replace("T"," ") : "Horário indisponível";
           time.textContent=(row.success ? "Concluído" : "Verificar resultado")+
             " · "+safeTime;
