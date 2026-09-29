@@ -189,11 +189,9 @@ class WifiEnvironmentCollector(DiagnosticCollector):
             analysis = ChannelAnalyzer().analyze(
                 band=band,
                 radio=radio,
-                neighbors=scan.get(
-                    "networks",
-                    [],
-                ),
+                neighbors=scan.get("networks", []),
                 available_channels=channels,
+                scan_confirmed=scan.get("available") is True,
             )
 
             bands[band] = {
@@ -1143,18 +1141,9 @@ class ChannelRule(DiagnosticRule):
                                 else "canal automático é a opção mais segura."
                             )
                         ),
-                        recommendation=(
-                            None
-                            if analysis.get("auto_channel")
-                            else {
-                                "title": f"Usar Auto em {band}",
-                                "action": {
-                                    "type": "wifi_auto_channel",
-                                    "band": band,
-                                },
-                                "safe": True,
-                            }
-                        ),
+                        # Insufficient evidence is a manual check, not a
+                        # reason to mutate a live customer's radio.
+                        recommendation=None,
                     )
                 )
                 continue
@@ -1292,238 +1281,94 @@ class ChannelAnalyzer:
     """
 
     def analyze(
-        self,
-        *,
-        band: str,
-        radio: dict[str, Any],
-        neighbors: list[dict[str, Any]],
-        available_channels: Any,
+        self, *, band: str, radio: dict[str, Any],
+        neighbors: list[dict[str, Any]], available_channels: Any,
+        scan_confirmed: bool = True,
     ) -> dict[str, Any]:
-        candidates = self._candidates(
-            band,
-            available_channels,
-        )
-
-        current = _number(
-            radio.get("canal")
-            if "canal" in radio
-            else radio.get("channel")
-        )
-
-        auto = bool(
-            radio.get("canal_automatico")
-            if "canal_automatico" in radio
-            else radio.get("auto_channel")
-        )
-
-        scores = {
-            channel: round(
-                self._score(
-                    band,
-                    channel,
-                    neighbors,
-                ),
-                2,
-            )
-            for channel in candidates
+        # Never propose a firmware write based on fallback/guessed channels.
+        # ZTE.available_channels returns LISTS of {banda, largura, pais,
+        # canais: [...]} rather than individual channels.
+        candidates = self._candidates(band, available_channels)
+        current = _number(radio.get("canal", radio.get("channel")))
+        raw_auto = radio.get("canal_automatico",
+                             radio.get("auto_channel", False))
+        auto = raw_auto is True or str(raw_auto).strip().lower() in {
+            "1", "true", "yes", "on",
         }
-
-        best = min(
-            scores,
-            key=scores.get,
-        ) if scores else None
-
-        current_score = (
-            scores.get(
-                int(current)
-            )
-            if current is not None
-            else None
-        )
-
-        best_score = (
-            scores.get(best)
-            if best is not None
-            else None
-        )
-
-        recommendation = {}
-
-        if not neighbors:
-            recommendation = {
-                "title": f"Canal automático em {band}",
-                "message": (
-                    f"Sem amostra suficiente de redes vizinhas em {band}; "
-                    "prefira Auto em vez de escolher um canal no escuro."
-                ),
-                "action": {
-                    "type": "wifi_auto_channel",
-                    "band": band,
-                },
-                "confidence": "low",
-            }
-
-        elif (
-            best_score is not None
-            and best_score >= 80
+        scores = {
+            channel: round(self._score(band, channel, neighbors), 2)
+            for channel in candidates
+        } if scan_confirmed and neighbors else {}
+        best = min(scores, key=scores.get) if scores else None
+        current_score = scores.get(int(current)) if current is not None else None
+        best_score = scores.get(best) if best is not None else None
+        recommendation: dict[str, Any] = {}
+        if (
+            scan_confirmed and neighbors and not auto
+            and current_score is not None and best is not None
+            and int(current) != best and
+            current_score - float(best_score or 0) >= 15
         ):
             recommendation = {
-                "title": f"Usar Auto em {band}",
+                "title": f"Selecionar canal {best} em {band}",
                 "message": (
-                    f"Todos os canais candidatos em {band} estão congestionados; "
-                    "o firmware pode reagir melhor em Auto."
+                    f"Uma leitura de redes próximas indica menor "
+                    f"sobreposição no canal {best} em {band}. "
+                    "Valide a estabilidade após a alteração."
                 ),
                 "action": {
-                    "type": "wifi_auto_channel",
-                    "band": band,
+                    "type": "wifi_channel", "band": band, "channel": best,
                 },
-                "confidence": "medium",
+                "confidence": "moderate",  # one scan is not proof over time
             }
-
-        elif (
-            not auto
-            and current_score is not None
-            and best is not None
-            and int(current or -1) != best
-            and (
-                current_score
-                - float(
-                    best_score or 0
-                )
-            ) >= 15
-        ):
-            recommendation = {
-                "title": f"Mudar {band} para canal {best}",
-                "message": (
-                    f"Canal {int(current)} em {band} tem score {current_score:.1f}; "
-                    f"canal {best} caiu para {best_score:.1f}."
-                ),
-                "action": {
-                    "type": "wifi_channel",
-                    "band": band,
-                    "channel": best,
-                },
-                "confidence": "high",
-            }
-
         return {
-            "band": band,
-            "current_channel": (
-                int(current)
-                if current is not None
-                else None
+            "band": band, "current_channel": (
+                int(current) if current is not None else None
             ),
             "auto_channel": auto,
-            "current_score": current_score,
-            "best_channel": best,
-            "best_score": best_score,
-            "scores": scores,
-            "neighbor_count": len(
-                neighbors
-            ),
-            "recommendation": recommendation,
+            "candidate_channels_confirmed": bool(candidates),
+            "neighbor_scan_confirmed": scan_confirmed,
+            "current_score": current_score, "best_channel": best,
+            "best_score": best_score, "scores": scores,
+            "neighbor_count": len(neighbors), "recommendation": recommendation,
         }
 
     @staticmethod
-    def _candidates(
-        band: str,
-        available_channels: Any,
-    ) -> list[int]:
-        raw = []
-
-        if isinstance(
-            available_channels,
-            dict,
-        ):
-            for key in (
-                "channels",
-                "available_channels",
-                "values",
-                "canais",
-            ):
-                value = available_channels.get(
-                    key
-                )
-
-                if isinstance(
-                    value,
-                    list,
-                ):
-                    raw.extend(
-                        value
-                    )
-
-        elif isinstance(
-            available_channels,
-            list,
-        ):
-            raw = available_channels
-
-        parsed = []
-
-        for item in raw:
-            if isinstance(
-                item,
-                dict,
-            ):
-                item = (
-                    item.get("channel")
-                    or item.get("value")
-                    or item.get("id")
-                )
-
-            number = _number(
-                item
-            )
-
-            if number is not None:
-                parsed.append(
-                    int(number)
-                )
-
-        is_24 = "2.4" in str(
-            band
-        )
-
-        defaults = (
-            [1, 6, 11]
-            if is_24
-            else [
-                36,
-                40,
-                44,
-                48,
-                149,
-                153,
-                157,
-                161,
-            ]
-        )
-
-        if is_24:
-            safe = [
-                channel
-                for channel in parsed
-                if channel in {
-                    1,
-                    6,
-                    11,
-                }
-            ]
-
-            return (
-                sorted(
-                    set(safe)
-                )
-                or defaults
-            )
-
-        return (
-            sorted(
-                set(parsed)
-            )
-            or defaults
-        )
+    def _candidates(band: str, available_channels: Any) -> list[int]:
+        # Do not invent defaults (especially DFS/region-specific 5 GHz
+        # channels) when the firmware channel table is unavailable.
+        entries = available_channels if isinstance(available_channels, list) else [
+            available_channels
+        ]
+        parsed = set()
+        for row in entries:
+            values = row
+            if isinstance(row, dict):
+                row_band = row.get("banda") or row.get("band")
+                if row_band and str(row_band).lower() != band.lower():
+                    continue
+                values = next((
+                    row[key] for key in (
+                        "canais", "channels", "available_channels", "values"
+                    ) if isinstance(row.get(key), list)
+                ), [])
+            if not isinstance(values, list):
+                continue
+            for item in values:
+                if isinstance(item, dict):
+                    item = item.get("channel", item.get("value"))
+                value = _number(item)
+                if value is None or not float(value).is_integer():
+                    continue
+                channel = int(value)
+                # In Brazil 2.4 GHz may expose 12/13 but 1/6/11 are
+                # nonoverlapping 20 MHz starting points, not a universal rule.
+                if "2.4" in band and channel not in {1, 6, 11}:
+                    continue
+                if "2.4" not in band and not 32 <= channel <= 177:
+                    continue
+                parsed.add(channel)
+        return sorted(parsed)
 
     @staticmethod
     def _signal_weight(
