@@ -47,6 +47,22 @@ def _safe_code(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]", "_", value)[:64]
 
 
+def _profile_stage_log(operation: str, value: Any) -> list[dict[str, Any]]:
+    """Allowlisted stage names/statuses only; never persist response details."""
+    if operation != "profile_apply" or not isinstance(value, dict):
+        return []
+    permitted = {
+        "Wi-Fi 2.4GHz": "Wi-Fi 2,4 GHz",
+        "Wi-Fi 5GHz": "Wi-Fi 5 GHz",
+        "DNS": "Servidores DNS",
+    }
+    return [
+        {"name": permitted[step["name"]], "accepted": step.get("success") is True}
+        for step in value.get("steps", [])
+        if isinstance(step, dict) and step.get("name") in permitted
+    ][:6]
+
+
 def _capture(reader: Callable[[], Any]) -> tuple[bool, Any]:
     try:
         value = reader()
@@ -118,10 +134,19 @@ class AuditedOperation:
             raise
 
         if _rejected(value):
-            outcome = ChangeOutcome.FAILED
+            public_steps = _profile_stage_log(operation, value)
+            # A later DNS failure does not reverse an earlier accepted radio
+            # POST. A partially attempted profile is UNCERTAIN, not safely
+            # classified as a total failure.
+            outcome = (
+                ChangeOutcome.UNCERTAIN
+                if any(item["accepted"] for item in public_steps)
+                else ChangeOutcome.FAILED
+            )
             self._record(
                 session_id=session_id, operation=operation, target=target,
-                before=before if before_ok else None, after=None,
+                before=before if before_ok else None,
+                after={"_profile_steps": public_steps} if public_steps else None,
                 outcome=outcome, message="action_rejected",
             )
             return AuditResult(value=value, outcome=outcome)
@@ -154,26 +179,13 @@ class AuditedOperation:
         # attendance report. Store *only fixed stage names and booleans*, not
         # POST payloads, credentials or raw firmware response text.
         history_after = after if after_ok else None
-        if operation == "profile_apply" and isinstance(value, dict):
-            public_steps = []
-            permitted = {
-                "Wi-Fi 2.4GHz": "Wi-Fi 2,4 GHz",
-                "Wi-Fi 5GHz": "Wi-Fi 5 GHz",
-                "DNS": "Servidores DNS",
-            }
-            for step in value.get("steps", []):
-                if not isinstance(step, dict) or step.get("name") not in permitted:
-                    continue
-                public_steps.append({
-                    "name": permitted[step["name"]],
-                    "accepted": step.get("success") is True,
-                })
-            if public_steps:
-                history_after = (
-                    {**history_after, "_profile_steps": public_steps}
-                    if isinstance(history_after, dict)
-                    else {"_profile_steps": public_steps}
-                )
+        public_steps = _profile_stage_log(operation, value)
+        if public_steps:
+            history_after = (
+                {**history_after, "_profile_steps": public_steps}
+                if isinstance(history_after, dict)
+                else {"_profile_steps": public_steps}
+            )
         self._record(
             session_id=session_id, operation=operation, target=target,
             before=before if before_ok else None,
