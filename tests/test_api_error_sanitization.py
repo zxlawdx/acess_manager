@@ -20,7 +20,7 @@ class SanitizedApiErrorsTests(unittest.TestCase):
             result = api_module._safe_call(failing_action)
 
         self.assertEqual(result["type"], "internal")
-        self.assertEqual(set(result), {"error", "type", "error_id"})
+        self.assertEqual(set(result), {"error", "type", "code", "retryable", "error_id"})
         self.assertRegex(result["error_id"], r"^[0-9a-f]{32}$")
         self.assertIn(result["error_id"], result["error"])
         self.assertNotIn(secret, str(result))
@@ -50,12 +50,14 @@ class SanitizedApiErrorsTests(unittest.TestCase):
         )
         self.assertEqual(validation, {
             "error":"Identificação inválida", "type":"validation",
+            "code":"INVALID_INPUT", "retryable":False,
         })
         state = api_module._safe_call(
             lambda: (_ for _ in ()).throw(RuntimeError("Sessão expirada"))
         )
         self.assertEqual(state, {
-            "error":"Sessão expirada", "type":"state",
+            "error":"A sessão expirou. Reconecte-se ao equipamento.",
+            "type":"session", "code":"SESSION_EXPIRED", "retryable":True,
         })
 
 
