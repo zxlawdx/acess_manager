@@ -273,6 +273,34 @@ class AttendanceReportService:
             for _date, _kind, _id, description in sorted(events):
                 lines.append("- " + description + ".")
 
+        # Operational metrics belong to the customer's ONT only when the
+        # authenticated ONT collector actually produced them. PC tests are
+        # recorded separately in the session timeline above.
+        ping = sections.get("ping") or {}
+        if isinstance(ping, dict) and ping:
+            lines.extend(["", "Conectividade testada pela ONT:"])
+            if ping.get("medio_ms") not in (None, ""):
+                lines.append("- Latência média: " +
+                             self._fmt(ping["medio_ms"]) + " ms")
+            try:
+                success_count = int(ping["sucesso"])
+                fail_count = int(ping["falha"])
+                total = success_count + fail_count
+                if total > 0 and success_count >= 0 and fail_count >= 0:
+                    lines.append(
+                        f"- Perda ICMP observada: {100 * fail_count / total:.1f}% "
+                        f"({fail_count} falhas em {total} tentativas)"
+                    )
+            except (KeyError, ValueError, TypeError):
+                pass
+        trace = sections.get("traceroute") or {}
+        if isinstance(trace, dict) and trace.get("hops") is not None:
+            try:
+                lines.append("- Traceroute da ONT: " +
+                             str(int(trace["hops"])) + " saltos informados")
+            except (ValueError, TypeError):
+                pass
+
         speed = sections.get(
             "speedtest"
         ) or {}
