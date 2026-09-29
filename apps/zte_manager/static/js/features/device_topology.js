@@ -14,6 +14,7 @@
   const clean = (value, fallback="Não informado", limit=72) => {
     if (value === null || value === undefined || String(value).trim()==="") return fallback;
     const str=String(value).replace(/[\x00-\x1F\x7F<>]/g,"").trim();
+    if (/(?:https?:\/\/|password\s*[:=]|token\s*[:=]|secret\s*[:=]|cookie\s*[:=])/i.test(str)) return fallback;
     return str ? str.slice(0,limit) : fallback;
   };
   function clientType(hostname) {
@@ -88,7 +89,7 @@
       ["Tipo",device.type]
     ];
     if(device.kind==="wifi"){
-      const key=device.kind+":"+device.mac+":"+device.ip;
+      const key=device.key;
       const list=samples.get(key)||[];
       const mean=list.length?list.reduce((acc,v)=>acc+v,0)/list.length:device.rssi;
       fields.push(["Rede",device.ssid]);
@@ -114,15 +115,23 @@
       "O tipo é sugerido somente quando o nome identifica o aparelho. "+
       "A distância por RSSI não é uma medição: paredes, potência, orientação e interferência alteram o resultado."));
   }
+  function withIdentity(item,kind,index){
+    const device=normalize(item,kind);
+    // Repeated or unknown addresses must never merge measurements from
+    // different clients. Index is a fallback only when identity is absent.
+    const anonymous=device.mac==="Não informado"&&device.ip==="Não informado";
+    device.key=kind+":"+device.mac+":"+device.ip+(anonymous?":"+index:"");
+    return device;
+  }
   function readDevices(wifi,lan){
-    const w=Array.isArray(wifi)?wifi.filter(v=>v&&typeof v==="object").map(v=>normalize(v,"wifi")):[];
-    const l=Array.isArray(lan)?lan.filter(v=>v&&typeof v==="object").map(v=>normalize(v,"lan")):[];
+    const w=Array.isArray(wifi)?wifi.filter(v=>v&&typeof v==="object").map((v,i)=>withIdentity(v,"wifi",i)):[];
+    const l=Array.isArray(lan)?lan.filter(v=>v&&typeof v==="object").map((v,i)=>withIdentity(v,"lan",i)):[];
     // No mixing snapshots from different equipment; no localStorage.
     const host=clean(document.getElementById("connectedHost")?.textContent||"","",100);
     if(currentHost!==host){currentHost=host;samples.clear();selectedKey=null;}
     for(const device of w){
       if(device.rssi===null)continue;
-      const key="wifi:"+device.mac+":"+device.ip;
+      const key=device.key;
       const previous=samples.get(key)||[];
       previous.push(device.rssi);
       samples.set(key,previous.slice(-5));
@@ -183,7 +192,7 @@
         const x=xs[index%2],y=289+Math.floor(index/2)*99;
         picture.appendChild(svg("path",{d:"M "+hubX+" "+(hubY+35)+" V "+
           (y-54)+" H "+x+" V "+(y-35),class:"am-topology-line"}));
-        const key=kind+":"+device.mac+":"+device.ip;
+        const key=device.key;
         const chip=shape(x,y,"am-topology-client"+(selectedKey===key?" is-selected":""),
           device.name,device.ip==="Não informado"?"Endereço não informado":device.ip,
           kind==="wifi"?"◉":"▣");
@@ -239,7 +248,7 @@
     for(const id of ["topologyRssiOneMeter","topologyPathLoss"]){
       document.getElementById(id)?.addEventListener("input",()=>{
         const currentDevice=[...current.wifi,...current.lan].find(d=>
-          d.kind+":"+d.mac+":"+d.ip===selectedKey);
+          d.key===selectedKey);
         if(currentDevice)details(currentDevice);
       });
     }
