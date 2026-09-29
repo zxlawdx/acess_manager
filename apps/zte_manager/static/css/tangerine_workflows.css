@@ -123,6 +123,20 @@ html[data-theme] .am-support-workspace .am-features-empty {
   background:var(--am-surface);color:var(--am-text-2);
   border-radius:9px;font:530 12px/1.6 var(--font-sans);
 }
+html[data-theme] .am-support-workspace .am-pending-feature {
+  min-width:0;display:flex;gap:10px;flex-direction:column;
+  padding:9px 11px;border-bottom:1px solid var(--am-border);
+}
+html[data-theme] .am-support-workspace .am-pending-feature:last-child {
+  border-bottom:0;
+}
+html[data-theme] .am-support-workspace .am-pending-feature strong {
+  color:var(--am-text);font:620 12px/1.45 var(--font-sans);
+  overflow-wrap:break-word;word-break:normal;
+}
+html[data-theme] .am-support-workspace .am-pending-feature small {
+  color:var(--am-text-2);font:480 10px/1.4 var(--font-sans);
+}
 html[data-theme] .am-support-workspace .support-summary {
  background:var(--am-primary-wash)!important;color:var(--am-text)!important;
  border-radius:11px!important;border:1px solid var(--am-selected)!important;
