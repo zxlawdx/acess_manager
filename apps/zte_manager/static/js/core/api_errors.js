@@ -22,7 +22,7 @@
   });
   const CODE_BY_TYPE = Object.freeze({
     authentication:"AUTH_FAILED", session:"SESSION_EXPIRED",
-    session_expired:"SESSION_EXPIRED", unsupported:"FEATURE_ABSENT",
+    session_expired:"SESSION_EXPIRED", unsupported:"CAPABILITY_UNCONFIRMED",
     unconfirmed:"CAPABILITY_UNCONFIRMED", permission:"OPERATION_FORBIDDEN",
     connection:"NETWORK_UNREACHABLE", timeout:"TIMEOUT",
     invalid_response:"INVALID_DEVICE_RESPONSE", partial:"OPERATION_PARTIAL",
@@ -76,6 +76,8 @@
     let code = Object.hasOwn(RULES,claimed) ? claimed :
       (Object.hasOwn(CODE_BY_TYPE,legacyType) ? CODE_BY_TYPE[legacyType] :
         mapStatus(status,true));
+    if (code==="FEATURE_ABSENT" && claimed!=="FEATURE_ABSENT")
+      code="CAPABILITY_UNCONFIRMED";
     if ((status===404 || status===405) && code==="FEATURE_ABSENT" &&
         claimed!=="FEATURE_ABSENT") code="ROUTE_UNCONFIRMED";
     return new OperationError(code,{...payload,status});
