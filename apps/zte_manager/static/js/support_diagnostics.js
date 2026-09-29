@@ -2027,7 +2027,7 @@ async function detectFirmwareDiagnosticOptions() {
     let total = 0;
     let stopped = false;
     const results = {};
-    setBusy(true, "Validando recursos disponíveis (somente GET)...");
+    setBusy(true, "Verificando as funcionalidades disponíveis...");
     try {
         if (firmwareDiagnosticState.source === "native") {
             // O adaptador nativo oferece recursos próprios da F670L.
@@ -2062,15 +2062,15 @@ async function detectFirmwareDiagnosticOptions() {
                 features.forEach(item => {
                     sections[item.name] = {
                         available: item.confirmed,
-                        data: item.confirmed ? { status: "GET confirmado" } : null
+                        data: item.confirmed ? null : null
                     };
                 });
-                window.renderAdaptiveDiagnostic({ model, sections }, result);
+                window.renderAdaptiveDiagnostic({ model, sections, probe_only: true }, result);
             }
             return;
         }
         do {
-            setBusy(true, "Sondando firmware: " + offset +
+            setBusy(true, "Verificando recursos do equipamento: " + offset +
                 (total ? "/" + total : "") + " rotas verificadas...");
             // Um lote por vez: o firmware compartilha contexto menuView/menuData.
             const batch = await discoveryRequest("/multimodel/probe", {
@@ -2105,11 +2105,11 @@ async function detectFirmwareDiagnosticOptions() {
                 Object.entries(results).forEach(([name, item]) => {
                     sections[name] = {
                         available: item.available,
-                        data: item.available ? { status: "GET confirmado" } : null,
+                        data: item.available ? null : null,
                         reason: item.reason
                     };
                 });
-                window.renderAdaptiveDiagnostic({ model, sections }, result, {
+                window.renderAdaptiveDiagnostic({ model, sections, probe_only: true }, result, {
                     progress: "Verificação " + Math.min(offset, total) +
                               " de " + total
                 });
