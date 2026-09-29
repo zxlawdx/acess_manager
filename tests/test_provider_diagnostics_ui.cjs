@@ -109,3 +109,51 @@ test("firmware probe is summary only, not a wall of mock GET cards",()=>{
     assert.match(text,/2 de 3 funcionalidades responderam/);
     assert.doesNotMatch(text,/GET|think_lua|wifi_advanced/);
 });
+
+test("ONT indicators compute loss from real success/failure counters",()=>{
+    const begin=support.indexOf("function renderNetworkIndicators(result) {");
+    const end=support.indexOf("function renderAffectedClient(result) {",begin);
+    assert.ok(begin>=0&&end>begin);
+    const factory=new Function("metric","supportEscape",
+        support.slice(begin,end)+";return renderNetworkIndicators;");
+    const render=factory(
+        (name,value)=>"<p>"+name+": "+String(value)+"</p>",
+        value=>String(value).replace(/</g,"&lt;")
+    );
+    const report={sections:{
+        optical:{registration_status:"O5",rx_power_dbm:-19.5},
+        wan:[{status:"Up"},{status:"Down"}],
+        lan_ports:[{status:"Up"}],
+        ping:{medio_ms:"18",sucesso:"3",falha:"1"},
+        dns_health:{lookup:{success:true}},
+        traceroute:{hops:7}
+    }};
+    const html=render(report);
+    assert.match(html,/25\.0%/);
+    assert.match(html,/18 ms/);
+    assert.match(html,/1 de 2/);
+    assert.match(html,/Resolveu/);
+    assert.match(html,/7 saltos/);
+    assert.match(html,/não descreve necessariamente a conexão/);
+    const incomplete=render({sections:{ping:{medio_ms:"18"}}});
+    assert.match(incomplete,/Não medido/);
+});
+test("Wi-Fi remediation distinguishes proof from a merely accepted command",()=>{
+    const begin=support.indexOf("function renderRemediationAudit(result) {");
+    const end=support.indexOf("function renderNetworkIndicators(result) {",begin);
+    assert.ok(begin>=0&&end>begin);
+    const fn=new Function("supportDiagnosticState","supportEscape",
+        support.slice(begin,end)+";return renderRemediationAudit;")(
+        {lastConfig:{auto_optimize_wifi:true}},value=>String(value)
+    );
+    assert.match(fn({remediations:[]}),/Nenhuma mudança automática/);
+    const content=fn({remediations:[
+        {band:"2.4GHz",action:{type:"wifi_channel",channel:11},
+            result:{success:true,audit_outcome:"accepted"}},
+        {band:"5GHz",action:{type:"wifi_auto_channel"},
+            result:{success:true,audit_outcome:"verified"}}
+    ]});
+    assert.match(content,/aguarda confirmação/);
+    assert.match(content,/confirmada pela releitura/);
+    assert.match(content,/canal 11/);
+});
