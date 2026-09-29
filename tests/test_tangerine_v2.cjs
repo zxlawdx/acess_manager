@@ -45,7 +45,9 @@ test("UI has ten page-specific visual headers, preserves actual session IDs",()=
   "consoleHostText","overviewHost","connectButton","topDeviceChip","appearanceSelect"]){
    assert.ok(html.includes('id="'+id+'"'),id);
  }
- assert.match(html,/class="login-hero am-connect-story"/);
+ assert.match(html,/class="login-hero am-connect-story am-inventory-panel"/);
+ assert.ok(html.includes('id="connectionInventoryList"'),
+   "Figma equipment browser must use real inventory");
  assert.doesNotMatch(html,/window-dot red/);
 });
 
