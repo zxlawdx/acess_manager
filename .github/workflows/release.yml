@@ -70,6 +70,7 @@ jobs:
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
           node --test tests/test_tangerine_feature_experience.cjs
           node --test tests/test_operator_outcomes.cjs
+          node --test tests/test_shell_and_support_layout.cjs
           node --test tests/test_connection_inventory.cjs
           node --test tests/test_clients_workbench.cjs
           node --test tests/test_device_tr069_workflow.cjs
@@ -177,6 +178,7 @@ jobs:
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/features/firmware_inspector.js
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/components/topology.css
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/components/firmware_inspector.css
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/components/shell_layout.css
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/tangerine_forms.js
 
       - name: Package Linux build
@@ -240,6 +242,7 @@ jobs:
           if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\features\device_topology.js")) { throw "Grafo nao encontrado no bundle Windows" }
           if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\features\firmware_inspector.js")) { throw "Inspetor nao encontrado no bundle Windows" }
           if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\css\components\topology.css")) { throw "Estilos do grafo nao encontrados no bundle Windows" }
+          if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\css\components\shell_layout.css")) { throw "Layout responsivo nao encontrado no bundle Windows" }
           Compress-Archive -Path "dist\ZTEAutomatic" -DestinationPath $zip -Force
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256"
