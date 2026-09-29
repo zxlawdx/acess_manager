@@ -49,6 +49,8 @@ jobs:
           node --check apps/zte_manager/static/js/neutral_theme.js
           node --check apps/zte_manager/static/js/core/api_errors.js
           node --check apps/zte_manager/static/js/workbench_tabs.js
+          node --check apps/zte_manager/static/js/features/history.js
+          node --test tests/test_history_view.cjs
           node --check apps/zte_manager/static/js/tangerine_shell.js
           node --test tests/test_api_client_ui.cjs tests/test_advanced_workbench.cjs
           node --check apps/zte_manager/static/js/tangerine_forms.js
