@@ -428,6 +428,36 @@
         return node;
     }
 
+    function humanCapturedRoute(route, index) {
+        const tag = String(route?.tag || "").toLowerCase();
+        const vocabulary = [
+            [/optical|poninfo|loid/, "Potência óptica e fibra"],
+            [/wlan.*ssid|wlanhome|wlan_home/, "Redes Wi-Fi"],
+            [/wlan.*basic|channel/, "Configurações de rádio"],
+            [/wlan.*wps/, "Conexão simplificada WPS"],
+            [/bandsteer/, "Direcionamento entre bandas"],
+            [/sta_wlan_profile/, "Redes Wi-Fi próximas"],
+            [/dhcp.*host|dhcphost/, "Dispositivos com DHCP"],
+            [/dhcp.*static/, "Reservas DHCP"],
+            [/dhcp/, "Servidor DHCP"],
+            [/dns/, "Configurações DNS"],
+            [/route.*ipv6/, "Rotas IPv6"],
+            [/route.*ipv4/, "Rotas IPv4"],
+            [/wan.*internet/, "Conexão de Internet"],
+            [/upnp/, "Abertura automática de portas"],
+            [/firewall/, "Proteção da rede"],
+            [/sntp/, "Sincronização de horário"],
+            [/remotemgr/, "Gerenciamento remoto"],
+            [/networkdiag_ping/, "Teste de conectividade"],
+            [/networkdiag_traceroute/, "Caminho da conexão"],
+            [/log_syslog/, "Registros do equipamento"],
+            [/voip/, "Telefonia"],
+        ];
+        const matched = vocabulary.find(([pattern]) => pattern.test(tag));
+        return (matched ? matched[1] : (route.category || "Equipamento")) +
+            " · função " + (index + 1);
+    }
+
     async function loadCapturedRoutes() {
         if (routerWriteEnabled || !ontConnected) return;
         const bootstrap = await apiRequest("/discovery/bootstrap");
@@ -451,17 +481,17 @@
         const copy = make("div");
         copy.append(make("span", "adaptive-eyebrow",
             "MAPEAMENTO CAPTURADO · SOMENTE LEITURA"));
-        copy.append(make("h2", "", "Explorador de endpoints do F6201B"));
+        copy.append(make("h2", "", "Funcionalidades identificadas no F6201B"));
         copy.append(make("p", "adaptive-empty",
-            data.total_get_routes + " rotas GET catalogadas. " +
+            data.total_get_routes + " funcionalidades catalogadas. " +
             "Consultas opcionais mostram somente estrutura e contagens; " +
             "a presença no catálogo não confirma disponibilidade atual."));
         header.append(copy);
         panel.append(header);
         const search = make("input", "adaptive-search");
         search.type = "search";
-        search.placeholder = "Filtrar por tag ou categoria…";
-        search.setAttribute("aria-label", "Buscar rotas capturadas");
+        search.placeholder = "Buscar funcionalidade ou categoria…";
+        search.setAttribute("aria-label", "Buscar funcionalidades observadas");
         panel.append(search);
         const groups = make("div", "adaptive-route-groups");
         panel.append(groups);
@@ -470,7 +500,7 @@
         const rebuild = () => {
             groups.replaceChildren();
             const filtered = data.routes.filter(route => (
-                route.tag + " " + route.category).toLowerCase()
+                humanCapturedRoute(route, data.routes.indexOf(route)) + " " + route.category).toLowerCase()
                 .includes(search.value.toLowerCase().trim()));
             const categories = new Map();
             filtered.forEach(route => {
@@ -486,18 +516,19 @@
                 routes.forEach(route => {
                     const row = make("div", "adaptive-route-row");
                     const desc = make("div");
-                    desc.append(make("strong", "", route.tag));
+                    desc.append(make("strong", "",
+                        humanCapturedRoute(route, data.routes.indexOf(route))));
                     desc.append(make("small", "", route.inspectable
-                        ? "Objeto observado: " + route.root
-                        : "Sem XML estrutural completo na captura"));
+                        ? "Consulta estrutural disponível"
+                        : "Consulta ainda sem formato confirmado"));
                     const button = make("button", "button ghost compact",
-                        route.inspectable ? "Inspecionar GET" : "Sem leitura");
+                        route.inspectable ? "Consultar" : "Não disponível");
                     button.type = "button";
                     button.disabled = !route.inspectable;
                     button.addEventListener("click", async () => {
                         if (!ontConnected) return;
                         button.disabled = true;
-                        setBusy(true, "Inspecionando " + route.tag + "...");
+                        setBusy(true, "Consultando a funcionalidade...");
                         try {
                             const response = await apiRequest(
                                 "/multimodel/mapped-inspect", {
@@ -506,7 +537,7 @@
                                 });
                             window.renderAdaptiveDiagnostic({
                                 model: "F6201B",
-                                sections: { [route.tag]: {
+                                sections: { [humanCapturedRoute(route, data.routes.indexOf(route))]: {
                                     available: response.available === true,
                                     data: response.available
                                         ? { objects: response.structure } : null,
