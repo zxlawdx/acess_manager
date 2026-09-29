@@ -480,6 +480,25 @@ async function saveWifiSchedule(event) {
 // CAPABILITIES
 // =========================================================
 
+async function loadCapabilityCatalog() {
+    const data = await apiRequest(
+        "/device/capabilities"
+    );
+
+    if (!data || typeof data.features !== "object" || !data.features ||
+        Array.isArray(data.features)) {
+        throw new Error("O catálogo nativo retornou um formato inválido.");
+    }
+    advancedState.capabilities = data;
+    const badge = document.getElementById("adapterBadge");
+    if (badge) badge.textContent = "Catálogo carregado";
+    populateFirmwareSelector(data.features);
+
+    renderCapabilities(data.features, null);
+    return data;
+}
+
+
 function populateFirmwareSelector(features) {
     const select = document.getElementById("firmwareFeatureSelect");
     const button = document.getElementById("firmwareInspectButton");
@@ -512,25 +531,6 @@ function populateFirmwareSelector(features) {
         ? catalog.length + " funcionalidades catalogadas. A disponibilidade de cada uma só é confirmada após a consulta."
         : "Este modelo não forneceu uma lista de funcionalidades. Revise a identificação.";
 }
-
-async function loadCapabilityCatalog() {
-    const data = await apiRequest(
-        "/device/capabilities"
-    );
-
-    if (!data || typeof data.features !== "object" || !data.features ||
-        Array.isArray(data.features)) {
-        throw new Error("O catálogo nativo retornou um formato inválido.");
-    }
-    advancedState.capabilities = data;
-    const badge = document.getElementById("adapterBadge");
-    if (badge) badge.textContent = "Catálogo carregado";
-    populateFirmwareSelector(data.features);
-
-    renderCapabilities(data.features, null);
-    return data;
-}
-
 
 let nativeProbeBusy = false;
 
