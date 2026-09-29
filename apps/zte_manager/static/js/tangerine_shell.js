@@ -12,6 +12,9 @@
     try { collapsed = localStorage.getItem(STORAGE) === "true"; } catch {}
     function render() {
       sidebar.classList.toggle("is-collapsed", collapsed);
+      const shell = sidebar.closest(".app-shell");
+      shell?.classList.toggle("am-shell-collapsed", collapsed);
+      document.documentElement.dataset.sidebarCollapsed = String(collapsed);
       toggle.setAttribute("aria-expanded", String(!collapsed));
       toggle.setAttribute("aria-label", collapsed ? "Expandir menu lateral" : "Recolher menu lateral");
       toggle.title = collapsed ? "Expandir menu lateral" : "Recolher menu lateral";
