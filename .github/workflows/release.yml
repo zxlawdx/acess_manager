@@ -70,6 +70,7 @@ jobs:
           node --test tests/test_clients_workbench.cjs
           node --test tests/test_device_tr069_workflow.cjs
           node --test tests/test_management_tabs.cjs
+          node --test tests/test_diagnostic_tabs.cjs
           node --check apps/zte_manager/static/js/tangerine_shell.js
           node --test tests/test_api_client_ui.cjs tests/test_advanced_workbench.cjs
           node --check apps/zte_manager/static/js/tangerine_forms.js
