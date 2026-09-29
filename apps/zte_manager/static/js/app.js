@@ -4267,18 +4267,18 @@ function applyUiZoom(
         value
     );
 
-    // Zoom only the application grid. Zooming body desynchronizes a fixed
-    // sidebar and causes horizontal clipping in QtWebEngine on Windows.
-    // The shell expands its layout width inversely (CSS --am-zoom), so the
-    // rendered outer width stays equal to the viewport at every zoom level.
+    // A+/A- scale text only. CSS zoom on body or the application grid
+    // desynchronizes QtWebEngine's viewport, media queries and sidebar.
+    // Keep each page in the same layout coordinate system at every size.
     document.documentElement.style.zoom = "";
     document.body.style.zoom = "";
     document.body.style.width = "";
     document.body.style.maxWidth = "";
-    document.documentElement.style.setProperty("--app-zoom", String(uiZoom));
-    document.documentElement.style.setProperty("--am-zoom", String(uiZoom));
     const shell = document.querySelector(".app-shell");
-    if (shell) shell.style.zoom = String(uiZoom);
+    if (shell) shell.style.zoom = "";
+    document.documentElement.style.setProperty(
+        "--am-font-scale", String(uiZoom)
+    );
 
     const level = document.getElementById(
         "zoomLevel"
