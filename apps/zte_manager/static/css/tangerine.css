@@ -1277,6 +1277,7 @@ html[data-theme] #wifiNetworks,html[data-theme] #wifiRadios{
 /* QtWebEngine: inverse layout width avoids page overflow at 110–160% zoom. */
 html[data-theme] .app-shell {
   width:calc(100% / var(--am-zoom,1))!important;
+  zoom:var(--am-zoom,1);
   max-width:none!important;
 }
 html[data-theme][data-sidebar-collapsed="true"] .app-shell{
