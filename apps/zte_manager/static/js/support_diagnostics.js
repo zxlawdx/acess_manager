@@ -796,6 +796,7 @@ function renderSupportDiagnostic(result) {
     output.replaceChildren();
     const sections = [
         ["Resumo", () => renderDiagnosticSummary(result, finalResult)],
+        ["Alterações", () => renderRemediationAudit(result)],
         ["Cliente", () => renderAffectedClient(finalResult)],
         ["Conclusões", () => renderFindings(finalResult)],
         ["Wi-Fi", () => renderWifiEnvironment(finalResult)],
@@ -851,12 +852,46 @@ function renderDiagnosticSummary(original, result) {
                     <span>recomendações</span>
                 </div>
                 <div>
-                    <strong>${remediations.length}</strong>
-                    <span>ajustes auto</span>
+                    <strong>${remediations.filter(item => item.result?.audit_outcome === "verified").length}</strong>
+                    <span>ajustes confirmados</span>
                 </div>
             </div>
         </article>
     `;
+}
+
+
+function renderRemediationAudit(result) {
+    const changes = result.remediations || [];
+    if (!changes.length) {
+        return supportDiagnosticState.lastConfig?.auto_optimize_wifi
+            ? '<article class="support-result-card"><h3>Otimização de Wi-Fi</h3>' +
+                '<p>Nenhuma mudança automática foi executada. ' +
+                'É necessário confirmar redes vizinhas, canais autorizados ' +
+                'e uma vantagem real antes de alterar o rádio.</p></article>'
+            : "";
+    }
+    const modes = {
+        verified: "Configuração confirmada pela releitura",
+        accepted: "Comando aceito; aguarda confirmação",
+        uncertain: "Resultado incerto; confira o rádio",
+        failed: "A alteração não foi confirmada"
+    };
+    return '<article class="support-result-card">' +
+        '<div class="support-card-head"><h3>Alterações realizadas</h3></div>' +
+        '<ul class="am-remediation-list">' +
+        changes.map(change => {
+            const action = change.action || {};
+            const outcome = change.result?.audit_outcome || "uncertain";
+            const title = action.type === "wifi_channel"
+                ? "Seleção do canal " + Number(action.channel)
+                : "Configuração de canal automático";
+            return '<li><strong>' + supportEscape(title) + ' · ' +
+                supportEscape(change.band || "") + '</strong>' +
+                '<span>' + supportEscape(modes[outcome] || modes.uncertain) +
+                '</span></li>';
+        }).join("") +
+        '</ul></article>';
 }
 
 
@@ -1256,7 +1291,7 @@ async function applySupportRecommendation(button) {
     );
 
     try {
-        await apiRequest(
+        const mutation = await apiRequest(
             "/diagnostics/remediate",
             {
                 method: "POST",
@@ -1272,9 +1307,13 @@ async function applySupportRecommendation(button) {
             }
         );
 
-        showToast(
-            "Ajuste aplicado. Reexecutando a validação..."
-        );
+        const outcome = mutation.audit_outcome ||
+            mutation.result?.audit_outcome || "uncertain";
+        showToast(outcome === "verified"
+            ? "Configuração do canal confirmada. Reexecutando diagnóstico..."
+            : outcome === "failed"
+              ? "O equipamento rejeitou a mudança. Atualizando o diagnóstico..."
+              : "Mudança enviada, mas ainda não confirmada. Conferindo o estado atual...");
 
         const config = {
             ...(
