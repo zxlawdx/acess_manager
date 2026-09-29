@@ -45,6 +45,8 @@ jobs:
           node --check apps/zte_manager/static/js/f6201b_editor.js
           node --check apps/zte_manager/static/js/neutral_theme.js
           node --check apps/zte_manager/static/js/tangerine_shell.js
+          node --check apps/zte_manager/static/js/tangerine_forms.js
+          node --test tests/test_tangerine_v2.cjs
           node --check apps/zte_manager/static/js/f6201b_workbench.js
           node --check apps/zte_manager/static/js/dhcp_module.js
           node --check apps/zte_manager/static/js/named_presets.js

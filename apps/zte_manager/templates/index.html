@@ -30,6 +30,7 @@
 <link rel="stylesheet" href="{{ static('zte_manager/css/light_mode_refine.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/dhcp_module.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/tangerine.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/tangerine_forms.css') }}">
 
 <div class="app-shell">
 
@@ -1464,7 +1465,7 @@
                                 <label class="field"><span>NOME</span><input id="managementProfileName" type="text" value="Brasil Digital padrão"></label>
                                 <label class="check-row"><input id="managementProfileDefault" type="checkbox"><span>Perfil padrão</span></label>
                             </div>
-                            <label class="field">
+                            <label class="field am-source-json">
                                 <span>CONFIGURAÇÃO JSON</span>
                                 <textarea id="managementProfileJson" class="management-json-editor" spellcheck="false">{
   "wifi": {
@@ -1491,7 +1492,7 @@
                                     <option value="sync_inventory">Sincronizar inventário local</option>
                                 </select>
                             </label>
-                            <label class="field">
+                            <label class="field am-source-json">
                                 <span>PAYLOAD JSON</span>
                                 <textarea id="managementBatchPayload" class="management-json-editor" spellcheck="false">{}</textarea>
                             </label>
@@ -1639,7 +1640,7 @@
                             <span class="section-kicker">QOS / SQM</span>
                             <h3>Fila, shaper e policer</h3>
                             <label class="field"><span>TIPO</span><select id="managementQosKind"><option value="queue">Queue</option><option value="shaper">Shaper</option><option value="policer">Policer</option></select></label>
-                            <label class="field"><span>CONFIG JSON</span><textarea id="managementQosJson" class="management-json-editor">{"Alias":"Suporte","Enable":true}</textarea></label>
+                            <label class="field am-source-json"><span>CONFIG JSON</span><textarea id="managementQosJson" class="management-json-editor">{"Alias":"Suporte","Enable":true}</textarea></label>
                             <button id="managementQosSave" class="button primary" type="button">Salvar QoS</button>
                         </article>
 
@@ -1654,21 +1655,21 @@
                                 <label class="field"><span>FILTRO</span><select id="managementFirewallRuleKind"><option value="ip">IP</option><option value="mac">MAC</option></select></label>
                                 <label class="field"><span>ID PARA EXCLUIR</span><input id="managementFirewallRuleId" type="text" placeholder="Opcional"></label>
                             </div>
-                            <label class="field"><span>REGRA JSON</span><textarea id="managementFirewallRuleJson" class="management-json-editor">{"Name":"Suporte","Enable":true,"Protocol":"TCP"}</textarea></label>
+                            <label class="field am-source-json"><span>REGRA JSON</span><textarea id="managementFirewallRuleJson" class="management-json-editor">{"Name":"Suporte","Enable":true,"Protocol":"TCP"}</textarea></label>
                             <div class="management-action-row">
                                 <button id="managementFirewallRuleSave" class="button ghost" type="button">Salvar filtro</button>
                                 <button id="managementFirewallRuleDelete" class="button danger" type="button">Excluir filtro</button>
                             </div>
-                            <label class="field"><span>POLÍTICA GLOBAL JSON</span><textarea id="managementFirewallGlobalJson" class="management-json-editor">{"mac_enabled":false,"mac_target":"Discard"}</textarea></label>
+                            <label class="field am-source-json"><span>POLÍTICA GLOBAL JSON</span><textarea id="managementFirewallGlobalJson" class="management-json-editor">{"mac_enabled":false,"mac_target":"Discard"}</textarea></label>
                             <button id="managementFirewallGlobalSave" class="button ghost" type="button">Aplicar política global</button>
                         </article>
 
                         <article class="panel">
                             <span class="section-kicker">SNTP / TR-069</span>
                             <h3>Gerenciamento remoto</h3>
-                            <label class="field"><span>SNTP JSON</span><textarea id="managementSntpJson" class="management-json-editor">{"enabled":true,"server1":"pool.ntp.org"}</textarea></label>
+                            <label class="field am-source-json"><span>SNTP JSON</span><textarea id="managementSntpJson" class="management-json-editor">{"enabled":true,"server1":"pool.ntp.org"}</textarea></label>
                             <button id="managementSntpSave" class="button ghost" type="button">Aplicar SNTP</button>
-                            <label class="field"><span>TR-069 JSON</span><textarea id="managementTr069Json" class="management-json-editor">{"periodic_inform_enabled":true,"periodic_inform_interval":3600}</textarea></label>
+                            <label class="field am-source-json"><span>TR-069 JSON</span><textarea id="managementTr069Json" class="management-json-editor">{"periodic_inform_enabled":true,"periodic_inform_interval":3600}</textarea></label>
                             <button id="managementTr069Save" class="button primary" type="button">Aplicar TR-069</button>
                         </article>
                     </div>
@@ -1679,7 +1680,7 @@
                             <label class="field"><span>WAN ID</span><input id="managementWanId" type="text" placeholder="IGD.WD1.WCD1.WCIP1"></label>
                             <label class="field"><span>AÇÃO</span><select id="managementWanAction"><option value="connect">PPPoE Connect</option><option value="disconnect">PPPoE Disconnect</option><option value="dhcp_renew">DHCP Renew</option><option value="dhcp_release">DHCP Release</option></select></label>
                         </div>
-                        <label class="field"><span>CONFIGURAÇÃO WAN JSON</span><textarea id="managementWanJson" class="management-json-editor">{"vlan_enabled":true,"vlan_id":"100","priority":"0","mtu":"1492"}</textarea></label>
+                        <label class="field am-source-json"><span>CONFIGURAÇÃO WAN JSON</span><textarea id="managementWanJson" class="management-json-editor">{"vlan_enabled":true,"vlan_id":"100","priority":"0","mtu":"1492"}</textarea></label>
                         <div class="management-action-row">
                             <button id="managementWanCreate" class="button ghost" type="button">Criar nova WAN</button>
                             <button id="managementWanUpdate" class="button primary" type="button">Aplicar WAN</button>
@@ -1882,6 +1883,7 @@
 <script src="{{ static('zte_manager/js/f6201b_editor.js') }}"></script>
 <script src="{{ static('zte_manager/js/neutral_theme.js') }}"></script>
 <script src="{{ static('zte_manager/js/tangerine_shell.js') }}"></script>
+<script src="{{ static('zte_manager/js/tangerine_forms.js') }}"></script>
 <script src="{{ static('zte_manager/js/f6201b_workbench.js') }}"></script>
 <script src="{{ static('zte_manager/js/dhcp_module.js') }}"></script>
 <script src="{{ static('zte_manager/js/named_presets.js') }}"></script>

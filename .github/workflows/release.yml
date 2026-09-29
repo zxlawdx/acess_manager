@@ -58,6 +58,8 @@ jobs:
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/neutral_theme.js
           node --check apps/zte_manager/static/js/tangerine_shell.js
+          node --check apps/zte_manager/static/js/tangerine_forms.js
+          node --test tests/test_tangerine_v2.cjs
           node --test tests/test_tangerine_ui.cjs
 
   build-linux:
