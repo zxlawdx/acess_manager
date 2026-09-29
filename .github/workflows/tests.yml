@@ -70,6 +70,7 @@ jobs:
           node --check apps/zte_manager/static/js/features/device_topology.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
           node --test tests/test_tangerine_feature_experience.cjs
+          node --test tests/test_operator_outcomes.cjs
           node --test tests/test_connection_inventory.cjs
           node --test tests/test_clients_workbench.cjs
           node --test tests/test_device_tr069_workflow.cjs
@@ -169,10 +170,11 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Verify Phase 2 session, inventory and desktop host contracts
         run: |
-          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat tests.test_api_error_sanitization tests.test_api_error_policy tests.test_frontend_backend_contracts tests.test_f6600p_support_progress tests.test_f6600p_dhcp_encoded tests.test_tr069_named_presets -v
+          python -m unittest tests.test_phase2_integration tests.test_runtime_device_contract tests.test_windows_compat tests.test_api_error_sanitization tests.test_api_error_policy tests.test_audit_outcome_api tests.test_frontend_backend_contracts tests.test_f6600p_support_progress tests.test_f6600p_dhcp_encoded tests.test_tr069_named_presets -v
       - name: Verify clipboard browser selection never touches Windows Web APIs
         run: |
           node tests/test_desktop_clipboard.cjs
+          node --test tests/test_tangerine_feature_experience.cjs tests/test_operator_outcomes.cjs
           node tests/test_native_readonly_diagnostics.cjs
           node tests/test_inventory_view.cjs
           node tests/test_f6600p_advanced_ui.cjs
