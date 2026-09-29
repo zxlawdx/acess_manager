@@ -3863,6 +3863,11 @@ async function loadClients() {
     renderLanClients(
         lanClients
     );
+    // Real /clients/wifi and /clients/lan response, shared with the graph.
+    // The topology never re-probes the ONT or derives fictitious clients.
+    document.dispatchEvent(new CustomEvent("am:clients-updated", {
+        detail: {wifi: wifiClients, lan: lanClients}
+    }));
 }
 
 
