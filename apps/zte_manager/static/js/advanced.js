@@ -596,7 +596,7 @@ async function probeCapabilities() {
         const catalog = advancedState.capabilities?.features || {};
         const keys = Object.keys(catalog);
         if (!keys.length) {
-            showToast("Não há menus ThinkLua neste perfil. Use Detectar modelo.");
+            showToast("Não há recursos de inspeção catalogados. Confirme o modelo do equipamento.");
             return;
         }
         const results = [];
@@ -1212,14 +1212,13 @@ async function probeMultimodel({ quick = false } = {}) {
                     Object.entries(endpoints).forEach(([name, value]) => {
                         sections[name] = {
                             available: value.available === true,
-                            data: value.available ? {
-                                status: "GET confirmado", tag: value.tag
-                            } : null,
+                            data: null, // availability is not an actual data reading
                             reason: value.reason
                         };
                     });
                     window.renderAdaptiveDiagnostic({
-                        model: batch.model || model, sections
+                        model: batch.model || model,
+                        sections, probe_only: true
                     }, output, {
                         progress: "Verificação " + Math.min(offset, total) +
                                   "/" + total
@@ -1280,7 +1279,7 @@ async function exportFeatureShapes() {
 
     const report = {
         schema: 1,
-        adapter: advancedState.capabilities?.adapter || "ThinkLua",
+        adapter: "Equipamento identificado",
         notes: "Contém apenas estrutura de menu e contagens. Revisar antes de compartilhar.",
         tracker: tracker ? {
             model: tracker.model,
@@ -2335,7 +2334,7 @@ async function loadOperationsConsoleInternal() {
                             status: "not_tested"
                         })
                     ),
-                    reason: "Modelo autenticado. Recursos do adaptador disponíveis para verificação GET."
+                    reason: "Modelo autenticado. Recursos disponíveis para verificação."
                 });
             }
         } catch (error) {
