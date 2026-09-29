@@ -1,0 +1,77 @@
+<section id="page-profiles" class="page">
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">tune</span>
+                        <span class="section-kicker">TECHNICIAN PRESET</span>
+                        <h2>Configuração padrão</h2>
+                        <p>Perfil persistente do atendente para padronizar rádio e DNS.</p>
+                    </div>
+                    <div class="profile-actions">
+                        <button id="captureProfileButton" class="button ghost" type="button"><span class="material-symbols-outlined">download</span>Capturar atual</button>
+                        <button id="saveProfileButton" class="button ghost" type="button"><span class="material-symbols-outlined">save</span>Salvar perfil</button>
+                        <button id="applyProfileButton" class="button primary" type="button"><span class="material-symbols-outlined">bolt</span>Aplicar perfil</button>
+                    </div>
+                </div>
+
+                <article class="panel profile-banner">
+                    <span class="section-kicker">PERFIL ATIVO</span>
+                    <strong id="profileAttendant">-</strong>
+                    <p>Os parâmetros abaixo pertencem somente a este atendente.</p>
+                </article>
+
+                <article class="panel with-top-space" id="namedPresetPanel">
+                    <div class="panel-header"><div>
+                        <span class="section-kicker">CONFIGURAÇÕES VARIANTES</span>
+                        <h3>Configurações salvas do atendente</h3>
+                    </div></div>
+                    <div class="field-grid three">
+                        <label class="field"><span>CONFIGURAÇÃO</span>
+                            <select id="namedPresetSelect" aria-label="Escolher configuração salva"></select></label>
+                        <label class="field"><span>NOVA CONFIGURAÇÃO</span>
+                            <input id="namedPresetName" type="text" maxlength="60"
+                                placeholder="Ex.: Cliente empresarial"></label>
+                        <div class="profile-actions">
+                            <button type="button" id="namedPresetCreate" class="button ghost">+ Criar conf.</button>
+                            <button type="button" id="namedPresetDelete" class="button ghost">Excluir</button>
+                        </div>
+                    </div>
+                    <p id="namedPresetHint" class="muted" role="status" aria-live="polite">
+                        A configuração principal permanece compatível com o fluxo atual.
+                    </p>
+                    <div class="profile-actions">
+                        <button type="button" id="namedPresetSave" class="button ghost">Salvar configuração selecionada</button>
+                        <button type="button" id="namedPresetApply" class="button primary">Aplicar configuração selecionada</button>
+                    </div>
+                </article>
+                <div id="profileRadios" class="radio-grid"></div>
+
+                <article class="panel with-top-space">
+                    <div class="panel-header"><div><span class="section-kicker">DNS PRESET</span><h3>DNS padrão</h3></div></div>
+                    <div class="field-grid three">
+                        <label class="field"><span>DOMÍNIO</span><input id="profileDomainName" type="text" placeholder="Opcional"></label>
+                        <label class="field"><span>DNS IPv4 1</span><input id="profileDns4_1" type="text"></label>
+                        <label class="field"><span>DNS IPv4 2</span><input id="profileDns4_2" type="text"></label>
+                        <label class="field"><span>DNS IPv6 1</span><input id="profileDns6_1" type="text"></label>
+                        <label class="field"><span>DNS IPv6 2</span><input id="profileDns6_2" type="text"></label>
+                    </div>
+                </article>
+
+                <article class="panel with-top-space">
+                    <div class="panel-header">
+                        <div><span class="section-kicker">STATIC DNS HOSTS</span><h3>Nomes de servidor</h3></div>
+                        <button id="addProfileHostButton" class="text-action" type="button">+ Adicionar</button>
+                    </div>
+                    <div id="profileHosts" class="stack-list"></div>
+                </article>
+
+                <article class="panel with-top-space">
+                    <div class="panel-header"><div><span class="section-kicker">LAST RUN</span><h3>Resultado da aplicação</h3></div></div>
+                    <div id="profileApplyResult" class="stack-list"><span class="muted">Nenhuma aplicação realizada nesta sessão.</span></div>
+                </article>
+            </section>
+
+
+            <!-- ==================================================
+                 ADVANCED OPERATIONS
+            =================================================== -->
+            <!-- Gestão TR-069: credenciais de aplicação não são persistidas. -->
+            

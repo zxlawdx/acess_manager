@@ -29,7 +29,10 @@ jobs:
           python -c "from vela.cli.build import BuildOptions, build_plan, launcher_source; from pathlib import Path; p=build_plan(Path.cwd(), BuildOptions(gui='qt6')); assert 'qtpy' in p['command']; assert 'webview.platforms.qt' in launcher_source('qt6')"
 
       - name: Compile Python
-        run: python -m compileall -q apps config tests manage.py launcher.py
+        run: python -m compileall -q apps config tests manage.py launcher.py tools/build_frontend_template.py
+
+      - name: Verify modular frontend template is generated and current
+        run: python tools/build_frontend_template.py --check
 
       - name: Run tests
         run: python -m unittest discover -s tests -v

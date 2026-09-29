@@ -1,0 +1,166 @@
+<section id="page-dashboard" class="page">
+                <!-- Live values mirror the authenticated ONT state; no Figma mock data. -->
+                <section class="am-dashboard-hero" aria-label="Resumo do equipamento atual">
+                    <div class="am-hero-copy">
+                        <span class="am-hero-kicker"><span class="am-hero-dot"></span>
+                            <span id="overviewConnectionStatus">Verificando sessão</span></span>
+                        <h2>Seu equipamento, <em>sob controle.</em></h2>
+                        <p>Acesse os recursos reais do equipamento atual sem sair do atendimento.</p>
+                        <div class="am-hero-target">
+                            <span class="material-symbols-outlined" aria-hidden="true">router</span>
+                            <div>
+                                <strong id="overviewModel">Identificando equipamento</strong>
+                                <span id="overviewHost" class="mono">Aguardando conexão</span>
+                            </div>
+                        </div>
+                        <div class="am-hero-actions">
+                            <button class="button primary" type="button" data-jump="advanced">
+                                <span class="material-symbols-outlined" aria-hidden="true">radar</span>
+                                Identificar recursos
+                            </button>
+                            <button class="button" type="button" data-jump="supportDiagnostic">
+                                <span class="material-symbols-outlined" aria-hidden="true">troubleshoot</span>
+                                Diagnóstico
+                            </button>
+                            <button class="button" type="button" data-jump="wifi">
+                                <span class="material-symbols-outlined" aria-hidden="true">wifi</span>
+                                Wi-Fi
+                            </button>
+                        </div>
+                    </div>
+                    <div class="am-hero-visual" aria-hidden="true">
+                        <span class="am-orbit orbit-outer"></span>
+                        <span class="am-orbit orbit-inner"></span>
+                        <span class="am-orbit-center"><span class="material-symbols-outlined">router</span></span>
+                        <span class="am-orbit-node orbit-node-top"></span>
+                        <span class="am-orbit-node orbit-node-bottom"></span>
+                        <span class="am-orbit-node orbit-node-side"></span>
+                    </div>
+                </section>
+                <section class="am-recent-activity panel" aria-label="Últimas operações registradas">
+                    <div class="panel-header">
+                        <div>
+                            <span class="section-kicker">HISTÓRICO REAL</span>
+                            <h3>Operações recentes</h3>
+                        </div>
+                        <button id="overviewHistoryRefresh" class="button" type="button">
+                            <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                            Atualizar
+                        </button>
+                    </div>
+                    <div id="overviewHistory" class="am-activity-list" role="status" aria-live="polite">
+                        O histórico será carregado ao abrir esta página.
+                    </div>
+                </section>
+                <div class="operations-strip">
+                    <div class="operations-main">
+                        <span class="pulse"></span>
+                        <div>
+                            <span class="section-kicker">ATENDIMENTO ATIVO</span>
+                            <strong id="dashboardProfileName">-</strong>
+                        </div>
+                    </div>
+                    <div class="operations-copy">
+                        Perfil padrão pronto para aplicar em Wi-Fi e DNS.
+                    </div>
+                    <button id="applyDefaultButton" class="button primary" type="button">
+                        <span class="material-symbols-outlined">bolt</span>
+                        Aplicar configuração padrão
+                    </button>
+                </div>
+
+                <article class="panel dashboard-health-panel">
+                    <div class="dashboard-health-layout">
+                        <div>
+                            <div class="panel-header">
+                                <div>
+                                    <span class="section-kicker">SAÚDE DA CONEXÃO</span>
+                                    <h3>Triagem automática</h3>
+                                </div>
+                                <span id="dashboardHealthBadge" class="badge">Aguardando</span>
+                            </div>
+                            <div id="dashboardHealthResult" class="dashboard-health-lines">
+                                <div class="dashboard-health-line info">
+                                    <span class="health-dot"></span>
+                                    <span>A triagem será executada após a conexão com a ONT.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button id="dashboardFullDiagnosticButton" class="button primary" type="button">
+                            <span class="material-symbols-outlined">troubleshoot</span>
+                            Diagnóstico completo
+                        </button>
+                    </div>
+                </article>
+
+                <div class="kpi-grid">
+                    <article class="kpi-card cyan">
+                        <div class="kpi-head"><span>ONT</span><span class="material-symbols-outlined">memory</span></div>
+                        <strong id="deviceModel">-</strong>
+                        <small id="deviceFirmware">Firmware: -</small>
+                    </article>
+
+                    <article class="kpi-card violet">
+                        <div class="kpi-head"><span>RECURSOS</span><span class="material-symbols-outlined">developer_board</span></div>
+                        <div class="dual-metric">
+                            <div><strong id="deviceCpu">-</strong><small>CPU</small></div>
+                            <div><strong id="deviceMemory">-</strong><small>RAM</small></div>
+                        </div>
+                    </article>
+
+                    <article class="kpi-card green">
+                        <div class="kpi-head"><span>GPON RX</span><span class="material-symbols-outlined">cell_tower</span></div>
+                        <strong id="opticalRxKpi">-</strong>
+                        <small id="opticalStatusKpi">Aguardando leitura óptica</small>
+                    </article>
+
+                    <article class="kpi-card amber">
+                        <div class="kpi-head"><span>CLIENTES</span><span class="material-symbols-outlined">devices</span></div>
+                        <strong id="clientTotalKpi">0</strong>
+                        <small>dispositivos encontrados</small>
+                    </article>
+                </div>
+
+                <div class="dashboard-grid">
+                    <article class="panel span-2">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">RF OVERVIEW</span>
+                                <h3>Redes Wi-Fi</h3>
+                            </div>
+                            <button class="text-action" data-jump="wifi" type="button">Gerenciar SSIDs</button>
+                        </div>
+                        <div id="dashboardNetworks" class="network-overview"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">UPLINK</span><h3>WAN principal</h3></div></div>
+                        <div id="wanSummary"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">AUTH</span><h3>PPPoE</h3></div></div>
+                        <div id="dashboardPppoe"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">RESOLVER</span><h3>DNS</h3></div></div>
+                        <div id="dashboardDns"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">SESSION</span><h3>Equipamento</h3></div></div>
+                        <div class="mini-metrics">
+                            <div><span>Uptime</span><strong id="deviceUptime">-</strong></div>
+                            <div><span>Serial</span><strong id="dashboardSerial" class="mono">-</strong></div>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+
+            <!-- ==================================================
+                 WIFI
+            =================================================== -->
+            

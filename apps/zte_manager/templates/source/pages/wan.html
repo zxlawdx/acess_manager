@@ -1,0 +1,96 @@
+<section id="page-wan" class="page">
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">lan</span>
+                        <span class="section-kicker">CONFIGURAÇÃO DE REDE</span>
+                        <h2>WAN, PPPoE e Ethernet</h2>
+                        <p>Estado da Internet, autenticação e negociação das portas LAN.</p>
+                    </div>
+                </div>
+
+                <div id="wanConnections" class="wan-grid"></div>
+
+                <div class="two-column-layout">
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div><span class="section-kicker">PPPoE</span><h3>Credenciais</h3></div>
+                            <button id="revealPppoeButton" class="text-action" type="button">Revelar senha</button>
+                        </div>
+                        <div id="pppoeDetails"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">ETHERNET</span><h3>Portas LAN</h3></div></div>
+                        <div id="lanPorts" class="port-grid"><div class="loading">Carregando...</div></div>
+                    </article>
+                </div>
+
+                <article class="panel with-top-space">
+                    <div class="panel-header">
+                        <div><span class="section-kicker">DISCOVERY SERVICE</span><h3>UPnP</h3></div>
+                        <span id="upnpBadge" class="badge">Carregando</span>
+                    </div>
+                    <div id="upnpDetails" class="upnp-layout">
+                        <div class="loading">Carregando configuração UPnP...</div>
+                    </div>
+                </article>
+                <article id="dhcpModule" class="panel with-top-space dhcp-module">
+                    <div class="panel-header">
+                        <div>
+                            <span class="section-kicker">LAN / DHCP</span>
+                            <h3>Servidor DHCP e concessões</h3>
+                        </div>
+                        <button id="dhcpRefresh" class="button ghost" type="button">
+                            <span class="material-symbols-outlined">refresh</span>Atualizar
+                        </button>
+                    </div>
+                    <p class="muted" id="dhcpAvailability">
+                        Consultando as funcionalidades expostas pela ONT...
+                    </p>
+                    <form id="dhcpConfigForm" class="dhcp-settings" onsubmit="return false;">
+                        <label class="switch-field">
+                            <span>Servidor DHCP ativo</span>
+                            <span class="switch"><input id="dhcpEnabled" type="checkbox">
+                                <span class="switch-slider"></span></span>
+                        </label>
+                        <div class="field-grid three">
+                            <label class="field"><span>IP inicial</span>
+                                <input id="dhcpStart" type="text" inputmode="decimal"></label>
+                            <label class="field"><span>IP final</span>
+                                <input id="dhcpEnd" type="text" inputmode="decimal"></label>
+                            <label class="field"><span>Tempo de concessão (s)</span>
+                                <input id="dhcpLease" type="number" min="60"></label>
+                            <label class="field"><span>DNS IPv4 1</span>
+                                <input id="dhcpDns1" type="text" inputmode="decimal"></label>
+                            <label class="field"><span>DNS IPv4 2</span>
+                                <input id="dhcpDns2" type="text" inputmode="decimal"></label>
+                        </div>
+                        <p class="muted">A faixa DHCP deve pertencer à rede LAN. Alterações
+                            podem interromper a conectividade dos clientes.</p>
+                        <button id="dhcpApply" class="button primary" type="submit">
+                            <span class="material-symbols-outlined">save</span>
+                            Aplicar DHCP
+                        </button>
+                    </form>
+                    <p id="dhcpFeedback" class="dhcp-feedback" role="status"></p>
+                    <div class="dhcp-lists">
+                        <div>
+                            <h4>Endereços concedidos</h4>
+                            <div class="table-wrap"><table>
+                                <thead><tr><th>Dispositivo</th><th>IP</th>
+                                    <th>MAC</th><th>Concessão</th></tr></thead>
+                                <tbody id="dhcpLeases"></tbody>
+                            </table></div>
+                        </div>
+                        <div id="dhcpIpv6" class="dhcp-ipv6">
+                            <h4>DHCP IPv6</h4>
+                            <p class="muted">Verificando suporte do equipamento...</p>
+                        </div>
+                    </div>
+                </article>
+            </section>
+
+
+            <!-- ==================================================
+                 CLIENTS
+            =================================================== -->
+            

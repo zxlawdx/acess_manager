@@ -1,0 +1,39 @@
+<section id="page-clients" class="page">
+                <div class="section-intro am-section-intro compact">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">devices</span>
+                        <span class="section-kicker">DISPOSITIVOS</span>
+                        <h2>Clientes conectados</h2>
+                        <p>Visão de dispositivos wireless e cabeados.</p>
+                    </div>
+                    <div class="client-counter-row">
+                        <div><span>Wi-Fi</span><strong id="wifiClientCount">0</strong></div>
+                        <div><span>LAN</span><strong id="lanClientCount">0</strong></div>
+                    </div>
+                </div>
+
+                <article class="panel table-panel">
+                    <div class="panel-header"><div><span class="section-kicker">WIRELESS</span><h3>Clientes Wi-Fi</h3></div></div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Hostname</th><th>IP</th><th>MAC</th><th>SSID</th><th>RSSI</th><th>SNR</th><th>RX</th><th>TX</th></tr></thead>
+                            <tbody id="wifiClientsTable"></tbody>
+                        </table>
+                    </div>
+                </article>
+
+                <article class="panel table-panel">
+                    <div class="panel-header"><div><span class="section-kicker">ETHERNET</span><h3>Clientes LAN</h3></div></div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Hostname</th><th>IP</th><th>MAC</th></tr></thead>
+                            <tbody id="lanClientsTable"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </section>
+
+
+            <!-- ==================================================
+                 AUTOMATIC SUPPORT DIAGNOSTICS
+            =================================================== -->
+            

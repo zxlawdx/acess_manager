@@ -1,0 +1,206 @@
+<!-- ZTE Automatic dentro do shell Vela (layout blank). -->
+<!--
+    O console prioriza Inter + JetBrains Mono quando já estão disponíveis no
+    sistema e mantém stacks locais equivalentes para funcionar offline.
+    Tailwind não é necessário: o design system é CSS nativo do projeto.
+    Material Symbols permanece como no frontend original.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..600,0..1,-25..0&display=swap" rel="stylesheet">
+<script>
+/* Apply the stored theme BEFORE the stylesheets to avoid a flash on startup. */
+(function () {
+    var pref = "auto";
+    try { pref = localStorage.getItem("zte-automatic-theme") || "auto"; } catch (e) {}
+    if (!/^(light|dark|auto)$/.test(pref)) pref = "auto";
+    var isDark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.appearance = pref;
+    document.documentElement.dataset.theme = pref === "auto" ? (isDark ? "dark" : "light") : pref;
+})();
+</script>
+<link rel="stylesheet" href="{{ static('zte_manager/css/style.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/advanced.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/support_diagnostics.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/management.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/telecom_console.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/adaptive_firmware.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/f6201b_editor.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/neutral_console.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/brmodelo_workbench.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/f6201b_workbench.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/light_mode_refine.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/dhcp_module.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/tangerine.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/tangerine_forms.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/tangerine_cards.css') }}">
+
+<div class="app-shell">
+
+    <!-- =====================================================
+         SIDEBAR
+    ====================================================== -->
+    <aside class="sidebar">
+        <div class="brand-row">
+            <div class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 40 40" fill="none">
+                    <rect width="40" height="40" rx="8"></rect>
+                    <rect x="0.5" y="0.5" width="39" height="39" rx="7.5"></rect>
+                    <path d="M10 13H30L17 27H30"></path>
+                    <circle cx="10" cy="27" r="2.5"></circle>
+                </svg>
+            </div>
+            <div class="brand-copy">
+                <strong>Access Manager</strong>
+                <span>Gerenciamento de equipamentos ZTE</span>
+            </div>
+            <button id="sidebarCollapseToggle" class="shell-control" type="button"
+                    aria-label="Recolher menu lateral" aria-expanded="true" title="Recolher menu lateral">
+                <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+            </button>
+        </div>
+
+        <div id="connectedDevice" class="target-card hidden">
+            <div class="target-head">
+                <span>EQUIPAMENTO ATUAL</span>
+                <span class="live-dot-wrap">
+                    <i class="live-dot"></i>
+                    ONLINE
+                </span>
+            </div>
+            <strong id="connectedModel">ZTE</strong>
+            <span id="connectedHost" class="mono">-</span>
+            <span id="connectedAttendant" class="target-tech">-</span>
+        </div>
+
+        <div class="nav-caption">
+            <span>MENU</span>
+            <span class="mono">v2.5</span>
+        </div>
+
+        <nav class="nav-menu" aria-label="Navegação principal">
+            <div class="nav-group-label" aria-hidden="true">Gerenciamento</div>
+            <button class="menu-item active" data-page="connection" type="button">
+                <span class="material-symbols-outlined">login</span>
+                <span>Conexão</span>
+            </button>
+            <button class="menu-item protected-page locked" data-page="dashboard" type="button">
+                <span class="material-symbols-outlined">space_dashboard</span>
+                <span>Visão geral</span>
+            </button>
+            <button class="menu-item protected-page locked" data-page="clients" type="button">
+                <span class="material-symbols-outlined">devices</span>
+                <span>Clientes</span>
+            </button>
+            <button class="menu-item protected-page locked" data-page="device" type="button">
+                <span class="material-symbols-outlined">settings_suggest</span>
+                <span>Equipamento</span>
+            </button>
+            <div class="nav-group-label" aria-hidden="true">Configuração</div>
+            <button class="menu-item protected-page locked" data-page="wifi" type="button">
+                <span class="material-symbols-outlined">wifi</span>
+                <span>Wi-Fi e SSIDs</span>
+            </button>
+            <button class="menu-item protected-page locked" data-page="wan" type="button">
+                <span class="material-symbols-outlined">lan</span>
+                <span>WAN e LAN</span>
+            </button>
+            <button class="menu-item protected-page locked" data-page="profiles" type="button">
+                <span class="material-symbols-outlined">tune</span>
+                <span>Perfis de configuração</span>
+            </button>
+            <button class="menu-item protected-page locked" data-page="tr069" type="button">
+                <span class="material-symbols-outlined">settings_ethernet</span>
+                <span>Gestão TR-069</span>
+            </button>
+            <div class="nav-group-label" aria-hidden="true">Ferramentas</div>
+            <button class="menu-item protected-page locked" data-page="supportDiagnostic" type="button">
+                <span class="material-symbols-outlined">health_and_safety</span>
+                <span>Diagnóstico completo</span>
+            </button>
+            <button class="menu-item protected-page locked" data-page="diagnostics" type="button">
+                <span class="material-symbols-outlined">network_ping</span>
+                <span>Ping e traceroute</span>
+            </button>
+            <button class="menu-item protected-page locked" data-page="advanced" type="button">
+                <span class="material-symbols-outlined">developer_board</span>
+                <span>Identificação de recursos</span>
+            </button>
+            <button class="menu-item" data-page="management" type="button">
+                <span class="material-symbols-outlined">hub</span>
+                <span>Gerenciamento</span>
+            </button>
+            <div class="nav-group-label" aria-hidden="true">Sistema</div>
+            <button id="appearanceSidebarButton" class="menu-item" type="button" title="Selecionar aparência">
+                <span class="material-symbols-outlined" aria-hidden="true">palette</span>
+                <span>Aparência</span>
+            </button>
+        </nav>
+
+        <div class="sidebar-bottom">
+            <div class="connection-state">
+                <span id="connectionDot" class="status-dot offline"></span>
+                <div>
+                    <small>SESSÃO</small>
+                    <strong id="connectionStatus">Desconectado</strong>
+                </div>
+            </div>
+
+            <button id="disconnectButton" class="sidebar-action danger hidden" type="button">
+                <span class="material-symbols-outlined">logout</span>
+                Fechar console
+            </button>
+        </div>
+    </aside>
+
+
+    <!-- =====================================================
+         WORKSPACE
+    ====================================================== -->
+    <div class="workspace">
+
+        <div class="console-ribbon am-session-bar" role="status" aria-label="Estado da sessão">
+            <span class="am-session-context"><span class="material-symbols-outlined" aria-hidden="true">lan</span> WORKSPACE <span class="am-context-separator">/</span> ZTE</span>
+            <span class="console-ribbon-right am-session-data">
+                <span class="console-session am-session-indicator"><i id="consoleSessionDot"></i><span id="consoleSessionState">DESCONECTADO</span></span>
+                <span id="consoleHostText" class="mono">SEM EQUIPAMENTO</span>
+            </span>
+        </div>
+
+
+        <header class="topbar am-workspace-header">
+            <div class="topbar-title am-workspace-title">
+                <span class="eyebrow">ÁREA DE TRABALHO <span aria-hidden="true">/</span> <span id="amCurrentContext">EQUIPAMENTOS</span></span>
+                <h1 id="pageTitle">Conexão</h1>
+                <p id="pageSubtitle">Entre na ONT para iniciar o atendimento.</p>
+            </div>
+            <div class="topbar-actions am-workspace-tools">
+                <div class="topbar-quick-actions am-quick-tools" aria-label="Acesso rápido">
+                    <button class="console-action" data-jump="advanced" type="button"><span class="material-symbols-outlined">radar</span> Recursos</button>
+                    <button class="console-action" data-jump="supportDiagnostic" type="button"><span class="material-symbols-outlined">troubleshoot</span> Diagnóstico</button>
+                    <button class="console-action primary" data-jump="management" type="button"><span class="material-symbols-outlined">hub</span> Gerenciamento</button>
+                </div>
+                <label class="appearance-control am-appearance" for="appearanceSelect">
+                    <span class="material-symbols-outlined" aria-hidden="true">contrast</span>
+                    <span class="am-control-label">Tema</span>
+                    <select id="appearanceSelect" aria-label="Tema da interface">
+                        <option value="light">Claro</option>
+                        <option value="dark">Escuro</option>
+                        <option value="auto">Automático</option>
+                    </select>
+                </label>
+                <button id="themeToggle" class="console-action hidden" type="button" aria-label="Alternar tema">Alternar tema</button>
+                <div class="zoom-control" title="Zoom da interface: Ctrl + / Ctrl - / Ctrl 0">
+                    <button id="zoomOutButton" class="zoom-button" type="button" aria-label="Diminuir interface">A−</button>
+                    <span id="zoomLevel" class="zoom-level">100%</span>
+                    <button id="zoomInButton" class="zoom-button" type="button" aria-label="Aumentar interface">A+</button>
+                </div>
+                <div id="topDeviceChip" class="device-chip hidden"><span class="material-symbols-outlined">router</span><div><strong id="topDeviceModel">ZTE</strong><span id="topDeviceMeta" class="mono">-</span></div></div>
+                <button id="refreshButton" class="icon-button hidden" type="button" title="Atualizar dados" aria-label="Atualizar dados"><span class="refresh-glyph" aria-hidden="true">↻</span></button>
+            </div>
+        </header>
+
+        <main class="main-content">
+
+            <!-- ==================================================
+                 CONNECTION
+            =================================================== -->
+            

@@ -1,0 +1,53 @@
+<section id="page-diagnostics" class="page">
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">network_ping</span>
+                        <span class="section-kicker">CPE DIAGNOSTICS</span>
+                        <h2>Testes a partir da própria ONT</h2>
+                        <p>O tráfego parte do equipamento, não do computador do atendente.</p>
+                    </div>
+                </div>
+
+                <div class="diagnostic-grid">
+                    <article class="panel diagnostic-card">
+                        <div class="panel-header"><div class="panel-title-inline"><span class="material-symbols-outlined panel-icon">network_ping</span><h3>Ping</h3></div></div>
+                        <form id="pingForm" class="form-stack">
+                            <label class="field"><span>HOST / IP</span><input id="pingHost" type="text" value="8.8.8.8" required></label>
+                            <div class="field-grid two">
+                                <label class="field"><span>INTERFACE</span><select id="pingInterface"><option value="">Rota padrão</option></select></label>
+                                <label class="field"><span>IP VERSION</span><select id="pingIpVersion"><option value="IPv4">IPv4</option><option value="IPv6">IPv6</option></select></label>
+                            </div>
+                            <div class="field-grid three">
+                                <label class="field"><span>PACOTES</span>
+                                    <input id="pingCount" type="number" min="1" max="30" value="4"></label>
+                                <label class="field"><span>TAMANHO (BYTES)</span>
+                                    <input id="pingSize" type="number" min="1" max="1400" value="64"></label>
+                                <label class="field"><span>TIMEOUT (MS)</span>
+                                    <input id="pingTimeout" type="number" min="1000" max="10000" value="5000"></label>
+                            </div>
+                            <button class="button primary" type="submit"><span class="material-symbols-outlined">play_arrow</span>Executar ping</button>
+                        </form>
+                        <pre id="pingOutput" class="terminal-output">Aguardando teste...</pre>
+                    </article>
+
+                    <article class="panel diagnostic-card">
+                        <div class="panel-header"><div class="panel-title-inline"><span class="material-symbols-outlined panel-icon">route</span><h3>Traceroute</h3></div></div>
+                        <form id="tracerouteForm" class="form-stack">
+                            <label class="field"><span>HOST / IP</span><input id="traceHost" type="text" value="8.8.8.8" required></label>
+                            <div class="field-grid two">
+                                <label class="field"><span>INTERFACE</span><select id="traceInterface"><option value="">Rota padrão</option></select></label>
+                                <label class="field"><span>PROTOCOLO</span><select id="traceProtocol"><option value="ICMP">ICMP</option><option value="UDP">UDP</option></select></label>
+                                <label class="field"><span>MAX HOPS</span><input id="traceHops" type="number" min="1" max="64" value="30"></label>
+                                <label class="field"><span>TIMEOUT (MS)</span><input id="traceTimeout" type="number" min="2000" max="10000" value="5000"></label>
+                            </div>
+                            <button class="button primary" type="submit"><span class="material-symbols-outlined">play_arrow</span>Executar traceroute</button>
+                        </form>
+                        <pre id="tracerouteOutput" class="terminal-output">Aguardando teste...</pre>
+                    </article>
+                </div>
+            </section>
+
+
+            <!-- ==================================================
+                 PROFILES
+            =================================================== -->
+            

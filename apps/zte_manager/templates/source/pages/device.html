@@ -1,0 +1,44 @@
+<section id="page-device" class="page">
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">router</span>
+                        <span class="section-kicker">DEVICE MANAGEMENT</span>
+                        <h2>Equipamento e PON</h2>
+                        <p>Telemetria óptica, conta administrativa e ações da ONT.</p>
+                    </div>
+                </div>
+
+                <div class="device-grid">
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">HARDWARE</span><h3>Informações da ONT</h3></div></div>
+                        <div id="deviceDetails"><div class="loading">Carregando...</div></div>
+                    </article>
+
+                    <article class="panel optical-panel">
+                        <div class="panel-header"><div><span class="section-kicker">GPON OPTICS</span><h3>Sinal óptico</h3></div></div>
+                        <div id="opticalDetails"><div class="loading">Carregando...</div></div>
+                    </article>
+                </div>
+
+                <div class="two-column-layout with-top-space">
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">ACCOUNT MANAGER</span><h3>Senha administrativa</h3></div><span class="badge warning">Avançado</span></div>
+                        <div id="accountDetails" class="account-list"><div class="loading">Carregando...</div></div>
+                        <form id="adminPasswordForm" class="admin-password-form">
+                            <label class="field"><span>NOVA SENHA</span><input id="newAdminPassword" type="password" autocomplete="new-password" placeholder="Nova senha da conta usada no login" required></label>
+                            <label class="field"><span>CONFIRMAR</span><input id="confirmAdminPassword" type="password" autocomplete="new-password" placeholder="Repita a senha" required></label>
+                            <button class="button ghost" type="submit"><span class="material-symbols-outlined">key</span>Trocar senha da ONT</button>
+                        </form>
+                    </article>
+
+                    <article class="panel danger-zone">
+                        <div class="panel-header"><div><span class="section-kicker">POWER CONTROL</span><h3>Reinicialização</h3></div></div>
+                        <p>Envia o mesmo comando de Restart da interface original. A sessão será perdida enquanto a ONT reinicia.</p>
+                        <button id="rebootDeviceButton" class="button danger" type="button"><span class="material-symbols-outlined">restart_alt</span>Reiniciar equipamento</button>
+                    </article>
+                </div>
+            </section>
+
+            <!-- ==================================================
+                 CPE MANAGEMENT PLATFORM
+            =================================================== -->
+            

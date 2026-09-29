@@ -47,7 +47,10 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Compile Python
-        run: python -m compileall -q apps config tests manage.py launcher.py
+        run: python -m compileall -q apps config tests manage.py launcher.py tools/build_frontend_template.py
+
+      - name: Verify modular Vela template
+        run: python tools/build_frontend_template.py --check
 
       - name: Run tests
         run: python -m unittest discover -s tests -v

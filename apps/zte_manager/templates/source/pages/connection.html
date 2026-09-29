@@ -1,0 +1,116 @@
+<section id="page-connection" class="page active">
+                <div class="login-layout">
+
+                    <div class="login-hero am-connect-story">
+                        <div class="am-story-top">
+                            <span class="am-story-chip"><span class="material-symbols-outlined" aria-hidden="true">bolt</span> ACCESS MANAGER</span>
+                            <h2>Conectar é só <em>o começo.</em></h2>
+                            <p>Uma área de trabalho para identificar, configurar e diagnosticar sua ONT, com cada etapa no mesmo lugar.</p>
+                        </div>
+                        <div class="am-story-art" aria-hidden="true">
+                            <svg viewBox="0 0 410 250" fill="none" role="presentation" focusable="false">
+                                <path d="M88 124H322M205 49V202" stroke="currentColor" stroke-width="1.6" stroke-dasharray="5 7" opacity=".33"/>
+                                <ellipse cx="205" cy="124" rx="130" ry="93" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 8" opacity=".22"/>
+                                <rect x="137" y="85" width="136" height="79" rx="21" fill="var(--am-surface)" stroke="var(--am-border)" stroke-width="2"/>
+                                <rect x="154" y="104" width="102" height="42" rx="12" fill="var(--am-primary)"/>
+                                <path d="M174 118a14 14 0 0121 0m-26-5a21 21 0 0131 0m-21 11h.1" stroke="var(--am-primary-ink)" stroke-width="3" stroke-linecap="round"/>
+                                <circle cx="224" cy="124" r="4" fill="var(--am-primary-ink)"/><circle cx="237" cy="124" r="4" fill="var(--am-primary-ink)"/>
+                                <rect x="32" y="108" width="80" height="40" rx="13" fill="var(--am-surface)" stroke="var(--am-border)" stroke-width="2"/>
+                                <rect x="298" y="108" width="80" height="40" rx="13" fill="var(--am-surface)" stroke="var(--am-border)" stroke-width="2"/>
+                                <path d="M50 127h44M50 135h27M316 127h44M316 135h27" stroke="var(--am-primary-deep)" stroke-width="3" stroke-linecap="round" opacity=".65"/>
+                                <circle cx="205" cy="35" r="16" fill="var(--am-primary-wash)" stroke="var(--am-primary)" stroke-width="2"/><path d="m199 35 4 4 8-9" stroke="var(--am-primary-deep)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                <circle cx="205" cy="212" r="16" fill="var(--am-primary-wash)" stroke="var(--am-primary)" stroke-width="2"/><path d="M197 212h16m-8-8v16" stroke="var(--am-primary-deep)" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="am-story-steps" aria-label="Etapas do atendimento">
+                            <span><b>01</b> Conecte</span>
+                            <span aria-hidden="true" class="am-step-line"></span>
+                            <span><b>02</b> Identifique</span>
+                            <span aria-hidden="true" class="am-step-line"></span>
+                            <span><b>03</b> Configure</span>
+                        </div>
+                    </div>
+
+                    <div class="panel login-panel">
+                        <div class="panel-heading">
+                            <div class="heading-icon"><span class="material-symbols-outlined">router</span></div>
+                            <div>
+                                <span class="section-kicker">NOVA SESSÃO</span>
+                                <h3>Acesso à ONT</h3>
+                                <p>Use as credenciais administrativas do equipamento.</p>
+                            </div>
+                        </div>
+
+                        <form id="connectionForm" class="form-stack">
+                            <div class="field-grid two">
+                                <label class="field">
+                                    <span>IP / HOST</span>
+                                    <input id="zteIp" type="text" placeholder="100.64.230.64:6080" autocomplete="off" required>
+                                </label>
+
+                                <label class="field">
+                                    <span>ATENDENTE</span>
+                                    <input id="attendantName" type="text" placeholder="marinaldo" autocomplete="off" required>
+                                </label>
+                            </div>
+
+                            <label class="field">
+                                <span>USUÁRIO DA ONT</span>
+                                <input id="zteUsername" type="text" placeholder="admin" autocomplete="username" required>
+                            </label>
+
+                            <label class="field">
+                                <span>SENHA DA ONT</span>
+                                <div class="password-control">
+                                    <input id="ztePassword" type="password" placeholder="Senha" autocomplete="current-password" required>
+                                    <button id="togglePassword" type="button">Mostrar</button>
+                                </div>
+                            </label>
+
+                            <label class="field">
+                                <span>MODELO (OPCIONAL)</span>
+                                <select id="zteModelHint">
+                                    <option value="">Detectar automaticamente</option>
+                                    <option value="F6640">F6640</option>
+                                    <option value="F6645P">F6645P</option>
+                                    <option value="F680">F680</option>
+                                    <option value="F6600P">F6600P</option>
+                                    <option value="F8748">F8748</option>
+                                    <option value="F670L">F670L</option>
+                                    <option value="F6201B">F6201B (perfil experimental, somente leitura)</option>
+                                    <option value="H169A">H169A</option>
+                                    <option value="H2640">H2640</option>
+                                    <option value="H288A">H288A</option>
+                                    <option value="H388X">H388X</option>
+                                    <option value="H3600P">H3600P</option>
+                                    <option value="H3640">H3640</option>
+                                    <option value="H6645P">H6645P</option>
+                                    <option value="H6745">H6745</option>
+                                    <option value="E2631">E2631 (Vue: descoberta experimental)</option>
+                                    <option value="SR7410">SR7410 (Vue: descoberta experimental)</option>
+                                    <option value="SR7110">SR7110 (Vue: descoberta experimental)</option>
+                                </select>
+                                <small class="muted">Outros modelos usam descoberta de recursos em modo leitura. Vue ainda requer adaptador de login.</small>
+                            </label>
+
+                            <label class="check-row">
+                                <input id="zteHttps" type="checkbox">
+                                <span>Usar HTTPS neste equipamento</span>
+                            </label>
+
+                            <button id="connectButton" class="button primary wide" type="submit">
+                                <span class="material-symbols-outlined">power</span>
+                                Conectar ao equipamento
+                            </button>
+                        </form>
+
+                        <div id="connectionResult" class="connection-result hidden"></div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ==================================================
+                 DASHBOARD
+            =================================================== -->
+            

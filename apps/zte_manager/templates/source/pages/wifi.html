@@ -1,0 +1,55 @@
+<section id="page-wifi" class="page">
+                <div class="section-intro am-section-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">wifi</span>
+                        <span class="section-kicker">REDES SEM FIO</span>
+                        <h2>SSIDs e rádio</h2>
+                        <p>Ative, desative, renomeie redes, altere senha e ajuste parâmetros de RF.</p>
+                    </div>
+                    <button id="revealWifiPasswordsButton" class="button ghost" type="button">
+                        <span class="material-symbols-outlined">visibility</span>
+                        Revelar senhas Wi-Fi
+                    </button>
+                </div>
+
+                <div class="subsection-title">
+                    <div><span class="material-symbols-outlined">wifi</span><h3>SSIDs</h3></div>
+                    <span>Alterações são aplicadas individualmente por rede.</span>
+                </div>
+                <div id="wifiNetworks" class="ssid-grid"></div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">cell_tower</span><h3>Rádios 2.4 / 5 GHz</h3></div>
+                    <span>Canal, largura, modo, potência, SGI e estado do rádio.</span>
+                </div>
+                <div id="wifiRadios" class="radio-grid"></div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">schedule</span><h3>Agendamento Wi-Fi</h3></div>
+                    <span>Timer global do firmware; o estado manual dos rádios é preservado ao desativar.</span>
+                </div>
+                <div id="wifiScheduleControl" class="feature-grid">
+                    <div class="loading">Carregando agendamento...</div>
+                </div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">lock_reset</span><h3>WPS</h3></div>
+                    <span>Desative ou inicie PBC quando o firmware permitir.</span>
+                </div>
+                <div id="wpsControls" class="feature-grid">
+                    <div class="loading">Carregando suporte WPS...</div>
+                </div>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">hub</span><h3>Band Steering</h3></div>
+                    <span>Smart Connect / direcionamento entre 2.4 e 5 GHz quando o firmware expõe o recurso.</span>
+                </div>
+                <div id="bandSteeringControl" class="feature-grid">
+                    <div class="loading">Carregando Band Steering...</div>
+                </div>
+            </section>
+
+
+            <!-- ==================================================
+                 WAN / LAN
+            =================================================== -->
+            
