@@ -27,6 +27,20 @@ class ChannelEvidenceTests(unittest.TestCase):
         self.assertNotEqual(result["best_channel"], 6)
         self.assertEqual(result["recommendation"]["action"]["type"], "wifi_channel")
 
+    def test_existing_manual_channel_outside_nonoverlap_candidates_is_scored(self):
+        result = ChannelAnalyzer().analyze(
+            band="2.4GHz",
+            radio={"banda": "2.4GHz", "canal": 4, "canal_automatico": False},
+            neighbors=[{"channel": 4, "signal": -40}],
+            available_channels=[{"banda": "2.4GHz",
+                                 "canais": [1, 4, 6, 11]}],
+            scan_confirmed=True,
+        )
+        self.assertEqual(sorted(result["scores"]), [1, 6, 11])
+        self.assertIsNotNone(result["current_score"])
+        self.assertEqual(result["best_channel"], 11)
+        self.assertEqual(result["recommendation"]["action"]["channel"], 11)
+
     def test_no_channel_table_means_no_automatic_write(self):
         result = ChannelAnalyzer().analyze(
             band="5GHz",
