@@ -52,8 +52,13 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
-      - name: Check JavaScript syntax
-        run: node --check apps/zte_manager/static/js/app.js
+      - name: Check JavaScript syntax and Tangerine UI contracts
+        run: |
+          node --check apps/zte_manager/static/js/app.js
+          node --check apps/zte_manager/static/js/advanced.js
+          node --check apps/zte_manager/static/js/neutral_theme.js
+          node --check apps/zte_manager/static/js/tangerine_shell.js
+          node --test tests/test_tangerine_ui.cjs
 
   build-linux:
     name: Linux x86_64
@@ -139,6 +144,8 @@ jobs:
           test -f dist/ZTEAutomatic/_internal/apps/zte_manager/templates/index.html
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/app.js
           test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/style.css
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/css/tangerine.css
+          test -f dist/ZTEAutomatic/_internal/staticfiles/zte_manager/js/tangerine_shell.js
 
       - name: Package Linux build
         run: |
@@ -194,6 +201,8 @@ jobs:
         run: |
           $zip = "dist\ZTEAutomatic-Windows-x86_64-$env:RELEASE_TAG.zip"
           if (-not (Test-Path "dist\ZTEAutomatic\ZTEAutomatic.exe")) { throw "Executavel nao encontrado em dist\ZTEAutomatic\ZTEAutomatic.exe" }
+          if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\css\tangerine.css")) { throw "Tangerine CSS nao encontrado no bundle Windows" }
+          if (-not (Test-Path "dist\ZTEAutomatic\_internal\staticfiles\zte_manager\js\tangerine_shell.js")) { throw "Tangerine JS nao encontrado no bundle Windows" }
           Compress-Archive -Path "dist\ZTEAutomatic" -DestinationPath $zip -Force
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256"
