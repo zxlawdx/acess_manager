@@ -78,6 +78,58 @@ test("automatic appearance tracks OS changes, manual choice stays persisted", ()
   assert.equal(doc.documentElement.dataset.theme,"dark");
 });
 
+
+test("dashboard mirrors real session and hides untrusted history payloads", async () => {
+  const handlers={},elements=new Map();
+  function element(id,text="") {
+    const state={id,_text:text,children:[],classList:{
+      contains:()=>id==="page-dashboard",toggle(){}},
+      get textContent(){return this._text;},
+      set textContent(v){this._text=v;this.children=[];},
+      setAttribute(){},addEventListener:(kind,fn)=>{handlers[id+kind]=fn;},
+      querySelector:()=>({textContent:""}),
+      replaceChildren(){this.children=[];},
+      appendChild(child){this.children.push(child);}
+    };
+    elements.set(id,state);
+    return state;
+  }
+  for(const id of ["sidebarCollapseToggle","overviewModel","overviewHost",
+    "overviewHistory","overviewHistoryRefresh","overviewConnectionStatus",
+    "page-dashboard","connectionStatus"]) element(id);
+  element("connectedModel","F6201B");
+  element("connectedHost","192.0.2.4");
+  const doc={
+    readyState:"complete",body:{classList:{contains:()=>true}},
+    querySelector:()=>({classList:{toggle(){}},querySelectorAll:()=>[]}),
+    getElementById:id=>elements.get(id)||null,addEventListener(){},
+    createElement:tag=>({tagName:tag,textContent:"",children:[],
+      append(...items){this.children.push(...items);}})
+  };
+  let called="";
+  vm.runInNewContext(shell,{
+    document:doc,localStorage:{getItem:()=>null,setItem(){}},
+    MutationObserver:class{observe(){}},
+    apiRequest:async endpoint=>{
+      called=endpoint;
+      return {changes:[
+        {operation:"Wi-Fi alterado",success:true,created_at:"2026-09-29T11:33:22"},
+        {operation:"POST /api?password=private",success:false,
+          created_at:"2026-09-29T12:33:22"}
+      ],diagnostics:[]};
+    }
+  });
+  await handlers["overviewHistoryRefreshclick"]();
+  assert.equal(elements.get("overviewModel").textContent,"F6201B");
+  assert.equal(elements.get("overviewHost").textContent,"192.0.2.4");
+  assert.equal(called,"/history?limit=5");
+  const cards=elements.get("overviewHistory").children;
+  assert.equal(cards.length,2);
+  assert.equal(cards[0].children[0].textContent,"Alteração de configuração");
+  assert.equal(cards[1].children[0].textContent,"Wi-Fi alterado");
+  assert.doesNotMatch(JSON.stringify(cards),/password|private|POST|\/api/);
+});
+
 test("collapse persists without triggering backend navigation", () => {
   const saved = new Map(),listeners={},classes = new Set();
   const sidebar = {classList:{toggle:(name,enabled)=>enabled?classes.add(name):classes.delete(name)},
