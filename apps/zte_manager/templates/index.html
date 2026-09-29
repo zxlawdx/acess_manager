@@ -332,6 +332,59 @@
                  DASHBOARD
             =================================================== -->
             <section id="page-dashboard" class="page">
+                <!-- Live values mirror the authenticated ONT state; no Figma mock data. -->
+                <section class="am-dashboard-hero" aria-label="Resumo do equipamento atual">
+                    <div class="am-hero-copy">
+                        <span class="am-hero-kicker"><span class="am-hero-dot"></span>
+                            <span id="overviewConnectionStatus">Verificando sessão</span></span>
+                        <h2>Seu equipamento, <em>sob controle.</em></h2>
+                        <p>Acesse os recursos reais do equipamento atual sem sair do atendimento.</p>
+                        <div class="am-hero-target">
+                            <span class="material-symbols-outlined" aria-hidden="true">router</span>
+                            <div>
+                                <strong id="overviewModel">Identificando equipamento</strong>
+                                <span id="overviewHost" class="mono">Aguardando conexão</span>
+                            </div>
+                        </div>
+                        <div class="am-hero-actions">
+                            <button class="button primary" type="button" data-jump="advanced">
+                                <span class="material-symbols-outlined" aria-hidden="true">radar</span>
+                                Identificar recursos
+                            </button>
+                            <button class="button" type="button" data-jump="supportDiagnostic">
+                                <span class="material-symbols-outlined" aria-hidden="true">troubleshoot</span>
+                                Diagnóstico
+                            </button>
+                            <button class="button" type="button" data-jump="wifi">
+                                <span class="material-symbols-outlined" aria-hidden="true">wifi</span>
+                                Wi-Fi
+                            </button>
+                        </div>
+                    </div>
+                    <div class="am-hero-visual" aria-hidden="true">
+                        <span class="am-orbit orbit-outer"></span>
+                        <span class="am-orbit orbit-inner"></span>
+                        <span class="am-orbit-center"><span class="material-symbols-outlined">router</span></span>
+                        <span class="am-orbit-node orbit-node-top"></span>
+                        <span class="am-orbit-node orbit-node-bottom"></span>
+                        <span class="am-orbit-node orbit-node-side"></span>
+                    </div>
+                </section>
+                <section class="am-recent-activity panel" aria-label="Últimas operações registradas">
+                    <div class="panel-header">
+                        <div>
+                            <span class="section-kicker">HISTÓRICO REAL</span>
+                            <h3>Operações recentes</h3>
+                        </div>
+                        <button id="overviewHistoryRefresh" class="button" type="button">
+                            <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                            Atualizar
+                        </button>
+                    </div>
+                    <div id="overviewHistory" class="am-activity-list" role="status" aria-live="polite">
+                        O histórico será carregado ao abrir esta página.
+                    </div>
+                </section>
                 <div class="operations-strip">
                     <div class="operations-main">
                         <span class="pulse"></span>
