@@ -44,6 +44,10 @@ jobs:
           test -f staticfiles/zte_manager/js/core/api_errors.js
           test -f staticfiles/zte_manager/js/features/history.js
           test -f staticfiles/zte_manager/js/features/connection_inventory.js
+          test -f staticfiles/zte_manager/js/features/device_topology.js
+          test -f staticfiles/zte_manager/js/features/firmware_inspector.js
+          test -f staticfiles/zte_manager/css/components/topology.css
+          test -f staticfiles/zte_manager/css/components/firmware_inspector.css
           test -f staticfiles/zte_manager/css/tangerine.css
           test -f staticfiles/zte_manager/css/tangerine_cards.css
 
@@ -63,6 +67,9 @@ jobs:
           node --test tests/test_history_view.cjs
           node --test tests/test_structured_forms.cjs
           node --check apps/zte_manager/static/js/features/connection_inventory.js
+          node --check apps/zte_manager/static/js/features/device_topology.js
+          node --check apps/zte_manager/static/js/features/firmware_inspector.js
+          node --test tests/test_tangerine_feature_experience.cjs
           node --test tests/test_connection_inventory.cjs
           node --test tests/test_clients_workbench.cjs
           node --test tests/test_device_tr069_workflow.cjs
