@@ -46,6 +46,7 @@
 <link rel="stylesheet" href="{{ static('zte_manager/css/components/topology.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/components/firmware_inspector.css') }}">
 <link rel="stylesheet" href="{{ static('zte_manager/css/components/shell_layout.css') }}">
+<link rel="stylesheet" href="{{ static('zte_manager/css/components/provider_diagnostics.css') }}">
 
 <div class="app-shell">
 
@@ -745,6 +746,37 @@
                     <span id="supportDiagnosticBadge" class="badge">Pronto</span>
                 </div>
 
+                <section id="providerDiagnosticPresets" class="am-provider-triage"
+                         aria-label="Roteiros de diagnóstico de provedores">
+                    <div class="am-provider-triage-head">
+                        <div>
+                            <span class="section-kicker">ROTEIROS DE SUPORTE</span>
+                            <h3>Por onde começar?</h3>
+                            <p>Escolha um cenário para preparar o diagnóstico real. Nenhuma medição ou alteração começa até você iniciar o teste.</p>
+                        </div>
+                    </div>
+                    <div class="am-provider-preset-grid" role="group" aria-label="Selecione a queixa">
+                        <button type="button" data-provider-preset="no_internet" aria-pressed="false">
+                            <strong>Sem Internet</strong><span>GPON, WAN, DNS e rota</span>
+                        </button>
+                        <button type="button" data-provider-preset="low_speed" aria-pressed="false">
+                            <strong>Lentidão</strong><span>LAN, Wi-Fi, banda e latência</span>
+                        </button>
+                        <button type="button" data-provider-preset="drops" aria-pressed="false">
+                            <strong>Quedas</strong><span>WAN, sinal, ping e caminho</span>
+                        </button>
+                        <button type="button" data-provider-preset="wifi" aria-pressed="false">
+                            <strong>Wi-Fi instável</strong><span>RSSI, vizinhança e canal</span>
+                        </button>
+                        <button type="button" data-provider-preset="realtime" aria-pressed="false">
+                            <strong>TV e chamadas</strong><span>Latência, jitter e perda</span>
+                        </button>
+                    </div>
+                    <p id="providerPresetStatus" class="am-provider-preset-help" role="status">
+                        Selecione a queixa ou configure manualmente os campos abaixo.
+                    </p>
+                </section>
+
                 <div class="support-diagnostic-shell am-support-workspace">
                     <article class="panel support-control-panel">
                         <!-- Bloqueia submissão HTML nativa caso scripts carreguem com erro.
@@ -866,6 +898,19 @@
                             </span>
                         </div>
                     </div>
+
+                    <section class="am-workstation-compare" aria-label="Teste adicional do computador">
+                        <div>
+                            <span class="section-kicker">COMPARAÇÃO DE ORIGEM</span>
+                            <h3>Conexão do computador do técnico</h3>
+                            <p>Executa consultas reais de DNS e conexões TCP no PC onde o aplicativo está instalado. Não mede a Internet do cliente nem a ONT.</p>
+                        </div>
+                        <button id="providerWorkstationRun" class="button ghost" type="button">
+                            Testar conexão deste PC
+                        </button>
+                        <div id="providerWorkstationResult" aria-live="polite"
+                             class="am-workstation-output">Nenhum teste do computador executado.</div>
+                    </section>
 
                     <div id="supportStandaloneSpeed"></div>
 
@@ -2034,6 +2079,7 @@
 <script src="{{ static('zte_manager/js/features/firmware_inspector.js') }}"></script>
 <script src="{{ static('zte_manager/js/desktop_clipboard.js') }}"></script>
 <script src="{{ static('zte_manager/js/support_diagnostics.js') }}"></script>
+<script src="{{ static('zte_manager/js/features/provider_diagnostics.js') }}"></script>
 <script src="{{ static('zte_manager/js/tangerine_results.js') }}"></script>
 <script src="{{ static('zte_manager/js/management.js') }}"></script>
 <script type="module" src="{{ static('zte_manager/js/management/inventory_view.js') }}"></script>
