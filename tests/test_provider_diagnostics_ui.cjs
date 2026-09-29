@@ -157,3 +157,18 @@ test("Wi-Fi remediation distinguishes proof from a merely accepted command",()=>
     assert.match(content,/confirmada pela releitura/);
     assert.match(content,/canal 11/);
 });
+
+test("full diagnosis never prints raw router exceptions or paths to a technician",()=>{
+    const start=support.indexOf("function renderDiagnosticErrors(result) {");
+    const end=support.indexOf("function bindRecommendationActions(root)",start);
+    assert.ok(start>=0&&end>start);
+    const render=new Function("supportEscape",
+        support.slice(start,end)+";return renderDiagnosticErrors;")(value=>String(value));
+    const report=render({errors:{
+        wifi_environment:"GET /api/router/?token=SECRET; traceback",
+        "rule:channel_unknown":"POST /private user admin"
+    }});
+    assert.match(report,/Interferência Wi-Fi/);
+    assert.match(report,/não/);
+    assert.doesNotMatch(report,/GET|POST|api\/|token|SECRET|private|traceback/);
+});
