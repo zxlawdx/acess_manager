@@ -69,6 +69,7 @@ jobs:
           node --check apps/zte_manager/static/js/features/device_topology.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
           node --test tests/test_tangerine_feature_experience.cjs
+          node --test tests/test_operator_outcomes.cjs
           node --test tests/test_connection_inventory.cjs
           node --test tests/test_clients_workbench.cjs
           node --test tests/test_device_tr069_workflow.cjs
