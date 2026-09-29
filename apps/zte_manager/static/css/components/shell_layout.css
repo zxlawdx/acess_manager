@@ -52,7 +52,7 @@ html[data-theme] .app-shell>.workspace>.topbar {
 html[data-theme] .app-shell>.workspace>.main-content {
   width:100%!important;max-width:100%!important;
   box-sizing:border-box!important;min-width:0!important;
-  overflow-x:clip!important;
+  overflow-x:auto!important;
 }
 html[data-theme] .app-shell .sidebar .brand-row {
   display:flex!important;align-items:center;
