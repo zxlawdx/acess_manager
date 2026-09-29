@@ -3610,14 +3610,18 @@ async function applyProfile() {
             result
         );
 
-        if (result.success) {
-            showToast(
-                "Configuração padrão aplicada."
-            );
+        const profileOutcome = result.audit_outcome ||
+            (result.verified === true ? "verified" :
+             result.uncertain || result.partial ? "uncertain" :
+             result.success === false ? "failed" : "accepted");
+        if (profileOutcome === "verified") {
+            showToast("Configuração confirmada pela leitura do equipamento.");
+        } else if (profileOutcome === "failed") {
+            showToast("A alteração não foi confirmada. Confira o relatório e o estado atual.");
+        } else if (profileOutcome === "uncertain") {
+            showToast("Parte da configuração pode ter sido aplicada. Verifique o estado antes de repetir.");
         } else {
-            showToast(
-                "O perfil foi aplicado parcialmente. Veja o relatório."
-            );
+            showToast("Perfil enviado. A confirmação de todas as etapas ainda está pendente.");
         }
 
         await loadWifi();
@@ -3658,8 +3662,8 @@ function renderProfileApplyResult(result) {
                         <p>${escapeHtml(step.detail)}</p>
                     </div>
 
-                    <span class="badge ${step.success ? "badge-success" : "badge-danger"}">
-                        ${step.success ? "OK" : "Falhou"}
+                    <span class="badge ${step.verified === true ? "badge-success" : step.success ? "" : "badge-danger"}">
+                        ${step.verified === true ? "Confirmada" : step.success ? "Enviada" : "Verificar"}
                     </span>
                 </div>
             `
