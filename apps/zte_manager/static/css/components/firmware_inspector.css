@@ -77,3 +77,25 @@
  #page-advanced .am-inspector-selector{grid-template-columns:minmax(0,1fr);}
  #page-advanced .am-inspector-selector button{justify-self:stretch;}
 }
+
+/* The capability map intentionally excludes raw feature codes, view names,
+   protocol paths, request parameters and firmware object labels. */
+.am-firmware-map{min-width:0;display:grid;gap:12px;margin-top:14px;}
+.am-inspector-map-heading{font:770 15px/1.45 var(--font-sans);color:var(--am-text);
+  margin:0;}
+.am-inspector-map-summary{font:650 11px/1.6 var(--font-sans);color:var(--am-text-2);
+  margin:0;}
+.am-inspector-map-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));
+  gap:12px;margin:0;padding:0;list-style:none;}
+.am-inspector-map-item{min-width:0;display:grid;align-content:start;gap:11px;
+  border:1px solid var(--am-border);background:var(--am-surface);
+  border-radius:11px;padding:16px;}
+.am-inspector-map-item strong{font:750 13px/1.4 var(--font-sans);color:var(--am-text);}
+.am-inspector-map-state{width:max-content;max-width:100%;font:750 10px var(--font-sans);
+  padding:6px 10px;border-radius:30px;color:var(--am-text-2);
+  border:1px solid var(--am-border);background:var(--am-bg);}
+.am-inspector-map-state.confirmed{color:var(--am-success);
+  background:var(--am-success-wash);border-color:var(--am-success);}
+.am-inspector-map-state.unconfirmed{color:var(--am-warning);
+  background:var(--am-warning-wash);border-color:var(--am-border);}
+.am-inspector-map-item small{font:480 11px/1.65 var(--font-sans);color:var(--am-text-2);}
