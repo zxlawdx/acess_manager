@@ -1138,3 +1138,6 @@ html[data-theme] #tr069ProviderFeedback[data-level="ok"] {
   }
   html[data-theme] .am-tr069-workspace>.panel:nth-child(2){position:static;}
 }
+
+/* Native hidden state wins over legacy tab display rules. */
+html[data-theme] .management-pane[hidden]{display:none!important;}
