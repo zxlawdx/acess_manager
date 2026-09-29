@@ -7,7 +7,9 @@ from typing import Optional
 
 from apps.zte_manager.model.device_adapters import select_adapter
 from apps.zte_manager.application.operations.audit_executor import AuditedOperation
-from apps.zte_manager.application.operations.verifiers import verify_dhcp, verify_ssid
+from apps.zte_manager.application.operations.verifiers import (
+    verify_dhcp, verify_ssid, verify_channel_choice,
+)
 from apps.zte_manager.application.inventory import DeviceRegistrar
 from apps.zte_manager.infrastructure.zte.adapters import ThinkLuaDeviceAdapter
 from apps.zte_manager.infrastructure.zte.adapters.thinklua_device import (
@@ -2065,6 +2067,8 @@ class ZTEService:
                     cfg
                 ),
                 after_reader=zte.channel_status,
+                verify=lambda before, response, after, b=band, cfg=config:
+                    verify_channel_choice(b, cfg, before, response, after),
             )
 
             applied.append({
@@ -2139,10 +2143,16 @@ class ZTEService:
                     radio_config
                 ),
                 after_reader=zte.channel_status,
+                verify=lambda before, response, after:
+                    verify_channel_choice(
+                        band, radio_config, before, response, after,
+                    ),
             )
 
             return {
-                "success": True,
+                "success": result.get("success") is True,
+                "verified": result.get("audit_outcome") == "verified",
+                "audit_outcome": result.get("audit_outcome", "uncertain"),
                 "action": action,
                 "band": band,
                 "result": result,
