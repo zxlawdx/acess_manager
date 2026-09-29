@@ -93,4 +93,6 @@ test("explicit positive firmware evidence is the only absent capability",()=>{
   const classify=context.window.AccessManagerErrors;
   assert.equal(classify.fromPayload({code:"FEATURE_ABSENT"}).kind,"unsupported");
   assert.notEqual(classify.fromPayload({}, {status:404}).kind,"unsupported");
+  // Legacy generic "unsupported" is not positive firmware evidence.
+  assert.equal(classify.fromPayload({type:"unsupported"}).kind,"unconfirmed");
 });
