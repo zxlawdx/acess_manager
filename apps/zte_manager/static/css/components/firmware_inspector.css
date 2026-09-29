@@ -1,0 +1,79 @@
+/* Operator firmware inspector. Dedicated component; no generic JSON cards. */
+#page-advanced .am-inspector-selector{
+  display:grid!important;grid-template-columns:minmax(260px,1fr) auto;
+  gap:12px!important;align-items:end!important;min-width:0;
+  padding:0!important;margin:0 0 22px!important;
+  border:0!important;
+}
+#page-advanced .am-inspector-selector label{min-width:0;display:grid;gap:7px;}
+#page-advanced .am-inspector-selector select{
+  min-width:0;width:100%;min-height:44px;padding:9px 35px 9px 13px;
+  font:600 13px/1.4 var(--font-sans);background:var(--am-surface);
+  color:var(--am-text);border:1px solid var(--am-border);border-radius:10px;
+}
+#page-advanced .am-inspector-selector button{
+  min-height:44px!important;white-space:nowrap;padding:10px 23px!important;
+}
+#page-advanced #firmwareInspectorNotice{
+  grid-column:1/-1;font:480 11px/1.6 var(--font-sans);
+  color:var(--am-text-2);margin:0;
+}
+#page-advanced #featureInspectorOutput.am-inspector-result{
+  max-width:100%;width:100%;min-width:0;padding:0!important;
+  border:0!important;background:transparent!important;
+  overflow:visible!important;
+}
+.am-inspector-card{
+  display:grid;gap:18px;min-width:0;
+  border:1px solid var(--am-border);background:var(--am-surface);
+  border-radius:14px;padding:clamp(16px,2.6vw,29px);
+}
+.am-inspector-header{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:15px;flex-wrap:wrap;padding-bottom:17px;border-bottom:1px solid var(--am-border);
+}
+.am-inspector-heading{min-width:0;}
+.am-inspector-kicker{color:var(--am-primary-deep);
+  font:800 10px var(--font-sans);letter-spacing:.12em;}
+.am-inspector-heading h3{font:790 clamp(19px,2.2vw,25px)/1.3 var(--font-sans);
+  letter-spacing:-.04em;color:var(--am-text);margin:7px 0 0;overflow-wrap:anywhere;}
+.am-inspector-status{font:700 11px var(--font-sans);border-radius:30px;
+  border:1px solid var(--am-border);padding:9px 12px;color:var(--am-text-2);
+  background:var(--am-bg);}
+.am-inspector-status.is-confirmed{background:var(--am-success-wash);
+  color:var(--am-success);border-color:var(--am-success);}
+.am-inspector-description{font:480 13px/1.75 var(--font-sans);
+  margin:0;color:var(--am-text-2);max-width:80ch;}
+.am-inspector-mode{display:grid;gap:7px;min-width:0;
+  background:var(--am-primary-wash);border-left:4px solid var(--am-primary);
+  padding:13px 16px;border-radius:9px;}
+.am-inspector-mode strong{font:790 11px var(--font-sans);color:var(--am-text);}
+.am-inspector-mode span{font:540 13px/1.5 var(--font-sans);color:var(--am-text);}
+.am-inspector-fields{display:grid;gap:12px;}
+.am-inspector-fields h4{font:770 14px var(--font-sans);color:var(--am-text);
+  margin:0 0 4px;}
+.am-inspector-fields-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));
+  gap:11px;margin:0;
+}
+.am-inspector-field{display:grid;gap:9px;background:var(--am-bg);
+  border:1px solid var(--am-border);border-radius:11px;padding:15px;min-width:0;}
+.am-inspector-field dt{font:700 11px/1.4 var(--font-sans);color:var(--am-text-2);}
+.am-inspector-field dd{margin:0;font:770 15px/1.45 var(--font-sans);
+  color:var(--am-text);overflow-wrap:anywhere;}
+.am-inspector-quiet{font:530 12px/1.6 var(--font-sans);
+  color:var(--am-text-2);margin:0;}
+.am-inspector-actions{display:flex;align-items:center;gap:17px;flex-wrap:wrap;
+  border-top:1px solid var(--am-border);padding-top:17px;}
+.am-inspector-actions .button{min-height:43px!important;}
+.am-inspector-actions small{flex:1 1 220px;
+  font:500 11px/1.6 var(--font-sans);color:var(--am-text-2);}
+.am-inspector-warning,.am-inspector-alert{
+  background:var(--am-warning-wash);color:var(--am-warning);
+  border:1px solid var(--am-border);border-radius:10px;padding:14px;
+  font:550 12px/1.7 var(--font-sans);margin:0;
+}
+@media(max-width:720px){
+ #page-advanced .am-inspector-selector{grid-template-columns:minmax(0,1fr);}
+ #page-advanced .am-inspector-selector button{justify-self:stretch;}
+}
