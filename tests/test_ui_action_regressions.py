@@ -36,11 +36,26 @@ class UIActionRegressions(unittest.TestCase):
                 self.assertIn('id="' + button + '"', html)
                 self.assertIn('"' + button + '"', source)
 
-    def test_zoom_compensates_document_width(self):
+    def test_zoom_reflows_the_grid_shell_without_clipping_the_viewport(self):
         source = js("app.js")
-        self.assertIn("document.documentElement.style.zoom = \"\";", source)
-        self.assertIn("document.body.style.zoom = String(uiZoom);", source)
-        self.assertIn("document.body.style.width =", source)
+        tangerine = (
+            STATIC / "css" / "tangerine.css"
+        ).read_text(encoding="utf-8")
+        # QtWebEngine must never magnify <body> and clip the sidebar/topbar.
+        self.assertIn('document.documentElement.style.zoom = "";', source)
+        self.assertIn('document.body.style.zoom = "";', source)
+        self.assertIn('document.body.style.width = "";', source)
+        self.assertIn('shell.style.zoom = String(uiZoom);', source)
+        self.assertNotIn(
+            "document.body.style.zoom = String(uiZoom);", source
+        )
+        self.assertIn(
+            "grid-template-columns:var(--am-current-sidebar) minmax(0,1fr)",
+            tangerine,
+        )
+        self.assertIn(
+            "width:calc(100% / var(--am-zoom,1))", tangerine
+        )
         self.assertIn('"zoomInButton"', source)
         self.assertIn('"zoomOutButton"', source)
 
