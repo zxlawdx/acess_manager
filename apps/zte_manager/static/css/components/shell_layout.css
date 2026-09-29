@@ -170,7 +170,7 @@ html[data-theme] .app-shell>.workspace .am-workspace-tools .zoom-control {
 }
 /* Compact native window: sidebar is a 66px rail, with an explicit drawer.
    This is responsive to the *real viewport*, never an artificial shell zoom. */
-@media(max-width:920px) {
+@media(max-width:930px) {
   html[data-theme] .app-shell {
     --am-shell-column:66px;
   }
