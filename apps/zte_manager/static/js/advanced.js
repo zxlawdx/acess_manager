@@ -647,7 +647,7 @@ function renderTrackerDiscovery(data) {
         item => item.status === "not_confirmed"
     ).length;
     const model = data.model || trackerDetectedModel || "Não identificado";
-    status.textContent = data.reason ||
+    status.textContent = data.reason ? normalizeApiErrorMessage(data.reason) :
         `${model} • ${found} confirmado(s), ${notConfirmed} indisponível(is), ${features.length - found - notConfirmed} ainda não testado(s)`;
     grid.innerHTML = features.length ? features.map(item => {
         const confirmed = item.status === "detected";
@@ -662,14 +662,14 @@ function renderTrackerDiscovery(data) {
         };
         const label = confirmed ? "Confirmado neste equipamento"
             : unconfirmed
-                ? (reasonLabels[item.reason] || "Endpoint não confirmado")
+                ? (reasonLabels[item.reason] || "Recurso não confirmado")
                 : "Documentado, ainda não testado";
         return `<article class="capability-card">
             <div class="capability-head"><div>
                 <strong>${escapeHtml(item.label || item.feature)}</strong>
                 <p>${escapeHtml(label)}</p>
             </div><i class="capability-state ${confirmed ? "available" : unconfirmed ? "unavailable" : ""}"></i></div>
-            <div class="operation-meta"><span>LEITURA</span><span>zte_tracker / ${escapeHtml(data.family || "desconhecida")}</span></div>
+            <div class="operation-meta"><span>LEITURA</span><span>Perfil do equipamento: ${escapeHtml(data.family || "não identificado")}</span></div>
         </article>`;
     }).join("") : '<p class="muted">Nenhum endpoint documentado confirmado para este perfil.</p>';
 }
@@ -709,10 +709,10 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
             timeoutMs: 10000
         });
         if (startGeneration !== trackerSessionGeneration) return response;
-        if (response.error) throw new Error(response.error);
+        if (response.error) throw new Error(normalizeApiErrorMessage(response.error));
         if (!response.connected) {
             if (info) info.textContent =
-                response.reason || "Conecte-se ao equipamento primeiro.";
+                response.reason ? normalizeApiErrorMessage(response.reason) : "Conecte-se ao equipamento primeiro.";
             return response;
         }
 
@@ -721,7 +721,7 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
         select.replaceChildren(new Option("Usar identificação automática", ""));
         for (const item of catalogModels) {
             select.add(new Option(
-                `${item.model} · ${String(item.protocol || "thinklua").toUpperCase()}`,
+                item.model,
                 item.model
             ));
         }
@@ -1343,8 +1343,8 @@ function renderCapabilities(
                         </div>
 
                         <div class="operation-meta">
-                            ${spec.writable ? "<span>WRITE</span>" : "<span>READ</span>"}
-                            ${spec.dangerous ? "<span>CONFIRM</span>" : ""}
+                            ${spec.writable ? "<span>ALTERAÇÃO</span>" : "<span>LEITURA</span>"}
+                            ${spec.dangerous ? "<span>CONFIRMAÇÃO</span>" : ""}
                         </div>
 
                         ${spec.notes ? `<p>${escapeHtml(spec.notes)}</p>` : ""}
