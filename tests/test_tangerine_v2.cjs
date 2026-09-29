@@ -69,5 +69,5 @@ test("management results are readable and redact unsafe data",()=>{
  const text=JSON.stringify(sample);
  assert.doesNotMatch(text,/PRIVATE_SECRET|POST|endpoint/);
  assert.match(text,/F6600P/);
- assert.match(html,/tangerine_results\\.js/);
+ assert.ok(html.includes("tangerine_results.js"));
 });
