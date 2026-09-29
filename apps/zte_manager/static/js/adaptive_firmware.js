@@ -82,9 +82,19 @@
         return node;
     };
     const pretty = name => LABELS[name] || String(name).replace(/_/g, " ");
-    const scalar = value => typeof value === "boolean"
-        ? (value ? "Sim" : "Não")
-        : (value == null || value === "" ? "Não informado" : String(value));
+    const scalar = value => {
+        if (typeof value === "boolean") return value ? "Sim" : "Não";
+        if (value == null || value === "") return "Não informado";
+        const text = String(value);
+        const lower = text.toLowerCase();
+        // Raw firmware errors may contain secrets even under an innocent key.
+        if (["password=", "password:", "token=", "token:", "cookie=",
+             "secret=", "traceback", "<html", "<script", "<?xml"].some(
+                 marker => lower.includes(marker)
+             ) || (lower.startsWith("http") && lower.includes("@")) ||
+             text.length > 250) return "Informação técnica reservada.";
+        return text;
+    };
     function renderFields(data, parent, level = 0) {
         if (level > 4) return;
         if (Array.isArray(data)) {
@@ -128,8 +138,9 @@
         const head = el("div", "adaptive-card-head");
         head.append(el("h3", "", pretty(key)));
         const available = section && section.available === true;
+        const absent = section?.reason === "confirmed_absence";
         head.append(el("span", "adaptive-badge " + (available ? "is-ok" : "is-muted"),
-            available ? "Lido" : "Indisponível"));
+            available ? "Leitura confirmada" : absent ? "Ausência confirmada" : "Não confirmado"));
         card.append(head);
         if (available) renderFields(section.data, card);
         else {
@@ -144,10 +155,7 @@
             card.append(el("p", "adaptive-empty",
                 messages[section?.reason] ||
                 "Função ainda não confirmada nesta versão de firmware."));
-            if (section?.error_type) {
-                card.append(el("small", "adaptive-choice-note",
-                    "Tipo técnico: " + String(section.error_type).slice(0, 50)));
-            }
+            // Technical driver error types remain in private logs only.
         }
         return card;
     }
@@ -199,7 +207,9 @@
         ];
         for (const [key, section] of Object.entries(report.sections || {})) {
             if (!section?.available) {
-                lines.push("- " + pretty(key) + ": indisponível/não confirmado");
+                lines.push("- " + pretty(key) + ": " +
+                    (section?.reason === "confirmed_absence"
+                        ? "ausência confirmada" : "leitura não confirmada"));
                 continue;
             }
             const data = section.data;
