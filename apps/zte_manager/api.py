@@ -818,9 +818,8 @@ def huawei_ipv4_filter_delete(context=None):
 def discovery_bootstrap(context=None):
     """Vendor-neutral UI bootstrap without device I/O."""
     try:
-        status = device_service.status()
-
-        if status.get("vendor") == "huawei":
+        if device_service.vendor == "huawei":
+            status = device_service.status()
             return {
                 "connected": status.get("connected", False),
                 "vendor": "huawei",
@@ -838,17 +837,19 @@ def discovery_bootstrap(context=None):
                 "reason": None,
             }
 
+        # This branch is intentionally ZTE-only: its catalog describes
+        # ThinkLua/F6201B/Vue resources and must never run for Huawei.
         device = zte_service._device_info or {}
         return {
-            "connected": status.get("connected", False),
+            "connected": zte_service.connected,
             "vendor": "zte",
             "model": (
-                status.get("model")
+                zte_service._selected_model
                 or device.get("modelo")
                 or device.get("model")
             ),
             "detected_model": device.get("modelo") or device.get("model"),
-            "model_verified": status.get("model_verified", False),
+            "model_verified": zte_service._model_verified,
             "native_diagnostics_available": bool(
                 zte_service.connected
                 and zte_service._model_verified
@@ -858,12 +859,15 @@ def discovery_bootstrap(context=None):
                     "zte-f6201b-thinklua",
                 }
             ),
-            "session_revision": status.get("session_revision"),
+            "session_revision": zte_service._session_revision,
             "firmware": device.get("firmware"),
-            "writes_enabled": status.get("writes_enabled", False),
+            "writes_enabled": (
+                bool(getattr(zte_service._zte, "writes_enabled", False))
+                if zte_service.connected else False
+            ),
             "catalog": zte_service.multimodel_catalog(),
             "reason": (
-                None if status.get("connected")
+                None if zte_service.connected
                 else "Conecte-se a uma ONT para detectar recursos."
             ),
         }
