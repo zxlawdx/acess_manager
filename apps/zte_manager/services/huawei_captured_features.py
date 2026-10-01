@@ -317,8 +317,8 @@ class HuaweiCapturedFeatureService:
     def optical_status(self) -> dict[str, Any]:
         _html, records = self._records(OPTICAL_PAGE)
         return {
-            "rx_power": _record_value(records, "RxPower", "RXPower", "RxOpticalPower", "ReceivePower"),
-            "tx_power": _record_value(records, "TxPower", "TXPower", "TxOpticalPower", "TransmitPower"),
+            "rx_power_dbm": _record_value(records, "RxPower", "RXPower", "RxOpticalPower", "ReceivePower"),
+            "tx_power_dbm": _record_value(records, "TxPower", "TXPower", "TxOpticalPower", "TransmitPower"),
             "temperature_c": _record_value(records, "Temperature", "TemperatureC", "ChipTemperature"),
             "voltage": _record_value(records, "Voltage", "SupplyVoltage"),
             "current_ma": _record_value(records, "Current", "BiasCurrent", "TxBias"),
@@ -1238,7 +1238,10 @@ class HuaweiCapturedFeatureService:
         *,
         confirm: bool = False,
     ) -> dict[str, Any]:
-        allowed = {"enabled", "Enable", "advanced_level", "AdvancedLevel"}
+        allowed = {
+            "enabled", "Enable",
+            "level", "advanced_level", "AdvancedLevel",
+        }
         extras = [
             key for key, value in config.items()
             if key not in allowed and value not in (None, "", False, [])
@@ -1250,7 +1253,16 @@ class HuaweiCapturedFeatureService:
         current = self.firewall_management_status()["firewall"]
         enabled = config.get("enabled", config.get("Enable", current.get("Enable")))
         level = str(
-            config.get("advanced_level", config.get("AdvancedLevel", current.get("AdvancedLevel") or ""))
+            config.get(
+                "level",
+                config.get(
+                    "advanced_level",
+                    config.get(
+                        "AdvancedLevel",
+                        current.get("AdvancedLevel") or "",
+                    ),
+                ),
+            )
         )
         path = (
             "/html/bbsp/firewalllevel/set.cgi"
