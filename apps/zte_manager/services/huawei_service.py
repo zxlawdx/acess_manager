@@ -27,6 +27,12 @@ from apps.zte_manager.services.huawei_captured_features import (
 from apps.zte_manager.services.tr069_profile_service import (
     tr069_provider_profiles,
 )
+from apps.zte_manager.services.profile_service import (
+    profile_service,
+)
+from apps.zte_manager.services.named_preset_service import (
+    named_preset_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -476,6 +482,201 @@ class HuaweiService:
     # =========================================================
     # HUAWEI CAPTURED FEATURES — EG8041X7-10
     # =========================================================
+
+    def current_configuration(self) -> dict:
+        with self._lock:
+            captured = self._require_captured()
+            radios = {
+                item["banda"]: item
+                for item in captured.wifi_radios()
+            }
+            dns = captured.dns_status()
+            dns.pop("_search_rows", None)
+
+            wifi: dict[str, dict] = {}
+            for band in ("2.4GHz", "5GHz"):
+                radio = radios.get(band) or {}
+                channel = str(radio.get("canal") or "0")
+                auto = bool(
+                    radio.get("canal_automatico")
+                    or channel in {"", "0", "Auto"}
+                )
+                wifi[band] = {
+                    "auto_channel": auto,
+                    "channel": (
+                        None
+                        if auto
+                        else int(channel)
+                        if channel.isdigit()
+                        else channel
+                    ),
+                    "standard": radio.get("padrao") or "",
+                    "country": radio.get("pais") or "BR",
+                    "bandwidth": radio.get("largura") or "Auto",
+                    "sgi": bool(radio.get("sgi", False)),
+                    "beacon_interval": int(
+                        radio.get("beacon_interval") or 100
+                    ),
+                    "tx_power": radio.get("potencia") or "100%",
+                }
+
+            return {
+                "wifi": wifi,
+                "dns": {
+                    "domain_name": dns.get("domain_name") or "",
+                    "ipv4_1": dns.get("ipv4_1") or "",
+                    "ipv4_2": dns.get("ipv4_2") or "",
+                    "ipv6_1": "",
+                    "ipv6_2": "",
+                    # Host entries are readable, but profile application
+                    # does not mutate them because CREATE/DELETE was not
+                    # captured on this model.
+                    "hosts": dns.get("hosts") or [],
+                },
+            }
+
+    def capture_profile(self, attendant=None):
+        with self._lock:
+            owner = (
+                attendant
+                or self.current_attendant
+                or "default"
+            )
+            return profile_service.save_profile(
+                owner,
+                self.current_configuration(),
+            )
+
+    def _apply_profile_payload(
+        self,
+        profile: dict,
+        *,
+        operation: str,
+        target: str,
+    ) -> dict:
+        captured = self._require_captured()
+        steps: list[dict] = []
+        omitted: list[str] = []
+
+        for band in ("2.4GHz", "5GHz"):
+            config = dict(
+                (profile.get("wifi") or {}).get(band)
+                or {}
+            )
+            if not config:
+                continue
+            try:
+                result = captured.set_wifi_radio(
+                    band,
+                    config,
+                )
+                verified = bool(result.get("verified"))
+                steps.append({
+                    "name": f"Wi-Fi {band}",
+                    "success": verified,
+                    "verified": verified,
+                    "detail": (
+                        "Canal/RF confirmado por read-back."
+                        if verified
+                        else "A alteração não foi confirmada pela releitura."
+                    ),
+                })
+            except Exception as exc:
+                steps.append({
+                    "name": f"Wi-Fi {band}",
+                    "success": False,
+                    "verified": False,
+                    "detail": str(exc),
+                })
+                break
+
+        if all(step.get("success") for step in steps):
+            dns = dict(profile.get("dns") or {})
+            if dns:
+                unsupported = []
+                if dns.get("ipv6_1") or dns.get("ipv6_2"):
+                    unsupported.append("DNS IPv6")
+                if dns.get("hosts"):
+                    unsupported.append("hosts estáticos")
+                if dns.get("ipv4_2"):
+                    # The physical capture proved one SearList mutation.
+                    # Preserve secondary DNS until a second row is captured.
+                    unsupported.append("DNS IPv4 secundário")
+                omitted.extend(unsupported)
+
+                safe_dns = {
+                    "domain_name": dns.get("domain_name"),
+                    "ipv4_1": dns.get("ipv4_1"),
+                }
+                if safe_dns.get("ipv4_1"):
+                    try:
+                        result = captured.set_dns(safe_dns)
+                        verified = bool(result.get("verified"))
+                        steps.append({
+                            "name": "DNS IPv4 principal",
+                            "success": verified,
+                            "verified": verified,
+                            "detail": (
+                                "DNS confirmado por read-back."
+                                if verified
+                                else "A alteração DNS não foi confirmada."
+                            ),
+                        })
+                    except Exception as exc:
+                        steps.append({
+                            "name": "DNS IPv4 principal",
+                            "success": False,
+                            "verified": False,
+                            "detail": str(exc),
+                        })
+
+        success = bool(steps) and all(
+            bool(step.get("success"))
+            for step in steps
+        )
+        result = {
+            "success": success,
+            "verified": success,
+            "audit_outcome": (
+                "verified"
+                if success
+                else "failed"
+            ),
+            "steps": steps,
+            "not_included": omitted,
+        }
+        self._audit_captured(
+            operation=operation,
+            target=target,
+            result=result,
+            after=profile,
+        )
+        return result
+
+    def apply_profile(self, attendant=None):
+        with self._lock:
+            owner = (
+                attendant
+                or self.current_attendant
+                or "default"
+            )
+            return self._apply_profile_payload(
+                profile_service.get_profile(owner),
+                operation="huawei_profile_apply",
+                target=owner,
+            )
+
+    def apply_named_preset(self, attendant: str, name: str):
+        with self._lock:
+            profile = named_preset_service.get(
+                attendant,
+                name,
+            )
+            return self._apply_profile_payload(
+                profile,
+                operation="huawei_named_profile_apply",
+                target=name,
+            )
 
     def optical_status(self):
         with self._lock:
