@@ -1453,7 +1453,8 @@ function renderCapabilities(
                 );
 
                 const profileVerified = (
-                    currentVendor === "huawei"
+                    typeof currentVendor !== "undefined"
+                    && currentVendor === "huawei"
                     && spec?.verified === true
                     && spec?.operations?.read === true
                 );
