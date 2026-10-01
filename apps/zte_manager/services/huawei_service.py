@@ -101,12 +101,34 @@ class HuaweiService:
         return dict(self._device_info)
 
     _SNAPSHOT_SECRET_FIELDS = frozenset({
-        "password", "passwd", "pass_word", "ppppassword",
+        "password", "passwd", "pass_word", "pppoe_password",
+        "pppoepassword", "wifi_password", "wifipassword",
         "acs_password", "connection_request_password",
         "cookie", "cookiehttp", "authorization",
         "x_hw_token", "hwonttoken", "onttoken", "token",
-        "psk", "secret", "credential", "senha",
+        "psk", "wpa_psk", "pre_shared_key", "presharedkey",
+        "keypassphrase", "secret", "credential", "senha",
     })
+
+    @classmethod
+    def _snapshot_secret_key(cls, key: object) -> bool:
+        normalized = str(key).strip().casefold().replace("-", "_")
+        compact = normalized.replace("_", "")
+        if normalized in {"password_hidden", "has_password", "secret_exists"}:
+            return False
+        if normalized in cls._SNAPSHOT_SECRET_FIELDS:
+            return True
+        if (
+            compact.endswith("password")
+            or compact.endswith("passwd")
+            or compact.endswith("token")
+            or compact.endswith("secret")
+            or compact.endswith("credential")
+            or "presharedkey" in compact
+            or compact.endswith("psk")
+        ):
+            return True
+        return False
 
     @classmethod
     def _snapshot_safe(cls, value):
@@ -114,10 +136,7 @@ class HuaweiService:
         if isinstance(value, dict):
             safe = {}
             for key, item in value.items():
-                normalized = (
-                    str(key).strip().casefold().replace("-", "_")
-                )
-                if normalized in cls._SNAPSHOT_SECRET_FIELDS:
+                if cls._snapshot_secret_key(key):
                     continue
                 safe[str(key)] = cls._snapshot_safe(item)
             return safe
@@ -961,10 +980,11 @@ class HuaweiService:
     ):
         with self._lock:
             if reveal_password:
-                return self._snapshot_safe(
-                    self._require_captured().pppoe_status(
-                        reveal_password=True
-                    )
+                # Explicit operator action may return the live password, but
+                # this branch never stores the result in the session snapshot
+                # or history.
+                return self._require_captured().pppoe_status(
+                    reveal_password=True
                 )
             return self._snapshot_read(
                 "pppoe",
