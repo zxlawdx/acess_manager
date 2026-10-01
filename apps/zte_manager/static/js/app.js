@@ -979,6 +979,7 @@ document
                 if (currentVendor === "huawei") {
                     openPage("dashboard");
                     try {
+                        await warmHuaweiSessionState();
                         await loadAll();
                         await warmHuaweiSessionPanels();
                     } catch (huaweiLoadError) {
@@ -4629,9 +4630,30 @@ function setRefreshBusy(busy) {
 // LOAD ALL
 // =========================================================
 
+async function warmHuaweiSessionState({refresh = false} = {}) {
+    if (currentVendor !== "huawei" || !ontConnected) return null;
+    const endpoint = (
+        "/huawei/session-snapshot/warm"
+        + (refresh ? "?refresh=1" : "")
+    );
+    const result = await apiRequest(endpoint, {
+        method: "POST",
+        body: JSON.stringify({}),
+        expected: "object"
+    });
+    if (result?.partial) {
+        console.warn(
+            "Huawei: snapshot inicial parcial:",
+            result.failed || {}
+        );
+    }
+    return result;
+}
+
+
 async function warmHuaweiSessionPanels() {
     if (currentVendor !== "huawei" || !ontConnected) return;
-    // Huawei's WebUI is stateful: run these initial reads sequentially.
+    // These loaders now render from the already-warmed backend snapshot.
     for (const warmer of [
         window.warmHuaweiAdvancedSnapshot,
         window.warmHuaweiTr069Snapshot
@@ -4806,7 +4828,26 @@ document
     )
     .addEventListener(
         "click",
-        () => void loadAll({refresh: true})
+        () => void (async () => {
+            if (currentVendor !== "huawei") {
+                await loadAll();
+                return;
+            }
+            setBusy(true, "Atualizando estado completo da sessão Huawei...");
+            try {
+                await warmHuaweiSessionState({refresh: true});
+                document.dispatchEvent(
+                    new CustomEvent("huawei:snapshot-refreshed")
+                );
+                await loadAll();
+                await warmHuaweiSessionPanels();
+                showToast("Estado Huawei atualizado.");
+            } catch (error) {
+                showToast(error.message);
+            } finally {
+                setBusy(false);
+            }
+        })()
     );
 
 document
@@ -5153,6 +5194,7 @@ async function restoreDesktopSession() {
         document.getElementById("profileRadios")?.replaceChildren();
         if (currentVendor === "huawei") {
             try {
+                await warmHuaweiSessionState();
                 await loadAll();
                 await warmHuaweiSessionPanels();
                 showToast("Sessão Huawei recuperada do snapshot da sessão.");
