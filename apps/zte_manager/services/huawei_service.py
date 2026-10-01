@@ -997,6 +997,7 @@ class HuaweiService:
                 "dos": service.set_dos,
                 "ipv6_firewall": service.set_ipv6_firewall,
                 "internet_control": service.set_internet_control,
+                "firewall_level": service.set_management_firewall,
             }
 
             capability = (
