@@ -104,7 +104,8 @@ class HuaweiService:
         "password", "passwd", "pass_word", "ppppassword",
         "acs_password", "connection_request_password",
         "cookie", "cookiehttp", "authorization",
-        "x_hw_token", "hwonttoken", "onttoken",
+        "x_hw_token", "hwonttoken", "onttoken", "token",
+        "psk", "secret", "credential", "senha",
     })
 
     @classmethod
@@ -1567,13 +1568,41 @@ class HuaweiService:
             )
             return result
 
-    def firewall_management_status(self, *, refresh: bool = False):
+    def firewall_level_status(self, *, refresh: bool = False):
         with self._lock:
             return self._snapshot_read(
                 "firewall_level",
                 self._require_captured().firewall_level_status,
                 refresh=refresh,
             )
+
+    def firewall_management_status(self, *, refresh: bool = False):
+        """Compatibility aggregate composed entirely from snapshot readers."""
+        with self._lock:
+            firewall = self.firewall_level_status(refresh=refresh)
+            dos = self.dos_status(refresh=refresh)
+            ipv6 = self.ipv6_firewall_status(refresh=refresh)
+            alg = self.alg_status(refresh=refresh)
+            igmp = self.igmp_status(refresh=refresh)
+            internet = self.internet_control_status(refresh=refresh)
+            return {
+                "available": any((
+                    firewall.get("available"),
+                    bool(dos),
+                    bool(ipv6),
+                    bool(alg),
+                    bool(igmp),
+                    bool(internet),
+                )),
+                "firewall": firewall.get("firewall") or {},
+                "dos": dos,
+                "ipv6_firewall": ipv6.get(
+                    "X_HW_IPv6FWDFireWallEnable", ""
+                ),
+                "alg": alg,
+                "igmp": igmp.get("IGMPEnable", ""),
+                "internet_control": internet.get("Enable", ""),
+            }
 
     def set_management_firewall(self, config, *, confirm=False):
         with self._lock:
@@ -1914,7 +1943,7 @@ class HuaweiService:
             "wifi_basic": self.wifi_networks,
             "wifi_radio": self.wifi_radios,
             "tr069_url": self.tr069_management_status,
-            "firewall_level": self.firewall_management_status,
+            "firewall_level": self.firewall_level_status,
             "alg": self.alg_status,
             "igmp": self.igmp_status,
             "dos": self.dos_status,
