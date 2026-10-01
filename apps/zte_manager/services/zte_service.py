@@ -144,6 +144,202 @@ class ZTEService:
 
             self._zte.session.post = blocked_post
 
+    def _close_huawei_local(self) -> None:
+        if self._huawei is None:
+            return
+
+        if self._history_session_id is not None:
+            try:
+                history_repository.end_session(
+                    self._history_session_id
+                )
+            except Exception as exc:
+                logger.warning(
+                    "history_end_failed error_type=%s",
+                    type(exc).__name__,
+                )
+
+        try:
+            self._huawei.close()
+        except Exception as exc:
+            logger.warning(
+                "huawei_session_close_failed error_type=%s",
+                type(exc).__name__,
+            )
+
+        self._huawei = None
+        self._huawei_ipv4_filter = None
+        self._history_session_id = None
+
+    def _connect_huawei(
+        self,
+        *,
+        ip: str,
+        username: str,
+        password: str,
+        https: bool,
+        attendant: str | None,
+        model_hint: str | None,
+    ) -> dict:
+        if self._zte is not None:
+            self.disconnect()
+
+        scheme = "https" if https else "http"
+        base_url = (
+            ip.rstrip("/")
+            if ip.startswith(("http://", "https://"))
+            else f"{scheme}://{ip.rstrip('/')}"
+        )
+
+        if (
+            self._huawei is not None
+            and self._huawei.base_url == base_url
+            and self._huawei.username == username
+            and self._huawei.password == password
+        ):
+            self.current_attendant = (
+                attendant.strip()
+                if attendant and attendant.strip()
+                else self.current_attendant
+                or "default"
+            )
+            return {
+                "success": True,
+                "vendor": "huawei",
+                "writes_enabled": bool(
+                    getattr(
+                        self._huawei,
+                        "writes_enabled",
+                        False,
+                    )
+                ),
+                "attendant": self.current_attendant,
+                "host": self.current_host,
+                "reused_session": True,
+                "model": self._selected_model,
+                "model_verified": self._model_verified,
+                "session_revision": self._session_revision,
+                "device": self._device_info,
+                "adapter": (
+                    self._adapter.name
+                    if self._adapter
+                    else None
+                ),
+            }
+
+        self._close_huawei_local()
+        self._runtime_driver = None
+        self._adapter = None
+        self._capability_service = None
+        self._readonly_original_post = None
+        self._session_revision = uuid4().hex
+        self._f6201b_writer.clear()
+        self._f6201b_dns.clear()
+        self._f6201b_profile.clear()
+        self._captured_workbench.clear()
+
+        client = HuaweiWebClient(
+            host=ip,
+            username=username,
+            password=password,
+            https=https,
+        )
+        client.login()
+
+        selected_model = (
+            model_hint.strip()
+            if model_hint and model_hint.strip()
+            else "Huawei"
+        )
+        adapter = HuaweiWebAdapter(
+            selected_model
+        )
+        ipv4_filter = HuaweiIPv4FilterService(
+            client,
+            model=selected_model,
+        )
+        capability = ipv4_filter.capability(
+            probe_read=True
+        )
+        profile = huawei_ipv4_filter_capability(
+            selected_model
+        )
+        writes_enabled = bool(
+            capability.get("read")
+            and profile.verified
+            and profile.create
+            and profile.update
+            and profile.delete
+        )
+        client.writes_enabled = writes_enabled
+
+        self._huawei = client
+        self._huawei_ipv4_filter = ipv4_filter
+        self._vendor = "huawei"
+        self.current_host = ip
+        self.current_attendant = (
+            attendant.strip()
+            if attendant and attendant.strip()
+            else "default"
+        )
+        self._selected_model = selected_model
+        # The profile is laboratory-verified, but a manual model hint is not
+        # equivalent to a device-reported identity.
+        self._model_verified = False
+        self._device_info = {
+            "fabricante": "Huawei",
+            "modelo": selected_model,
+        }
+        self._adapter = adapter
+
+        try:
+            self._history_session_id = (
+                history_repository.start_session(
+                    host=self.current_host,
+                    attendant=self.current_attendant,
+                    device=self._device_info,
+                )
+            )
+        except Exception as exc:
+            logger.warning(
+                "history_start_failed error_type=%s",
+                type(exc).__name__,
+            )
+            self._history_session_id = None
+
+        if self._history_session_id is not None:
+            try:
+                history_repository.save_snapshot(
+                    self._history_session_id,
+                    "connect",
+                    {
+                        "device": self._device_info,
+                        "adapter": adapter.describe(),
+                    },
+                )
+            except Exception as exc:
+                logger.warning(
+                    "history_snapshot_failed error_type=%s",
+                    type(exc).__name__,
+                )
+
+        return {
+            "success": True,
+            "vendor": "huawei",
+            "attendant": self.current_attendant,
+            "host": self.current_host,
+            "reused_session": False,
+            "model": self._selected_model,
+            "model_verified": self._model_verified,
+            "session_revision": self._session_revision,
+            "writes_enabled": writes_enabled,
+            "device": self._device_info,
+            "adapter": adapter.name,
+            "capabilities": {
+                "ipv4_filter": capability,
+            },
+        }
+
     def connect(
         self,
         ip: str,
@@ -160,6 +356,38 @@ class ZTEService:
 
             protocolo = "https" if https else "http"
             base_url = f"{protocolo}://{ip}"
+
+            huawei_candidate = (
+                is_known_huawei_model(
+                    model_hint
+                )
+                or (
+                    self._zte is None
+                    and HuaweiWebClient.looks_like_huawei(
+                        ip,
+                        https=https,
+                    )
+                )
+            )
+            if huawei_candidate:
+                return self._connect_huawei(
+                    ip=ip,
+                    username=username,
+                    password=password,
+                    https=https,
+                    attendant=attendant,
+                    model_hint=model_hint,
+                )
+
+            if self._huawei is not None:
+                self._close_huawei_local()
+                self.current_host = None
+                self.current_attendant = None
+                self._adapter = None
+                self._selected_model = None
+                self._model_verified = False
+                self._device_info = {}
+                self._vendor = "zte"
 
             # Trocar somente o atendente na UI não deve derrubar a sessão da
             # ONT. O firmware costuma aceitar uma sessão administrativa por
