@@ -360,17 +360,27 @@ class HuaweiCapturedFeatureService:
                 or item.get("name")
                 or domain
             )
+            dns_raw = str(
+                item.get("dnsstr")
+                or item.get("DNSServers")
+                or ""
+            )
+            dns_parts = [
+                value.strip()
+                for value in dns_raw.split(",")
+                if value.strip()
+            ]
             dns1 = (
                 item.get("IPv4PrimaryDNS")
                 or item.get("PrimaryDNS")
                 or item.get("DNS1")
-                or ""
+                or (dns_parts[0] if dns_parts else "")
             )
             dns2 = (
                 item.get("IPv4SecondaryDNS")
                 or item.get("SecondaryDNS")
                 or item.get("DNS2")
-                or ""
+                or (dns_parts[1] if len(dns_parts) > 1 else "")
             )
             result.append({
                 "id": domain,
