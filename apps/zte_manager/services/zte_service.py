@@ -477,8 +477,11 @@ class ZTEService:
                     })
                 self.current_host = ip
 
+                self._vendor = "zte"
+
                 return {
                     "success": True,
+                    "vendor": "zte",
                     "writes_enabled": getattr(self._zte, "writes_enabled", True),
                     "attendant": self.current_attendant,
                     "host": self.current_host,
@@ -2139,6 +2142,36 @@ class ZTEService:
 
     def capability_shape(self, feature):
         with self._lock:
+            if self._vendor == "huawei":
+                if feature != "ipv4_filter":
+                    raise ValueError(
+                        "Capability Huawei desconhecida."
+                    )
+                result = self.list_ipv4_filters()
+                rules = result.get("rules", [])
+                return {
+                    "feature": "ipv4_filter",
+                    "available": True,
+                    "count": len(rules),
+                    "keys": [
+                        "domain",
+                        "name",
+                        "protocol",
+                        "direction",
+                        "lan_start_ip",
+                        "lan_end_ip",
+                        "wan_start_ip",
+                        "wan_end_ip",
+                        "lan_tcp_port",
+                        "lan_udp_port",
+                        "wan_tcp_port",
+                        "wan_udp_port",
+                        "source_interface",
+                        "vlan_id",
+                        "priority",
+                        "action",
+                    ],
+                }
             return self._capabilities().shape(feature)
 
     def read_capability(
@@ -2146,6 +2179,26 @@ class ZTEService:
         feature
     ):
         with self._lock:
+            if self._vendor == "huawei":
+                if feature != "ipv4_filter":
+                    raise ValueError(
+                        "Capability Huawei desconhecida."
+                    )
+                result = self.list_ipv4_filters()
+                return {
+                    "feature": "ipv4_filter",
+                    "label": "IPv4 Filtering",
+                    "available": True,
+                    "writable": bool(
+                        result.get("capability", {}).get("create")
+                        or result.get("capability", {}).get("update")
+                        or result.get("capability", {}).get("delete")
+                    ),
+                    "objects": {
+                        "rules": result.get("rules", [])
+                    },
+                    "capability": result.get("capability", {}),
+                }
             return self._capabilities().read(
                 feature
             )
