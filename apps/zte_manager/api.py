@@ -876,6 +876,14 @@ def huawei_session_snapshot(context=None):
     )
 
 
+@api.post("/huawei/session-snapshot/warm")
+def huawei_session_snapshot_warm(context=None):
+    return _safe_call(
+        device_service.warm_huawei_session_snapshot,
+        refresh=_bool(_query(context).get("refresh")),
+    )
+
+
 @api.post("/huawei/ipv4-filters/create")
 def huawei_ipv4_filter_create(context=None):
     def action():
