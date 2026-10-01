@@ -511,6 +511,7 @@ class HuaweiService:
         operation: str,
         target: str,
         result: dict,
+        before: dict | list | None = None,
         after: dict | list | None = None,
     ) -> None:
         if self._history_session_id is None:
@@ -524,12 +525,20 @@ class HuaweiService:
             else "failed"
         )
         try:
+            audit_after = self._snapshot_safe(after)
+            if isinstance(audit_after, dict):
+                audit_after = dict(audit_after)
+                audit_after["_verified"] = verified
+                if result.get("readback") is not None:
+                    audit_after["_readback"] = self._snapshot_safe(
+                        result.get("readback")
+                    )
             history_repository.save_change(
                 self._history_session_id,
                 operation=operation,
                 target=str(target or "")[:128],
-                before=None,
-                after=after,
+                before=self._snapshot_safe(before),
+                after=audit_after,
                 success=verified,
                 message=(
                     "Read-back semântico Huawei"
@@ -618,8 +627,6 @@ class HuaweiService:
                 "device", load, refresh=refresh
             )
 
-    # =========================================================
-    # HUAWEI CAPTURED FEATURES — EG8041X7-10
     # =========================================================
     # HUAWEI CAPTURED FEATURES — EG8041X7-10
     # =========================================================
@@ -741,6 +748,12 @@ class HuaweiService:
                     safe_config,
                 )
                 verified = bool(result.get("verified"))
+                if verified and isinstance(result.get("readback"), dict):
+                    self._snapshot_patch_list(
+                        "wifi_radios",
+                        result["readback"],
+                        identity_fields=("banda", "id"),
+                    )
                 steps.append({
                     "name": f"Wi-Fi {band}",
                     "success": verified,
@@ -782,6 +795,10 @@ class HuaweiService:
                     try:
                         result = captured.set_dns(safe_dns)
                         verified = bool(result.get("verified"))
+                        if verified and isinstance(result.get("readback"), dict):
+                            readback = dict(result["readback"])
+                            readback.pop("_search_rows", None)
+                            self._snapshot_store("dns", readback)
                         steps.append({
                             "name": "DNS IPv4 principal",
                             "success": verified,
@@ -928,20 +945,38 @@ class HuaweiService:
 
     def set_ssid_config(self, ssid_id, config):
         with self._lock:
+            cached = self._snapshot_cached("wifi_networks") or []
+            before = next(
+                (
+                    item for item in cached
+                    if str(item.get("id") or "") == str(ssid_id)
+                ),
+                None,
+            )
             result = self._require_captured().set_ssid_config(
                 ssid_id,
                 config,
             )
+            if result.get("verified") and isinstance(
+                result.get("readback"), dict
+            ):
+                self._snapshot_patch_list(
+                    "wifi_networks",
+                    result["readback"],
+                    identity_fields=("id", "banda"),
+                )
             self._audit_captured(
                 operation="huawei_wifi_basic_update",
                 target=str(ssid_id),
                 result=result,
+                before=before,
                 after={
                     key: value
                     for key, value in dict(config or {}).items()
                     if key != "password"
                 },
             )
+            result["snapshot_resource"] = "wifi_networks"
             return result
 
     def wifi_radios(self, *, refresh: bool = False):
@@ -962,34 +997,76 @@ class HuaweiService:
 
     def set_wifi_radio(self, band, config):
         with self._lock:
+            cached = self._snapshot_cached("wifi_radios") or []
+            before = next(
+                (
+                    item for item in cached
+                    if str(item.get("banda") or "") == str(band)
+                ),
+                None,
+            )
             result = self._require_captured().set_wifi_radio(
                 band,
                 config,
             )
+            if result.get("verified") and isinstance(
+                result.get("readback"), dict
+            ):
+                self._snapshot_patch_list(
+                    "wifi_radios",
+                    result["readback"],
+                    identity_fields=("banda", "id"),
+                )
             self._audit_captured(
                 operation="huawei_wifi_radio_update",
                 target=str(band),
                 result=result,
+                before=before,
                 after=dict(config or {}),
             )
+            result["snapshot_resource"] = "wifi_radios"
             return result
 
-    def radio_power_status(self):
+    def radio_power_status(self, *, refresh: bool = False):
         with self._lock:
-            return self._require_captured().radio_power_status()
+            return [
+                {
+                    "band": item.get("banda"),
+                    "enabled": bool(item.get("ativo")),
+                }
+                for item in self.wifi_networks(refresh=refresh)
+            ]
 
     def set_radio_power(self, band, enabled):
         with self._lock:
+            cached = self._snapshot_cached("wifi_networks") or []
+            before = next(
+                (
+                    item for item in cached
+                    if str(item.get("banda") or "") == str(band)
+                ),
+                None,
+            )
             result = self._require_captured().set_radio_power(
                 band,
                 enabled,
             )
+            if result.get("verified") and isinstance(
+                result.get("readback"), dict
+            ):
+                self._snapshot_patch_list(
+                    "wifi_networks",
+                    result["readback"],
+                    identity_fields=("id", "banda"),
+                )
             self._audit_captured(
                 operation="huawei_wifi_power",
                 target=str(band),
                 result=result,
+                before=before,
                 after={"enabled": bool(enabled)},
             )
+            result["snapshot_resource"] = "wifi_networks"
             return result
 
     def wifi_schedule_status(self):
@@ -1066,15 +1143,24 @@ class HuaweiService:
 
     def set_dhcp_basic(self, config):
         with self._lock:
+            cached = self._snapshot_cached("dhcp") or {}
+            before = deepcopy(cached.get("basic"))
             result = self._require_captured().set_dhcp_basic(
                 dict(config or {})
             )
+            readback = result.get("readback")
+            if result.get("verified") and isinstance(readback, dict):
+                updated = deepcopy(cached)
+                updated["basic"] = readback
+                self._snapshot_store("dhcp", updated)
             self._audit_captured(
                 operation="huawei_dhcp_update",
                 target="LAN / DHCP",
                 result=result,
+                before=before,
                 after=dict(config or {}),
             )
+            result["snapshot_resource"] = "dhcp"
             return result
 
     def save_dhcp_reservation(self, config):
@@ -1086,20 +1172,55 @@ class HuaweiService:
                     "A captura validou UPDATE de reserva existente, "
                     "não CREATE de reserva DHCP Huawei."
                 )
+            cached = self._snapshot_cached("dhcp") or {}
+            before = next(
+                (
+                    row for row in cached.get("reservations") or []
+                    if str(row.get("_InstID") or "") == str(instance_id)
+                    or str(row.get("_InstID") or "").endswith(
+                        "." + str(instance_id)
+                    )
+                ),
+                None,
+            )
             result = self._require_captured().update_dhcp_reservation(
                 instance_id,
                 ip=str(values.get("ip") or ""),
                 mac=str(values.get("mac") or ""),
             )
+            readback = result.get("readback")
+            if result.get("verified") and isinstance(readback, dict):
+                updated = deepcopy(cached)
+                rows = list(updated.get("reservations") or [])
+                matched = False
+                for index, row in enumerate(rows):
+                    if (
+                        row.get("_InstID") == readback.get("_InstID")
+                        or (
+                            readback.get("_InstID")
+                            and str(row.get("_InstID") or "").endswith(
+                                "." + str(readback["_InstID"]).split(".")[-1]
+                            )
+                        )
+                    ):
+                        rows[index] = readback
+                        matched = True
+                        break
+                if not matched:
+                    rows.append(readback)
+                updated["reservations"] = rows
+                self._snapshot_store("dhcp", updated)
             self._audit_captured(
                 operation="huawei_dhcp_static_update",
                 target=str(instance_id),
                 result=result,
+                before=before,
                 after={
                     "ip": values.get("ip"),
                     "mac": values.get("mac"),
                 },
             )
+            result["snapshot_resource"] = "dhcp"
             return result
 
     def delete_dhcp_reservation(self, instance_id):
@@ -1119,9 +1240,15 @@ class HuaweiService:
 
     def set_dns(self, config):
         with self._lock:
+            before = self._snapshot_cached("dns")
             result = self._require_captured().set_dns(
                 dict(config or {})
             )
+            readback = result.get("readback")
+            if result.get("verified") and isinstance(readback, dict):
+                readback = dict(readback)
+                readback.pop("_search_rows", None)
+                self._snapshot_store("dns", readback)
             safe = {
                 key: value
                 for key, value in dict(config or {}).items()
@@ -1131,8 +1258,10 @@ class HuaweiService:
                 operation="huawei_dns_update",
                 target="DNS",
                 result=result,
+                before=before,
                 after=safe,
             )
+            result["snapshot_resource"] = "dns"
             return result
 
     def dmz_status(self, *, refresh: bool = False):
@@ -1153,15 +1282,27 @@ class HuaweiService:
 
     def set_dmz(self, config):
         with self._lock:
+            before = self._snapshot_cached("dmz")
             result = self._require_captured().set_dmz(
                 dict(config or {})
             )
+            readback = result.get("readback")
+            if result.get("verified") and isinstance(readback, dict):
+                public = [] if not readback.get("available") else [{
+                    "_InstID": readback.get("id") or "",
+                    "Enable": "1" if readback.get("enabled") else "0",
+                    "InternalClient": readback.get("internal_client") or "",
+                    "WANCViewName": readback.get("wan") or "",
+                }]
+                self._snapshot_store("dmz", public)
             self._audit_captured(
                 operation="huawei_dmz_update",
                 target="DMZ",
                 result=result,
+                before=before,
                 after=dict(config or {}),
             )
+            result["snapshot_resource"] = "dmz"
             return result
 
     def tr069_management_status(self, *, refresh: bool = False):
@@ -1207,14 +1348,20 @@ class HuaweiService:
 
     def set_management_tr069(self, config, *, confirm=True):
         with self._lock:
+            before = self._snapshot_cached("tr069")
             result = self._require_captured().set_management_tr069(
                 dict(config or {}),
                 confirm=confirm,
             )
+            if result.get("verified") and isinstance(
+                result.get("readback"), dict
+            ):
+                self._snapshot_store("tr069", result["readback"])
             self._audit_captured(
                 operation="huawei_tr069_url_update",
                 target="ACS",
                 result=result,
+                before=before,
                 after={
                     "url": (
                         dict(config or {}).get("url")
@@ -1222,6 +1369,7 @@ class HuaweiService:
                     )
                 },
             )
+            result["snapshot_resource"] = "tr069"
             return result
 
     def apply_tr069_provider(
