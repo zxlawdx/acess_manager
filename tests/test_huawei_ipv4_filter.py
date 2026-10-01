@@ -8,6 +8,9 @@ from apps.zte_manager.infrastructure.huawei import (
     HuaweiWebClient,
     decode_huawei_js_string,
 )
+from apps.zte_manager.services.attendance_report_service import (
+    AttendanceReportService,
+)
 from apps.zte_manager.services.huawei_ipv4_filter_service import (
     HuaweiIPv4FilterRule,
     HuaweiIPv4FilterService,
@@ -407,6 +410,50 @@ class HuaweiReadBackTests(unittest.TestCase):
             service.create_ipv4_filter(
                 fixture_rule()
             )
+
+
+class HuaweiAttendanceTests(unittest.TestCase):
+    def test_verified_create_appears_in_attendance_report(self):
+        rule = fixture_rule().as_dict()
+        report = AttendanceReportService().build(
+            diagnostic={
+                "mode": "general",
+                "sections": {},
+                "findings": [],
+                "status": "info",
+            },
+            timeline={
+                "changes": [{
+                    "id": 1,
+                    "created_at": "2026-10-01T00:00:00Z",
+                    "operation": "huawei_ipv4_filter_create",
+                    "target": "RE_TEST_01",
+                    "before_json": None,
+                    "after_json": rule,
+                    "success": True,
+                    "outcome": "verified",
+                }],
+                "diagnostics": [],
+                "snapshots": [],
+            },
+        )
+        text = report["text"]
+        self.assertIn(
+            "IPv4 Filtering - Regra criada: RE_TEST_01",
+            text,
+        )
+        self.assertIn(
+            "LAN: 192.168.18.240-192.168.18.241",
+            text,
+        )
+        self.assertIn(
+            "Porta WAN: 42002",
+            text,
+        )
+        self.assertIn(
+            "alteração verificada por releitura",
+            text,
+        )
 
 
 if __name__ == "__main__":
