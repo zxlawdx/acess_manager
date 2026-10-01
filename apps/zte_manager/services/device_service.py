@@ -8,6 +8,7 @@ from typing import Any
 from apps.zte_manager.infrastructure.huawei import HuaweiWebClient
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
 from apps.zte_manager.services.huawei_service import HuaweiService
+from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,25 @@ class DeviceService:
         self._huawei_factory = huawei_factory
         self._huawei_client_type = huawei_client_type
         self._session: DeviceSession | None = None
+
+    def __getattr__(self, name: str):
+        """Delegate vendor-neutral operations to the active provider.
+
+        Missing methods are an explicit provider capability gap. They never
+        fall back from Huawei to ZTE.
+        """
+        if name.startswith("_"):
+            raise AttributeError(name)
+
+        service = self.active_service
+        target = getattr(service, name, None)
+        if target is None or not callable(target):
+            status = self.status()
+            raise ProviderFeatureUnavailable(
+                vendor=status.get("vendor"),
+                model=status.get("model"),
+            )
+        return target
 
     @property
     def session(self) -> DeviceSession | None:
