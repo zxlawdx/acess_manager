@@ -43,8 +43,8 @@ const ctx={
 };
 vm.createContext(ctx);
 vm.runInContext(profile,ctx);
-assert.ok(handlers["zte:page-open"]);
-handlers["zte:page-open"]({detail:{pageName:"wifi"}});
+assert.ok(handlers["device:page-open"]);
+handlers["device:page-open"]({detail:{pageName:"wifi"}});
 (async()=>{
     await new Promise(resolve=>setTimeout(resolve,0));
     console.log("Old native layout for both families is preserved.");
