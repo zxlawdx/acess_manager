@@ -1452,10 +1452,21 @@ function renderCapabilities(
                     key
                 );
 
+                const profileVerified = (
+                    currentVendor === "huawei"
+                    && spec?.verified === true
+                    && spec?.operations?.read === true
+                );
                 const stateClass = state?.available ? "available" :
-                    state?.status === "absent" ? "unavailable" : "";
-                const stateText = !state ? "Não testado" :
-                    state.available ? "Confirmado nesta sessão" :
+                    state?.status === "absent" ? "unavailable" :
+                    profileVerified ? "available" : "";
+                const stateText = !state
+                    ? (
+                        profileVerified
+                            ? "Validado fisicamente para este modelo"
+                            : "Não testado"
+                    )
+                    : state.available ? "Confirmado nesta sessão" :
                     state.status === "absent" ? "Ausência confirmada" :
                     state.status === "inconclusive" ? "Sondagem inconclusiva" :
                     state.probeable === false ? "Sem adaptador de leitura; não verificado" :
