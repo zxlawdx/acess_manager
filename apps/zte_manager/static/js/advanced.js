@@ -826,14 +826,32 @@ async function loadMultimodelCatalog({ refresh = false } = {}) {
             ? `PERFIL ${trackerDetectedModel}` : "MODELO NÃO INFORMADO";
 
         if (matched) {
-            const candidates = (matched.candidate_features || []).map(feature => ({
-                feature,
-                label: feature.replace(/_/g, " "),
-                status: "not_tested"
-            }));
+            const candidates = (matched.candidate_features || []).map(feature => {
+                const operations = response.vendor === "huawei"
+                    ? (response.capabilities?.[feature] || {})
+                    : {};
+                return {
+                    feature,
+                    label: feature.replace(/_/g, " "),
+                    // Para a EG8041X7-10, verified é metadado do profile
+                    // fisicamente exercitado. Não rebaixe para "Não testado"
+                    // só porque a tela acabou de abrir.
+                    status: (
+                        response.vendor === "huawei"
+                        && operations.read
+                        && operations.verified
+                            ? "detected"
+                            : "not_tested"
+                    )
+                };
+            });
             renderTrackerDiscovery({
-                model: matched.model, family: matched.family,
-                candidate_features: candidates
+                model: matched.model,
+                family: matched.family,
+                candidate_features: candidates,
+                reason: response.vendor === "huawei"
+                    ? "Profile Huawei autenticado. Recursos marcados como confirmados foram validados fisicamente para este modelo."
+                    : undefined
             });
         } else if (info) {
             info.textContent = trackerDetectedModel
@@ -883,10 +901,16 @@ async function detectConnectedModel() {
         }
         const message = `Modelo: ${profile.model} · Firmware: ${bootstrap.firmware || "não informado"}` +
             " · Identificação confirmada no login. " +
-            "Use Detectar recursos para validar os GETs disponíveis.";
+            (bootstrap.vendor === "huawei"
+                ? "Capabilities físicas do profile carregadas."
+                : "Use Detectar recursos para validar os GETs disponíveis.");
         if (output) output.textContent = message;
         if (status) status.textContent = message;
-        showToast("Modelo identificado. Recursos ainda não testados.");
+        showToast(
+            bootstrap.vendor === "huawei"
+                ? "Huawei identificada e profile validado carregado."
+                : "Modelo identificado. Recursos ainda não testados."
+        );
     } catch (error) {
         const message = "Falha ao identificar o modelo: " + error.message;
         if (status) status.textContent = message;
@@ -933,6 +957,35 @@ async function discoveryRequest(endpoint, {
 // páginas e competir com o login/diagnóstico do firmware.
 function autoDiscoverTracker() {
     if (!ontConnected || !trackerDetectedModel) return Promise.resolve();
+
+    // Huawei possui o próprio catálogo /device/capabilities. Nunca disparar
+    // probe ThinkLua/ZTE durante uma sessão Huawei.
+    if (currentVendor === "huawei") {
+        return loadCapabilityCatalog()
+            .then(data => {
+                const catalog = data?.features || {};
+                const results = Object.entries(catalog).map(([feature, spec]) => ({
+                    feature,
+                    available: Boolean(spec?.operations?.read),
+                    verified: Boolean(spec?.operations?.verified),
+                    status: (
+                        spec?.operations?.read && spec?.operations?.verified
+                            ? "confirmed"
+                            : "not_tested"
+                    )
+                }));
+                renderNativeDetection(
+                    catalog,
+                    results,
+                    trackerDetectedModel
+                );
+                return data;
+            })
+            .catch(error => {
+                console.warn("Catálogo Huawei não carregado:", error);
+            });
+    }
+
     const key = `${globalThis.currentZteRevision || ""}:${currentHost || ""}:${trackerDetectedModel}`;
     if (trackerQuickScanKey === key) return trackerQuickScanPromise || Promise.resolve();
     trackerQuickScanKey = key;
@@ -2434,10 +2487,16 @@ function syncHuaweiAdvancedMode() {
         "captureSnapshotButton",
         "automaticDiagnosticPanel"
     ]) {
-        document.getElementById(id)?.classList.toggle(
+        const element = document.getElementById(id);
+        element?.classList.toggle(
             "hidden",
             huawei
         );
+        // Tangerine/workbench CSS may restyle buttons after page setup.
+        // Inline display keeps ZTE-only actions out of Huawei sessions.
+        if (element) {
+            element.style.display = huawei ? "none" : "";
+        }
     }
 
     if (huawei && filterTab) {
