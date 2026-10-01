@@ -315,10 +315,20 @@ class DeviceService:
     def probe_capabilities(self, features=None):
         return self.active_service.probe_capabilities(features)
 
-    def capability_shape(self, feature):
+    def capability_shape(self, feature, *, refresh=False):
+        if self.vendor == "huawei":
+            return self.active_service.capability_shape(
+                feature,
+                refresh=refresh,
+            )
         return self.active_service.capability_shape(feature)
 
-    def read_capability(self, feature):
+    def read_capability(self, feature, *, refresh=False):
+        if self.vendor == "huawei":
+            return self.active_service.read_capability(
+                feature,
+                refresh=refresh,
+            )
         return self.active_service.read_capability(feature)
 
     def _require_huawei(self) -> HuaweiService:
@@ -335,8 +345,10 @@ class DeviceService:
             )
         return self._session.service
 
-    def list_ipv4_filters(self):
-        result = self._require_huawei().list_ipv4_filters()
+    def list_ipv4_filters(self, *, refresh=False):
+        result = self._require_huawei().list_ipv4_filters(
+            refresh=refresh
+        )
         # Do not erase DHCP/DNS/Wi-Fi/etc. capabilities merely because the
         # IPv4 filter panel refreshed. The previous replacement caused the
         # Huawei sidebar/discovery state to collapse to one feature.
@@ -365,6 +377,9 @@ class DeviceService:
         return self._require_huawei().delete_ipv4_filter(
             instance_or_domain
         )
+
+    def huawei_session_snapshot(self):
+        return self._require_huawei().session_snapshot()
 
     def generate_attendance(self, diagnostic_id=None):
         return self.active_service.generate_attendance(
