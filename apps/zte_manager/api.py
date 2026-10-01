@@ -234,10 +234,11 @@ def _call_device_read(method_name: str, context=None, *args, **kwargs):
     Ordinary GETs consume Huawei's normalized session snapshot. The router is
     touched again only when the operator sends ?refresh=1.
     """
-    if device_service.vendor == "huawei":
-        kwargs["refresh"] = _bool(
-            _query(context).get("refresh")
-        )
+    if (
+        device_service.vendor == "huawei"
+        and _bool(_query(context).get("refresh"))
+    ):
+        kwargs["refresh"] = True
     return _call_device(
         method_name,
         *args,
