@@ -1,4 +1,4 @@
-<!-- ZTE Automatic dentro do shell Vela (layout blank). -->
+<!-- Access Manager dentro do shell Vela (layout blank). -->
 <!--
     O console prioriza Inter + JetBrains Mono quando já estão disponíveis no
     sistema e mantém stacks locais equivalentes para funcionar offline.
@@ -65,7 +65,7 @@
             </div>
             <div class="brand-copy">
                 <strong>Access Manager</strong>
-                <span>Gerenciamento de equipamentos ZTE</span>
+                <span>Gerenciamento de equipamentos / ONTs</span>
             </div>
             <button id="sidebarCollapseToggle" class="shell-control" type="button"
                     aria-label="Recolher menu lateral" aria-expanded="true" title="Recolher menu lateral">
@@ -81,7 +81,7 @@
                     ONLINE
                 </span>
             </div>
-            <strong id="connectedModel">ZTE</strong>
+            <strong id="connectedModel">ONT</strong>
             <span id="connectedHost" class="mono">-</span>
             <span id="connectedAttendant" class="target-tech">-</span>
         </div>
@@ -173,7 +173,7 @@
     <div class="workspace">
 
         <div class="console-ribbon am-session-bar" role="status" aria-label="Estado da sessão">
-            <span class="am-session-context"><span class="material-symbols-outlined" aria-hidden="true">lan</span> WORKSPACE <span class="am-context-separator">/</span> ZTE</span>
+            <span class="am-session-context"><span class="material-symbols-outlined" aria-hidden="true">lan</span> WORKSPACE <span class="am-context-separator">/</span> <span id="workspaceVendorLabel">EQUIPAMENTOS</span></span>
             <span class="console-ribbon-right am-session-data">
                 <span class="console-session am-session-indicator"><i id="consoleSessionDot"></i><span id="consoleSessionState">DESCONECTADO</span></span>
                 <span id="consoleHostText" class="mono">SEM EQUIPAMENTO</span>
@@ -208,7 +208,7 @@
                     <span id="zoomLevel" class="zoom-level">100%</span>
                     <button id="zoomInButton" class="zoom-button" type="button" aria-label="Aumentar tamanho do texto">A+</button>
                 </div>
-                <div id="topDeviceChip" class="device-chip hidden"><span class="material-symbols-outlined">router</span><div><strong id="topDeviceModel">ZTE</strong><span id="topDeviceMeta" class="mono">-</span></div></div>
+                <div id="topDeviceChip" class="device-chip hidden"><span class="material-symbols-outlined">router</span><div><strong id="topDeviceModel">ONT</strong><span id="topDeviceMeta" class="mono">-</span></div></div>
                 <button id="refreshButton" class="icon-button hidden" type="button" title="Atualizar dados" aria-label="Atualizar dados"><span class="refresh-glyph" aria-hidden="true">↻</span></button>
             </div>
         </header>
