@@ -191,11 +191,13 @@ class HuaweiIPv4FilterService:
         client: HuaweiWebClient,
         *,
         model: str | None = None,
+        capability: HuaweiIPv4FilterCapability | None = None,
         sleep: Callable[[float], None] = time.sleep,
         readback_tries: int = 8,
     ) -> None:
         self.client = client
         self.model = model
+        self._declared_capability = capability
         self.sleep = sleep
         self.readback_tries = max(
             1,
@@ -207,8 +209,11 @@ class HuaweiIPv4FilterService:
         *,
         probe_read: bool = False,
     ) -> dict[str, bool]:
-        profile = huawei_ipv4_filter_capability(
-            self.model
+        profile = (
+            self._declared_capability
+            or huawei_ipv4_filter_capability(
+                self.model
+            )
         )
         read_available = profile.read
 
@@ -410,7 +415,8 @@ class HuaweiIPv4FilterService:
         operation: str,
     ) -> None:
         capability: HuaweiIPv4FilterCapability = (
-            huawei_ipv4_filter_capability(
+            self._declared_capability
+            or huawei_ipv4_filter_capability(
                 self.model
             )
         )
