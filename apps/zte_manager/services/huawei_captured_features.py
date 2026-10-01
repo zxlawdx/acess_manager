@@ -1074,6 +1074,16 @@ class HuaweiCapturedFeatureService:
             )
 
         current = self.dns_status()
+        requested_secondary = config.get("ipv4_2")
+        if (
+            requested_secondary not in (None, "")
+            and str(requested_secondary)
+            != str(current.get("ipv4_2") or "")
+        ):
+            raise ValueError(
+                "A captura validou apenas SearList.1; alteração do DNS IPv4 "
+                "secundário ainda não foi mapeada."
+            )
         rows = current.pop("_search_rows", [])
         row = rows[0] if rows else {}
         interface = str(row.get("Interface") or "")
@@ -1517,6 +1527,8 @@ class HuaweiCapturedFeatureService:
                     _record_value(relevant, "TransmitPower", default="100")
                 ),
                 "beacon_interval": _record_value(relevant, "BeaconPeriod", default=100),
+                "rts_cts": _record_value(relevant, "RTSThreshold", default=2346),
+                "dtim": _record_value(relevant, "DtimPeriod", default=1),
                 "sgi": False,
                 "mu_mimo": False,
                 "downlink_ofdma": False,
@@ -1574,6 +1586,31 @@ class HuaweiCapturedFeatureService:
         if current is None:
             raise RuntimeError("O rádio Huawei não pôde ser relido.")
 
+        supported_keys = {
+            "auto_channel",
+            "channel",
+            "country",
+            "tx_power",
+            "beacon_interval",
+            "rts_cts",
+            "dtim",
+            # Read-only-in-UI values are accepted only when unchanged.
+            "bandwidth",
+            "standard",
+            "sgi",
+        }
+        unsupported = [
+            key
+            for key, value in config.items()
+            if key not in supported_keys
+            and value is not None
+        ]
+        if unsupported:
+            raise ValueError(
+                "Campos de rádio Huawei ainda não validados: "
+                + ", ".join(sorted(unsupported))
+            )
+
         for key, label in (
             ("bandwidth", "largura de canal"),
             ("standard", "padrão Wi-Fi"),
@@ -1591,6 +1628,8 @@ class HuaweiCapturedFeatureService:
         country = str(config.get("country", current.get("pais") or "BR") or "BR")
         power = str(config.get("tx_power", current.get("potencia") or "100%") or "100%").rstrip("%")
         beacon = str(config.get("beacon_interval", current.get("beacon_interval") or 100))
+        rts = str(config.get("rts_cts", current.get("rts_cts") or 2346))
+        dtim = str(config.get("dtim", current.get("dtim") or 1))
 
         y = f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{instance}"
         radio = "1" if instance == "1" else "2"
@@ -1618,15 +1657,9 @@ class HuaweiCapturedFeatureService:
                 current.get("_raw_standard")
                 or "11ax"
             ),
-            "x.DtimPeriod": str(
-                current.get("_raw_dtim")
-                or "1"
-            ),
+            "x.DtimPeriod": dtim,
             "x.BeaconPeriod": beacon,
-            "x.RTSThreshold": str(
-                current.get("_raw_rts")
-                or "2346"
-            ),
+            "x.RTSThreshold": rts,
             "x.FragThreshold": str(
                 current.get("_raw_frag")
                 or "2346"
@@ -1665,6 +1698,10 @@ class HuaweiCapturedFeatureService:
             if str(actual.get("potencia") or "").rstrip("%") != power:
                 return None
             if str(actual.get("beacon_interval") or "") != beacon:
+                return None
+            if str(actual.get("rts_cts") or "") != rts:
+                return None
+            if str(actual.get("dtim") or "") != dtim:
                 return None
             return actual
 
