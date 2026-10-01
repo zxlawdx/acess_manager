@@ -6,11 +6,17 @@ from threading import Lock, RLock
 from typing import Optional
 
 from apps.zte_manager.model.device_adapters import select_adapter
+from apps.zte_manager.model.device_adapters.huawei import (
+    HuaweiWebAdapter,
+    huawei_ipv4_filter_capability,
+    is_known_huawei_model,
+)
 from apps.zte_manager.application.operations.audit_executor import AuditedOperation
 from apps.zte_manager.application.operations.verifiers import (
     verify_dhcp, verify_ssid, verify_channel_choice,
 )
 from apps.zte_manager.application.inventory import DeviceRegistrar
+from apps.zte_manager.infrastructure.huawei import HuaweiWebClient
 from apps.zte_manager.infrastructure.zte.adapters import ThinkLuaDeviceAdapter
 from apps.zte_manager.infrastructure.zte.adapters.thinklua_device import (
     DeviceWriteNotApproved,
@@ -39,6 +45,10 @@ from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.f6201b_profile import ExperimentalF6201BProfile
 from apps.zte_manager.services.f6201b_diagnostics import F6201BDiagnostics, PING, TRACE, host_name
 from apps.zte_manager.services.f6201b_support import run_f6201b_support
+from apps.zte_manager.services.huawei_ipv4_filter_service import (
+    HuaweiIPv4FilterRule,
+    HuaweiIPv4FilterService,
+)
 from apps.zte_manager.services import f6201b_dhcp
 from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
 from apps.zte_manager.services.profile_service import profile_service
@@ -84,6 +94,9 @@ class ZTEService:
         self._registrar = registrar or DeviceRegistrar(management_repository)
         self._runtime_driver: ThinkLuaDeviceAdapter | None = None
         self._zte: Optional[ZTE] = None
+        self._huawei: HuaweiWebClient | None = None
+        self._huawei_ipv4_filter: HuaweiIPv4FilterService | None = None
+        self._vendor = "zte"
         self._lock = RLock()
         self.current_attendant = None
         self.current_host = None
@@ -131,6 +144,227 @@ class ZTEService:
 
             self._zte.session.post = blocked_post
 
+    def _close_huawei_local(self) -> None:
+        if self._huawei is None:
+            return
+
+        if self._history_session_id is not None:
+            try:
+                history_repository.end_session(
+                    self._history_session_id
+                )
+            except Exception as exc:
+                logger.warning(
+                    "history_end_failed error_type=%s",
+                    type(exc).__name__,
+                )
+
+        try:
+            self._huawei.close()
+        except Exception as exc:
+            logger.warning(
+                "huawei_session_close_failed error_type=%s",
+                type(exc).__name__,
+            )
+
+        self._huawei = None
+        self._huawei_ipv4_filter = None
+        self._history_session_id = None
+
+    def _connect_huawei(
+        self,
+        *,
+        ip: str,
+        username: str,
+        password: str,
+        https: bool,
+        attendant: str | None,
+        model_hint: str | None,
+    ) -> dict:
+        if self._zte is not None:
+            self.disconnect()
+
+        scheme = "https" if https else "http"
+        base_url = (
+            ip.rstrip("/")
+            if ip.startswith(("http://", "https://"))
+            else f"{scheme}://{ip.rstrip('/')}"
+        )
+
+        if (
+            self._huawei is not None
+            and self._huawei.base_url == base_url
+            and self._huawei.username == username
+            and self._huawei.password == password
+        ):
+            self.current_attendant = (
+                attendant.strip()
+                if attendant and attendant.strip()
+                else self.current_attendant
+                or "default"
+            )
+            return {
+                "success": True,
+                "vendor": "huawei",
+                "writes_enabled": bool(
+                    getattr(
+                        self._huawei,
+                        "writes_enabled",
+                        False,
+                    )
+                ),
+                "attendant": self.current_attendant,
+                "host": self.current_host,
+                "reused_session": True,
+                "model": self._selected_model,
+                "model_verified": self._model_verified,
+                "session_revision": self._session_revision,
+                "device": self._device_info,
+                "adapter": (
+                    self._adapter.name
+                    if self._adapter
+                    else None
+                ),
+            }
+
+        self._close_huawei_local()
+        self._runtime_driver = None
+        self._adapter = None
+        self._capability_service = None
+        self._readonly_original_post = None
+        self._session_revision = uuid4().hex
+        self._f6201b_writer.clear()
+        self._f6201b_dns.clear()
+        self._f6201b_profile.clear()
+        self._captured_workbench.clear()
+
+        client = HuaweiWebClient(
+            host=ip,
+            username=username,
+            password=password,
+            https=https,
+        )
+        client.login()
+
+        detected_model = client.detect_known_model(
+            ("EG8041X7-10",)
+        )
+        selected_model = (
+            model_hint.strip()
+            if model_hint and model_hint.strip()
+            else detected_model
+            or "Huawei"
+        )
+        if (
+            model_hint
+            and detected_model
+            and (
+                str(model_hint).strip().upper().replace(" ", "")
+                != str(detected_model).strip().upper().replace(" ", "")
+            )
+        ):
+            client.close()
+            raise ValueError(
+                "Modelo Huawei informado diverge do modelo "
+                "identificado pelo equipamento."
+            )
+
+        adapter = HuaweiWebAdapter(
+            selected_model
+        )
+        ipv4_filter = HuaweiIPv4FilterService(
+            client,
+            model=selected_model,
+        )
+        capability = ipv4_filter.capability(
+            probe_read=True
+        )
+        profile = huawei_ipv4_filter_capability(
+            selected_model
+        )
+        writes_enabled = bool(
+            capability.get("read")
+            and profile.verified
+            and profile.create
+            and profile.update
+            and profile.delete
+        )
+        client.writes_enabled = writes_enabled
+
+        self._huawei = client
+        self._huawei_ipv4_filter = ipv4_filter
+        self._vendor = "huawei"
+        self.current_host = ip
+        self.current_attendant = (
+            attendant.strip()
+            if attendant and attendant.strip()
+            else "default"
+        )
+        self._selected_model = selected_model
+        self._model_verified = bool(
+            detected_model
+            and (
+                str(selected_model).strip().upper().replace(" ", "")
+                == str(detected_model).strip().upper().replace(" ", "")
+            )
+        )
+        self._device_info = {
+            "fabricante": "Huawei",
+            "modelo": (
+                detected_model
+                or selected_model
+            ),
+        }
+        self._adapter = adapter
+
+        try:
+            self._history_session_id = (
+                history_repository.start_session(
+                    host=self.current_host,
+                    attendant=self.current_attendant,
+                    device=self._device_info,
+                )
+            )
+        except Exception as exc:
+            logger.warning(
+                "history_start_failed error_type=%s",
+                type(exc).__name__,
+            )
+            self._history_session_id = None
+
+        if self._history_session_id is not None:
+            try:
+                history_repository.save_snapshot(
+                    self._history_session_id,
+                    "connect",
+                    {
+                        "device": self._device_info,
+                        "adapter": adapter.describe(),
+                    },
+                )
+            except Exception as exc:
+                logger.warning(
+                    "history_snapshot_failed error_type=%s",
+                    type(exc).__name__,
+                )
+
+        return {
+            "success": True,
+            "vendor": "huawei",
+            "attendant": self.current_attendant,
+            "host": self.current_host,
+            "reused_session": False,
+            "model": self._selected_model,
+            "model_verified": self._model_verified,
+            "session_revision": self._session_revision,
+            "writes_enabled": writes_enabled,
+            "device": self._device_info,
+            "adapter": adapter.name,
+            "capabilities": {
+                "ipv4_filter": capability,
+            },
+        }
+
     def connect(
         self,
         ip: str,
@@ -147,6 +381,38 @@ class ZTEService:
 
             protocolo = "https" if https else "http"
             base_url = f"{protocolo}://{ip}"
+
+            huawei_candidate = (
+                is_known_huawei_model(
+                    model_hint
+                )
+                or (
+                    self._zte is None
+                    and HuaweiWebClient.looks_like_huawei(
+                        ip,
+                        https=https,
+                    )
+                )
+            )
+            if huawei_candidate:
+                return self._connect_huawei(
+                    ip=ip,
+                    username=username,
+                    password=password,
+                    https=https,
+                    attendant=attendant,
+                    model_hint=model_hint,
+                )
+
+            if self._huawei is not None:
+                self._close_huawei_local()
+                self.current_host = None
+                self.current_attendant = None
+                self._adapter = None
+                self._selected_model = None
+                self._model_verified = False
+                self._device_info = {}
+                self._vendor = "zte"
 
             # Trocar somente o atendente na UI não deve derrubar a sessão da
             # ONT. O firmware costuma aceitar uma sessão administrativa por
@@ -235,6 +501,8 @@ class ZTEService:
                         k: v for k, v in actual.items() if v is not None
                     })
                 self.current_host = ip
+
+                self._vendor = "zte"
 
                 return {
                     "success": True,
@@ -443,6 +711,8 @@ class ZTEService:
                     "inventory_registrar_failed error_type=%s", type(exc).__name__
                 )
 
+            self._vendor = "zte"
+
             return {
                 "success": True,
                 "attendant": self.current_attendant,
@@ -458,28 +728,47 @@ class ZTEService:
 
     def disconnect(self) -> None:
         with self._lock:
-            if self._zte is None:
+            if self._zte is None and self._huawei is None:
                 return
-            # Local socket only; never log the remote administrative user out.
+
             try:
                 if self._history_session_id is not None:
                     try:
-                        history_repository.end_session(self._history_session_id)
+                        history_repository.end_session(
+                            self._history_session_id
+                        )
                     except Exception as exc:
                         logger.warning(
-                            "history_end_failed error_type=%s", type(exc).__name__
+                            "history_end_failed error_type=%s",
+                            type(exc).__name__,
                         )
-                try:
-                    self._zte.session.close()
-                except Exception as exc:
-                    logger.warning(
-                        "session_local_close_failed error_type=%s", type(exc).__name__
-                    )
+
+                if self._zte is not None:
+                    try:
+                        self._zte.session.close()
+                    except Exception as exc:
+                        logger.warning(
+                            "session_local_close_failed error_type=%s",
+                            type(exc).__name__,
+                        )
+
+                if self._huawei is not None:
+                    try:
+                        self._huawei.close()
+                    except Exception as exc:
+                        logger.warning(
+                            "huawei_session_close_failed error_type=%s",
+                            type(exc).__name__,
+                        )
             finally:
                 if self._runtime_driver is not None:
                     self._runtime_driver.close()
                     self._runtime_driver = None
+
                 self._zte = None
+                self._huawei = None
+                self._huawei_ipv4_filter = None
+                self._vendor = "zte"
                 self.current_host = None
                 self.current_attendant = None
                 self._adapter = None
@@ -505,7 +794,10 @@ class ZTEService:
 
     @property
     def connected(self) -> bool:
-        return self._zte is not None
+        return (
+            self._zte is not None
+            or self._huawei is not None
+        )
 
     def _capabilities(self) -> CapabilityService:
         if self._capability_service is None:
@@ -1259,6 +1551,42 @@ class ZTEService:
 
     def capability_catalog(self):
         with self._lock:
+            if self._vendor == "huawei":
+                if self._adapter is None:
+                    raise RuntimeError(
+                        "Adapter Huawei não inicializado."
+                    )
+                result = self._adapter.describe()
+                if self._huawei_ipv4_filter is not None:
+                    operations = (
+                        self._huawei_ipv4_filter.capability(
+                            probe_read=False
+                        )
+                    )
+                    feature = result[
+                        "features"
+                    ][
+                        "ipv4_filter"
+                    ]
+                    feature[
+                        "operations"
+                    ] = operations
+                    feature[
+                        "verified"
+                    ] = bool(
+                        operations.get(
+                            "verified"
+                        )
+                    )
+                    feature[
+                        "writable"
+                    ] = bool(
+                        operations.get("create")
+                        or operations.get("update")
+                        or operations.get("delete")
+                    )
+                return result
+
             return self._capabilities().catalog()
 
     def probe_capabilities(
@@ -1266,9 +1594,246 @@ class ZTEService:
         features=None
     ):
         with self._lock:
+            if self._vendor == "huawei":
+                requested = list(
+                    features
+                    or ["ipv4_filter"]
+                )
+                invalid = [
+                    feature
+                    for feature in requested
+                    if feature != "ipv4_filter"
+                ]
+                if invalid:
+                    raise ValueError(
+                        "Capabilities Huawei desconhecidas: "
+                        + ", ".join(invalid)
+                    )
+                operations = (
+                    self._require_huawei_ipv4_filter()
+                    .capability(
+                        probe_read=True
+                    )
+                )
+                return {
+                    "adapter": "huawei-webui",
+                    "features": [{
+                        "feature": "ipv4_filter",
+                        "label": "IPv4 Filtering",
+                        "available": bool(
+                            operations.get("read")
+                        ),
+                        "status": (
+                            "confirmed"
+                            if operations.get("read")
+                            else "inconclusive"
+                        ),
+                        "probeable": True,
+                        "writable": bool(
+                            operations.get("create")
+                            or operations.get("update")
+                            or operations.get("delete")
+                        ),
+                        "dangerous": False,
+                        "verified": bool(
+                            operations.get("verified")
+                        ),
+                        "operations": operations,
+                        "notes": (
+                            "CRUD validado em laboratório "
+                            "somente para EG8041X7-10."
+                        ),
+                    }],
+                }
+
             return self._capabilities().probe(
                 features
             )
+
+    def _require_huawei_ipv4_filter(
+        self,
+    ) -> HuaweiIPv4FilterService:
+        if (
+            self._vendor != "huawei"
+            or self._huawei_ipv4_filter is None
+        ):
+            raise RuntimeError(
+                "Conecte-se a uma ONT Huawei "
+                "para usar IPv4 Filtering."
+            )
+        return self._huawei_ipv4_filter
+
+    @staticmethod
+    def _huawei_filter_rule_from_config(
+        config,
+        *,
+        domain="",
+    ) -> HuaweiIPv4FilterRule:
+        if not isinstance(
+            config,
+            dict,
+        ):
+            raise ValueError(
+                "Parâmetros IPv4 Filtering inválidos."
+            )
+        return HuaweiIPv4FilterRule(
+            domain=domain,
+            name=str(config.get("name") or ""),
+            protocol=str(config.get("protocol") or ""),
+            direction=str(config.get("direction") or ""),
+            lan_start_ip=str(config.get("lan_start_ip") or ""),
+            lan_end_ip=str(config.get("lan_end_ip") or ""),
+            wan_start_ip=str(config.get("wan_start_ip") or ""),
+            wan_end_ip=str(config.get("wan_end_ip") or ""),
+            lan_tcp_port=str(config.get("lan_tcp_port") or ""),
+            lan_udp_port=str(config.get("lan_udp_port") or ""),
+            wan_tcp_port=str(config.get("wan_tcp_port") or ""),
+            wan_udp_port=str(config.get("wan_udp_port") or ""),
+        )
+
+    def list_ipv4_filters(self):
+        with self._lock:
+            return (
+                self._require_huawei_ipv4_filter()
+                .list_ipv4_filters()
+            )
+
+    def create_ipv4_filter(
+        self,
+        config,
+    ):
+        with self._lock:
+            rule = self._huawei_filter_rule_from_config(
+                config
+            )
+            result = (
+                self._require_huawei_ipv4_filter()
+                .create_ipv4_filter(
+                    rule
+                )
+            )
+            self._audit_huawei_ipv4_filter(
+                operation="huawei_ipv4_filter_create",
+                target=rule.name,
+                before=None,
+                after=(
+                    result.get("rule")
+                    or rule.as_dict()
+                ),
+                result=result,
+            )
+            return result
+
+    def update_ipv4_filter(
+        self,
+        instance_or_domain,
+        config,
+    ):
+        with self._lock:
+            service = (
+                self._require_huawei_ipv4_filter()
+            )
+            current = (
+                service.list_ipv4_filters()
+                .get("rules", [])
+            )
+            domain = str(
+                instance_or_domain
+            )
+            before = next(
+                (
+                    item
+                    for item in current
+                    if item.get("domain") == domain
+                    or item.get("domain", "").endswith(
+                        "." + domain
+                    )
+                ),
+                None,
+            )
+            rule = self._huawei_filter_rule_from_config(
+                config,
+                domain=domain,
+            )
+            result = service.update_ipv4_filter(
+                instance_or_domain,
+                rule,
+            )
+            self._audit_huawei_ipv4_filter(
+                operation="huawei_ipv4_filter_update",
+                target=rule.name,
+                before=before,
+                after=(
+                    result.get("rule")
+                    or rule.as_dict()
+                ),
+                result=result,
+            )
+            return result
+
+    def delete_ipv4_filter(
+        self,
+        instance_or_domain,
+    ):
+        with self._lock:
+            service = (
+                self._require_huawei_ipv4_filter()
+            )
+            result = service.delete_ipv4_filter(
+                instance_or_domain
+            )
+            previous = result.get(
+                "previous"
+            )
+            self._audit_huawei_ipv4_filter(
+                operation="huawei_ipv4_filter_delete",
+                target=(
+                    previous.get("name")
+                    if isinstance(previous, dict)
+                    else str(instance_or_domain)
+                ),
+                before=previous,
+                after=None,
+                result=result,
+            )
+            return result
+
+    def _audit_huawei_ipv4_filter(
+        self,
+        *,
+        operation,
+        target,
+        before,
+        after,
+        result,
+    ) -> None:
+        if self._history_session_id is None:
+            return
+        outcome = (
+            "verified"
+            if result.get("verified")
+            else (
+                "uncertain"
+                if result.get("uncertain")
+                else "failed"
+            )
+        )
+        history_repository.save_change(
+            self._history_session_id,
+            operation=operation,
+            target=str(target or "")[:128],
+            before=before,
+            after=after,
+            success=bool(
+                result.get("verified")
+            ),
+            message=(
+                "Read-back semântico Huawei"
+                if result.get("verified")
+                else result.get("error")
+            ),
+            outcome=outcome,
+        )
 
     def multimodel_catalog(self):
         return multimodel_service.catalog()
@@ -1600,6 +2165,36 @@ class ZTEService:
 
     def capability_shape(self, feature):
         with self._lock:
+            if self._vendor == "huawei":
+                if feature != "ipv4_filter":
+                    raise ValueError(
+                        "Capability Huawei desconhecida."
+                    )
+                result = self.list_ipv4_filters()
+                rules = result.get("rules", [])
+                return {
+                    "feature": "ipv4_filter",
+                    "available": True,
+                    "count": len(rules),
+                    "keys": [
+                        "domain",
+                        "name",
+                        "protocol",
+                        "direction",
+                        "lan_start_ip",
+                        "lan_end_ip",
+                        "wan_start_ip",
+                        "wan_end_ip",
+                        "lan_tcp_port",
+                        "lan_udp_port",
+                        "wan_tcp_port",
+                        "wan_udp_port",
+                        "source_interface",
+                        "vlan_id",
+                        "priority",
+                        "action",
+                    ],
+                }
             return self._capabilities().shape(feature)
 
     def read_capability(
@@ -1607,6 +2202,26 @@ class ZTEService:
         feature
     ):
         with self._lock:
+            if self._vendor == "huawei":
+                if feature != "ipv4_filter":
+                    raise ValueError(
+                        "Capability Huawei desconhecida."
+                    )
+                result = self.list_ipv4_filters()
+                return {
+                    "feature": "ipv4_filter",
+                    "label": "IPv4 Filtering",
+                    "available": True,
+                    "writable": bool(
+                        result.get("capability", {}).get("create")
+                        or result.get("capability", {}).get("update")
+                        or result.get("capability", {}).get("delete")
+                    ),
+                    "objects": {
+                        "rules": result.get("rules", [])
+                    },
+                    "capability": result.get("capability", {}),
+                }
             return self._capabilities().read(
                 feature
             )

@@ -42,6 +42,8 @@ from apps.zte_manager.schemas import (
     FirmwareRegisterRequest,
     FirmwareUpgradeRequest,
     GatewayCommandRequest,
+    HuaweiIPv4FilterDeleteRequest,
+    HuaweiIPv4FilterRuleRequest,
     InventorySyncRequest,
     InventoryUpdateRequest,
     ManagementBackupRequest,
@@ -287,8 +289,19 @@ def connection_status(context=None):
         "firmware": zte_service._device_info.get("firmware"),
         "model_verified": zte_service._model_verified,
         "session_revision": zte_service._session_revision,
+        "vendor": zte_service._vendor,
         "writes_enabled": (
-            bool(getattr(zte_service._zte, "writes_enabled", True))
+            bool(
+                getattr(
+                    (
+                        zte_service._huawei
+                        if zte_service._vendor == "huawei"
+                        else zte_service._zte
+                    ),
+                    "writes_enabled",
+                    False,
+                )
+            )
             if zte_service.connected
             else False
         ),
@@ -754,6 +767,70 @@ def capability_probe(context=None):
     )
 
 
+@api.get("/huawei/ipv4-filters")
+def huawei_ipv4_filters(context=None):
+    return _safe_call(
+        zte_service.list_ipv4_filters
+    )
+
+
+@api.post("/huawei/ipv4-filters/create")
+def huawei_ipv4_filter_create(context=None):
+    def action():
+        data = _validated(
+            HuaweiIPv4FilterRuleRequest,
+            context,
+        )
+        return zte_service.create_ipv4_filter(
+            data.model_dump(
+                exclude={"instance_or_domain"}
+            )
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/huawei/ipv4-filters/update")
+def huawei_ipv4_filter_update(context=None):
+    def action():
+        data = _validated(
+            HuaweiIPv4FilterRuleRequest,
+            context,
+        )
+        if data.instance_or_domain is None:
+            raise ValueError(
+                "Informe a instância da regra IPv4."
+            )
+        return zte_service.update_ipv4_filter(
+            data.instance_or_domain,
+            data.model_dump(
+                exclude={"instance_or_domain"}
+            ),
+        )
+
+    return _safe_call(
+        action
+    )
+
+
+@api.post("/huawei/ipv4-filters/delete")
+def huawei_ipv4_filter_delete(context=None):
+    def action():
+        data = _validated(
+            HuaweiIPv4FilterDeleteRequest,
+            context,
+        )
+        return zte_service.delete_ipv4_filter(
+            data.instance_or_domain
+        )
+
+    return _safe_call(
+        action
+    )
+
+
 @api.get("/discovery/bootstrap")
 def discovery_bootstrap(context=None):
     """Estado de UI sem chamadas HTTP ao roteador ou bloqueio de RLock.
@@ -763,8 +840,35 @@ def discovery_bootstrap(context=None):
     """
     try:
         device = zte_service._device_info or {}
+        if zte_service._vendor == "huawei":
+            writes_enabled = bool(
+                getattr(
+                    zte_service._huawei,
+                    "writes_enabled",
+                    False,
+                )
+            )
+            return {
+                "connected": zte_service.connected,
+                "vendor": "huawei",
+                "model": (
+                    zte_service._selected_model
+                    or device.get("modelo")
+                    or "Huawei"
+                ),
+                "detected_model": device.get("modelo"),
+                "model_verified": zte_service._model_verified,
+                "native_diagnostics_available": False,
+                "session_revision": zte_service._session_revision,
+                "firmware": device.get("firmware"),
+                "writes_enabled": writes_enabled,
+                "catalog": [],
+                "reason": None,
+            }
+
         return {
             "connected": zte_service.connected,
+            "vendor": "zte",
             "model": (
                 zte_service._selected_model
                 or device.get("modelo")

@@ -32,6 +32,9 @@ _OPERATION_LABELS = {
     "easymesh_pairing": "Pareamento EasyMesh",
     "port_forward_save": "Cadastro de redirecionamento de portas",
     "port_forward_delete": "Exclusão de redirecionamento de portas",
+    "huawei_ipv4_filter_create": "IPv4 Filtering",
+    "huawei_ipv4_filter_update": "IPv4 Filtering",
+    "huawei_ipv4_filter_delete": "IPv4 Filtering",
 }
 
 
@@ -176,6 +179,16 @@ class AttendanceReportService:
                     ]
                     if readable:
                         description += "; etapas: " + ", ".join(readable)
+            elif operation in {
+                "huawei_ipv4_filter_create",
+                "huawei_ipv4_filter_update",
+                "huawei_ipv4_filter_delete",
+            }:
+                details = self._huawei_ipv4_filter_summary(
+                    change
+                )
+                if details:
+                    description = details
             elif operation == "f6201b_profile_apply":
                 safe = change.get("after_json") or {}
                 stages = safe.get("stages", [])
@@ -201,7 +214,16 @@ class AttendanceReportService:
                         description += "; etapas: " + ", ".join(labels)
                 elif safe.get("noop") is True:
                     description += "; o equipamento já correspondia ao perfil"
-            if difference and operation not in {"profile_apply", "f6201b_profile_apply"}:
+            if (
+                difference
+                and operation not in {
+                    "profile_apply",
+                    "f6201b_profile_apply",
+                    "huawei_ipv4_filter_create",
+                    "huawei_ipv4_filter_update",
+                    "huawei_ipv4_filter_delete",
+                }
+            ):
                 description += ": " + difference
             description += {
                 "verified": " — alteração verificada por releitura",
@@ -356,6 +378,73 @@ class AttendanceReportService:
                 changes
             ),
         }
+
+    @staticmethod
+    def _huawei_ipv4_filter_summary(
+        change,
+    ) -> str:
+        operation = str(
+            change.get("operation") or ""
+        )
+        source = (
+            change.get("before_json")
+            if operation == "huawei_ipv4_filter_delete"
+            else change.get("after_json")
+        )
+        if not isinstance(source, dict):
+            source = {}
+
+        action = {
+            "huawei_ipv4_filter_create": "Regra criada",
+            "huawei_ipv4_filter_update": "Regra editada",
+            "huawei_ipv4_filter_delete": "Regra excluída",
+        }.get(
+            operation,
+            "Regra alterada",
+        )
+        name = str(
+            source.get("name")
+            or change.get("target")
+            or "-"
+        )
+        protocol = str(
+            source.get("protocol") or "-"
+        )
+        lan_start = str(
+            source.get("lan_start_ip") or "-"
+        )
+        lan_end = str(
+            source.get("lan_end_ip") or "-"
+        )
+        wan_start = str(
+            source.get("wan_start_ip") or "-"
+        )
+        wan_end = str(
+            source.get("wan_end_ip") or "-"
+        )
+
+        if protocol.upper() == "UDP":
+            lan_port = source.get("lan_udp_port")
+            wan_port = source.get("wan_udp_port")
+        else:
+            lan_port = source.get("lan_tcp_port")
+            wan_port = source.get("wan_tcp_port")
+
+        parts = [
+            f"IPv4 Filtering - {action}: {name}",
+            f"Protocolo: {protocol}",
+            f"LAN: {lan_start}-{lan_end}",
+            f"WAN: {wan_start}-{wan_end}",
+        ]
+        if lan_port not in (None, ""):
+            parts.append(
+                f"Porta LAN: {lan_port}"
+            )
+        if wan_port not in (None, ""):
+            parts.append(
+                f"Porta WAN: {wan_port}"
+            )
+        return "; ".join(parts)
 
     @staticmethod
     def _profile_change_summary(before, after) -> str:
