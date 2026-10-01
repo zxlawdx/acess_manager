@@ -295,7 +295,12 @@ function huaweiIpv4CrudEnabled(capabilities) {
 
 const HUAWEI_SUPPORTED_PAGES = new Set([
     "connection",
+    "dashboard",
     "device",
+    "wifi",
+    "wan",
+    "clients",
+    "tr069",
     "advanced"
 ]);
 
@@ -851,6 +856,66 @@ function openPage(pageName) {
 }
 
 
+// Huawei pages use the same public API routes as ZTE, but the active
+// DeviceService dispatches them to HuaweiService. Keep page loads sequential
+// because Huawei WebUI stores view/session context server-side.
+document.addEventListener(
+    "device:page-open",
+    event => {
+        if (
+            event.detail?.vendor !== "huawei"
+            || !ontConnected
+        ) {
+            return;
+        }
+
+        const pageName = event.detail?.pageName;
+
+        const run = async () => {
+            if (pageName === "dashboard") {
+                await loadAll();
+                return;
+            }
+            if (pageName === "device") {
+                await loadDevice();
+                try {
+                    await loadOptical();
+                } catch (error) {
+                    console.warn("Óptico Huawei indisponível:", error);
+                }
+                return;
+            }
+            if (pageName === "wifi") {
+                await loadWifi();
+                return;
+            }
+            if (pageName === "wan") {
+                await loadWan();
+                await loadPppoe(false);
+                try {
+                    await loadLanPorts();
+                } catch (error) {
+                    console.warn("Portas LAN Huawei sem telemetria:", error);
+                }
+                return;
+            }
+            if (pageName === "clients") {
+                await loadClients();
+            }
+        };
+
+        void run().catch(error => {
+            console.warn(
+                "Falha ao carregar página Huawei:",
+                pageName,
+                error
+            );
+            showToast(error.message);
+        });
+    }
+);
+
+
 // =========================================================
 // CONNECTION FORM
 // =========================================================
@@ -977,9 +1042,17 @@ document
                 // Read-only models still have LOCAL Wi-Fi 2.4/5 GHz defaults.
                 // Loading them must not execute native F670L router commands.
                 if (currentVendor === "huawei") {
-                    openPage("advanced");
+                    openPage("dashboard");
+                    try {
+                        await loadAll();
+                    } catch (huaweiLoadError) {
+                        console.warn(
+                            "Leitura Huawei parcial:",
+                            huaweiLoadError
+                        );
+                    }
                     showToast(
-                        "ONT Huawei conectada. IPv4 Filtering disponível em Avançado."
+                        "ONT Huawei conectada. Carregando recursos validados da EG8041X7-10."
                     );
                     return;
                 }
@@ -4523,12 +4596,39 @@ async function loadAll() {
         return;
     }
     if (currentVendor === "huawei") {
+        const loaders = [
+            ["equipamento", loadDevice],
+            ["óptico", loadOptical],
+            ["WAN", loadWan],
+            ["PPPoE", () => loadPppoe(false)],
+            ["portas LAN", loadLanPorts],
+            ["Wi-Fi", loadWifi],
+            ["DNS", loadDns],
+            ["clientes", loadClients]
+        ];
+        const failed = [];
+        let essentialLoaded = 0;
+        for (const [name, loader] of loaders) {
+            try {
+                await loader();
+                if (["equipamento", "WAN", "Wi-Fi"].includes(name)) {
+                    essentialLoaded++;
+                }
+            } catch (error) {
+                failed.push({name, error});
+                console.warn(
+                    `Huawei: falha ao carregar ${name}`,
+                    error
+                );
+            }
+        }
         document.dispatchEvent(
             new CustomEvent("huawei:ipv4-filter-refresh")
         );
         return {
-            essentialLoaded: 1,
+            essentialLoaded,
             vendor: "huawei",
+            failed: failed.map(item => item.name),
         };
     }
 
@@ -4960,7 +5060,7 @@ async function restoreDesktopSession() {
             ? requestedPage
             : (
                 currentVendor === "huawei"
-                    ? "advanced"
+                    ? "dashboard"
                     : (routerWriteEnabled ? "dashboard" : "advanced")
             );
         openPage(destination);
@@ -4973,7 +5073,13 @@ async function restoreDesktopSession() {
         profileLoadPending = null;
         document.getElementById("profileRadios")?.replaceChildren();
         if (currentVendor === "huawei") {
-            showToast("Sessão Huawei recuperada. Use Avançado para IPv4 Filtering.");
+            try {
+                await loadAll();
+                showToast("Sessão Huawei recuperada e recursos validados recarregados.");
+            } catch (huaweiRestoreError) {
+                console.warn("Falha parcial ao restaurar Huawei:", huaweiRestoreError);
+                showToast("Sessão Huawei recuperada. Algumas leituras precisam ser atualizadas.");
+            }
             return;
         }
         try {
