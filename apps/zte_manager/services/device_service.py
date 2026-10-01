@@ -201,20 +201,21 @@ class DeviceService:
             self.disconnect()
 
         result = self._zte_service.connect(**kwargs)
-        self._session = DeviceSession(
-            vendor="zte",
-            model=result.get("model"),
-            profile=result.get("adapter"),
-            provider=type(self._zte_service).__name__,
-            service=self._zte_service,
-            capabilities={},
-            model_verified=bool(
-                result.get("model_verified")
-            ),
-            host=result.get("host"),
-            attendant=result.get("attendant"),
-            session_revision=result.get("session_revision"),
-        )
+        if self._zte_service.connected:
+            self._session = DeviceSession(
+                vendor="zte",
+                model=result.get("model"),
+                profile=result.get("adapter"),
+                provider=type(self._zte_service).__name__,
+                service=self._zte_service,
+                capabilities={},
+                model_verified=bool(
+                    result.get("model_verified")
+                ),
+                host=result.get("host"),
+                attendant=result.get("attendant"),
+                session_revision=result.get("session_revision"),
+            )
         logger.info(
             "device_provider_selected vendor=zte provider=%s",
             type(self._zte_service).__name__,
