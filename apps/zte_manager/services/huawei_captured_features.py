@@ -876,16 +876,111 @@ class HuaweiCapturedFeatureService:
             f"?c1={c}&w={w}&y={y}&z={z}&k={y}.PreSharedKey.1&c2={c}"
             "&RequestFile=html/amp/wlanbasic/WlanBasic.asp"
         )
+        record, records = self._wifi_basic_record(band)
+        beacon_type = str(
+            record.get("BeaconType")
+            or _record_value(records, "BeaconType", default="")
+            or current.get("seguranca")
+            or ""
+        )
+        if not beacon_type:
+            raise RuntimeError(
+                "O modo de segurança Wi-Fi atual não foi identificado; "
+                "nenhum POST foi enviado."
+            )
+
+        # WlanBasic.asp submits a complete form. Preserve every captured
+        # non-secret field instead of sending a partial POST that could reset
+        # security/WPS defaults. The capture contained no PSK field.
+        def preserved(name: str, default: str) -> str:
+            value = (
+                record.get(name)
+                or _record_value(records, name, default="")
+            )
+            return str(value if value not in (None, "") else default)
+
+        auth_default = (
+            "PSKandSAEAuthentication"
+            if beacon_type == "WPA2/WPA3"
+            else ""
+        )
+        if beacon_type != "WPA2/WPA3" and not preserved(
+            "X_HW_WPAand11iAuthenticationMode",
+            "",
+        ):
+            raise RuntimeError(
+                "O formulário Huawei não expôs os campos necessários para "
+                "preservar a segurança atual do SSID."
+            )
+
         payload = {
             "y.Enable": _as01(enabled),
             "y.SSIDAdvertisementEnabled": _as01(broadcast),
             "y.SSID": ssid,
             "y.X_HW_AssociateNum": max_clients,
+            "y.BeaconType": beacon_type,
+            "y.X_HW_WPAand11iAuthenticationMode": preserved(
+                "X_HW_WPAand11iAuthenticationMode",
+                auth_default,
+            ),
+            "y.X_HW_WPAand11iEncryptionModes": preserved(
+                "X_HW_WPAand11iEncryptionModes",
+                "AESEncryption",
+            ),
+            "y.X_HW_GroupRekey": preserved(
+                "X_HW_GroupRekey",
+                "3600",
+            ),
+            "z.Enable": preserved("WPSEnable", "1"),
+            "z.X_HW_ConfigMethod": preserved(
+                "X_HW_ConfigMethod",
+                "PushButton",
+            ),
             "w.SsidInst": instance,
             "w.SSID": ssid,
             "w.Enable": _as01(enabled),
+            "w.Standard": preserved("Standard", "11ax"),
+            "w.BasicAuthenticationMode": preserved(
+                "BasicAuthenticationMode",
+                "None",
+            ),
+            "w.BasicEncryptionModes": preserved(
+                "BasicEncryptionModes",
+                "AESEncryption",
+            ),
+            "w.WPAAuthenticationMode": preserved(
+                "WPAAuthenticationMode",
+                "EAPAuthentication",
+            ),
+            "w.WPAEncryptionModes": preserved(
+                "WPAEncryptionModes",
+                "AESEncryption",
+            ),
+            "w.IEEE11iAuthenticationMode": preserved(
+                "IEEE11iAuthenticationMode",
+                "EAPAuthentication",
+            ),
+            "w.IEEE11iEncryptionModes": preserved(
+                "IEEE11iEncryptionModes",
+                "AESEncryption",
+            ),
+            "w.MixAuthenticationMode": preserved(
+                "MixAuthenticationMode",
+                auth_default or "PSKandSAEAuthentication",
+            ),
+            "w.MixEncryptionModes": preserved(
+                "MixEncryptionModes",
+                "AESEncryption",
+            ),
             "w.SSIDAdvertisementEnabled": _as01(broadcast),
+            "w.WMMEnable": preserved("WMMEnable", "1"),
             "w.MaxAssociateNum": max_clients,
+            "w.BeaconType": beacon_type,
+            "w.WEPEncryptionLevel": preserved(
+                "WEPEncryptionLevel",
+                "104-bit",
+            ),
+            "w.WEPKeyIndex": preserved("WEPKeyIndex", "1"),
             "c1.ActionType": "0",
             "c2.ActionType": "1",
             "c2.SSIDList": instance,
@@ -977,6 +1072,24 @@ class HuaweiCapturedFeatureService:
                 "radio_ativo": bool(basic.get("ativo", True)),
                 "_raw_ht20": raw_bw,
                 "_raw_standard": str(raw_standard),
+                "_raw_dtim": str(
+                    _record_value(relevant, "DtimPeriod", default="1")
+                ),
+                "_raw_rts": str(
+                    _record_value(relevant, "RTSThreshold", default="2346")
+                ),
+                "_raw_frag": str(
+                    _record_value(relevant, "FragThreshold", default="2346")
+                ),
+                "_raw_band_steering": str(
+                    _record_value(relevant, "BandSteeringPolicy", default="1")
+                ),
+                "_raw_airtime": str(
+                    _record_value(relevant, "X_HW_AirtimeFairness", default="0")
+                ),
+                "_raw_auto_scope": str(
+                    _record_value(relevant, "X_HW_AutoChannelScope", default="0")
+                ),
             })
         return radios
 
@@ -1045,13 +1158,44 @@ class HuaweiCapturedFeatureService:
             "y.AutoChannelEnable": _as01(auto),
             "y.RegulatoryDomain": country,
             "y.TransmitPower": power,
-            "y.X_HW_HT20": str(current.get("_raw_ht20") or ("4" if instance == "5" else "0")),
-            "y.X_HW_Standard": str(current.get("_raw_standard") or "11ax"),
+            "y.X_HW_HT20": str(
+                current.get("_raw_ht20")
+                or ("4" if instance == "5" else "0")
+            ),
+            "y.X_HW_Standard": str(
+                current.get("_raw_standard")
+                or "11ax"
+            ),
+            "x.DtimPeriod": str(
+                current.get("_raw_dtim")
+                or "1"
+            ),
             "x.BeaconPeriod": beacon,
+            "x.RTSThreshold": str(
+                current.get("_raw_rts")
+                or "2346"
+            ),
+            "x.FragThreshold": str(
+                current.get("_raw_frag")
+                or "2346"
+            ),
+            "z.BandSteeringPolicy": str(
+                current.get("_raw_band_steering")
+                or "1"
+            ),
+            "v.X_HW_AirtimeFairness": str(
+                current.get("_raw_airtime")
+                or "0"
+            ),
             "c1.ActionType": "0",
             "c2.ActionType": "1",
             "c2.SSIDList": instance,
         }
+        if instance == "5":
+            payload["y.X_HW_AutoChannelScope"] = str(
+                current.get("_raw_auto_scope")
+                or "0"
+            )
 
         def verify():
             actual = next(
