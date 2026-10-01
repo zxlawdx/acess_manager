@@ -8,9 +8,20 @@ from apps.zte_manager.services.huawei_captured_features import (
     DNS_HOSTS_PAGE,
     DNS_PAGE,
     DMZ_PAGE,
+    DEVICE_INFO_CUS_PAGE,
+    DEVICE_INFO_PAGE,
+    DHCP_INFO_PAGE,
     HuaweiCapturedFeatureService,
+    LAN_USER_DHCP_PAGE,
+    LAN_USER_DEV_PAGE,
+    LAN_USER_INFO_PAGE,
+    USER_DEVICE_PAGE,
     WLAN_ADV_PAGE,
+    WLAN_ASSOC_PAGE,
     WLAN_BASIC_PAGE,
+    WLAN_INFO_PAGE,
+    WLAN_LIST_PAGE,
+    WLAN_STA_BOOST_PAGE,
     WAN_CACHE_PAGE,
     WAN_INFO_PAGE,
     parse_huawei_js_records,
@@ -39,6 +50,7 @@ def constructor(name: str, params: list[str], values: list[str]) -> str:
 class FakeHuaweiClient:
     def __init__(self):
         self.posts = []
+        self.read_posts = []
         self.dhcp = {
             "Domain": "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement",
             "DHCPEnable": "0",
@@ -88,6 +100,27 @@ class FakeHuaweiClient:
             return '<input id="hwonttoken" value="' + TOKEN + '">'
         if path == "/html/bbsp/common/dhcpinfo.asp":
             return '<input id="hwonttoken" value="' + TOKEN + '">'
+        if path == DEVICE_INFO_PAGE:
+            return (
+                '<table><tr><td>Software Version</td><td>V5R020</td></tr>'
+                '<tr><td>Hardware Version</td><td>10D</td></tr>'
+                '<tr><td>Serial Number</td><td>48575443TEST</td></tr></table>'
+                'var ProductName="Huawei EG8041X7\\x2d10";'
+                'var Manufacturer="Huawei";'
+            )
+        if path == DEVICE_INFO_CUS_PAGE:
+            return ""
+        if path in {
+            USER_DEVICE_PAGE,
+            LAN_USER_INFO_PAGE,
+            LAN_USER_DEV_PAGE,
+            LAN_USER_DHCP_PAGE,
+            WLAN_INFO_PAGE,
+            WLAN_LIST_PAGE,
+            WLAN_ASSOC_PAGE,
+            WLAN_STA_BOOST_PAGE,
+        }:
+            return ""
         if path == DNS_PAGE:
             return self._page(self.dns, "stDns")
         if path == DNS_HOSTS_PAGE:
@@ -166,6 +199,38 @@ class FakeHuaweiClient:
             "/html/bbsp/igmp/igmp.asp",
         }:
             return '<input id="hwonttoken" value="' + TOKEN + '">'
+        raise RuntimeError(path)
+
+    def post_read(self, path, payload=None, *, referer="/index.asp"):
+        self.read_posts.append((path, dict(payload or {}), referer))
+        if path == LAN_USER_DEV_PAGE:
+            return (
+                "function stLanDev(MACAddress,IPAddress,HostName,Interface){"
+                "this.MACAddress=MACAddress;this.IPAddress=IPAddress;"
+                "this.HostName=HostName;this.Interface=Interface;}"
+                'new stLanDev("02:11:22:33:44:55","192.168.18.20",'
+                '"Notebook","LAN1");'
+            )
+        if path == LAN_USER_DHCP_PAGE:
+            return (
+                "function stDhcp(MACAddress,IPAddress,HostName){"
+                "this.MACAddress=MACAddress;this.IPAddress=IPAddress;"
+                "this.HostName=HostName;}"
+                'new stDhcp("02:AA:BB:CC:DD:EE","192.168.18.30","Phone");'
+            )
+        if path == WLAN_ASSOC_PAGE:
+            return (
+                "function stAssoc(AssociatedDeviceMACAddress,IPAddress,"
+                "HostName,SSID,SignalStrength,TxRate,RxRate){"
+                "this.AssociatedDeviceMACAddress=AssociatedDeviceMACAddress;"
+                "this.IPAddress=IPAddress;this.HostName=HostName;"
+                "this.SSID=SSID;this.SignalStrength=SignalStrength;"
+                "this.TxRate=TxRate;this.RxRate=RxRate;}"
+                'new stAssoc("02:AA:BB:CC:DD:EE","192.168.18.30",'
+                '"Phone","Lab5","-51","433","390");'
+            )
+        if path == WLAN_STA_BOOST_PAGE:
+            return ""
         raise RuntimeError(path)
 
     def post_form(self, path, payload, *, referer):
@@ -290,6 +355,35 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
         self.assertEqual(pppoe[0]["username"], "labuser")
         self.assertEqual(pppoe[0]["password"], "")
         self.assertTrue(pppoe[0]["password_hidden"])
+
+    def test_device_status_reads_js_and_table_values(self):
+        service = self.make_service()
+        status = service.device_status()
+        self.assertEqual(status["fabricante"], "Huawei")
+        self.assertEqual(status["modelo"], "Huawei EG8041X7-10")
+        self.assertEqual(status["firmware"], "V5R020")
+        self.assertEqual(status["hardware"], "10D")
+        self.assertEqual(status["serial"], "48575443TEST")
+
+    def test_client_inventory_uses_captured_post_only_feeds(self):
+        service = self.make_service()
+        wifi = service.wifi_clients()
+        self.assertEqual(len(wifi), 1)
+        self.assertEqual(wifi[0]["mac"], "02:AA:BB:CC:DD:EE")
+        self.assertEqual(wifi[0]["ssid"], "Lab5")
+        self.assertEqual(wifi[0]["rssi"], "-51")
+
+        lan = service.lan_clients()
+        self.assertTrue(
+            any(
+                item["mac"] == "02:11:22:33:44:55"
+                for item in lan
+            )
+        )
+        post_paths = [item[0] for item in service.client.read_posts]
+        self.assertIn(WLAN_ASSOC_PAGE, post_paths)
+        self.assertIn(LAN_USER_DEV_PAGE, post_paths)
+        self.assertIn(LAN_USER_DHCP_PAGE, post_paths)
 
     def test_wifi_read_maps_both_bands(self):
         service = self.make_service()

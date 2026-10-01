@@ -918,20 +918,31 @@ def discovery_bootstrap(context=None):
     try:
         if device_service.vendor == "huawei":
             status = device_service.status()
+            capabilities = status.get("capabilities") or {}
+            model = status.get("model") or "Huawei"
             return {
                 "connected": status.get("connected", False),
                 "vendor": "huawei",
-                "model": status.get("model"),
-                "detected_model": status.get("model"),
+                "model": model,
+                "detected_model": model,
                 "model_verified": status.get("model_verified", False),
                 "profile": status.get("profile"),
                 "provider": status.get("provider"),
-                "capabilities": status.get("capabilities") or {},
-                "native_diagnostics_available": False,
+                "capabilities": capabilities,
+                # Huawei has its own native capability catalog/probe. Marking
+                # this False sent the frontend into /multimodel/probe, which is
+                # deliberately ZTE-only and caused "Nenhuma ONT ZTE conectada".
+                "native_diagnostics_available": True,
                 "session_revision": status.get("session_revision"),
                 "firmware": None,
                 "writes_enabled": status.get("writes_enabled", False),
-                "catalog": [],
+                "catalog": {
+                    "models": [{
+                        "model": model,
+                        "family": "huawei_webui",
+                        "candidate_features": list(capabilities.keys()),
+                    }]
+                },
                 "reason": None,
             }
 
@@ -977,6 +988,18 @@ def discovery_bootstrap(context=None):
 
 @api.get("/multimodel/catalog")
 def multimodel_catalog(context=None):
+    if device_service.vendor == "huawei":
+        def huawei_catalog():
+            status = device_service.status()
+            capabilities = status.get("capabilities") or {}
+            return {
+                "models": [{
+                    "model": status.get("model") or "Huawei",
+                    "family": "huawei_webui",
+                    "candidate_features": list(capabilities.keys()),
+                }]
+            }
+        return _safe_call(huawei_catalog)
     return _safe_call(
         zte_service.multimodel_catalog
     )
@@ -985,6 +1008,19 @@ def multimodel_catalog(context=None):
 @api.post("/multimodel/diagnostic")
 def multimodel_diagnostic(context=None):
     """Consulta por família somente leitura, sem ping/traceroute no roteador."""
+    if device_service.vendor == "huawei":
+        return _safe_call(
+            lambda: {
+                "model": device_service.status().get("model"),
+                "family": "huawei_webui",
+                "read_only": True,
+                "sections": {},
+                "reason": (
+                    "Use Detectar recursos: Huawei possui probe nativo "
+                    "por capability e não usa o diagnóstico ThinkLua."
+                ),
+            }
+        )
     body = _json(context)
     requested = str(body.get("model") or "")[:50].strip()
     section = str(body.get("section") or "")[:32].strip() or None
@@ -997,6 +1033,17 @@ def multimodel_diagnostic(context=None):
 
 @api.post("/multimodel/mesh")
 def multimodel_mesh(context=None):
+    if device_service.vendor == "huawei":
+        return _safe_call(
+            lambda: {
+                "available": False,
+                "vendor": "huawei",
+                "model": device_service.status().get("model"),
+                "reason": (
+                    "Resumo Mesh ThinkLua não se aplica à sessão Huawei."
+                ),
+            }
+        )
     model = str(_json(context).get("model") or "")[:50].strip()
     return _safe_call(
         zte_service.multimodel_mesh,
@@ -1006,6 +1053,34 @@ def multimodel_mesh(context=None):
 
 @api.post("/multimodel/probe")
 def multimodel_probe(context=None):
+    if device_service.vendor == "huawei":
+        def huawei_probe():
+            status = device_service.status()
+            catalog = device_service.capability_catalog()
+            features = []
+            for key, spec in (catalog.get("features") or {}).items():
+                operations = spec.get("operations") or {}
+                features.append({
+                    "feature": key,
+                    "label": spec.get("label") or key,
+                    "status": (
+                        "detected"
+                        if operations.get("read")
+                        and operations.get("verified")
+                        else "not_tested"
+                    ),
+                    "available": bool(operations.get("read")),
+                    "verified": bool(operations.get("verified")),
+                })
+            return {
+                "model": status.get("model"),
+                "family": "huawei_webui",
+                "capabilities": features,
+                "candidate_features": [],
+                "reason": None,
+            }
+        return _safe_call(huawei_probe)
+
     # O usuário pode informar modelo quando o firmware omite a identificação.
     # Não envia escrita ao roteador e limita o nome fornecido.
     body = _json(context)

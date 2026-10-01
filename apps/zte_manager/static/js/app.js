@@ -834,16 +834,6 @@ function openPage(pageName) {
         }
     }
 
-    if (
-        pageName === "device"
-        && ontConnected
-        && currentVendor === "huawei"
-    ) {
-        void loadDevice().catch(error => {
-            showToast(error.message);
-        });
-    }
-
     // Todas as entradas (sidebar, cartões, topo e restore) carregam dados.
     document.dispatchEvent(new CustomEvent(
         "device:page-open", {
@@ -992,9 +982,7 @@ document
                 currentVendor = response.vendor || "zte";
                 currentModel = response.model || response.device?.modelo || null;
                 routerWriteEnabled = (
-                    currentVendor === "huawei"
-                        ? huaweiIpv4CrudEnabled(response.capabilities)
-                        : response.writes_enabled !== false
+                    response.writes_enabled !== false
                 );
                 currentHost = response.host || ip;
                 currentAttendant = response.attendant || attendant || "default";
@@ -2443,7 +2431,7 @@ function renderRadioEditor(radio) {
             <div class="radio-card-hero">
                 <div>
                     <span class="section-kicker">RF ${escapeHtml(radio.banda)}</span>
-                    <h3>${escapeHtml(radio.id ?? "Rádio")}</h3>
+                    <h3>${escapeHtml(radio.ssid ?? radio.id ?? "Rádio")}</h3>
                     <p>
                         Canal <strong>${escapeHtml(radio.canal_automatico ? "Auto" : radio.canal)}</strong>
                         • ${escapeHtml(radio.largura ?? "-")}
@@ -3337,6 +3325,32 @@ async function renderProfileForm(profile) {
                 );
             }
         );
+
+        if (currentVendor === "huawei") {
+            for (const fieldName of [
+                "bandwidth",
+                "standard",
+                "sgi"
+            ]) {
+                const field = container.querySelector(
+                    `[data-field="${fieldName}"]`
+                );
+                if (!field) continue;
+                field.disabled = true;
+                field.title = (
+                    "Este parâmetro permanece como está na Huawei; " +
+                    "a captura validou canal, região, potência e beacon."
+                );
+            }
+
+            const note = document.createElement("p");
+            note.className = "muted";
+            note.textContent = (
+                "Huawei EG8041X7-10: o perfil aplica somente parâmetros " +
+                "com mutation capturada e releitura disponível."
+            );
+            container.appendChild(note);
+        }
     }
 
     const dns = profile.dns || {};
@@ -3366,6 +3380,31 @@ async function renderProfileForm(profile) {
             ? dns.hosts
             : []
     );
+
+    if (currentVendor === "huawei") {
+        for (const id of [
+            "profileDns4_2",
+            "profileDns6_1",
+            "profileDns6_2",
+            "addProfileHostButton"
+        ]) {
+            const field = document.getElementById(id);
+            if (!field) continue;
+            field.disabled = true;
+            field.title = (
+                "Este campo não possui CREATE/UPDATE validado no profile Huawei atual."
+            );
+        }
+        document
+            .querySelectorAll("#profileHosts input, #profileHosts button")
+            .forEach(field => {
+                field.disabled = true;
+                field.title = (
+                    "DNS HOST pode ser lido/atualizado por instância, " +
+                    "mas o perfil em lote não cria nem remove entradas Huawei."
+                );
+            });
+    }
 }
 
 
@@ -4628,45 +4667,64 @@ function setRefreshBusy(busy) {
 // LOAD ALL
 // =========================================================
 
+let huaweiLoadAllPromise = null;
+
+
 async function loadAll() {
     if (!ontConnected) {
         return;
     }
     if (currentVendor === "huawei") {
-        const loaders = [
-            ["equipamento", loadDevice],
-            ["óptico", loadOptical],
-            ["WAN", loadWan],
-            ["PPPoE", () => loadPppoe(false)],
-            ["portas LAN", loadLanPorts],
-            ["Wi-Fi", loadWifi],
-            ["DNS", loadDns],
-            ["clientes", loadClients]
-        ];
-        const failed = [];
-        let essentialLoaded = 0;
-        for (const [name, loader] of loaders) {
-            try {
-                await loader();
-                if (["equipamento", "WAN", "Wi-Fi"].includes(name)) {
-                    essentialLoaded++;
-                }
-            } catch (error) {
-                failed.push({name, error});
-                console.warn(
-                    `Huawei: falha ao carregar ${name}`,
-                    error
-                );
-            }
+        // openPage("dashboard"), connect() and session restore can converge on
+        // this loader in the same tick. Do not execute duplicate Huawei page
+        // sequences: the WebUI is session/view-stateful and redundant chains
+        // were producing queues and inconsistent cards.
+        if (huaweiLoadAllPromise) {
+            return huaweiLoadAllPromise;
         }
-        document.dispatchEvent(
-            new CustomEvent("huawei:ipv4-filter-refresh")
-        );
-        return {
-            essentialLoaded,
-            vendor: "huawei",
-            failed: failed.map(item => item.name),
-        };
+
+        huaweiLoadAllPromise = (async () => {
+            const loaders = [
+                ["equipamento", loadDevice],
+                ["óptico", loadOptical],
+                ["WAN", loadWan],
+                ["PPPoE", () => loadPppoe(false)],
+                ["portas LAN", loadLanPorts],
+                ["Wi-Fi", loadWifi],
+                ["DNS", loadDns],
+                ["clientes", loadClients]
+            ];
+            const failed = [];
+            let essentialLoaded = 0;
+            for (const [name, loader] of loaders) {
+                try {
+                    await loader();
+                    if (["equipamento", "WAN", "Wi-Fi"].includes(name)) {
+                        essentialLoaded++;
+                    }
+                } catch (error) {
+                    failed.push({name, error});
+                    console.warn(
+                        `Huawei: falha ao carregar ${name}`,
+                        error
+                    );
+                }
+            }
+            document.dispatchEvent(
+                new CustomEvent("huawei:ipv4-filter-refresh")
+            );
+            return {
+                essentialLoaded,
+                vendor: "huawei",
+                failed: failed.map(item => item.name),
+            };
+        })();
+
+        try {
+            return await huaweiLoadAllPromise;
+        } finally {
+            huaweiLoadAllPromise = null;
+        }
     }
 
     const refreshButton = document.getElementById(
@@ -5064,9 +5122,7 @@ async function restoreDesktopSession() {
         currentVendor = status.vendor || "zte";
         currentModel = status.model || null;
         routerWriteEnabled = (
-            currentVendor === "huawei"
-                ? huaweiIpv4CrudEnabled(status.capabilities)
-                : status.writes_enabled !== false
+            status.writes_enabled !== false
         );
 
         document.getElementById("connectedHost").textContent =

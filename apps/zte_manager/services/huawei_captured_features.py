@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html as html_module
 import re
 import time
 from typing import Any, Callable, Iterable
@@ -30,12 +31,27 @@ ALG_PAGE = "/html/bbsp/alg/alg.asp"
 IGMP_PAGE = "/html/bbsp/igmp/igmp.asp"
 
 TR069_PAGE = "/html/ssmp/tr069/tr069.asp"
+DEVICE_INFO_PAGE = "/html/ssmp/deviceinfo/deviceinfo.asp"
+DEVICE_INFO_CUS_PAGE = "/html/ssmp/deviceinfo/deviceinfo.cus"
 OPTICAL_PAGE = "/html/amp/opticinfo/opticinfo.asp"
+ETH_INFO_PAGE = "/html/amp/ethinfo/ethinfo.asp"
+
 WAN_INFO_PAGE = "/html/bbsp/common/wan_list_info.asp"
 WAN_CACHE_PAGE = "/html/bbsp/common/wan_list_cache_wan.asp"
 
+LAN_USER_INFO_PAGE = "/html/bbsp/common/lanuserinfo.asp"
+LAN_USER_DEV_PAGE = "/html/bbsp/common/GetLanUserDevInfo.asp"
+LAN_USER_DHCP_PAGE = "/html/bbsp/common/GetLanUserDhcpInfo.asp"
+USER_DEVICE_PAGE = "/html/bbsp/userdevinfo/userdevinfo1.asp"
+
 WLAN_BASIC_PAGE = "/html/amp/wlanbasic/WlanBasic.asp"
 WLAN_ADV_PAGE = "/html/amp/wlanadv/WlanAdvance.asp"
+WLAN_LIST_PAGE = "/html/amp/common/wlan_list.asp"
+WLAN_INFO_PAGE = "/html/amp/wlaninfo/wlaninfo.asp"
+WLAN_ASSOC_PAGE = "/html/amp/wlaninfo/getassociateddeviceinfo.asp"
+WLAN_STA_BOOST_PAGE = "/html/amp/wlaninfo/getassociatedstaboost.asp"
+WLAN_ADV_COMMON_PAGE = "/html/amp/wlanadv/wlanadvance_com_api.asp"
+WLAN_ADV_API_PAGE = "/html/amp/wlanadv/wlanadvance_api.asp"
 
 WAN_DMZ_DOMAIN = (
     "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1."
@@ -218,6 +234,110 @@ def _record_domain(record: dict[str, Any]) -> str:
     return ""
 
 
+def _source_value(source: str, *names: str, default=None):
+    """Best-effort scalar extraction for Huawei pages that use plain JS/HTML.
+
+    Constructor records stay the primary parser. This only covers simple
+    named values commonly emitted by device/optic information pages.
+    """
+    text = source or ""
+    for name in names:
+        escaped = re.escape(str(name))
+        patterns = (
+            rf"(?:var\s+)?{escaped}\s*=\s*['\"]([^'\"]*)['\"]",
+            rf"(?:name|id)\s*=\s*['\"]{escaped}['\"][^>]*"
+            rf"value\s*=\s*['\"]([^'\"]*)['\"]",
+            rf"value\s*=\s*['\"]([^'\"]*)['\"][^>]*"
+            rf"(?:name|id)\s*=\s*['\"]{escaped}['\"]",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, text, re.I | re.S)
+            if match:
+                return decode_huawei_js_string(match.group(1))
+    return default
+
+
+def _label_value(source: str, *labels: str, default=""):
+    """Extract simple two-cell label/value rows from Huawei information pages."""
+    text = source or ""
+    for label in labels:
+        escaped = re.escape(str(label))
+        patterns = (
+            rf"<(?:td|th)[^>]*>\s*{escaped}\s*</(?:td|th)>\s*"
+            rf"<(?:td|th)[^>]*>\s*(.*?)\s*</(?:td|th)>",
+            rf"<label[^>]*>\s*{escaped}\s*</label>\s*"
+            rf"<[^>]+>\s*(.*?)\s*</[^>]+>",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, text, re.I | re.S)
+            if not match:
+                continue
+            value = re.sub(r"<[^>]+>", "", match.group(1))
+            value = html_module.unescape(value).strip()
+            if value:
+                return decode_huawei_js_string(value)
+    return default
+
+
+def _real_wan_domain(value: str) -> bool:
+    return bool(re.fullmatch(
+        r"InternetGatewayDevice\.WANDevice\.\d+\."
+        r"WANConnectionDevice\.\d+\."
+        r"(?:WANIPConnection|WANPPPConnection)\.\d+",
+        str(value or ""),
+    ))
+
+
+def _mac_from_record(record: dict[str, Any]) -> str:
+    for key in (
+        "AssociatedDeviceMACAddress", "MACAddress", "MACAddr",
+        "PhysAddress", "Chaddr", "MAC", "mac",
+    ):
+        value = str(record.get(key) or "").strip()
+        if re.fullmatch(
+            r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}",
+            value,
+        ):
+            return value.upper()
+    for value in record.get("_args") or []:
+        text = str(value or "").strip()
+        if re.fullmatch(
+            r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}",
+            text,
+        ):
+            return text.upper()
+    return ""
+
+
+def _ip_from_record(record: dict[str, Any]) -> str:
+    for key in (
+        "IPAddress", "IPAddr", "Yiaddr", "IPv4Address",
+        "Address", "IP", "ip",
+    ):
+        value = str(record.get(key) or "").strip()
+        if re.fullmatch(
+            r"(?:\d{1,3}\.){3}\d{1,3}",
+            value,
+        ):
+            return value
+    for value in record.get("_args") or []:
+        text = str(value or "").strip()
+        if re.fullmatch(
+            r"(?:\d{1,3}\.){3}\d{1,3}",
+            text,
+        ):
+            return text
+    return ""
+
+
+def _record_text(record: dict[str, Any], *keys: str, default="") -> str:
+    for key in keys:
+        value = record.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return str(default or "")
+
+
 def _as01(value: Any, default: str = "0") -> str:
     if value in (True, 1, "1", "true", "True", "on", "ON"):
         return "1"
@@ -317,38 +437,152 @@ class HuaweiCapturedFeatureService:
 
     # ----------------------------- WAN / device reads
 
-    def optical_status(self) -> dict[str, Any]:
-        _html, records = self._records(OPTICAL_PAGE)
+    def device_status(self) -> dict[str, Any]:
+        html, records = self._records(
+            DEVICE_INFO_PAGE,
+            DEVICE_INFO_CUS_PAGE,
+        )
+
+        def value(*names: str, default="", labels=()):
+            from_records = _record_value(
+                records,
+                *names,
+                default=None,
+            )
+            if from_records not in (None, ""):
+                return from_records
+            scalar = _source_value(
+                html,
+                *names,
+                default=None,
+            )
+            if scalar not in (None, ""):
+                return scalar
+            return _label_value(
+                html,
+                *(labels or names),
+                default=default,
+            )
+
         return {
-            "rx_power_dbm": _record_value(records, "RxPower", "RXPower", "RxOpticalPower", "ReceivePower"),
-            "tx_power_dbm": _record_value(records, "TxPower", "TXPower", "TxOpticalPower", "TransmitPower"),
-            "temperature_c": _record_value(records, "Temperature", "TemperatureC", "ChipTemperature"),
-            "voltage": _record_value(records, "Voltage", "SupplyVoltage"),
-            "current_ma": _record_value(records, "Current", "BiasCurrent", "TxBias"),
-            "registration_status": _record_value(records, "Status", "ONTState", "RegisterStatus", default="Huawei GPON"),
-            "onu_id": _record_value(records, "OnuId", "ONUId", "ONTID", default="-"),
-            "los": _record_value(records, "LOS", "LosStatus", default="-"),
-            "pon_uptime": _record_value(records, "Uptime", "PONUptime"),
+            "fabricante": value(
+                "Manufacturer", "Vendor", "ManufacturerName",
+                default="Huawei",
+                labels=("Manufacturer", "Fabricante"),
+            ) or "Huawei",
+            "modelo": value(
+                "ProductClass", "ProductName", "ModelName", "Model",
+                "DeviceType", default=self.model,
+                labels=(
+                    "Product Name", "Product Class", "Device Type",
+                    "Model", "Modelo",
+                ),
+            ) or self.model,
+            "firmware": value(
+                "SoftwareVersion", "SoftwareVer",
+                "FirmwareVersion", "MainSoftwareVersion",
+                labels=(
+                    "Software Version", "Firmware Version",
+                    "Versão de software",
+                ),
+            ),
+            "hardware": value(
+                "HardwareVersion", "HardwareVer",
+                labels=("Hardware Version", "Versão de hardware"),
+            ),
+            "boot": value(
+                "BootLoaderVersion", "BootVersion",
+                labels=("Boot Loader Version", "Boot Version"),
+            ),
+            "serial": value(
+                "SerialNumber", "SerialNo", "SN",
+                labels=("Serial Number", "Serial No.", "SN"),
+            ),
+            "uptime": value(
+                "UpTime", "Uptime", "DeviceUpTime",
+                labels=("Up Time", "Uptime", "Device Up Time"),
+            ),
+            "temperatura_cpu": value(
+                "Temperature", "CPUTemperature", "CpuTemperature",
+            ),
+            "memoria_percent": value(
+                "MemoryUsage", "MemoryUsedPercent",
+            ),
+            "flash_usado_percent": value(
+                "FlashUsage", "FlashUsedPercent",
+            ),
+        }
+
+    def optical_status(self) -> dict[str, Any]:
+        html, records = self._records(OPTICAL_PAGE)
+
+        def value(*names: str, default=""):
+            from_records = _record_value(
+                records,
+                *names,
+                default=None,
+            )
+            if from_records not in (None, ""):
+                return from_records
+            return _source_value(
+                html,
+                *names,
+                default=default,
+            )
+
+        return {
+            "rx_power_dbm": value(
+                "RxPower", "RXPower", "RxOpticalPower",
+                "ReceivePower", "RxPowerValue",
+            ),
+            "tx_power_dbm": value(
+                "TxPower", "TXPower", "TxOpticalPower",
+                "TransmitPower", "TxPowerValue",
+            ),
+            "temperature_c": value(
+                "Temperature", "TemperatureC", "ChipTemperature",
+            ),
+            "voltage": value(
+                "Voltage", "SupplyVoltage",
+            ),
+            "current_ma": value(
+                "Current", "BiasCurrent", "TxBias",
+            ),
+            "registration_status": value(
+                "Status", "ONTState", "RegisterStatus",
+                default="Huawei GPON",
+            ),
+            "onu_id": value(
+                "OnuId", "ONUId", "ONTID", default="-",
+            ),
+            "los": value(
+                "LOS", "LosStatus", default="-",
+            ),
+            "pon_uptime": value(
+                "Uptime", "PONUptime",
+            ),
         }
 
     def _wan_records(self) -> list[dict[str, Any]]:
-        # wan_list_info.asp defines WanIP/WanPPP constructors while
-        # wan_list_cache_wan.asp returns the live new WanPPP/new WanIP
-        # instances. Parsing the concatenated sources lets the generic
-        # constructor mapper attach the live arguments to their properties.
+        # wan_list_info.asp defines WanIP/WanPPP constructors while the cache
+        # contains the live connection instances. The definition page also
+        # creates helper objects such as ".X_HW_AddressType"; those are NOT WAN
+        # services and were the source of the duplicate cards seen in runtime.
         _html, records = self._records(
             WAN_INFO_PAGE,
             WAN_CACHE_PAGE,
         )
-        return [
-            item
-            for item in records
-            if (
-                item.get("_constructor") in {"WanIP", "WanPPP"}
-                or "WANIPConnection" in _record_domain(item)
-                or "WANPPPConnection" in _record_domain(item)
-            )
-        ]
+        selected: dict[str, dict[str, Any]] = {}
+        for item in records:
+            domain = _record_domain(item)
+            if not _real_wan_domain(domain):
+                continue
+            current = selected.get(domain)
+            # Prefer the richest/live record when the same domain appears in
+            # both definition and cache sources.
+            if current is None or len(item) >= len(current):
+                selected[domain] = item
+        return list(selected.values())
 
     def wan_status(self) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
@@ -456,39 +690,244 @@ class HuaweiCapturedFeatureService:
             })
         return rows
 
+    def _lan_client_records(self) -> list[dict[str, Any]]:
+        chunks: list[str] = []
+        for page in (
+            USER_DEVICE_PAGE,
+            LAN_USER_INFO_PAGE,
+            LAN_USER_DEV_PAGE,
+            LAN_USER_DHCP_PAGE,
+            DHCP_INFO_PAGE,
+        ):
+            try:
+                chunks.append(self._page(page))
+            except Exception:
+                continue
+
+        # In the real WebUI these two inventory feeds are AJAX POSTs with no
+        # body. GETing only their script/definition pages yields zero clients.
+        for endpoint in (
+            LAN_USER_DEV_PAGE,
+            LAN_USER_DHCP_PAGE,
+        ):
+            try:
+                chunks.append(
+                    self.client.post_read(
+                        endpoint,
+                        referer=USER_DEVICE_PAGE,
+                    )
+                )
+            except Exception:
+                continue
+
+        return parse_huawei_js_records("\n".join(chunks))
+
     def lan_clients(self) -> list[dict[str, Any]]:
         try:
-            _html, records = self._records(DHCP_INFO_PAGE)
+            records = self._lan_client_records()
         except Exception:
             return []
-        clients: list[dict[str, Any]] = []
+
+        by_mac: dict[str, dict[str, Any]] = {}
         for item in records:
-            ip = (
-                item.get("IPAddr")
-                or item.get("IPAddress")
-                or item.get("Yiaddr")
-            )
-            mac = (
-                item.get("MACAddr")
-                or item.get("MACAddress")
-                or item.get("Chaddr")
-            )
-            if not ip or not mac:
+            mac = _mac_from_record(item)
+            ip = _ip_from_record(item)
+            if not mac or not ip:
                 continue
-            clients.append({
-                "hostname": item.get("HostName") or item.get("hostname") or "",
+            interface = _record_text(
+                item,
+                "InterfaceType", "Interface", "Layer2Interface",
+                "PortType", "ConnectionType",
+            ).lower()
+            # User-device pages may contain both wired and wireless entries.
+            if "wlan" in interface or "wifi" in interface or "ssid" in interface:
+                continue
+            by_mac[mac] = {
+                "hostname": _record_text(
+                    item,
+                    "HostName", "hostname", "DeviceName", "Name",
+                ),
                 "ip": ip,
                 "mac": mac,
-            })
-        return clients
+            }
+        return list(by_mac.values())
 
     def wifi_clients(self) -> list[dict[str, Any]]:
-        # The capture proved DHCP clients, not an association table with RSSI.
-        return []
+        chunks: list[str] = []
+        for page in (
+            WLAN_INFO_PAGE,
+            WLAN_LIST_PAGE,
+        ):
+            try:
+                chunks.append(self._page(page))
+            except Exception:
+                continue
+
+        # Huawei serves association state through POST-only XHR endpoints.
+        # They are read-only and HuaweiWebClient.post_read safely retries once
+        # only when authentication expired.
+        for endpoint in (
+            WLAN_ASSOC_PAGE,
+            WLAN_STA_BOOST_PAGE,
+        ):
+            try:
+                chunks.append(
+                    self.client.post_read(
+                        endpoint,
+                        referer=WLAN_INFO_PAGE,
+                    )
+                )
+            except Exception:
+                continue
+
+        association_records = parse_huawei_js_records(
+            "\n".join(chunks)
+        )
+        try:
+            lan_records = self._lan_client_records()
+        except Exception:
+            lan_records = []
+
+        lan_by_mac: dict[str, dict[str, Any]] = {}
+        for item in lan_records:
+            mac = _mac_from_record(item)
+            if mac:
+                lan_by_mac[mac] = item
+
+        clients: dict[str, dict[str, Any]] = {}
+        for item in association_records:
+            mac = _mac_from_record(item)
+            if not mac:
+                continue
+
+            constructor = str(item.get("_constructor") or "").lower()
+            domain = _record_domain(item).lower()
+            association_hint = any(
+                item.get(key) not in (None, "")
+                for key in (
+                    "AssociatedDeviceMACAddress", "SignalStrength",
+                    "RSSI", "Rssi", "RxRate", "TxRate",
+                    "LastDataDownlinkRate", "LastDataUplinkRate",
+                )
+            ) or any(
+                hint in constructor or hint in domain
+                for hint in ("assoc", "station", "sta", "wlan")
+            )
+            if not association_hint:
+                continue
+
+            lan = lan_by_mac.get(mac, {})
+            ip = _ip_from_record(item) or _ip_from_record(lan)
+            hostname = _record_text(
+                item,
+                "HostName", "hostname", "DeviceName", "Name",
+            ) or _record_text(
+                lan,
+                "HostName", "hostname", "DeviceName", "Name",
+            )
+            clients[mac] = {
+                "hostname": hostname,
+                "ip": ip,
+                "mac": mac,
+                "ssid": _record_text(
+                    item,
+                    "SSID", "SSIDName", "WlanName", "NetworkName",
+                ),
+                "rssi": _record_text(
+                    item,
+                    "SignalStrength", "RSSI", "Rssi", "Signal",
+                ),
+                "snr": _record_text(
+                    item,
+                    "SNR", "Snr", "SignalNoiseRatio",
+                ),
+                "rx_rate": _record_text(
+                    item,
+                    "RxRate", "ReceiveRate", "LastDataDownlinkRate",
+                ),
+                "tx_rate": _record_text(
+                    item,
+                    "TxRate", "TransmitRate", "LastDataUplinkRate",
+                ),
+            }
+        return list(clients.values())
 
     def lan_ports(self) -> list[dict[str, Any]]:
-        # Link counters/speed were not semantically captured. Expose no fake state.
-        return []
+        try:
+            _html, records = self._records(
+                ETH_INFO_PAGE,
+                LAN_USER_INFO_PAGE,
+            )
+        except Exception:
+            records = []
+
+        ports: dict[int, dict[str, Any]] = {}
+        for item in records:
+            domain = _record_domain(item)
+            match = re.search(
+                r"LANEthernetInterfaceConfig\.(\d+)",
+                domain,
+            )
+            constructor = str(item.get("_constructor") or "")
+            port_value = (
+                match.group(1)
+                if match
+                else _record_text(
+                    item,
+                    "Port", "PortId", "PortID", "LANPort",
+                )
+            )
+            if not str(port_value).isdigit():
+                if "eth" not in constructor.lower():
+                    continue
+                continue
+            port = int(port_value)
+            ports[port] = {
+                "port": port,
+                "status": _record_text(
+                    item,
+                    "Status", "LinkStatus", "LinkState",
+                    default="unknown",
+                ),
+                "speed": _record_text(
+                    item,
+                    "MaxBitRate", "Speed", "CurrentBitRate",
+                ),
+                "duplex": _record_text(
+                    item,
+                    "DuplexMode", "Duplex",
+                ),
+                "rx_bytes": _record_text(
+                    item,
+                    "BytesReceived", "RxBytes", "ReceiveBytes",
+                ),
+                "tx_bytes": _record_text(
+                    item,
+                    "BytesSent", "TxBytes", "TransmitBytes",
+                ),
+            }
+
+        if ports:
+            return [ports[key] for key in sorted(ports)]
+
+        # The Layer 2/3 page was physically captured even when ethinfo does not
+        # serialize link counters. Expose the actual administrative L3 state,
+        # explicitly labelled, rather than claiming a physical link state.
+        try:
+            layer3 = self.layer3_status()
+        except Exception:
+            return []
+        return [
+            {
+                "port": item["port"],
+                "status": "enabled" if item.get("enabled") else "disabled",
+                "speed": "",
+                "duplex": "L3 admin",
+                "rx_bytes": "",
+                "tx_bytes": "",
+            }
+            for item in layer3.get("ports") or []
+        ]
 
     # ----------------------------- LAN / Layer3
 
@@ -1230,25 +1669,32 @@ class HuaweiCapturedFeatureService:
 
     def _wifi_basic_record(self, band: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         _display, instance, page, _adv = self._wifi_pages(band)
-        _html, records = self._records(page)
-        domain_suffix = f"WLANConfiguration.{instance}"
+        # WlanBasic.asp depends on wlan_list.asp in the real WebUI. Reading the
+        # main document alone produced empty SSIDs in Access Manager.
+        _html, records = self._records(
+            page,
+            WLAN_LIST_PAGE,
+        )
+        exact_domain = (
+            "InternetGatewayDevice.LANDevice.1."
+            f"WLANConfiguration.{instance}"
+        )
         candidates = [
             item
             for item in records
             if (
-                item.get("SSID") not in (None, "")
-                and (
-                    domain_suffix in _record_domain(item)
-                    or str(item.get("SsidInst") or "") == instance
-                )
+                _record_domain(item) == exact_domain
+                or str(item.get("SsidInst") or "") == instance
             )
         ]
-        if not candidates:
-            candidates = [
-                item
-                for item in records
-                if item.get("SSID") not in (None, "")
-            ]
+        with_ssid = [
+            item
+            for item in candidates
+            if item.get("SSID") not in (None, "")
+        ]
+        if with_ssid:
+            candidates = with_ssid
+
         merged: dict[str, Any] = {}
         for item in candidates:
             merged.update({
@@ -1256,6 +1702,8 @@ class HuaweiCapturedFeatureService:
                 for key, value in item.items()
                 if value not in (None, "")
             })
+        if candidates and not _record_domain(merged):
+            merged["Domain"] = exact_domain
         return merged, records
 
     def wifi_networks(self, reveal_password: bool = False) -> list[dict[str, Any]]:
@@ -1490,12 +1938,24 @@ class HuaweiCapturedFeatureService:
         radios = []
         for band in ("2.4GHz", "5GHz"):
             display, instance, _basic, adv_page = self._wifi_pages(band)
-            _html, records = self._records(adv_page)
-            domain_suffix = f"WLANConfiguration.{instance}"
+            _html, records = self._records(
+                adv_page,
+                WLAN_LIST_PAGE,
+                WLAN_ADV_COMMON_PAGE,
+                WLAN_ADV_API_PAGE,
+            )
+            exact_domain = (
+                "InternetGatewayDevice.LANDevice.1."
+                f"WLANConfiguration.{instance}"
+            )
             relevant = [
                 item
                 for item in records
-                if domain_suffix in _record_domain(item)
+                if (
+                    _record_domain(item) == exact_domain
+                    or exact_domain + "." in _record_domain(item)
+                    or str(item.get("SsidInst") or "") == instance
+                )
             ]
             if not relevant:
                 relevant = records
@@ -1517,6 +1977,7 @@ class HuaweiCapturedFeatureService:
             )
             radios.append({
                 "id": f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{instance}",
+                "ssid": basic.get("ssid") or "",
                 "banda": display,
                 "canal": str(channel),
                 "canal_automatico": auto or str(channel) == "0",

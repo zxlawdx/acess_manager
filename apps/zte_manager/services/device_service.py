@@ -337,10 +337,14 @@ class DeviceService:
 
     def list_ipv4_filters(self):
         result = self._require_huawei().list_ipv4_filters()
+        # Do not erase DHCP/DNS/Wi-Fi/etc. capabilities merely because the
+        # IPv4 filter panel refreshed. The previous replacement caused the
+        # Huawei sidebar/discovery state to collapse to one feature.
         self._session.capabilities = {
+            **(self._session.capabilities or {}),
             "ipv4_filter": dict(
                 result.get("capability") or {}
-            )
+            ),
         }
         return result
 
