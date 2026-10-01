@@ -372,6 +372,115 @@ class HuaweiProviderArchitectureTests(unittest.TestCase):
             zte,
         )
 
+    def test_huawei_filter_refresh_preserves_all_capabilities(self):
+        zte = FakeZTEProvider()
+        manager = DeviceService(
+            zte_provider=zte,
+            huawei_factory=self.make_huawei,
+            huawei_client_type=FakeHuaweiFingerprint,
+        )
+        manager.connect(
+            "192.168.18.1",
+            "Epadmin",
+            "fixture",
+            model_hint="EG8041X7-10",
+        )
+        before = set(manager.status()["capabilities"])
+        self.assertIn("dhcp", before)
+        self.assertIn("wifi_basic", before)
+
+        manager.list_ipv4_filters()
+
+        after = set(manager.status()["capabilities"])
+        self.assertEqual(after, before)
+        self.assertIn("ipv4_filter", after)
+
+    def test_huawei_bootstrap_uses_native_capability_catalog(self):
+        FakeHuaweiWebClient.device_html = DEVICE_HTML
+        zte = FakeZTEProvider()
+        manager = DeviceService(
+            zte_provider=zte,
+            huawei_factory=self.make_huawei,
+            huawei_client_type=FakeHuaweiFingerprint,
+        )
+        manager.connect(
+            "192.168.18.1",
+            "Epadmin",
+            "fixture",
+            model_hint="EG8041X7-10",
+        )
+
+        from apps.zte_manager import api as api_module
+
+        with patch.object(
+            api_module,
+            "device_service",
+            manager,
+        ):
+            bootstrap = api_module.discovery_bootstrap()
+
+        self.assertEqual(bootstrap["vendor"], "huawei")
+        self.assertTrue(bootstrap["native_diagnostics_available"])
+        self.assertEqual(
+            bootstrap["catalog"]["models"][0]["model"],
+            "EG8041X7-10",
+        )
+        self.assertIn(
+            "dhcp",
+            bootstrap["catalog"]["models"][0]["candidate_features"],
+        )
+
+    def test_huawei_multimodel_probe_never_calls_zte_provider(self):
+        FakeHuaweiWebClient.device_html = DEVICE_HTML
+        zte = FakeZTEProvider()
+        manager = DeviceService(
+            zte_provider=zte,
+            huawei_factory=self.make_huawei,
+            huawei_client_type=FakeHuaweiFingerprint,
+        )
+        manager.connect(
+            "192.168.18.1",
+            "Epadmin",
+            "fixture",
+            model_hint="EG8041X7-10",
+        )
+
+        from apps.zte_manager import api as api_module
+
+        with patch.object(
+            api_module,
+            "device_service",
+            manager,
+        ), patch.object(
+            api_module.zte_service,
+            "multimodel_probe",
+            side_effect=AssertionError("ZTE probe must not run"),
+        ):
+            result = api_module.multimodel_probe()
+
+        self.assertEqual(result["model"], "EG8041X7-10")
+        self.assertEqual(result["family"], "huawei_webui")
+        self.assertTrue(
+            any(
+                item["feature"] == "dhcp"
+                for item in result["capabilities"]
+            )
+        )
+
+    def test_huawei_device_status_reads_authenticated_device_page(self):
+        FakeHuaweiWebClient.device_html = DEVICE_HTML
+        service = self.make_huawei()
+        service.connect(
+            "192.168.18.1",
+            "Epadmin",
+            "fixture",
+            model_hint="EG8041X7-10",
+        )
+        status = service.device_status()
+        self.assertEqual(status["fabricante"], "Huawei")
+        self.assertEqual(status["modelo"], "Huawei EG8041X7-10")
+        self.assertEqual(status["profile"], "huawei_eg8041x7_10")
+
     def test_huawei_capabilities_reach_frontend(self):
         FakeHuaweiWebClient.device_html = DEVICE_HTML
         zte = FakeZTEProvider()
