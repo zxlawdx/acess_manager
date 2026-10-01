@@ -2326,7 +2326,9 @@ function syncHuaweiAdvancedMode() {
         "multimodelProbeButton",
         "multimodelDiagnosticButton",
         "multimodelMeshButton",
-        "backupConfigurationButton"
+        "backupConfigurationButton",
+        "captureSnapshotButton",
+        "automaticDiagnosticPanel"
     ]) {
         document.getElementById(id)?.classList.toggle(
             "hidden",
