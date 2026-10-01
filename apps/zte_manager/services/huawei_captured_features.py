@@ -440,7 +440,7 @@ class HuaweiCapturedFeatureService:
                 default="Huawei",
             ) or "Huawei",
             "modelo": value(
-                "ProductClass", "ModelName", "Model",
+                "ProductClass", "ProductName", "ModelName", "Model",
                 "DeviceType", default=self.model,
             ) or self.model,
             "firmware": value(
