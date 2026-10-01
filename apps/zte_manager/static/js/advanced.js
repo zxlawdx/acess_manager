@@ -1557,11 +1557,22 @@ function syncAdvancedNetworkForms() {
     for (const [key, selector] of controls) {
         const control = document.querySelector(selector);
         if (!control) continue;
+        const huaweiReservationUpdate = (
+            currentVendor === "huawei"
+            && selector.includes("dhcpReservationForm")
+            && advancedState.dhcp?.capabilities?.reservation_update === true
+            && Boolean(
+                document.getElementById("dhcpReservationId")?.value
+            )
+        );
         const unsupportedHuaweiWrite = (
             currentVendor === "huawei"
             && (
-                selector.includes("dhcpReservationForm")
-                || selector.includes("portForwardForm")
+                selector.includes("portForwardForm")
+                || (
+                    selector.includes("dhcpReservationForm")
+                    && !huaweiReservationUpdate
+                )
             )
         );
         const ready = !unsupportedHuaweiWrite &&
@@ -1702,45 +1713,53 @@ function renderDhcpReservations(items) {
         ).join("")
         : '<span class="muted">Nenhuma reserva cadastrada.</span>';
 
-    const reservationWrite = (
-        advancedState.dhcp?.capabilities?.reservation_write !== false
-        && currentVendor !== "huawei"
+    const huaweiReservationUpdate = (
+        currentVendor === "huawei"
+        && advancedState.dhcp?.capabilities?.reservation_update === true
+    );
+    const reservationCreateDelete = (
+        currentVendor !== "huawei"
+        && advancedState.dhcp?.capabilities?.reservation_write !== false
     );
 
     container
         .querySelectorAll(
-            ".reservation-edit, .reservation-delete"
+            ".reservation-edit"
         )
         .forEach(button => {
-            button.disabled = !reservationWrite;
-            button.title = reservationWrite
+            const allowed = (
+                huaweiReservationUpdate
+                || reservationCreateDelete
+            );
+            button.disabled = !allowed;
+            button.title = allowed
                 ? ""
-                : "A captura Huawei validou leitura/edição existente, mas não CREATE/DELETE de reserva.";
-        });
-
-    if (reservationWrite) {
-        container
-            .querySelectorAll(
-                ".reservation-edit"
-            )
-            .forEach(
-                button => button.addEventListener(
+                : "Edição de reserva não validada para este equipamento.";
+            if (allowed) {
+                button.addEventListener(
                     "click",
                     editDhcpReservation
-                )
-            );
+                );
+            }
+        });
 
-        container
-            .querySelectorAll(
-                ".reservation-delete"
-            )
-            .forEach(
-                button => button.addEventListener(
+    container
+        .querySelectorAll(
+            ".reservation-delete"
+        )
+        .forEach(button => {
+            const allowed = reservationCreateDelete;
+            button.disabled = !allowed;
+            button.title = allowed
+                ? ""
+                : "DELETE de reserva DHCP Huawei ainda não foi capturado.";
+            if (allowed) {
+                button.addEventListener(
                     "click",
                     deleteDhcpReservation
-                )
-            );
-    }
+                );
+            }
+        });
 }
 
 
@@ -1804,6 +1823,8 @@ function editDhcpReservation(event) {
     document.getElementById(
         "dhcpReservationMac"
     ).value = item.MACAddr || "";
+
+    syncAdvancedNetworkForms();
 }
 
 
@@ -1839,6 +1860,7 @@ async function saveDhcpReservation(event) {
                 "dhcpReservationId"
             ).value = "";
 
+            syncAdvancedNetworkForms();
             await loadDhcpOperations();
         }
     );
