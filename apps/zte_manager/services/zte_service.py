@@ -59,8 +59,11 @@ class ZTEService:
     """
     Service Layer / Facade da aplicação.
 
-    A API fala somente com este objeto. Ele mantém uma sessão única da ONT e
-    serializa as operações com RLock porque o firmware depende do contexto:
+    Provider exclusivo para equipamentos ZTE. O DeviceService despacha
+    conexões genéricas para este provider quando o fabricante é ZTE.
+
+    Mantém uma sessão única da ONT e serializa as operações com RLock porque
+    o firmware depende do contexto:
 
         menuView -> menuData -> POST
 
