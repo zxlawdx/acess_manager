@@ -992,9 +992,7 @@ document
                 currentVendor = response.vendor || "zte";
                 currentModel = response.model || response.device?.modelo || null;
                 routerWriteEnabled = (
-                    currentVendor === "huawei"
-                        ? huaweiIpv4CrudEnabled(response.capabilities)
-                        : response.writes_enabled !== false
+                    response.writes_enabled !== false
                 );
                 currentHost = response.host || ip;
                 currentAttendant = response.attendant || attendant || "default";
@@ -5064,9 +5062,7 @@ async function restoreDesktopSession() {
         currentVendor = status.vendor || "zte";
         currentModel = status.model || null;
         routerWriteEnabled = (
-            currentVendor === "huawei"
-                ? huaweiIpv4CrudEnabled(status.capabilities)
-                : status.writes_enabled !== false
+            status.writes_enabled !== false
         );
 
         document.getElementById("connectedHost").textContent =
