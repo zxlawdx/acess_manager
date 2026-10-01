@@ -151,6 +151,7 @@ let ontConnected = false;
 // Impede que uma resposta antiga de restauração sobrescreva login/logout recente.
 let sessionEpoch = 0;
 let routerWriteEnabled = true;
+let currentVendor = "zte";
 let currentHost = null;
 let currentAttendant = null;
 let currentProfile = null;
@@ -452,8 +453,9 @@ function setConnectionStatus(connected) {
             "hidden"
         );
 
-        refreshButton.classList.remove(
-            "hidden"
+        refreshButton.classList.toggle(
+            "hidden",
+            currentVendor === "huawei"
         );
 
         connectedDevice.classList.remove(
@@ -792,6 +794,7 @@ document
                 }
                 authenticated = true;
                 routerWriteEnabled = response.writes_enabled !== false;
+                currentVendor = response.vendor || "zte";
                 currentHost = response.host || ip;
                 currentAttendant = response.attendant || attendant || "default";
 
@@ -838,6 +841,14 @@ document
                 document.getElementById("profileRadios")?.replaceChildren();
                 // Read-only models still have LOCAL Wi-Fi 2.4/5 GHz defaults.
                 // Loading them must not execute native F670L router commands.
+                if (currentVendor === "huawei") {
+                    openPage("advanced");
+                    showToast(
+                        "ONT Huawei conectada. IPv4 Filtering disponível em Avançado."
+                    );
+                    return;
+                }
+
                 if (response.writes_enabled === false) {
                     openPage("advanced");
                     try {
@@ -942,6 +953,7 @@ document
             await disconnectONT();
 
             routerWriteEnabled = true;
+            currentVendor = "zte";
             currentHost = null;
             currentAttendant = null;
             currentProfile = null;
@@ -4374,6 +4386,15 @@ async function loadAll() {
     if (!ontConnected) {
         return;
     }
+    if (currentVendor === "huawei") {
+        document.dispatchEvent(
+            new CustomEvent("huawei:ipv4-filter-refresh")
+        );
+        return {
+            essentialLoaded: 1,
+            vendor: "huawei",
+        };
+    }
 
     const refreshButton = document.getElementById(
         "refreshButton"
@@ -4767,6 +4788,7 @@ async function restoreDesktopSession() {
         document.dispatchEvent(new CustomEvent("zte:session-changed"));
         currentHost = status.host || null;
         currentAttendant = status.attendant || "default";
+        currentVendor = status.vendor || "zte";
         routerWriteEnabled = status.writes_enabled !== false;
 
         document.getElementById("connectedHost").textContent =
@@ -4795,7 +4817,11 @@ async function restoreDesktopSession() {
         setConnectionStatus(true);
         const destination = requestedPage && requestedPage !== "connection"
             ? requestedPage
-            : (routerWriteEnabled ? "dashboard" : "advanced");
+            : (
+                currentVendor === "huawei"
+                    ? "advanced"
+                    : (routerWriteEnabled ? "dashboard" : "advanced")
+            );
         openPage(destination);
         // /connection/status só recupera metadados. As informações do
         // equipamento precisam ser consultadas novamente após o reload JS.
@@ -4805,6 +4831,10 @@ async function restoreDesktopSession() {
         profileLoadedFor = null;
         profileLoadPending = null;
         document.getElementById("profileRadios")?.replaceChildren();
+        if (currentVendor === "huawei") {
+            showToast("Sessão Huawei recuperada. Use Avançado para IPv4 Filtering.");
+            return;
+        }
         try {
             await ensureAttendantProfile();
         } catch (profileError) {
