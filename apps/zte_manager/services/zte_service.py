@@ -1525,6 +1525,42 @@ class ZTEService:
 
     def capability_catalog(self):
         with self._lock:
+            if self._vendor == "huawei":
+                if self._adapter is None:
+                    raise RuntimeError(
+                        "Adapter Huawei não inicializado."
+                    )
+                result = self._adapter.describe()
+                if self._huawei_ipv4_filter is not None:
+                    operations = (
+                        self._huawei_ipv4_filter.capability(
+                            probe_read=False
+                        )
+                    )
+                    feature = result[
+                        "features"
+                    ][
+                        "ipv4_filter"
+                    ]
+                    feature[
+                        "operations"
+                    ] = operations
+                    feature[
+                        "verified"
+                    ] = bool(
+                        operations.get(
+                            "verified"
+                        )
+                    )
+                    feature[
+                        "writable"
+                    ] = bool(
+                        operations.get("create")
+                        or operations.get("update")
+                        or operations.get("delete")
+                    )
+                return result
+
             return self._capabilities().catalog()
 
     def probe_capabilities(
@@ -1532,9 +1568,246 @@ class ZTEService:
         features=None
     ):
         with self._lock:
+            if self._vendor == "huawei":
+                requested = list(
+                    features
+                    or ["ipv4_filter"]
+                )
+                invalid = [
+                    feature
+                    for feature in requested
+                    if feature != "ipv4_filter"
+                ]
+                if invalid:
+                    raise ValueError(
+                        "Capabilities Huawei desconhecidas: "
+                        + ", ".join(invalid)
+                    )
+                operations = (
+                    self._require_huawei_ipv4_filter()
+                    .capability(
+                        probe_read=True
+                    )
+                )
+                return {
+                    "adapter": "huawei-webui",
+                    "features": [{
+                        "feature": "ipv4_filter",
+                        "label": "IPv4 Filtering",
+                        "available": bool(
+                            operations.get("read")
+                        ),
+                        "status": (
+                            "confirmed"
+                            if operations.get("read")
+                            else "inconclusive"
+                        ),
+                        "probeable": True,
+                        "writable": bool(
+                            operations.get("create")
+                            or operations.get("update")
+                            or operations.get("delete")
+                        ),
+                        "dangerous": False,
+                        "verified": bool(
+                            operations.get("verified")
+                        ),
+                        "operations": operations,
+                        "notes": (
+                            "CRUD validado em laboratório "
+                            "somente para EG8041X7-10."
+                        ),
+                    }],
+                }
+
             return self._capabilities().probe(
                 features
             )
+
+    def _require_huawei_ipv4_filter(
+        self,
+    ) -> HuaweiIPv4FilterService:
+        if (
+            self._vendor != "huawei"
+            or self._huawei_ipv4_filter is None
+        ):
+            raise RuntimeError(
+                "Conecte-se a uma ONT Huawei "
+                "para usar IPv4 Filtering."
+            )
+        return self._huawei_ipv4_filter
+
+    @staticmethod
+    def _huawei_filter_rule_from_config(
+        config,
+        *,
+        domain="",
+    ) -> HuaweiIPv4FilterRule:
+        if not isinstance(
+            config,
+            dict,
+        ):
+            raise ValueError(
+                "Parâmetros IPv4 Filtering inválidos."
+            )
+        return HuaweiIPv4FilterRule(
+            domain=domain,
+            name=str(config.get("name") or ""),
+            protocol=str(config.get("protocol") or ""),
+            direction=str(config.get("direction") or ""),
+            lan_start_ip=str(config.get("lan_start_ip") or ""),
+            lan_end_ip=str(config.get("lan_end_ip") or ""),
+            wan_start_ip=str(config.get("wan_start_ip") or ""),
+            wan_end_ip=str(config.get("wan_end_ip") or ""),
+            lan_tcp_port=str(config.get("lan_tcp_port") or ""),
+            lan_udp_port=str(config.get("lan_udp_port") or ""),
+            wan_tcp_port=str(config.get("wan_tcp_port") or ""),
+            wan_udp_port=str(config.get("wan_udp_port") or ""),
+        )
+
+    def list_ipv4_filters(self):
+        with self._lock:
+            return (
+                self._require_huawei_ipv4_filter()
+                .list_ipv4_filters()
+            )
+
+    def create_ipv4_filter(
+        self,
+        config,
+    ):
+        with self._lock:
+            rule = self._huawei_filter_rule_from_config(
+                config
+            )
+            result = (
+                self._require_huawei_ipv4_filter()
+                .create_ipv4_filter(
+                    rule
+                )
+            )
+            self._audit_huawei_ipv4_filter(
+                operation="huawei_ipv4_filter_create",
+                target=rule.name,
+                before=None,
+                after=(
+                    result.get("rule")
+                    or rule.as_dict()
+                ),
+                result=result,
+            )
+            return result
+
+    def update_ipv4_filter(
+        self,
+        instance_or_domain,
+        config,
+    ):
+        with self._lock:
+            service = (
+                self._require_huawei_ipv4_filter()
+            )
+            current = (
+                service.list_ipv4_filters()
+                .get("rules", [])
+            )
+            domain = str(
+                instance_or_domain
+            )
+            before = next(
+                (
+                    item
+                    for item in current
+                    if item.get("domain") == domain
+                    or item.get("domain", "").endswith(
+                        "." + domain
+                    )
+                ),
+                None,
+            )
+            rule = self._huawei_filter_rule_from_config(
+                config,
+                domain=domain,
+            )
+            result = service.update_ipv4_filter(
+                instance_or_domain,
+                rule,
+            )
+            self._audit_huawei_ipv4_filter(
+                operation="huawei_ipv4_filter_update",
+                target=rule.name,
+                before=before,
+                after=(
+                    result.get("rule")
+                    or rule.as_dict()
+                ),
+                result=result,
+            )
+            return result
+
+    def delete_ipv4_filter(
+        self,
+        instance_or_domain,
+    ):
+        with self._lock:
+            service = (
+                self._require_huawei_ipv4_filter()
+            )
+            result = service.delete_ipv4_filter(
+                instance_or_domain
+            )
+            previous = result.get(
+                "previous"
+            )
+            self._audit_huawei_ipv4_filter(
+                operation="huawei_ipv4_filter_delete",
+                target=(
+                    previous.get("name")
+                    if isinstance(previous, dict)
+                    else str(instance_or_domain)
+                ),
+                before=previous,
+                after=None,
+                result=result,
+            )
+            return result
+
+    def _audit_huawei_ipv4_filter(
+        self,
+        *,
+        operation,
+        target,
+        before,
+        after,
+        result,
+    ) -> None:
+        if self._history_session_id is None:
+            return
+        outcome = (
+            "verified"
+            if result.get("verified")
+            else (
+                "uncertain"
+                if result.get("uncertain")
+                else "failed"
+            )
+        )
+        history_repository.save_change(
+            self._history_session_id,
+            operation=operation,
+            target=str(target or "")[:128],
+            before=before,
+            after=after,
+            success=bool(
+                result.get("verified")
+            ),
+            message=(
+                "Read-back semântico Huawei"
+                if result.get("verified")
+                else result.get("error")
+            ),
+            outcome=outcome,
+        )
 
     def multimodel_catalog(self):
         return multimodel_service.catalog()
