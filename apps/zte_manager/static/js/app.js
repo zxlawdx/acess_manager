@@ -834,16 +834,6 @@ function openPage(pageName) {
         }
     }
 
-    if (
-        pageName === "device"
-        && ontConnected
-        && currentVendor === "huawei"
-    ) {
-        void loadDevice().catch(error => {
-            showToast(error.message);
-        });
-    }
-
     // Todas as entradas (sidebar, cartões, topo e restore) carregam dados.
     document.dispatchEvent(new CustomEvent(
         "device:page-open", {
@@ -4626,45 +4616,64 @@ function setRefreshBusy(busy) {
 // LOAD ALL
 // =========================================================
 
+let huaweiLoadAllPromise = null;
+
+
 async function loadAll() {
     if (!ontConnected) {
         return;
     }
     if (currentVendor === "huawei") {
-        const loaders = [
-            ["equipamento", loadDevice],
-            ["óptico", loadOptical],
-            ["WAN", loadWan],
-            ["PPPoE", () => loadPppoe(false)],
-            ["portas LAN", loadLanPorts],
-            ["Wi-Fi", loadWifi],
-            ["DNS", loadDns],
-            ["clientes", loadClients]
-        ];
-        const failed = [];
-        let essentialLoaded = 0;
-        for (const [name, loader] of loaders) {
-            try {
-                await loader();
-                if (["equipamento", "WAN", "Wi-Fi"].includes(name)) {
-                    essentialLoaded++;
-                }
-            } catch (error) {
-                failed.push({name, error});
-                console.warn(
-                    `Huawei: falha ao carregar ${name}`,
-                    error
-                );
-            }
+        // openPage("dashboard"), connect() and session restore can converge on
+        // this loader in the same tick. Do not execute duplicate Huawei page
+        // sequences: the WebUI is session/view-stateful and redundant chains
+        // were producing queues and inconsistent cards.
+        if (huaweiLoadAllPromise) {
+            return huaweiLoadAllPromise;
         }
-        document.dispatchEvent(
-            new CustomEvent("huawei:ipv4-filter-refresh")
-        );
-        return {
-            essentialLoaded,
-            vendor: "huawei",
-            failed: failed.map(item => item.name),
-        };
+
+        huaweiLoadAllPromise = (async () => {
+            const loaders = [
+                ["equipamento", loadDevice],
+                ["óptico", loadOptical],
+                ["WAN", loadWan],
+                ["PPPoE", () => loadPppoe(false)],
+                ["portas LAN", loadLanPorts],
+                ["Wi-Fi", loadWifi],
+                ["DNS", loadDns],
+                ["clientes", loadClients]
+            ];
+            const failed = [];
+            let essentialLoaded = 0;
+            for (const [name, loader] of loaders) {
+                try {
+                    await loader();
+                    if (["equipamento", "WAN", "Wi-Fi"].includes(name)) {
+                        essentialLoaded++;
+                    }
+                } catch (error) {
+                    failed.push({name, error});
+                    console.warn(
+                        `Huawei: falha ao carregar ${name}`,
+                        error
+                    );
+                }
+            }
+            document.dispatchEvent(
+                new CustomEvent("huawei:ipv4-filter-refresh")
+            );
+            return {
+                essentialLoaded,
+                vendor: "huawei",
+                failed: failed.map(item => item.name),
+            };
+        })();
+
+        try {
+            return await huaweiLoadAllPromise;
+        } finally {
+            huaweiLoadAllPromise = null;
+        }
     }
 
     const refreshButton = document.getElementById(
