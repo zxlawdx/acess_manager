@@ -156,14 +156,14 @@
       await selectPreset(PRIMARY);
       hint("Variante excluída. Configuração principal restaurada.");
     }));
-    document.addEventListener("zte:session-changed", () => {
+    document.addEventListener("device:session-changed", () => {
       ++state.generation;
       state.name = PRIMARY;
       state.owner = null;
       globalThis.activeNamedPreset = PRIMARY;
       if (id("namedPresetSelect")) id("namedPresetSelect").replaceChildren();
     });
-    document.addEventListener("zte:page-open", event => {
+    document.addEventListener("device:page-open", event => {
       if (event.detail?.pageName !== "profiles" || !currentAttendant) return;
       void execute(async () => {
         await refreshNames();
