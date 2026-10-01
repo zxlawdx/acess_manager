@@ -9,6 +9,10 @@ const advanced = read("apps/zte_manager/static/js/advanced.js");
 const management = read("apps/zte_manager/static/js/management.js");
 const support = read("apps/zte_manager/static/js/support_diagnostics.js");
 const tr069 = read("apps/zte_manager/static/js/tr069_profiles.js");
+const f6201bWorkbench = read("apps/zte_manager/static/js/f6201b_workbench.js");
+const f6201bEditor = read("apps/zte_manager/static/js/f6201b_editor.js");
+const dhcpModule = read("apps/zte_manager/static/js/dhcp_module.js");
+const adaptiveFirmware = read("apps/zte_manager/static/js/adaptive_firmware.js");
 const shell = read("apps/zte_manager/templates/source/shell_start.html");
 
 test("frontend uses vendor-neutral device lifecycle events", () => {
@@ -41,6 +45,10 @@ test("Huawei pages do not dispatch ZTE-only loaders", () => {
         tr069,
         /event\.detail\?\.vendor === "huawei"\) return/
     );
+    assert.match(f6201bWorkbench, /vendor === "huawei"\) return/);
+    assert.match(f6201bEditor, /vendor==="huawei"\)return/);
+    assert.match(dhcpModule, /vendor === "huawei"\) return/);
+    assert.match(adaptiveFirmware, /vendor === "huawei"\) return/);
 });
 
 test("branding is Access Manager and workspace vendor is dynamic", () => {
