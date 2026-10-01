@@ -348,7 +348,6 @@
     feedback("Conecte a uma ONT para consultar DHCP.");
   });
   document.addEventListener("device:page-open",event => {
-    if (event.detail?.vendor === "huawei") return;
     if (event.detail?.pageName === "wan")
       void refresh();
   });
