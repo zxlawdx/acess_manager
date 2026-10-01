@@ -42,6 +42,7 @@ from apps.zte_manager.schemas import (
     FirmwareRegisterRequest,
     FirmwareUpgradeRequest,
     GatewayCommandRequest,
+    HuaweiFeatureUpdateRequest,
     HuaweiIPv4FilterDeleteRequest,
     HuaweiIPv4FilterRuleRequest,
     InventorySyncRequest,
@@ -894,6 +895,21 @@ def huawei_ipv4_filter_delete(context=None):
     return _safe_call(
         action
     )
+
+
+@api.post("/huawei/features/update")
+def huawei_feature_update(context=None):
+    def action():
+        data = _validated(
+            HuaweiFeatureUpdateRequest,
+            context,
+        )
+        return device_service.update_captured_feature(
+            data.feature,
+            data.config,
+        )
+
+    return _safe_call(action)
 
 
 @api.get("/discovery/bootstrap")

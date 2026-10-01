@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .base import DeviceAdapter, FeatureSpec
 
@@ -30,6 +30,9 @@ class HuaweiProfile:
     model: str
     aliases: tuple[str, ...]
     ipv4_filter: HuaweiIPv4FilterCapability
+    captured_features: dict[str, dict[str, bool]] = field(
+        default_factory=dict
+    )
 
     @property
     def vendor(self) -> str:
@@ -59,6 +62,31 @@ class HuaweiEG8041X7Profile(HuaweiProfile):
                 delete=True,
                 verified=True,
             ),
+            captured_features={
+                "wan": {"read": True, "write": False, "verified": True},
+                "optical": {"read": True, "write": False, "verified": True},
+                "layer3": {"read": True, "update": True, "verified": True},
+                "lan_ipv4": {"read": True, "update": True, "verified": True},
+                "ipv6_lan": {"read": True, "update": True, "verified": True},
+                "dhcp": {"read": True, "update": True, "verified": True},
+                "dhcp_static": {"read": True, "update": True, "verified": True},
+                "dns": {"read": True, "update": True, "verified": True},
+                "dns_host": {"read": True, "update": True, "verified": True},
+                "dmz": {"read": True, "update": True, "verified": True},
+                "wifi_basic": {"read": True, "update": True, "verified": True},
+                "wifi_radio": {"read": True, "update": True, "verified": True},
+                "tr069_url": {"read": True, "update": True, "verified": True},
+                "firewall_level": {"read": True, "update": True, "verified": True},
+                "alg": {"read": True, "update": True, "verified": True},
+                "igmp": {"read": True, "update": True, "verified": True},
+                "dos": {"read": True, "update": True, "verified": True},
+                "ipv6_firewall": {
+                    "read": True, "update": True, "verified": True,
+                },
+                "internet_control": {
+                    "read": True, "update": True, "verified": True,
+                },
+            },
         )
 
 
@@ -163,7 +191,7 @@ class HuaweiWebAdapter(DeviceAdapter):
             if self.profile is not None
             else HuaweiIPv4FilterCapability()
         )
-        return {
+        features = {
             "ipv4_filter": FeatureSpec(
                 key="ipv4_filter",
                 label="IPv4 Filtering",
@@ -180,6 +208,54 @@ class HuaweiWebAdapter(DeviceAdapter):
                 ),
             )
         }
+        labels = {
+            "wan": "WAN / PPPoE",
+            "optical": "Sinal óptico",
+            "layer3": "LAN Layer 3",
+            "lan_ipv4": "LAN IPv4",
+            "ipv6_lan": "LAN IPv6 / RA / DHCPv6",
+            "dhcp": "DHCP",
+            "dhcp_static": "DHCP Static",
+            "dns": "DNS",
+            "dns_host": "DNS Hosts",
+            "dmz": "DMZ",
+            "wifi_basic": "Wi-Fi / SSID",
+            "wifi_radio": "Wi-Fi / Rádio",
+            "tr069_url": "TR-069 URL",
+            "firewall_level": "Firewall",
+            "alg": "ALG",
+            "igmp": "IGMP",
+            "dos": "DoS Protection",
+            "ipv6_firewall": "IPv6 Firewall",
+            "internet_control": "Internet Control",
+        }
+        for key, operations in (
+            (self.profile.captured_features.items())
+            if self.profile is not None
+            else ()
+        ):
+            features[key] = FeatureSpec(
+                key=key,
+                label=labels.get(key, key.replace("_", " ").title()),
+                writable=bool(
+                    operations.get("create")
+                    or operations.get("update")
+                    or operations.get("delete")
+                    or operations.get("write")
+                ),
+                dangerous=key in {
+                    "layer3", "lan_ipv4", "ipv6_lan",
+                    "dhcp", "dhcp_static", "dns_host",
+                    "wifi_basic", "wifi_radio",
+                    "tr069_url", "firewall_level",
+                    "ipv6_firewall", "internet_control",
+                },
+                notes=(
+                    "Endpoint/payload exercitado na EG8041X7-10 de laboratório; "
+                    "mutations do Access Manager exigem releitura antes de confirmar."
+                ),
+            )
+        return features
 
     def describe(self) -> dict:
         data = super().describe()

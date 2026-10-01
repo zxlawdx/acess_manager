@@ -58,6 +58,9 @@
                         <button class="am-workbench-tab hidden" type="button" role="tab" id="advanced-tab-ipv4-filter" aria-controls="advanced-panel-ipv4-filter" aria-selected="false" data-am-tab="ipv4-filter">
                             <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span> IPv4 Filtering
                         </button>
+                        <button class="am-workbench-tab hidden" type="button" role="tab" id="advanced-tab-huawei-security" aria-controls="advanced-panel-huawei-security" aria-selected="false" data-am-tab="huawei-security">
+                            <span class="material-symbols-outlined" aria-hidden="true">security</span> Segurança Huawei
+                        </button>
                         <button class="am-workbench-tab" type="button" role="tab" id="advanced-tab-inspector" aria-controls="advanced-panel-inspector" aria-selected="false" data-am-tab="inspector">
                             <span class="material-symbols-outlined" aria-hidden="true">manage_search</span> Inspeção
                         </button>
@@ -373,6 +376,116 @@
                         </div>
                         <div id="huaweiIpv4FilterList" class="operations-output">
                             <span class="muted">Nenhuma leitura realizada.</span>
+                        </div>
+                    </article>
+                </div>
+                    </section>
+
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-huawei-security" aria-labelledby="advanced-tab-huawei-security" data-am-panel="huawei-security" hidden>
+                <div class="subsection-title with-top-space">
+                    <div>
+                        <span class="material-symbols-outlined">security</span>
+                        <h3>Segurança e serviços Huawei</h3>
+                    </div>
+                    <span>Controles capturados e exercitados na EG8041X7-10 de laboratório.</span>
+                </div>
+
+                <div class="advanced-grid">
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">FIREWALL / IPTV</span>
+                                <h3>Proteção global</h3>
+                            </div>
+                            <button id="huaweiSecurityRefresh" class="text-action" type="button">Atualizar</button>
+                        </div>
+                        <form id="huaweiSecurityCoreForm" class="operations-form">
+                            <label class="check-row">
+                                <input id="huaweiFirewallEnabled" type="checkbox">
+                                <span>Firewall IPv4 habilitado</span>
+                            </label>
+                            <label class="field with-top-space">
+                                <span>NÍVEL / ADVANCED LEVEL</span>
+                                <input id="huaweiFirewallLevel" type="text" autocomplete="off">
+                            </label>
+                            <label class="check-row with-top-space">
+                                <input id="huaweiIpv6FirewallEnabled" type="checkbox">
+                                <span>Firewall IPv6 habilitado</span>
+                            </label>
+                            <label class="check-row with-top-space">
+                                <input id="huaweiInternetControlEnabled" type="checkbox">
+                                <span>Internet Control habilitado</span>
+                            </label>
+                            <label class="check-row with-top-space">
+                                <input id="huaweiIgmpEnabled" type="checkbox">
+                                <span>IGMP / IPTV habilitado</span>
+                            </label>
+                        </form>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">DOS PROTECTION</span>
+                                <h3>Proteções de tráfego</h3>
+                            </div>
+                        </div>
+                        <form id="huaweiDosForm" class="operations-form">
+                            <div class="advanced-switch-grid">
+                                <label class="advanced-switch"><span>SYN Flood</span><input id="huaweiDosSynFloodEn" type="checkbox"></label>
+                                <label class="advanced-switch"><span>ICMP Echo Reply</span><input id="huaweiDosIcmpEchoReplyEn" type="checkbox"></label>
+                                <label class="advanced-switch"><span>ICMP Redirect</span><input id="huaweiDosIcmpRedirectEn" type="checkbox"></label>
+                                <label class="advanced-switch"><span>LAND</span><input id="huaweiDosLandEn" type="checkbox"></label>
+                                <label class="advanced-switch"><span>Smurf</span><input id="huaweiDosSmurfEn" type="checkbox"></label>
+                                <label class="advanced-switch"><span>WinNuke</span><input id="huaweiDosWinnukeEn" type="checkbox"></label>
+                                <label class="advanced-switch"><span>Ping Sweep</span><input id="huaweiDosPingSweepEn" type="checkbox"></label>
+                            </div>
+                        </form>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">ALG</span>
+                                <h3>Application Layer Gateway</h3>
+                            </div>
+                        </div>
+                        <form id="huaweiAlgForm" class="operations-form">
+                            <div class="advanced-switch-grid">
+                                <label class="advanced-switch"><span>FTP</span><input id="huaweiAlgFtpEnable" type="checkbox"></label>
+                                <label class="advanced-switch"><span>TFTP</span><input id="huaweiAlgTftpEnable" type="checkbox"></label>
+                                <label class="advanced-switch"><span>H.323</span><input id="huaweiAlgH323Enable" type="checkbox"></label>
+                                <label class="advanced-switch"><span>SIP</span><input id="huaweiAlgSipEnable" type="checkbox"></label>
+                                <label class="advanced-switch"><span>RTSP</span><input id="huaweiAlgRTSPEnable" type="checkbox"></label>
+                                <label class="advanced-switch"><span>PPTP</span><input id="huaweiAlgPptpEnable" type="checkbox"></label>
+                                <label class="advanced-switch"><span>L2TP</span><input id="huaweiAlgL2TPForward" type="checkbox"></label>
+                                <label class="advanced-switch"><span>IPSec</span><input id="huaweiAlgIPSecForward" type="checkbox"></label>
+                                <label class="advanced-switch"><span>RTCP</span><input id="huaweiAlgRTCPEnable" type="checkbox"></label>
+                            </div>
+                            <label class="field with-top-space">
+                                <span>RTCP PORT</span>
+                                <input id="huaweiAlgRTCPPort" type="number" min="0" max="65535">
+                            </label>
+                        </form>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">APLICAÇÃO</span>
+                                <h3>Salvar alterações Huawei</h3>
+                            </div>
+                            <span id="huaweiSecurityBadge" class="badge">Não carregado</span>
+                        </div>
+                        <p class="muted">
+                            Cada grupo é enviado uma única vez. O backend relê a página correspondente e só confirma quando o estado esperado reaparece.
+                        </p>
+                        <button id="huaweiSecuritySave" class="button primary with-top-space" type="button">
+                            <span class="material-symbols-outlined">save</span>
+                            Aplicar alterações
+                        </button>
+                        <div id="huaweiSecurityStatus" class="operations-output with-top-space">
+                            <span class="muted">Carregue o estado atual antes de alterar.</span>
                         </div>
                     </article>
                 </div>

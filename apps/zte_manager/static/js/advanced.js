@@ -29,6 +29,30 @@ pageInfo.advanced = {
 const baseCollectRadioFormPayload = collectRadioFormPayload;
 
 renderRadioAdvancedFields = function (radio) {
+    if (currentVendor === "huawei") {
+        return `
+            <div class="advanced-radio-fields">
+                <span class="section-kicker">HUAWEI RF VALIDADO</span>
+                <div class="form-grid two-fields with-top-space">
+                    <div class="form-group">
+                        <label>RTS/CTS</label>
+                        <input data-field="rts_cts" type="number" min="0" max="2347"
+                            value="${escapeHtml(radio.rts_cts ?? 2346)}">
+                    </div>
+                    <div class="form-group">
+                        <label>DTIM</label>
+                        <input data-field="dtim" type="number" min="1" max="5"
+                            value="${escapeHtml(radio.dtim ?? 1)}">
+                    </div>
+                </div>
+                <p class="muted">
+                    Canal, potência, país, beacon, RTS e DTIM usam o formulário
+                    WLAN Advanced capturado na EG8041X7-10.
+                </p>
+            </div>
+        `;
+    }
+
     const checked = value => value ? "checked" : "";
 
     return `
@@ -125,16 +149,18 @@ collectRadioFormPayload = function (
         channelValue
     );
 
-    const booleanFields = [
-        "mu_mimo",
-        "uplink_mu_mimo",
-        "downlink_mu_mimo",
-        "uplink_ofdma",
-        "downlink_ofdma",
-        "twt",
-        "spatial_reuse",
-        "ssid_isolation"
-    ];
+    const booleanFields = currentVendor === "huawei"
+        ? []
+        : [
+            "mu_mimo",
+            "uplink_mu_mimo",
+            "downlink_mu_mimo",
+            "uplink_ofdma",
+            "downlink_ofdma",
+            "twt",
+            "spatial_reuse",
+            "ssid_isolation"
+        ];
 
     for (const name of booleanFields) {
         const field = form.querySelector(
@@ -166,11 +192,15 @@ collectRadioFormPayload = function (
         }
     }
 
-    for (const name of [
-        "qos_type",
-        "work_mode",
-        "preamble_type"
-    ]) {
+    for (const name of (
+        currentVendor === "huawei"
+            ? []
+            : [
+                "qos_type",
+                "work_mode",
+                "preamble_type"
+            ]
+    )) {
         const field = form.querySelector(
             `[data-field="${name}"]`
         );
@@ -1557,10 +1587,33 @@ function syncAdvancedNetworkForms() {
     for (const [key, selector] of controls) {
         const control = document.querySelector(selector);
         if (!control) continue;
-        const ready = Boolean(ontConnected && routerWriteEnabled && loaded[key]) &&
+        const huaweiReservationUpdate = (
+            currentVendor === "huawei"
+            && selector.includes("dhcpReservationForm")
+            && advancedState.dhcp?.capabilities?.reservation_update === true
+            && Boolean(
+                document.getElementById("dhcpReservationId")?.value
+            )
+        );
+        const unsupportedHuaweiWrite = (
+            currentVendor === "huawei"
+            && (
+                selector.includes("portForwardForm")
+                || (
+                    selector.includes("dhcpReservationForm")
+                    && !huaweiReservationUpdate
+                )
+            )
+        );
+        const ready = !unsupportedHuaweiWrite &&
+            Boolean(ontConnected && routerWriteEnabled && loaded[key]) &&
             (key !== "dhcp" || advancedState.dhcp?.write_safe !== false);
         control.disabled = !ready;
-        control.title = ready ? "" : "Carregue os dados atuais antes de configurar.";
+        control.title = unsupportedHuaweiWrite
+            ? "Esta operação específica ainda não foi capturada/validada para Huawei."
+            : ready
+                ? ""
+                : "Carregue os dados atuais antes de configurar.";
     }
 }
 
@@ -1690,27 +1743,53 @@ function renderDhcpReservations(items) {
         ).join("")
         : '<span class="muted">Nenhuma reserva cadastrada.</span>';
 
+    const huaweiReservationUpdate = (
+        currentVendor === "huawei"
+        && advancedState.dhcp?.capabilities?.reservation_update === true
+    );
+    const reservationCreateDelete = (
+        currentVendor !== "huawei"
+        && advancedState.dhcp?.capabilities?.reservation_write !== false
+    );
+
     container
         .querySelectorAll(
             ".reservation-edit"
         )
-        .forEach(
-            button => button.addEventListener(
-                "click",
-                editDhcpReservation
-            )
-        );
+        .forEach(button => {
+            const allowed = (
+                huaweiReservationUpdate
+                || reservationCreateDelete
+            );
+            button.disabled = !allowed;
+            button.title = allowed
+                ? ""
+                : "Edição de reserva não validada para este equipamento.";
+            if (allowed) {
+                button.addEventListener(
+                    "click",
+                    editDhcpReservation
+                );
+            }
+        });
 
     container
         .querySelectorAll(
             ".reservation-delete"
         )
-        .forEach(
-            button => button.addEventListener(
-                "click",
-                deleteDhcpReservation
-            )
-        );
+        .forEach(button => {
+            const allowed = reservationCreateDelete;
+            button.disabled = !allowed;
+            button.title = allowed
+                ? ""
+                : "DELETE de reserva DHCP Huawei ainda não foi capturado.";
+            if (allowed) {
+                button.addEventListener(
+                    "click",
+                    deleteDhcpReservation
+                );
+            }
+        });
 }
 
 
@@ -1774,6 +1853,8 @@ function editDhcpReservation(event) {
     document.getElementById(
         "dhcpReservationMac"
     ).value = item.MACAddr || "";
+
+    syncAdvancedNetworkForms();
 }
 
 
@@ -1809,6 +1890,7 @@ async function saveDhcpReservation(event) {
                 "dhcpReservationId"
             ).value = "";
 
+            syncAdvancedNetworkForms();
             await loadDhcpOperations();
         }
     );
@@ -1846,6 +1928,22 @@ async function deleteDhcpReservation(event) {
 // =========================================================
 
 async function loadNatOperations() {
+    if (currentVendor === "huawei") {
+        const forwarding = document.getElementById(
+            "portForwardList"
+        );
+        if (forwarding) {
+            forwarding.innerHTML = featureUnavailable(
+                "Port Forwarding",
+                "A captura da EG8041X7-10 validou DMZ, mas não um CRUD de Port Forwarding."
+            );
+        }
+        advancedState.portForwarding = [];
+        advancedState.networkLoaded.portForwarding = false;
+        syncAdvancedNetworkForms();
+        return await loadDmz();
+    }
+
     const forwarding = await loadPortForwarding();
     const dmz = await loadDmz();
     return forwarding && dmz;
@@ -2310,19 +2408,25 @@ function syncHuaweiAdvancedMode() {
         "hidden",
         !huawei
     );
+    document.getElementById(
+        "advanced-tab-huawei-security"
+    )?.classList.toggle(
+        "hidden",
+        !huawei
+    );
 
+    // DHCP e DMZ possuem implementação Huawei validada pela captura.
+    // Estas abas são multi-vendor; somente recursos não mapeados ficam ocultos.
     for (const id of [
         "advanced-tab-dhcp",
         "advanced-tab-nat"
     ]) {
-        document.getElementById(id)?.classList.toggle(
-            "hidden",
-            huawei
+        document.getElementById(id)?.classList.remove(
+            "hidden"
         );
     }
 
     for (const id of [
-        "refreshAdvancedNetworkButton",
         "multimodelProbeButton",
         "multimodelDiagnosticButton",
         "multimodelMeshButton",
@@ -2873,6 +2977,237 @@ async function deleteHuaweiIpv4Filter(index) {
 }
 
 // =========================================================
+// HUAWEI • SEGURANÇA / ALG / IGMP
+// =========================================================
+
+const huaweiSecurityState = {
+    loaded: false,
+    snapshot: null,
+};
+
+function huaweiFlag(value) {
+    return (
+        value === true
+        || value === 1
+        || String(value ?? "").toLowerCase() === "true"
+        || String(value ?? "") === "1"
+        || String(value ?? "").toLowerCase() === "on"
+    );
+}
+
+async function readHuaweiCapturedFeature(feature) {
+    const result = await apiRequest(
+        "/features/read?feature=" + encodeURIComponent(feature)
+    );
+    return result?.objects?.items ?? null;
+}
+
+function setHuaweiCheckbox(id, value) {
+    const input = document.getElementById(id);
+    if (input) input.checked = huaweiFlag(value);
+}
+
+function collectHuaweiSecurityForm() {
+    const firewall = {
+        enabled: document.getElementById("huaweiFirewallEnabled")?.checked === true,
+        level: document.getElementById("huaweiFirewallLevel")?.value?.trim() || "",
+    };
+
+    const dos = {};
+    for (const key of [
+        "SynFloodEn",
+        "IcmpEchoReplyEn",
+        "IcmpRedirectEn",
+        "LandEn",
+        "SmurfEn",
+        "WinnukeEn",
+        "PingSweepEn",
+    ]) {
+        const input = document.getElementById("huaweiDos" + key);
+        dos[key] = input?.checked === true;
+    }
+
+    const alg = {};
+    for (const key of [
+        "FtpEnable",
+        "TftpEnable",
+        "H323Enable",
+        "SipEnable",
+        "RTSPEnable",
+        "PptpEnable",
+        "L2TPForward",
+        "IPSecForward",
+        "RTCPEnable",
+    ]) {
+        const input = document.getElementById("huaweiAlg" + key);
+        alg[key] = input?.checked === true;
+    }
+    alg.RTCPPort = Number(
+        document.getElementById("huaweiAlgRTCPPort")?.value || 0
+    );
+
+    return {
+        firewall_level: firewall,
+        dos,
+        alg,
+        igmp: {
+            enabled: document.getElementById("huaweiIgmpEnabled")?.checked === true,
+        },
+        ipv6_firewall: {
+            enabled: document.getElementById("huaweiIpv6FirewallEnabled")?.checked === true,
+        },
+        internet_control: {
+            enabled: document.getElementById("huaweiInternetControlEnabled")?.checked === true,
+        },
+    };
+}
+
+async function loadHuaweiSecurityControls() {
+    if (!ontConnected || currentVendor !== "huawei") return;
+
+    const status = document.getElementById("huaweiSecurityStatus");
+    const badge = document.getElementById("huaweiSecurityBadge");
+    if (status) status.textContent = "Lendo segurança Huawei...";
+    if (badge) badge.textContent = "CARREGANDO";
+
+    const features = [
+        "firewall_level",
+        "dos",
+        "alg",
+        "igmp",
+        "ipv6_firewall",
+        "internet_control",
+    ];
+    const state = {};
+
+    for (const feature of features) {
+        state[feature] = await readHuaweiCapturedFeature(feature);
+    }
+
+    const firewall = state.firewall_level?.firewall || {};
+    setHuaweiCheckbox("huaweiFirewallEnabled", firewall.Enable);
+    const level = document.getElementById("huaweiFirewallLevel");
+    if (level) level.value = firewall.AdvancedLevel ?? "";
+
+    const dos = state.dos || {};
+    for (const key of [
+        "SynFloodEn",
+        "IcmpEchoReplyEn",
+        "IcmpRedirectEn",
+        "LandEn",
+        "SmurfEn",
+        "WinnukeEn",
+        "PingSweepEn",
+    ]) {
+        setHuaweiCheckbox("huaweiDos" + key, dos[key]);
+    }
+
+    const alg = state.alg || {};
+    for (const key of [
+        "FtpEnable",
+        "TftpEnable",
+        "H323Enable",
+        "SipEnable",
+        "RTSPEnable",
+        "PptpEnable",
+        "L2TPForward",
+        "IPSecForward",
+        "RTCPEnable",
+    ]) {
+        setHuaweiCheckbox("huaweiAlg" + key, alg[key]);
+    }
+    const rtcpPort = document.getElementById("huaweiAlgRTCPPort");
+    if (rtcpPort) rtcpPort.value = alg.RTCPPort ?? 0;
+
+    setHuaweiCheckbox(
+        "huaweiIgmpEnabled",
+        state.igmp?.IGMPEnable ?? state.igmp?.enabled
+    );
+    setHuaweiCheckbox(
+        "huaweiIpv6FirewallEnabled",
+        state.ipv6_firewall?.X_HW_IPv6FWDFireWallEnable
+            ?? state.ipv6_firewall?.enabled
+    );
+    setHuaweiCheckbox(
+        "huaweiInternetControlEnabled",
+        state.internet_control?.Enable
+            ?? state.internet_control?.enabled
+    );
+
+    huaweiSecurityState.snapshot = collectHuaweiSecurityForm();
+    huaweiSecurityState.loaded = true;
+
+    if (badge) badge.textContent = "CAPTURA VALIDADA";
+    if (status) {
+        status.textContent = (
+            "Estado carregado. Apenas grupos alterados serão enviados."
+        );
+    }
+}
+
+async function saveHuaweiSecurityControls() {
+    if (!huaweiSecurityState.loaded) {
+        await loadHuaweiSecurityControls();
+    }
+
+    const before = huaweiSecurityState.snapshot || {};
+    const after = collectHuaweiSecurityForm();
+    const changed = Object.entries(after).filter(
+        ([feature, config]) => (
+            JSON.stringify(config)
+            !== JSON.stringify(before[feature])
+        )
+    );
+
+    if (!changed.length) {
+        showToast("Nenhuma alteração Huawei para aplicar.");
+        return;
+    }
+
+    setBusy(true, "Aplicando segurança Huawei...");
+    const status = document.getElementById("huaweiSecurityStatus");
+
+    try {
+        const applied = [];
+        for (const [feature, config] of changed) {
+            const result = await apiRequest(
+                "/huawei/features/update",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        feature,
+                        config,
+                    }),
+                }
+            );
+            if (result?.verified !== true) {
+                throw new Error(
+                    "A ONT não confirmou " + feature + " por read-back."
+                );
+            }
+            applied.push(feature);
+        }
+
+        await loadHuaweiSecurityControls();
+        await loadHistory();
+        if (status) {
+            status.textContent = (
+                "Confirmado por read-back: " + applied.join(", ")
+            );
+        }
+        showToast(
+            applied.length + " grupo(s) Huawei atualizado(s) e confirmado(s)."
+        );
+    } catch (error) {
+        if (status) status.textContent = error.message;
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
+}
+
+
+// =========================================================
 // LOAD / EVENTS
 // =========================================================
 
@@ -2913,6 +3248,18 @@ async function loadOperationsConsoleInternal() {
                 "IPv4 Filtering Huawei:",
                 error
             );
+        }
+        try {
+            await loadHuaweiSecurityControls();
+        } catch (error) {
+            console.warn(
+                "Segurança Huawei:",
+                error
+            );
+            const status = document.getElementById(
+                "huaweiSecurityStatus"
+            );
+            if (status) status.textContent = error.message;
         }
         try {
             await loadHistory();
@@ -3113,6 +3460,10 @@ function initAdvancedOperations() {
         ?.addEventListener("click", resetHuaweiIpv4FilterForm);
     document.getElementById("huaweiIpv4FilterProtocol")
         ?.addEventListener("change", syncHuaweiPortFields);
+    document.getElementById("huaweiSecurityRefresh")
+        ?.addEventListener("click", () => void loadHuaweiSecurityControls());
+    document.getElementById("huaweiSecuritySave")
+        ?.addEventListener("click", () => void saveHuaweiSecurityControls());
     document.addEventListener(
         "huawei:ipv4-filter-refresh",
         () => {
