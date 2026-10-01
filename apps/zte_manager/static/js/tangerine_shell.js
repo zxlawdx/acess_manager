@@ -200,7 +200,7 @@
         }
       }).observe(dashboard,{attributes:true,attributeFilter:["class"]});
     }
-    document.addEventListener?.("zte:session-changed", () => {
+    document.addEventListener?.("device:session-changed", () => {
       historyGeneration++;
       syncOverview();
       const list=document.getElementById("overviewHistory");
