@@ -624,7 +624,15 @@ class HuaweiService:
 
     def dmz_status(self):
         with self._lock:
-            return self._require_captured().dmz_status()
+            status = self._require_captured().dmz_status()
+            if not status.get("available"):
+                return []
+            return [{
+                "_InstID": status.get("id") or "",
+                "Enable": "1" if status.get("enabled") else "0",
+                "InternalClient": status.get("internal_client") or "",
+                "WANCViewName": status.get("wan") or "",
+            }]
 
     def set_dmz(self, config):
         with self._lock:
