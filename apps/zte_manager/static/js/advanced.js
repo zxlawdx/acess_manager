@@ -3524,6 +3524,15 @@ function initAdvancedOperations() {
         huaweiIpv4FilterState.rules = [];
         huaweiIpv4FilterState.capability = null;
     });
+    document.addEventListener("huawei:snapshot-refreshed", () => {
+        if (currentVendor !== "huawei") return;
+        // Backend state was explicitly refreshed. Invalidate only the local
+        // render flags; subsequent loaders consume the refreshed snapshot
+        // without causing a second router read.
+        advancedState.loaded = false;
+        huaweiSecurityState.loaded = false;
+        huaweiSecurityState.snapshot = null;
+    });
 
     document
         .getElementById(
