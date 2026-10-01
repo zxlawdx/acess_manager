@@ -97,11 +97,10 @@ class DeviceService:
     def active_service(self):
         if self._session is not None:
             return self._session.service
-        if self._zte_service.connected:
-            return self._zte_service
-        raise RuntimeError(
-            "Nenhum equipamento conectado."
-        )
+        # Before /connect, the historical ZTE provider remains the default
+        # object so legacy tests/local callers keep their normal session error.
+        # An active Huawei session always wins and can never fall back to ZTE.
+        return self._zte_service
 
     @property
     def vendor(self) -> str | None:
