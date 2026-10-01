@@ -2889,8 +2889,15 @@ function loadOperationsConsole() {
 async function loadOperationsConsoleInternal() {
     if (!ontConnected) return;
 
-    syncHuaweiAdvancedMode();
-    if (currentVendor === "huawei") {
+    const activeVendor = (
+        typeof currentVendor !== "undefined"
+            ? currentVendor
+            : "zte"
+    );
+    if (typeof syncHuaweiAdvancedMode === "function") {
+        syncHuaweiAdvancedMode();
+    }
+    if (activeVendor === "huawei") {
         try {
             await loadCapabilityCatalog();
         } catch (error) {
