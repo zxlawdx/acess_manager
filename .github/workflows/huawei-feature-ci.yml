@@ -23,13 +23,39 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Compile
         run: python -m compileall -q apps config tests manage.py launcher.py tools/build_frontend_template.py
+      - name: Template consistency
+        run: python tools/build_frontend_template.py --check
       - name: Python tests
         run: python -m unittest discover -s tests -v
-      - name: JavaScript syntax
+      - name: JavaScript checks
         run: |
           node --check apps/zte_manager/static/js/app.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/dhcp_module.js
           node --check apps/zte_manager/static/js/tr069_profiles.js
-      - name: Template consistency
-        run: python tools/build_frontend_template.py --check
+          node --check apps/zte_manager/static/js/neutral_theme.js
+          node --check apps/zte_manager/static/js/core/api_errors.js
+          node --check apps/zte_manager/static/js/workbench_tabs.js
+          node --check apps/zte_manager/static/js/features/history.js
+          node --check apps/zte_manager/static/js/features/connection_inventory.js
+          node --check apps/zte_manager/static/js/features/device_topology.js
+          node --check apps/zte_manager/static/js/features/firmware_inspector.js
+          node --check apps/zte_manager/static/js/features/provider_diagnostics.js
+          node --check apps/zte_manager/static/js/support_diagnostics.js
+          node --check apps/zte_manager/static/js/adaptive_firmware.js
+          node --check apps/zte_manager/static/js/tangerine_shell.js
+          node --check apps/zte_manager/static/js/tangerine_forms.js
+          node --test tests/test_history_view.cjs
+          node --test tests/test_structured_forms.cjs
+          node --test tests/test_provider_diagnostics_ui.cjs
+          node --test tests/test_tangerine_feature_experience.cjs
+          node --test tests/test_operator_outcomes.cjs
+          node --test tests/test_shell_and_support_layout.cjs
+          node --test tests/test_connection_inventory.cjs
+          node --test tests/test_clients_workbench.cjs
+          node --test tests/test_device_tr069_workflow.cjs
+          node --test tests/test_management_tabs.cjs
+          node --test tests/test_diagnostic_tabs.cjs
+          node --test tests/test_api_client_ui.cjs tests/test_advanced_workbench.cjs
+          node --test tests/test_tangerine_v2.cjs
+          node --test tests/test_tangerine_ui.cjs
