@@ -21,6 +21,9 @@ from apps.zte_manager.services.huawei_ipv4_filter_service import (
     HuaweiIPv4FilterRule,
     HuaweiIPv4FilterService,
 )
+from apps.zte_manager.services.huawei_captured_features import (
+    HuaweiCapturedFeatureService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +42,7 @@ class HuaweiService:
         self._lock = RLock()
         self._client: HuaweiWebClient | None = None
         self._ipv4_filter: HuaweiIPv4FilterService | None = None
+        self._captured: HuaweiCapturedFeatureService | None = None
         self._profile: HuaweiProfile | None = None
         self._capabilities: dict[str, dict[str, bool]] = {}
         self._history_session_id: int | None = None
@@ -67,11 +71,14 @@ class HuaweiService:
 
     @property
     def writes_enabled(self) -> bool:
-        cap = self._capabilities.get("ipv4_filter") or {}
-        return bool(
-            cap.get("create")
-            or cap.get("update")
-            or cap.get("delete")
+        return any(
+            bool(
+                operations.get("create")
+                or operations.get("update")
+                or operations.get("delete")
+                or operations.get("write")
+            )
+            for operations in self._capabilities.values()
         )
 
     @property
@@ -191,12 +198,86 @@ class HuaweiService:
                 operations["delete"] = False
                 operations["verified"] = False
 
-            self._client = client
-            self._ipv4_filter = ipv4_filter
-            self._profile = profile
-            self._capabilities = {
+            captured = HuaweiCapturedFeatureService(
+                client,
+                model=selected_model,
+            )
+
+            feature_capabilities: dict[str, dict[str, bool]] = {
                 "ipv4_filter": operations,
             }
+            if profile.key == "huawei_eg8041x7_10":
+                # These operations were exercised against the physical
+                # EG8041X7-10 capture. Mutations still require semantic
+                # read-back before the service reports verified=True.
+                feature_capabilities.update({
+                    "wan": {
+                        "read": True,
+                        "write": False,
+                        "verified": True,
+                    },
+                    "optical": {
+                        "read": True,
+                        "write": False,
+                        "verified": True,
+                    },
+                    "dhcp": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                    "dns": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                    "dmz": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                    "wifi_basic": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                    "wifi_radio": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                    "tr069_url": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                    "firewall_level": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                    "alg": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                    "igmp": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                    "dos": {
+                        "read": True,
+                        "update": True,
+                        "verified": True,
+                    },
+                })
+
+            self._client = client
+            self._ipv4_filter = ipv4_filter
+            self._captured = captured
+            self._profile = profile
+            self._capabilities = feature_capabilities
             self.current_host = ip
             self.current_attendant = (
                 attendant.strip()
@@ -339,6 +420,7 @@ class HuaweiService:
 
             self._client = None
             self._ipv4_filter = None
+            self._captured = None
             self._profile = None
             self._capabilities = {}
             self._history_session_id = None
@@ -356,6 +438,57 @@ class HuaweiService:
                 "Conecte-se a uma ONT Huawei antes de usar IPv4 Filtering."
             )
         return self._ipv4_filter
+
+    def _require_captured(self) -> HuaweiCapturedFeatureService:
+        if self._captured is None or self._profile is None:
+            raise RuntimeError(
+                "Conecte-se a uma ONT Huawei antes de consultar este recurso."
+            )
+        if self._profile.key != "huawei_eg8041x7_10":
+            raise PermissionError(
+                "Este recurso ainda não foi validado para o modelo Huawei conectado."
+            )
+        return self._captured
+
+    def _audit_captured(
+        self,
+        *,
+        operation: str,
+        target: str,
+        result: dict,
+        after: dict | list | None = None,
+    ) -> None:
+        if self._history_session_id is None:
+            return
+        verified = bool(result.get("verified"))
+        outcome = (
+            "verified"
+            if verified
+            else "uncertain"
+            if result.get("uncertain")
+            else "failed"
+        )
+        try:
+            history_repository.save_change(
+                self._history_session_id,
+                operation=operation,
+                target=str(target or "")[:128],
+                before=None,
+                after=after,
+                success=verified,
+                message=(
+                    "Read-back semântico Huawei"
+                    if verified
+                    else "device_result_not_confirmed"
+                ),
+                outcome=outcome,
+            )
+        except Exception as exc:
+            logger.warning(
+                "huawei_audit_failed operation=%s error_type=%s",
+                operation,
+                type(exc).__name__,
+            )
 
     @staticmethod
     def _rule_from_config(
@@ -398,6 +531,262 @@ class HuaweiService:
                 "model_verified": self.model_verified,
                 "capabilities": self.capabilities,
             }
+
+    # =========================================================
+    # HUAWEI CAPTURED FEATURES — EG8041X7-10
+    # =========================================================
+
+    def optical_status(self):
+        with self._lock:
+            return self._require_captured().optical_status()
+
+    def wan_status(self):
+        with self._lock:
+            return self._require_captured().wan_status()
+
+    def pppoe_status(self, reveal_password=False):
+        with self._lock:
+            return self._require_captured().pppoe_status(
+                reveal_password=reveal_password
+            )
+
+    def lan_clients(self):
+        with self._lock:
+            return self._require_captured().lan_clients()
+
+    def wifi_clients(self):
+        with self._lock:
+            return self._require_captured().wifi_clients()
+
+    def lan_ports(self):
+        with self._lock:
+            return self._require_captured().lan_ports()
+
+    def wifi_networks(self, reveal_password=False):
+        with self._lock:
+            return self._require_captured().wifi_networks(
+                reveal_password=reveal_password
+            )
+
+    def set_ssid_config(self, ssid_id, config):
+        with self._lock:
+            result = self._require_captured().set_ssid_config(
+                ssid_id,
+                config,
+            )
+            self._audit_captured(
+                operation="huawei_wifi_basic_update",
+                target=str(ssid_id),
+                result=result,
+                after={
+                    key: value
+                    for key, value in dict(config or {}).items()
+                    if key != "password"
+                },
+            )
+            return result
+
+    def wifi_radios(self):
+        with self._lock:
+            return self._require_captured().wifi_radios()
+
+    def wifi_channels(self, band=None, bandwidth=None, country="BRI"):
+        with self._lock:
+            return self._require_captured().wifi_channels(
+                band=band,
+                bandwidth=bandwidth,
+                country=country,
+            )
+
+    def set_wifi_radio(self, band, config):
+        with self._lock:
+            result = self._require_captured().set_wifi_radio(
+                band,
+                config,
+            )
+            self._audit_captured(
+                operation="huawei_wifi_radio_update",
+                target=str(band),
+                result=result,
+                after=dict(config or {}),
+            )
+            return result
+
+    def radio_power_status(self):
+        with self._lock:
+            return self._require_captured().radio_power_status()
+
+    def set_radio_power(self, band, enabled):
+        with self._lock:
+            result = self._require_captured().set_radio_power(
+                band,
+                enabled,
+            )
+            self._audit_captured(
+                operation="huawei_wifi_power",
+                target=str(band),
+                result=result,
+                after={"enabled": bool(enabled)},
+            )
+            return result
+
+    def dhcp_status(self):
+        with self._lock:
+            return self._require_captured().dhcp_status()
+
+    def set_dhcp_basic(self, config):
+        with self._lock:
+            result = self._require_captured().set_dhcp_basic(
+                dict(config or {})
+            )
+            self._audit_captured(
+                operation="huawei_dhcp_update",
+                target="LAN / DHCP",
+                result=result,
+                after=dict(config or {}),
+            )
+            return result
+
+    def save_dhcp_reservation(self, config):
+        raise PermissionError(
+            "A captura validou edição de reserva existente, não CREATE de reserva DHCP Huawei."
+        )
+
+    def delete_dhcp_reservation(self, instance_id):
+        raise PermissionError(
+            "DELETE de reserva DHCP Huawei ainda não foi capturado."
+        )
+
+    def dns_status(self):
+        with self._lock:
+            result = self._require_captured().dns_status()
+            result.pop("_search_rows", None)
+            return result
+
+    def set_dns(self, config):
+        with self._lock:
+            result = self._require_captured().set_dns(
+                dict(config or {})
+            )
+            safe = {
+                key: value
+                for key, value in dict(config or {}).items()
+                if "pass" not in str(key).lower()
+            }
+            self._audit_captured(
+                operation="huawei_dns_update",
+                target="DNS",
+                result=result,
+                after=safe,
+            )
+            return result
+
+    def dmz_status(self):
+        with self._lock:
+            return self._require_captured().dmz_status()
+
+    def set_dmz(self, config):
+        with self._lock:
+            result = self._require_captured().set_dmz(
+                dict(config or {})
+            )
+            self._audit_captured(
+                operation="huawei_dmz_update",
+                target="DMZ",
+                result=result,
+                after=dict(config or {}),
+            )
+            return result
+
+    def tr069_management_status(self):
+        with self._lock:
+            return self._require_captured().tr069_management_status()
+
+    def tr069_setup(self):
+        with self._lock:
+            return self._require_captured().tr069_setup()
+
+    def set_management_tr069(self, config, *, confirm=True):
+        with self._lock:
+            result = self._require_captured().set_management_tr069(
+                dict(config or {}),
+                confirm=confirm,
+            )
+            self._audit_captured(
+                operation="huawei_tr069_url_update",
+                target="ACS",
+                result=result,
+                after={
+                    "url": (
+                        dict(config or {}).get("url")
+                        or dict(config or {}).get("URL")
+                    )
+                },
+            )
+            return result
+
+    def firewall_management_status(self):
+        with self._lock:
+            return self._require_captured().firewall_management_status()
+
+    def set_management_firewall(self, config, *, confirm=False):
+        with self._lock:
+            result = self._require_captured().set_management_firewall(
+                dict(config or {}),
+                confirm=confirm,
+            )
+            self._audit_captured(
+                operation="huawei_firewall_level_update",
+                target="Firewall",
+                result=result,
+                after=dict(config or {}),
+            )
+            return result
+
+    def account_status(self):
+        return {
+            "available": False,
+            "vendor": "huawei",
+            "message": (
+                "A captura atual não validou leitura/alteração da conta administrativa Huawei."
+            ),
+        }
+
+    def upnp_status(self):
+        return {
+            "available": False,
+            "vendor": "huawei",
+            "message": "UPnP Huawei ainda não foi validado nesta captura.",
+        }
+
+    def set_upnp(self, config):
+        raise PermissionError(
+            "UPnP Huawei ainda não foi validado nesta captura."
+        )
+
+    def wps_status(self):
+        return []
+
+    def set_wps(self, band, mode):
+        raise PermissionError(
+            "Alteração WPS Huawei ainda não foi validada."
+        )
+
+    def band_steering_status(self):
+        return {
+            "available": False,
+            "vendor": "huawei",
+        }
+
+    def set_band_steering(self, enabled):
+        raise PermissionError(
+            "Band Steering Huawei ainda não foi validado semanticamente."
+        )
+
+    def configure_band_steering(self, config):
+        raise PermissionError(
+            "Band Steering Huawei ainda não foi validado semanticamente."
+        )
 
     def list_ipv4_filters(self) -> dict:
         with self._lock:
