@@ -2338,7 +2338,7 @@ async function runSelectedFirmwareDiagnostic() {
     }
 }
 
-document.addEventListener("zte:session-changed", () => {
+document.addEventListener("device:session-changed", () => {
     firmwareDiagnosticState.host = null;
     firmwareDiagnosticState.revision = null;
     firmwareDiagnosticState.model = null;
@@ -2380,7 +2380,7 @@ document.addEventListener("zte:session-changed", () => {
         if (status) status.textContent = "Aguardando detecção da nova ONT.";
     }
 });
-document.addEventListener("zte:page-open", event => {
+document.addEventListener("device:page-open", event => {
     if (event.detail?.pageName === "supportDiagnostic") {
         document.getElementById("supportReportActions")?.classList.toggle(
             "hidden", !ontConnected
