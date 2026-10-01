@@ -879,6 +879,29 @@ class HuaweiService:
             outcome=outcome,
         )
 
+    def _feature_reader(self, feature: str):
+        readers = {
+            "ipv4_filter": self.list_ipv4_filters,
+            "wan": self.wan_status,
+            "optical": self.optical_status,
+            "dhcp": self.dhcp_status,
+            "dns": self.dns_status,
+            "dmz": self.dmz_status,
+            "wifi_basic": self.wifi_networks,
+            "wifi_radio": self.wifi_radios,
+            "tr069_url": self.tr069_management_status,
+            "firewall_level": self.firewall_management_status,
+            "alg": self.firewall_management_status,
+            "igmp": self.firewall_management_status,
+            "dos": self.firewall_management_status,
+        }
+        try:
+            return readers[feature]
+        except KeyError as exc:
+            raise ValueError(
+                f"Capability Huawei desconhecida: {feature}."
+            ) from exc
+
     def capability_catalog(self) -> dict:
         with self._lock:
             if self._profile is None:
@@ -890,63 +913,86 @@ class HuaweiService:
                 profile=self._profile,
             )
             data = adapter.describe()
-            feature = data["features"]["ipv4_filter"]
-            operations = dict(
-                self._capabilities.get("ipv4_filter") or {}
-            )
-            feature["operations"] = operations
-            feature["verified"] = bool(
-                operations.get("verified")
-            )
-            feature["writable"] = bool(
-                operations.get("create")
-                or operations.get("update")
-                or operations.get("delete")
-            )
+            for key, feature in data.get("features", {}).items():
+                operations = dict(
+                    self._capabilities.get(key) or {}
+                )
+                feature["operations"] = operations
+                feature["verified"] = bool(
+                    operations.get("verified")
+                )
+                feature["writable"] = bool(
+                    operations.get("create")
+                    or operations.get("update")
+                    or operations.get("delete")
+                    or operations.get("write")
+                )
             data["vendor"] = self.vendor
             data["profile"] = self.profile_key
             return data
 
     def probe_capabilities(self, features=None) -> dict:
         with self._lock:
-            requested = list(features or ["ipv4_filter"])
-            invalid = [
+            requested = list(
+                features
+                or self._capabilities.keys()
+                or ["ipv4_filter"]
+            )
+            unknown = [
                 feature
                 for feature in requested
-                if feature != "ipv4_filter"
+                if feature not in self._capabilities
             ]
-            if invalid:
+            if unknown:
                 raise ValueError(
                     "Capabilities Huawei desconhecidas: "
-                    + ", ".join(invalid)
+                    + ", ".join(unknown)
                 )
 
-            operations = dict(
-                self._capabilities.get("ipv4_filter") or {}
-            )
-            if (
-                self._profile is not None
-                and self._profile.key == "huawei_unknown"
-            ):
-                probe = self._require_ipv4_filter().capability(
-                    probe_read=True
+            results = []
+            for feature in requested:
+                operations = dict(
+                    self._capabilities.get(feature) or {}
                 )
-                operations["read"] = bool(
-                    probe.get("read")
-                )
-                self._capabilities["ipv4_filter"] = operations
+                available = bool(operations.get("read"))
+                error = None
+                if available:
+                    try:
+                        self._feature_reader(feature)()
+                    except Exception as exc:
+                        available = False
+                        error = type(exc).__name__
 
-            return {
-                "adapter": "huawei-webui",
-                "vendor": self.vendor,
-                "profile": self.profile_key,
-                "features": [{
-                    "feature": "ipv4_filter",
-                    "label": "IPv4 Filtering",
-                    "available": bool(operations.get("read")),
+                if (
+                    feature == "ipv4_filter"
+                    and self._profile is not None
+                    and self._profile.key == "huawei_unknown"
+                ):
+                    probe = self._require_ipv4_filter().capability(
+                        probe_read=True
+                    )
+                    available = bool(probe.get("read"))
+                    operations["read"] = available
+                    operations["create"] = False
+                    operations["update"] = False
+                    operations["delete"] = False
+                    operations["verified"] = False
+                    self._capabilities[feature] = operations
+
+                results.append({
+                    "feature": feature,
+                    "label": (
+                        HuaweiWebAdapter(
+                            self.model,
+                            profile=self._profile,
+                        )
+                        .features[feature]
+                        .label
+                    ),
+                    "available": available,
                     "status": (
                         "confirmed"
-                        if operations.get("read")
+                        if available
                         else "inconclusive"
                     ),
                     "probeable": True,
@@ -954,71 +1000,95 @@ class HuaweiService:
                         operations.get("create")
                         or operations.get("update")
                         or operations.get("delete")
+                        or operations.get("write")
                     ),
-                    "dangerous": False,
+                    "dangerous": bool(
+                        HuaweiWebAdapter(
+                            self.model,
+                            profile=self._profile,
+                        )
+                        .features[feature]
+                        .dangerous
+                    ),
                     "verified": bool(
                         operations.get("verified")
                     ),
                     "operations": operations,
-                    "notes": (
-                        "CRUD fisicamente validado para EG8041X7-10; "
-                        "Huawei desconhecida permanece sem escrita."
-                    ),
-                }],
+                    "error": error,
+                })
+
+            return {
+                "adapter": "huawei-webui",
+                "vendor": self.vendor,
+                "profile": self.profile_key,
+                "features": results,
             }
 
     def capability_shape(self, feature: str) -> dict:
-        if feature != "ipv4_filter":
-            raise ValueError(
-                "Capability Huawei desconhecida."
+        with self._lock:
+            operations = dict(
+                self._capabilities.get(feature) or {}
             )
-        result = self.list_ipv4_filters()
-        rules = result.get("rules", [])
-        return {
-            "feature": "ipv4_filter",
-            "available": True,
-            "count": len(rules),
-            "keys": [
-                "domain",
-                "name",
-                "protocol",
-                "direction",
-                "lan_start_ip",
-                "lan_end_ip",
-                "wan_start_ip",
-                "wan_end_ip",
-                "lan_tcp_port",
-                "lan_udp_port",
-                "wan_tcp_port",
-                "wan_udp_port",
-                "source_interface",
-                "vlan_id",
-                "priority",
-                "action",
-            ],
-        }
+            if not operations:
+                raise ValueError(
+                    "Capability Huawei desconhecida."
+                )
+            data = self._feature_reader(feature)()
+            if isinstance(data, list):
+                count = len(data)
+                keys = sorted({
+                    key
+                    for row in data
+                    if isinstance(row, dict)
+                    for key in row
+                    if not str(key).startswith("_")
+                })
+            elif isinstance(data, dict):
+                count = 1
+                keys = sorted(
+                    key
+                    for key in data
+                    if not str(key).startswith("_")
+                )
+            else:
+                count = 0
+                keys = []
+            return {
+                "feature": feature,
+                "available": True,
+                "count": count,
+                "keys": keys,
+            }
 
     def read_capability(self, feature: str) -> dict:
-        if feature != "ipv4_filter":
-            raise ValueError(
-                "Capability Huawei desconhecida."
+        with self._lock:
+            operations = dict(
+                self._capabilities.get(feature) or {}
             )
-        result = self.list_ipv4_filters()
-        capability = result.get("capability", {})
-        return {
-            "feature": "ipv4_filter",
-            "label": "IPv4 Filtering",
-            "available": True,
-            "writable": bool(
-                capability.get("create")
-                or capability.get("update")
-                or capability.get("delete")
-            ),
-            "objects": {
-                "rules": result.get("rules", [])
-            },
-            "capability": capability,
-        }
+            if not operations:
+                raise ValueError(
+                    "Capability Huawei desconhecida."
+                )
+            data = self._feature_reader(feature)()
+            spec = HuaweiWebAdapter(
+                self.model,
+                profile=self._profile,
+            ).features[feature]
+            return {
+                "feature": feature,
+                "label": spec.label,
+                "available": True,
+                "writable": bool(
+                    operations.get("create")
+                    or operations.get("update")
+                    or operations.get("delete")
+                    or operations.get("write")
+                ),
+                "objects": {
+                    "items": data
+                },
+                "capability": operations,
+            }
 
     def generate_attendance(self, diagnostic_id=None) -> dict:
         with self._lock:
