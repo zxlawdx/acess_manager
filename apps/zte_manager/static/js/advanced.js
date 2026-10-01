@@ -1098,7 +1098,11 @@ document.addEventListener("zte:session-changed", () => {
     advancedState.trackerProbe = null;
     advancedState.networkLoaded = { dhcp: false, portForwarding: false, dmz: false };
     advancedState.dhcp = null;
+    huaweiIpv4FilterState.rules = [];
+    huaweiIpv4FilterState.capability = null;
+    resetHuaweiIpv4FilterForm();
     syncAdvancedNetworkForms();
+    syncHuaweiAdvancedMode();
     const select = document.getElementById("multimodelSelect");
     if (select) {
         select.dataset.loaded = "false";
@@ -2285,6 +2289,588 @@ function featureUnavailable(
 
 
 // =========================================================
+// HUAWEI • IPV4 FILTERING
+// =========================================================
+
+const huaweiIpv4FilterState = {
+    rules: [],
+    capability: null,
+    loading: false
+};
+
+function syncHuaweiAdvancedMode() {
+    const huawei = (
+        ontConnected
+        && currentVendor === "huawei"
+    );
+    const filterTab = document.getElementById(
+        "advanced-tab-ipv4-filter"
+    );
+    filterTab?.classList.toggle(
+        "hidden",
+        !huawei
+    );
+
+    for (const id of [
+        "advanced-tab-dhcp",
+        "advanced-tab-nat"
+    ]) {
+        document.getElementById(id)?.classList.toggle(
+            "hidden",
+            huawei
+        );
+    }
+
+    for (const id of [
+        "refreshAdvancedNetworkButton",
+        "multimodelProbeButton",
+        "multimodelDiagnosticButton",
+        "multimodelMeshButton",
+        "backupConfigurationButton"
+    ]) {
+        document.getElementById(id)?.classList.toggle(
+            "hidden",
+            huawei
+        );
+    }
+
+    if (huawei && filterTab) {
+        queueMicrotask(() => {
+            if (currentVendor === "huawei") {
+                filterTab.click();
+            }
+        });
+    }
+}
+
+function resetHuaweiIpv4FilterForm() {
+    const form = document.getElementById(
+        "huaweiIpv4FilterForm"
+    );
+    if (!form) return;
+
+    form.reset();
+    document.getElementById(
+        "huaweiIpv4FilterDomain"
+    ).value = "";
+    document.getElementById(
+        "huaweiIpv4FilterFormTitle"
+    ).textContent = "Nova regra";
+    document.getElementById(
+        "huaweiIpv4FilterCancel"
+    )?.classList.add("hidden");
+    document.getElementById(
+        "huaweiIpv4FilterProtocol"
+    ).value = "TCP";
+    syncHuaweiPortFields();
+}
+
+function syncHuaweiPortFields() {
+    const protocol = String(
+        document.getElementById(
+            "huaweiIpv4FilterProtocol"
+        )?.value || ""
+    ).toUpperCase();
+
+    const showTcp = (
+        protocol === "TCP"
+        || protocol.includes("TCP")
+    );
+    const showUdp = (
+        protocol === "UDP"
+        || protocol.includes("UDP")
+    );
+
+    document.querySelectorAll(
+        ".huawei-ipv4-tcp-field"
+    ).forEach(
+        field => field.classList.toggle(
+            "hidden",
+            !showTcp
+        )
+    );
+    document.querySelectorAll(
+        ".huawei-ipv4-udp-field"
+    ).forEach(
+        field => field.classList.toggle(
+            "hidden",
+            !showUdp
+        )
+    );
+}
+
+function ensureSelectOption(
+    select,
+    value
+) {
+    if (!select || !value) return;
+    const exists = Array.from(
+        select.options
+    ).some(
+        option => option.value === value
+    );
+    if (!exists) {
+        select.add(
+            new Option(
+                value,
+                value
+            )
+        );
+    }
+}
+
+function hydrateHuaweiFilterOptions(rules) {
+    const protocol = document.getElementById(
+        "huaweiIpv4FilterProtocol"
+    );
+    const direction = document.getElementById(
+        "huaweiIpv4FilterDirection"
+    );
+
+    for (const rule of rules || []) {
+        ensureSelectOption(
+            protocol,
+            rule.protocol
+        );
+        ensureSelectOption(
+            direction,
+            rule.direction
+        );
+    }
+}
+
+function huaweiRulePortSummary(rule) {
+    const protocol = String(
+        rule.protocol || ""
+    ).toUpperCase();
+    const parts = [];
+
+    if (
+        protocol.includes("TCP")
+        && (
+            rule.lan_tcp_port
+            || rule.wan_tcp_port
+        )
+    ) {
+        parts.push(
+            "TCP "
+            + (rule.lan_tcp_port || "—")
+            + " → "
+            + (rule.wan_tcp_port || "—")
+        );
+    }
+    if (
+        protocol.includes("UDP")
+        && (
+            rule.lan_udp_port
+            || rule.wan_udp_port
+        )
+    ) {
+        parts.push(
+            "UDP "
+            + (rule.lan_udp_port || "—")
+            + " → "
+            + (rule.wan_udp_port || "—")
+        );
+    }
+
+    return parts.join(" · ") || "Sem portas";
+}
+
+function renderHuaweiIpv4Filters() {
+    const list = document.getElementById(
+        "huaweiIpv4FilterList"
+    );
+    const count = document.getElementById(
+        "huaweiIpv4FilterCount"
+    );
+    const capabilityBadge = document.getElementById(
+        "huaweiIpv4FilterCapability"
+    );
+    if (!list) return;
+
+    const rules = huaweiIpv4FilterState.rules || [];
+    if (count) {
+        count.textContent = (
+            rules.length
+            + (rules.length === 1 ? " regra" : " regras")
+        );
+    }
+
+    const capability = (
+        huaweiIpv4FilterState.capability
+        || {}
+    );
+    if (capabilityBadge) {
+        capabilityBadge.textContent = capability.verified
+            ? "CRUD validado"
+            : (
+                capability.read
+                    ? "Leitura disponível"
+                    : "Não confirmado"
+            );
+    }
+
+    if (!rules.length) {
+        list.innerHTML = (
+            '<span class="muted">'
+            + "Nenhuma regra IPv4 Filtering configurada."
+            + "</span>"
+        );
+        return;
+    }
+
+    list.innerHTML = rules.map(
+        (rule, index) => {
+            const canUpdate = capability.update === true;
+            const canDelete = capability.delete === true;
+            return `
+                <article class="capability-card huawei-ipv4-filter-rule"
+                         data-huawei-filter-index="${index}">
+                    <div class="capability-head">
+                        <div>
+                            <strong>${escapeHtml(rule.name || "Sem nome")}</strong>
+                            <small>${escapeHtml(rule.domain || "")}</small>
+                        </div>
+                        <span class="badge">${escapeHtml(rule.protocol || "—")}</span>
+                    </div>
+                    <p>
+                        <strong>Direção:</strong>
+                        ${escapeHtml(rule.direction || "—")}
+                    </p>
+                    <p>
+                        <strong>LAN:</strong>
+                        ${escapeHtml(rule.lan_start_ip || "—")}
+                        —
+                        ${escapeHtml(rule.lan_end_ip || "—")}
+                    </p>
+                    <p>
+                        <strong>WAN:</strong>
+                        ${escapeHtml(rule.wan_start_ip || "—")}
+                        —
+                        ${escapeHtml(rule.wan_end_ip || "—")}
+                    </p>
+                    <p>
+                        <strong>Portas:</strong>
+                        ${escapeHtml(huaweiRulePortSummary(rule))}
+                    </p>
+                    <div class="advanced-actions with-top-space">
+                        <button class="button ghost huawei-ipv4-filter-edit"
+                                type="button"
+                                data-index="${index}"
+                                ${canUpdate ? "" : "disabled"}>
+                            Editar
+                        </button>
+                        <button class="button danger huawei-ipv4-filter-delete"
+                                type="button"
+                                data-index="${index}"
+                                ${canDelete ? "" : "disabled"}>
+                            Excluir
+                        </button>
+                    </div>
+                </article>
+            `;
+        }
+    ).join("");
+
+    list.querySelectorAll(
+        ".huawei-ipv4-filter-edit"
+    ).forEach(
+        button => button.addEventListener(
+            "click",
+            () => editHuaweiIpv4Filter(
+                Number(button.dataset.index)
+            )
+        )
+    );
+    list.querySelectorAll(
+        ".huawei-ipv4-filter-delete"
+    ).forEach(
+        button => button.addEventListener(
+            "click",
+            () => deleteHuaweiIpv4Filter(
+                Number(button.dataset.index)
+            )
+        )
+    );
+}
+
+async function loadHuaweiIpv4Filters() {
+    if (
+        !ontConnected
+        || currentVendor !== "huawei"
+        || huaweiIpv4FilterState.loading
+    ) {
+        return;
+    }
+
+    huaweiIpv4FilterState.loading = true;
+    const status = document.getElementById(
+        "huaweiIpv4FilterStatus"
+    );
+    if (status) {
+        status.innerHTML = (
+            '<span class="muted">Consultando regras na ONT...</span>'
+        );
+    }
+
+    try {
+        const data = await apiRequest(
+            "/huawei/ipv4-filters",
+            { expected: "object" }
+        );
+        huaweiIpv4FilterState.rules = Array.isArray(
+            data?.rules
+        ) ? data.rules : [];
+        huaweiIpv4FilterState.capability = (
+            data?.capability || {}
+        );
+        hydrateHuaweiFilterOptions(
+            huaweiIpv4FilterState.rules
+        );
+        renderHuaweiIpv4Filters();
+
+        if (status) {
+            status.textContent = (
+                "Leitura concluída. "
+                + huaweiIpv4FilterState.rules.length
+                + " regra(s) encontrada(s)."
+            );
+        }
+
+        const save = document.getElementById(
+            "huaweiIpv4FilterSave"
+        );
+        if (save) {
+            save.disabled = (
+                huaweiIpv4FilterState.capability.create
+                !== true
+            );
+        }
+    } catch (error) {
+        if (status) {
+            status.textContent = error.message;
+        }
+        showToast(error.message);
+        throw error;
+    } finally {
+        huaweiIpv4FilterState.loading = false;
+    }
+}
+
+function collectHuaweiIpv4FilterPayload() {
+    const value = id => String(
+        document.getElementById(id)?.value || ""
+    ).trim();
+
+    const protocol = value(
+        "huaweiIpv4FilterProtocol"
+    );
+    const payload = {
+        name: value("huaweiIpv4FilterName"),
+        protocol,
+        direction: value("huaweiIpv4FilterDirection"),
+        lan_start_ip: value("huaweiIpv4FilterLanStart"),
+        lan_end_ip: value("huaweiIpv4FilterLanEnd"),
+        wan_start_ip: value("huaweiIpv4FilterWanStart"),
+        wan_end_ip: value("huaweiIpv4FilterWanEnd"),
+        lan_tcp_port: value("huaweiIpv4FilterLanTcp"),
+        lan_udp_port: value("huaweiIpv4FilterLanUdp"),
+        wan_tcp_port: value("huaweiIpv4FilterWanTcp"),
+        wan_udp_port: value("huaweiIpv4FilterWanUdp")
+    };
+
+    if (!protocol.toUpperCase().includes("TCP")) {
+        payload.lan_tcp_port = "";
+        payload.wan_tcp_port = "";
+    }
+    if (!protocol.toUpperCase().includes("UDP")) {
+        payload.lan_udp_port = "";
+        payload.wan_udp_port = "";
+    }
+
+    return payload;
+}
+
+async function saveHuaweiIpv4Filter(event) {
+    event.preventDefault();
+    if (
+        currentVendor !== "huawei"
+        || !ontConnected
+    ) {
+        showToast(
+            "Conecte-se a uma ONT Huawei compatível."
+        );
+        return;
+    }
+
+    const domain = String(
+        document.getElementById(
+            "huaweiIpv4FilterDomain"
+        )?.value || ""
+    ).trim();
+    const payload = collectHuaweiIpv4FilterPayload();
+    const editing = Boolean(domain);
+    const endpoint = editing
+        ? "/huawei/ipv4-filters/update"
+        : "/huawei/ipv4-filters/create";
+
+    if (editing) {
+        payload.instance_or_domain = domain;
+    }
+
+    setBusy(
+        true,
+        editing
+            ? "Atualizando regra IPv4..."
+            : "Criando regra IPv4..."
+    );
+
+    try {
+        const result = await apiRequest(
+            endpoint,
+            {
+                method: "POST",
+                body: JSON.stringify(payload),
+                expected: "object"
+            }
+        );
+        if (result?.verified !== true) {
+            throw new Error(
+                result?.error
+                || "A ONT não confirmou a alteração."
+            );
+        }
+        resetHuaweiIpv4FilterForm();
+        await loadHuaweiIpv4Filters();
+        await loadHistory();
+        showToast(
+            editing
+                ? "Regra IPv4 atualizada e confirmada."
+                : "Regra IPv4 criada e confirmada."
+        );
+    } catch (error) {
+        const status = document.getElementById(
+            "huaweiIpv4FilterStatus"
+        );
+        if (status) {
+            status.textContent = error.message;
+        }
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
+}
+
+function editHuaweiIpv4Filter(index) {
+    const rule = huaweiIpv4FilterState.rules[
+        index
+    ];
+    if (!rule) return;
+
+    const set = (id, value) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.value = value ?? "";
+        }
+    };
+
+    ensureSelectOption(
+        document.getElementById(
+            "huaweiIpv4FilterProtocol"
+        ),
+        rule.protocol
+    );
+    ensureSelectOption(
+        document.getElementById(
+            "huaweiIpv4FilterDirection"
+        ),
+        rule.direction
+    );
+
+    set("huaweiIpv4FilterDomain", rule.domain);
+    set("huaweiIpv4FilterName", rule.name);
+    set("huaweiIpv4FilterProtocol", rule.protocol);
+    set("huaweiIpv4FilterDirection", rule.direction);
+    set("huaweiIpv4FilterLanStart", rule.lan_start_ip);
+    set("huaweiIpv4FilterLanEnd", rule.lan_end_ip);
+    set("huaweiIpv4FilterWanStart", rule.wan_start_ip);
+    set("huaweiIpv4FilterWanEnd", rule.wan_end_ip);
+    set("huaweiIpv4FilterLanTcp", rule.lan_tcp_port);
+    set("huaweiIpv4FilterLanUdp", rule.lan_udp_port);
+    set("huaweiIpv4FilterWanTcp", rule.wan_tcp_port);
+    set("huaweiIpv4FilterWanUdp", rule.wan_udp_port);
+
+    document.getElementById(
+        "huaweiIpv4FilterFormTitle"
+    ).textContent = "Editar regra";
+    document.getElementById(
+        "huaweiIpv4FilterCancel"
+    )?.classList.remove("hidden");
+    syncHuaweiPortFields();
+    document.getElementById(
+        "huaweiIpv4FilterForm"
+    )?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+}
+
+async function deleteHuaweiIpv4Filter(index) {
+    const rule = huaweiIpv4FilterState.rules[
+        index
+    ];
+    if (!rule) return;
+
+    if (!window.confirm(
+        "Excluir a regra "
+        + (rule.name || rule.domain)
+        + "?"
+    )) {
+        return;
+    }
+
+    setBusy(
+        true,
+        "Excluindo regra IPv4..."
+    );
+    try {
+        const result = await apiRequest(
+            "/huawei/ipv4-filters/delete",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    instance_or_domain: rule.domain
+                }),
+                expected: "object"
+            }
+        );
+        if (result?.verified !== true) {
+            throw new Error(
+                result?.error
+                || "A ONT não confirmou a exclusão."
+            );
+        }
+        resetHuaweiIpv4FilterForm();
+        await loadHuaweiIpv4Filters();
+        await loadHistory();
+        showToast(
+            "Regra IPv4 excluída e confirmada."
+        );
+    } catch (error) {
+        const status = document.getElementById(
+            "huaweiIpv4FilterStatus"
+        );
+        if (status) {
+            status.textContent = error.message;
+        }
+        showToast(error.message);
+    } finally {
+        setBusy(false);
+    }
+}
+
+// =========================================================
 // LOAD / EVENTS
 // =========================================================
 
@@ -2300,6 +2886,36 @@ function loadOperationsConsole() {
 
 async function loadOperationsConsoleInternal() {
     if (!ontConnected) return;
+
+    syncHuaweiAdvancedMode();
+    if (currentVendor === "huawei") {
+        try {
+            await loadCapabilityCatalog();
+        } catch (error) {
+            console.warn(
+                "Capabilities Huawei:",
+                error
+            );
+        }
+        try {
+            await loadHuaweiIpv4Filters();
+        } catch (error) {
+            console.warn(
+                "IPv4 Filtering Huawei:",
+                error
+            );
+        }
+        try {
+            await loadHistory();
+        } catch (error) {
+            console.warn(
+                "Histórico local:",
+                error
+            );
+        }
+        advancedState.loaded = true;
+        return;
+    }
 
     // Bootstrap e catálogo nativo são exclusivamente locais e devem
     // aparecer ANTES das sondagens menuView/menuData, que podem levar
@@ -2436,6 +3052,7 @@ function initAdvancedOperations() {
     if (info) info.textContent = "Clique em Carregar DHCP / NAT para consultar o estado atual.";
     document.addEventListener("zte:page-open", event => {
         if (event.detail?.pageName === "advanced" && ontConnected) {
+            syncHuaweiAdvancedMode();
             void loadOperationsConsole();
         }
     });
@@ -2478,6 +3095,26 @@ function initAdvancedOperations() {
 
     document.getElementById("refreshAdvancedNetworkButton")
         ?.addEventListener("click", loadAdvancedNetworkManually);
+
+    document.getElementById("huaweiIpv4FilterForm")
+        ?.addEventListener("submit", saveHuaweiIpv4Filter);
+    document.getElementById("huaweiIpv4FilterRefresh")
+        ?.addEventListener("click", loadHuaweiIpv4Filters);
+    document.getElementById("huaweiIpv4FilterCancel")
+        ?.addEventListener("click", resetHuaweiIpv4FilterForm);
+    document.getElementById("huaweiIpv4FilterProtocol")
+        ?.addEventListener("change", syncHuaweiPortFields);
+    document.addEventListener(
+        "huawei:ipv4-filter-refresh",
+        () => {
+            if (
+                ontConnected
+                && currentVendor === "huawei"
+            ) {
+                void loadHuaweiIpv4Filters();
+            }
+        }
+    );
 
     document
         .getElementById(
