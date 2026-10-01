@@ -1451,6 +1451,7 @@ class HuaweiService:
         with self._lock:
             service = self._require_captured()
             values = dict(config or {})
+            before = self._snapshot_cached(feature)
             writers = {
                 "layer3": service.set_layer3_ports,
                 "lan_ipv4": service.set_lan_ipv4,
@@ -1513,11 +1514,55 @@ class HuaweiService:
                         f"Escrita Huawei não disponível para a capability {feature}."
                     ) from exc
                 result = writer(values)
+            readback = result.get("readback")
+            if result.get("verified") and isinstance(readback, dict):
+                if feature == "dhcp_static":
+                    state = self._snapshot_cached("dhcp") or {}
+                    rows = list(state.get("reservations") or [])
+                    replaced = False
+                    for index, row in enumerate(rows):
+                        if row.get("_InstID") == readback.get("_InstID"):
+                            rows[index] = readback
+                            replaced = True
+                            break
+                    if not replaced:
+                        rows.append(readback)
+                    state["reservations"] = rows
+                    self._snapshot_store("dhcp", state)
+                elif feature == "dns_host":
+                    state = self._snapshot_cached("dns") or {}
+                    rows = list(state.get("hosts") or [])
+                    replaced = False
+                    for index, row in enumerate(rows):
+                        if row.get("id") == readback.get("id"):
+                            rows[index] = readback
+                            replaced = True
+                            break
+                    if not replaced:
+                        rows.append(readback)
+                    state["hosts"] = rows
+                    self._snapshot_store("dns", state)
+                elif feature == "firewall_level":
+                    self._snapshot_store(
+                        "firewall_level",
+                        {
+                            "available": True,
+                            "firewall": readback,
+                        },
+                    )
+                else:
+                    self._snapshot_store(feature, readback)
             self._audit_captured(
                 operation=f"huawei_{feature}_update",
                 target=feature,
                 result=result,
+                before=before,
                 after=dict(config or {}),
+            )
+            result["snapshot_resource"] = (
+                "dhcp" if feature == "dhcp_static"
+                else "dns" if feature == "dns_host"
+                else feature
             )
             return result
 
@@ -1531,16 +1576,29 @@ class HuaweiService:
 
     def set_management_firewall(self, config, *, confirm=False):
         with self._lock:
+            before = self._snapshot_cached("firewall_level")
             result = self._require_captured().set_management_firewall(
                 dict(config or {}),
                 confirm=confirm,
             )
+            if result.get("verified") and isinstance(
+                result.get("readback"), dict
+            ):
+                self._snapshot_store(
+                    "firewall_level",
+                    {
+                        "available": True,
+                        "firewall": result["readback"],
+                    },
+                )
             self._audit_captured(
                 operation="huawei_firewall_level_update",
                 target="Firewall",
                 result=result,
+                before=before,
                 after=dict(config or {}),
             )
+            result["snapshot_resource"] = "firewall_level"
             return result
 
     def port_forwarding_status(self):
@@ -1661,6 +1719,26 @@ class HuaweiService:
         with self._lock:
             rule = self._rule_from_config(config)
             result = self._require_ipv4_filter().create_ipv4_filter(rule)
+            if result.get("verified") and isinstance(
+                result.get("rule"), dict
+            ):
+                state = self._snapshot_cached("ipv4_filter") or {
+                    "rules": [],
+                    "capability": dict(
+                        self._capabilities.get("ipv4_filter") or {}
+                    ),
+                    "vendor": self.vendor,
+                    "model": self.model,
+                    "profile": self.profile_key,
+                }
+                rows = [
+                    item for item in state.get("rules") or []
+                    if item.get("domain") != result["rule"].get("domain")
+                ]
+                rows.append(result["rule"])
+                state["rules"] = rows
+                self._snapshot_store("ipv4_filter", state)
+            result["snapshot_resource"] = "ipv4_filter"
             self._audit_ipv4_filter(
                 operation="huawei_ipv4_filter_create",
                 target=rule.name,
@@ -1677,7 +1755,12 @@ class HuaweiService:
     ) -> dict:
         with self._lock:
             service = self._require_ipv4_filter()
-            current = service.list_ipv4_filters().get("rules", [])
+            cached_state = self._snapshot_cached("ipv4_filter")
+            current = (
+                cached_state.get("rules", [])
+                if isinstance(cached_state, dict)
+                else service.list_ipv4_filters().get("rules", [])
+            )
             domain = str(instance_or_domain)
             before = next(
                 (
@@ -1696,6 +1779,34 @@ class HuaweiService:
                 instance_or_domain,
                 rule,
             )
+            if result.get("verified") and isinstance(
+                result.get("rule"), dict
+            ):
+                state = cached_state or {
+                    "rules": current,
+                    "capability": dict(
+                        self._capabilities.get("ipv4_filter") or {}
+                    ),
+                    "vendor": self.vendor,
+                    "model": self.model,
+                    "profile": self.profile_key,
+                }
+                rows = list(state.get("rules") or [])
+                replaced = False
+                for index, item in enumerate(rows):
+                    if (
+                        item.get("domain") == result["rule"].get("domain")
+                        or item.get("domain") == domain
+                        or str(item.get("domain") or "").endswith("." + domain)
+                    ):
+                        rows[index] = result["rule"]
+                        replaced = True
+                        break
+                if not replaced:
+                    rows.append(result["rule"])
+                state["rules"] = rows
+                self._snapshot_store("ipv4_filter", state)
+            result["snapshot_resource"] = "ipv4_filter"
             self._audit_ipv4_filter(
                 operation="huawei_ipv4_filter_update",
                 target=rule.name,
@@ -1710,10 +1821,36 @@ class HuaweiService:
         instance_or_domain,
     ) -> dict:
         with self._lock:
+            cached_state = self._snapshot_cached("ipv4_filter")
             result = self._require_ipv4_filter().delete_ipv4_filter(
                 instance_or_domain
             )
             previous = result.get("previous")
+            if result.get("verified"):
+                state = cached_state or {
+                    "rules": [],
+                    "capability": dict(
+                        self._capabilities.get("ipv4_filter") or {}
+                    ),
+                    "vendor": self.vendor,
+                    "model": self.model,
+                    "profile": self.profile_key,
+                }
+                deleted = str(
+                    result.get("deleted_domain")
+                    or instance_or_domain
+                )
+                state["rules"] = [
+                    item for item in state.get("rules") or []
+                    if (
+                        str(item.get("domain") or "") != deleted
+                        and not str(item.get("domain") or "").endswith(
+                            "." + deleted
+                        )
+                    )
+                ]
+                self._snapshot_store("ipv4_filter", state)
+            result["snapshot_resource"] = "ipv4_filter"
             self._audit_ipv4_filter(
                 operation="huawei_ipv4_filter_delete",
                 target=(
@@ -1846,7 +1983,7 @@ class HuaweiService:
                 error = None
                 if available:
                     try:
-                        self._feature_reader(feature)()
+                        self._feature_reader(feature)(refresh=True)
                     except Exception as exc:
                         available = False
                         error = type(exc).__name__
@@ -1912,7 +2049,12 @@ class HuaweiService:
                 "features": results,
             }
 
-    def capability_shape(self, feature: str) -> dict:
+    def capability_shape(
+        self,
+        feature: str,
+        *,
+        refresh: bool = False,
+    ) -> dict:
         with self._lock:
             operations = dict(
                 self._capabilities.get(feature) or {}
@@ -1921,7 +2063,7 @@ class HuaweiService:
                 raise ValueError(
                     "Capability Huawei desconhecida."
                 )
-            data = self._feature_reader(feature)()
+            data = self._feature_reader(feature)(refresh=refresh)
             if isinstance(data, list):
                 count = len(data)
                 keys = sorted({
@@ -1948,7 +2090,12 @@ class HuaweiService:
                 "keys": keys,
             }
 
-    def read_capability(self, feature: str) -> dict:
+    def read_capability(
+        self,
+        feature: str,
+        *,
+        refresh: bool = False,
+    ) -> dict:
         with self._lock:
             operations = dict(
                 self._capabilities.get(feature) or {}
@@ -1957,7 +2104,7 @@ class HuaweiService:
                 raise ValueError(
                     "Capability Huawei desconhecida."
                 )
-            data = self._feature_reader(feature)()
+            data = self._feature_reader(feature)(refresh=refresh)
             spec = HuaweiWebAdapter(
                 self.model,
                 profile=self._profile,
@@ -2025,20 +2172,16 @@ class HuaweiService:
                 raise RuntimeError(
                     "Conecte-se ao equipamento antes de capturar histórico."
                 )
+            session = self.session_snapshot()
             payload = {
                 "device": self.device_info,
                 "provider": type(self).__name__,
                 "profile": self.profile_key,
                 "capabilities": self.capabilities,
+                "session_revision": self.session_revision,
+                "state": session.get("state") or {},
             }
-            try:
-                payload["ipv4_filter"] = self.list_ipv4_filters()
-                partial = False
-            except Exception as exc:
-                payload["ipv4_filter"] = {
-                    "_error": type(exc).__name__
-                }
-                partial = True
+            partial = False
             snapshot_id = history_repository.save_snapshot(
                 self._history_session_id,
                 reason,
@@ -2049,9 +2192,7 @@ class HuaweiService:
                 "snapshot_id": snapshot_id,
                 "payload": payload,
                 "partial": partial,
-                "failed_sections": (
-                    ["ipv4_filter"] if partial else []
-                ),
+                "failed_sections": [],
             }
 
     def history(self, limit=50):
