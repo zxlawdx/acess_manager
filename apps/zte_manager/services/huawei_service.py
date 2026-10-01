@@ -205,73 +205,11 @@ class HuaweiService:
 
             feature_capabilities: dict[str, dict[str, bool]] = {
                 "ipv4_filter": operations,
+                **{
+                    key: dict(value)
+                    for key, value in profile.captured_features.items()
+                },
             }
-            if profile.key == "huawei_eg8041x7_10":
-                # These operations were exercised against the physical
-                # EG8041X7-10 capture. Mutations still require semantic
-                # read-back before the service reports verified=True.
-                feature_capabilities.update({
-                    "wan": {
-                        "read": True,
-                        "write": False,
-                        "verified": True,
-                    },
-                    "optical": {
-                        "read": True,
-                        "write": False,
-                        "verified": True,
-                    },
-                    "dhcp": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                    "dns": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                    "dmz": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                    "wifi_basic": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                    "wifi_radio": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                    "tr069_url": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                    "firewall_level": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                    "alg": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                    "igmp": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                    "dos": {
-                        "read": True,
-                        "update": True,
-                        "verified": True,
-                    },
-                })
 
             self._client = client
             self._ipv4_filter = ipv4_filter
