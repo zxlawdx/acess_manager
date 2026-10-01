@@ -1,0 +1,57 @@
+name: Huawei session validation
+
+on:
+  push:
+    branches:
+      - fix/huawei-session-state-audit
+  pull_request:
+    paths:
+      - "apps/zte_manager/infrastructure/huawei/**"
+      - "apps/zte_manager/model/device_adapters/huawei.py"
+      - "apps/zte_manager/services/device_service.py"
+      - "apps/zte_manager/services/huawei_*.py"
+      - "apps/zte_manager/api.py"
+      - "apps/zte_manager/static/js/app.js"
+      - "apps/zte_manager/static/js/advanced.js"
+      - "apps/zte_manager/static/js/tr069_profiles.js"
+      - "tests/test_huawei*"
+      - "tests/test_multivendor_runtime_regressions.py"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Python syntax
+        run: |
+          python -m py_compile             apps/zte_manager/services/huawei_service.py             apps/zte_manager/services/huawei_captured_features.py             apps/zte_manager/services/huawei_ipv4_filter_service.py             apps/zte_manager/services/device_service.py             apps/zte_manager/model/device_adapters/huawei.py             apps/zte_manager/api.py
+
+      - name: JavaScript syntax
+        run: |
+          node --check apps/zte_manager/static/js/app.js
+          node --check apps/zte_manager/static/js/advanced.js
+          node --check apps/zte_manager/static/js/tr069_profiles.js
+
+      - name: Huawei backend regressions
+        run: |
+          python -m unittest             tests.test_huawei_session_snapshot             tests.test_huawei_captured_features             tests.test_huawei_provider_architecture             tests.test_huawei_ipv4_filter             tests.test_multivendor_runtime_regressions
+
+      - name: Huawei UI snapshot regressions
+        run: |
+          node --test tests/test_huawei_navigation_snapshot.cjs

@@ -228,6 +228,24 @@ def _call_device(method_name: str, *args, **kwargs):
     )(*args, **kwargs)
 
 
+def _call_device_read(method_name: str, context=None, *args, **kwargs):
+    """Read through the active provider with explicit Huawei refresh only.
+
+    Ordinary GETs consume Huawei's normalized session snapshot. The router is
+    touched again only when the operator sends ?refresh=1.
+    """
+    if (
+        device_service.vendor == "huawei"
+        and _bool(_query(context).get("refresh"))
+    ):
+        kwargs["refresh"] = True
+    return _call_device(
+        method_name,
+        *args,
+        **kwargs,
+    )
+
+
 def _call_active_provider(method_name: str, *args, **kwargs):
     """Compatibility for provider-local state endpoints.
 
@@ -369,16 +387,18 @@ def security_status(context=None):
 @api.get("/device/status")
 def device_status(context=None):
     return _safe_call(
-        _call_device,
-        "device_status"
+        _call_device_read,
+        "device_status",
+        context,
     )
 
 
 @api.get("/device/optical")
 def optical_status(context=None):
     return _safe_call(
-        _call_device,
-        "optical_status"
+        _call_device_read,
+        "optical_status",
+        context,
     )
 
 
@@ -423,8 +443,9 @@ def reboot_device(context=None):
 @api.get("/wan/status")
 def wan_status(context=None):
     return _safe_call(
-        _call_device,
-        "wan_status"
+        _call_device_read,
+        "wan_status",
+        context,
     )
 
 
@@ -435,35 +456,39 @@ def pppoe_status(context=None):
     )
 
     return _safe_call(
-        _call_device,
+        _call_device_read,
         "pppoe_status",
+        context,
         reveal_password=_bool(
             query.get("reveal_password")
-        )
+        ),
     )
 
 
 @api.get("/clients/wifi")
 def wifi_clients(context=None):
     return _safe_call(
-        _call_device,
-        "wifi_clients"
+        _call_device_read,
+        "wifi_clients",
+        context,
     )
 
 
 @api.get("/clients/lan")
 def lan_clients(context=None):
     return _safe_call(
-        _call_device,
-        "lan_clients"
+        _call_device_read,
+        "lan_clients",
+        context,
     )
 
 
 @api.get("/lan/ports")
 def lan_ports(context=None):
     return _safe_call(
-        _call_device,
-        "lan_ports"
+        _call_device_read,
+        "lan_ports",
+        context,
     )
 
 
@@ -479,11 +504,12 @@ def wifi_networks(context=None):
     )
 
     return _safe_call(
-        _call_device,
+        _call_device_read,
         "wifi_networks",
+        context,
         reveal_password=_bool(
             query.get("reveal_password")
-        )
+        ),
     )
 
 
@@ -523,8 +549,9 @@ def set_wifi_network(context=None):
 @api.get("/wifi/radios")
 def get_radios(context=None):
     return _safe_call(
-        _call_device,
-        "wifi_radios"
+        _call_device_read,
+        "wifi_radios",
+        context,
     )
 
 
@@ -579,8 +606,9 @@ def set_radio(context=None):
 @api.get("/wifi/power")
 def wifi_power_status(context=None):
     return _safe_call(
-        _call_device,
-        "radio_power_status"
+        _call_device_read,
+        "radio_power_status",
+        context,
     )
 
 
@@ -732,8 +760,9 @@ def set_upnp(context=None):
 @api.get("/dns/status")
 def dns_status(context=None):
     return _safe_call(
-        _call_device,
-        "dns_status"
+        _call_device_read,
+        "dns_status",
+        context,
     )
 
 
@@ -835,8 +864,23 @@ def capability_probe(context=None):
 @api.get("/huawei/ipv4-filters")
 def huawei_ipv4_filters(context=None):
     return _safe_call(
-        _call_device,
-        "list_ipv4_filters"
+        device_service.list_ipv4_filters,
+        refresh=_bool(_query(context).get("refresh")),
+    )
+
+
+@api.get("/huawei/session-snapshot")
+def huawei_session_snapshot(context=None):
+    return _safe_call(
+        device_service.huawei_session_snapshot
+    )
+
+
+@api.post("/huawei/session-snapshot/warm")
+def huawei_session_snapshot_warm(context=None):
+    return _safe_call(
+        device_service.warm_huawei_session_snapshot,
+        refresh=_bool(_query(context).get("refresh")),
     )
 
 
@@ -1270,6 +1314,12 @@ def read_feature(context=None):
             "type": "validation",
         }
 
+    if device_service.vendor == "huawei":
+        return _safe_call(
+            device_service.read_capability,
+            feature,
+            refresh=_bool(query.get("refresh")),
+        )
     return _safe_call(
         _active_provider_service().read_capability,
         feature
@@ -1284,8 +1334,9 @@ def read_feature(context=None):
 @api.get("/network/dhcp")
 def dhcp_status(context=None):
     return _safe_call(
-        _call_device,
-        "dhcp_status"
+        _call_device_read,
+        "dhcp_status",
+        context,
     )
 
 
@@ -1388,8 +1439,9 @@ def delete_port_forward(context=None):
 @api.get("/network/dmz")
 def dmz_status(context=None):
     return _safe_call(
-        _call_device,
-        "dmz_status"
+        _call_device_read,
+        "dmz_status",
+        context,
     )
 
 
@@ -2391,7 +2443,11 @@ def delete_tr069_provider(context=None):
 
 @api.get("/tr069/setup")
 def tr069_setup(context=None):
-    return _safe_call(_call_device, "tr069_setup")
+    return _safe_call(
+        _call_device_read,
+        "tr069_setup",
+        context,
+    )
 
 
 @api.post("/tr069/providers/apply")
@@ -2411,8 +2467,9 @@ def apply_tr069_provider(context=None):
 @api.get("/management/tr069")
 def management_tr069(context=None):
     return _safe_call(
-        _call_device,
-        "tr069_management_status"
+        _call_device_read,
+        "tr069_management_status",
+        context,
     )
 
 

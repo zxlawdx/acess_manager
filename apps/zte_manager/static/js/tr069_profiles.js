@@ -3,6 +3,7 @@
   "use strict";
   const byId = id => document.getElementById(id);
   let profiles = [], busy = false, epoch = 0, setupSnapshot = null;
+  let loadedEpoch = -1;
   const clearSecrets = () => {
     for (const id of ["tr069ProviderPassword", "tr069ProviderRequestPassword"]) {
       if (byId(id)) byId(id).value = "";
@@ -56,14 +57,16 @@
     select.value = chosen?.name || "";
     fill(chosen);
   }
-  async function refreshWan() {
+  async function refreshWan(refresh = false) {
     const requestEpoch = epoch;
     const selection = byId("tr069EligibleWan");
     const button = byId("tr069ProviderApply");
     button.disabled = true;
     selection.replaceChildren(new Option("Consultando WANs...", ""));
     try {
-      const response = await apiRequest("/tr069/setup");
+      const response = await apiRequest(
+        "/tr069/setup" + (refresh ? "?refresh=1" : "")
+      );
       if (requestEpoch !== epoch) return;
       setupSnapshot = response;
       const candidates = response.wan_candidates || [];
@@ -150,7 +153,7 @@
       feedback("Perfil excluído.");
     }));
     byId("tr069ProviderRefresh")?.addEventListener("click", () =>
-      void guard(refreshWan));
+      void guard(() => refreshWan(true)));
     byId("tr069ProviderApply")?.addEventListener("click", () => guard(async () => {
       if (!ontConnected) throw new Error("Conecte-se à ONT antes de aplicar.");
       const name = byId("tr069ProviderSelect").value;
@@ -201,6 +204,7 @@
     }));
     document.addEventListener("device:session-changed", () => {
       epoch++;
+      loadedEpoch = -1;
       setupSnapshot = null;
       clearSecrets();
       if (byId("tr069EligibleWan")) {
@@ -210,11 +214,34 @@
       }
       if (byId("tr069ProviderApply")) byId("tr069ProviderApply").disabled = true;
     });
+    document.addEventListener("huawei:snapshot-refreshed", () => {
+      if (currentVendor !== "huawei") return;
+      loadedEpoch = -1;
+      setupSnapshot = null;
+    });
+    window.warmHuaweiTr069Snapshot = async function warmHuaweiTr069Snapshot() {
+      if (!ontConnected || currentVendor !== "huawei") return;
+      if (loadedEpoch === epoch && setupSnapshot) return;
+      await guard(async () => {
+        await listProviders();
+        await refreshWan();
+        loadedEpoch = epoch;
+      });
+    };
+
     document.addEventListener("device:page-open", event => {
       if (event.detail?.pageName !== "tr069") return;
+      if (
+        currentVendor === "huawei"
+        && loadedEpoch === epoch
+        && setupSnapshot
+      ) {
+        return;
+      }
       void guard(async () => {
         await listProviders();
         if (ontConnected) await refreshWan();
+        if (currentVendor === "huawei") loadedEpoch = epoch;
       });
     });
   }

@@ -564,9 +564,10 @@ function setConnectionStatus(connected) {
             "hidden"
         );
 
-        refreshButton.classList.toggle(
-            "hidden",
-            currentVendor === "huawei"
+        // Huawei refresh is explicit now. Tab navigation never reloads the
+        // router, but the operator can deliberately refresh the session state.
+        refreshButton.classList.remove(
+            "hidden"
         );
 
         connectedDevice.classList.remove(
@@ -847,64 +848,9 @@ function openPage(pageName) {
 }
 
 
-// Huawei pages use the same public API routes as ZTE, but the active
-// DeviceService dispatches them to HuaweiService. Keep page loads sequential
-// because Huawei WebUI stores view/session context server-side.
-document.addEventListener(
-    "device:page-open",
-    event => {
-        if (
-            event.detail?.vendor !== "huawei"
-            || !ontConnected
-        ) {
-            return;
-        }
-
-        const pageName = event.detail?.pageName;
-
-        const run = async () => {
-            if (pageName === "dashboard") {
-                await loadAll();
-                return;
-            }
-            if (pageName === "device") {
-                await loadDevice();
-                try {
-                    await loadOptical();
-                } catch (error) {
-                    console.warn("Óptico Huawei indisponível:", error);
-                }
-                return;
-            }
-            if (pageName === "wifi") {
-                await loadWifi();
-                return;
-            }
-            if (pageName === "wan") {
-                await loadWan();
-                await loadPppoe(false);
-                try {
-                    await loadLanPorts();
-                } catch (error) {
-                    console.warn("Portas LAN Huawei sem telemetria:", error);
-                }
-                return;
-            }
-            if (pageName === "clients") {
-                await loadClients();
-            }
-        };
-
-        void run().catch(error => {
-            console.warn(
-                "Falha ao carregar página Huawei:",
-                pageName,
-                error
-            );
-            showToast(error.message);
-        });
-    }
-);
+// Huawei navigation is render-only. The authenticated session is loaded once
+// after connect/restore; page changes only reveal already-rendered state.
+// Explicit refresh buttons are the only navigation-adjacent router reads.
 
 
 // =========================================================
@@ -1033,7 +979,9 @@ document
                 if (currentVendor === "huawei") {
                     openPage("dashboard");
                     try {
+                        await warmHuaweiSessionState();
                         await loadAll();
+                        await warmHuaweiSessionPanels();
                     } catch (huaweiLoadError) {
                         console.warn(
                             "Leitura Huawei parcial:",
@@ -1202,9 +1150,17 @@ document
 // DEVICE
 // =========================================================
 
-async function loadDevice() {
+function snapshotReadUrl(path, refresh = false) {
+    if (!refresh || currentVendor !== "huawei") {
+        return path;
+    }
+    return path + (path.includes("?") ? "&" : "?") + "refresh=1";
+}
+
+
+async function loadDevice({refresh = false} = {}) {
     const data = await apiRequest(
-        "/device/status"
+        snapshotReadUrl("/device/status", refresh)
     );
 
     if (!data || typeof data !== "object" || !Object.keys(data).length || data.error) {
@@ -1310,14 +1266,14 @@ async function loadDevice() {
 }
 
 
-async function loadOptical() {
+async function loadOptical({refresh = false} = {}) {
     const container = document.getElementById(
         "opticalDetails"
     );
 
     try {
         const data = await apiRequest(
-            "/device/optical"
+            snapshotReadUrl("/device/optical", refresh)
         );
 
         if (!data || typeof data !== "object" || !Object.keys(data).length || data.error) {
@@ -1393,9 +1349,9 @@ async function loadOptical() {
 // WAN / PPPOE
 // =========================================================
 
-async function loadWan() {
+async function loadWan({refresh = false} = {}) {
     cachedWan = await apiRequest(
-        "/wan/status"
+        snapshotReadUrl("/wan/status", refresh)
     );
 
     const connections = Array.isArray(
@@ -1501,11 +1457,15 @@ function renderWanCard(wan) {
 
 
 async function loadPppoe(
-    reveal = false
+    reveal = false,
+    refresh = false
 ) {
     const query = new URLSearchParams({
         reveal_password: reveal
     });
+    if (refresh && currentVendor === "huawei") {
+        query.set("refresh", "1");
+    }
 
     const data = await apiRequest(
         `/wan/pppoe?${query.toString()}`
@@ -1589,14 +1549,14 @@ function renderPppoe(
 // LAN PORTS / UPNP
 // =========================================================
 
-async function loadLanPorts() {
+async function loadLanPorts({refresh = false} = {}) {
     const container = document.getElementById(
         "lanPorts"
     );
 
     try {
         const data = await apiRequest(
-            "/lan/ports"
+            snapshotReadUrl("/lan/ports", refresh)
         );
 
         const ports = Array.isArray(data)
@@ -1820,17 +1780,20 @@ async function applyUpnp(event) {
 // WIFI
 // =========================================================
 
-async function loadWifi() {
+async function loadWifi({refresh = false} = {}) {
     const query = new URLSearchParams({
         reveal_password: wifiPasswordsRevealed
     });
+    if (refresh && currentVendor === "huawei") {
+        query.set("refresh", "1");
+    }
 
     cachedNetworks = await apiRequest(
         `/wifi/networks?${query.toString()}`
     );
 
     cachedRadios = await apiRequest(
-        "/wifi/radios"
+        snapshotReadUrl("/wifi/radios", refresh)
     );
 
     renderWifiNetworks(
@@ -2921,9 +2884,9 @@ function capabilityPill(
 // DNS
 // =========================================================
 
-async function loadDns() {
+async function loadDns({refresh = false} = {}) {
     const data = await apiRequest(
-        "/dns/status"
+        snapshotReadUrl("/dns/status", refresh)
     );
 
     const hosts = Array.isArray(
@@ -4128,13 +4091,13 @@ async function rebootDevice() {
 // CLIENTES
 // =========================================================
 
-async function loadClients() {
+async function loadClients({refresh = false} = {}) {
     const wifi = await apiRequest(
-        "/clients/wifi"
+        snapshotReadUrl("/clients/wifi", refresh)
     );
 
     const lan = await apiRequest(
-        "/clients/lan"
+        snapshotReadUrl("/clients/lan", refresh)
     );
 
     const wifiClients = Array.isArray(wifi)
@@ -4667,10 +4630,47 @@ function setRefreshBusy(busy) {
 // LOAD ALL
 // =========================================================
 
+async function warmHuaweiSessionState({refresh = false} = {}) {
+    if (currentVendor !== "huawei" || !ontConnected) return null;
+    const endpoint = (
+        "/huawei/session-snapshot/warm"
+        + (refresh ? "?refresh=1" : "")
+    );
+    const result = await apiRequest(endpoint, {
+        method: "POST",
+        body: JSON.stringify({}),
+        expected: "object"
+    });
+    if (result?.partial) {
+        console.warn(
+            "Huawei: snapshot inicial parcial:",
+            result.failed || {}
+        );
+    }
+    return result;
+}
+
+
+async function warmHuaweiSessionPanels() {
+    if (currentVendor !== "huawei" || !ontConnected) return;
+    // These loaders now render from the already-warmed backend snapshot.
+    for (const warmer of [
+        window.warmHuaweiAdvancedSnapshot,
+        window.warmHuaweiTr069Snapshot
+    ]) {
+        if (typeof warmer !== "function") continue;
+        try {
+            await warmer();
+        } catch (error) {
+            console.warn("Huawei: carga inicial complementar:", error);
+        }
+    }
+}
+
 let huaweiLoadAllPromise = null;
 
 
-async function loadAll() {
+async function loadAll({refresh = false} = {}) {
     if (!ontConnected) {
         return;
     }
@@ -4685,14 +4685,14 @@ async function loadAll() {
 
         huaweiLoadAllPromise = (async () => {
             const loaders = [
-                ["equipamento", loadDevice],
-                ["óptico", loadOptical],
-                ["WAN", loadWan],
-                ["PPPoE", () => loadPppoe(false)],
-                ["portas LAN", loadLanPorts],
-                ["Wi-Fi", loadWifi],
-                ["DNS", loadDns],
-                ["clientes", loadClients]
+                ["equipamento", () => loadDevice({refresh})],
+                ["óptico", () => loadOptical({refresh})],
+                ["WAN", () => loadWan({refresh})],
+                ["PPPoE", () => loadPppoe(false, refresh)],
+                ["portas LAN", () => loadLanPorts({refresh})],
+                ["Wi-Fi", () => loadWifi({refresh})],
+                ["DNS", () => loadDns({refresh})],
+                ["clientes", () => loadClients({refresh})]
             ];
             const failed = [];
             let essentialLoaded = 0;
@@ -4710,9 +4710,6 @@ async function loadAll() {
                     );
                 }
             }
-            document.dispatchEvent(
-                new CustomEvent("huawei:ipv4-filter-refresh")
-            );
             return {
                 essentialLoaded,
                 vendor: "huawei",
@@ -4831,7 +4828,35 @@ document
     )
     .addEventListener(
         "click",
-        loadAll
+        () => void (async () => {
+            if (currentVendor !== "huawei") {
+                await loadAll();
+                return;
+            }
+            setBusy(true, "Atualizando estado completo da sessão Huawei...");
+            try {
+                await warmHuaweiSessionState({refresh: true});
+                document.dispatchEvent(
+                    new CustomEvent("huawei:snapshot-refreshed")
+                );
+                await loadAll();
+                await warmHuaweiSessionPanels();
+                showToast("Estado Huawei atualizado.");
+            } catch (error) {
+                showToast(error.message);
+            } finally {
+                setBusy(false);
+            }
+        })()
+    );
+
+document
+    .getElementById(
+        "clientsRefreshButton"
+    )
+    ?.addEventListener(
+        "click",
+        () => void loadClients({refresh: true})
     );
 
 
@@ -4954,13 +4979,15 @@ document.addEventListener(
                 return;
             }
             if (jump === "advanced") {
-                // O loader da página inicia pelo evento device:page-open.
-                // A probe só começa após catálogo ter sido carregado.
-                window.setTimeout(() => {
-                    if (typeof window.startQuickProbe === "function") {
-                        void window.startQuickProbe();
-                    }
-                }, 0);
+                // Huawei navigation is render-only. Probes remain explicit
+                // because they are live device I/O.
+                if (currentVendor !== "huawei") {
+                    window.setTimeout(() => {
+                        if (typeof window.startQuickProbe === "function") {
+                            void window.startQuickProbe();
+                        }
+                    }, 0);
+                }
             } else if (jump === "supportDiagnostic") {
                 // O painel automático também aceita famílias experimentais:
                 // opções aparecem dinamicamente conforme probes GET confirmados.
@@ -5167,8 +5194,10 @@ async function restoreDesktopSession() {
         document.getElementById("profileRadios")?.replaceChildren();
         if (currentVendor === "huawei") {
             try {
+                await warmHuaweiSessionState();
                 await loadAll();
-                showToast("Sessão Huawei recuperada e recursos validados recarregados.");
+                await warmHuaweiSessionPanels();
+                showToast("Sessão Huawei recuperada do snapshot da sessão.");
             } catch (huaweiRestoreError) {
                 console.warn("Falha parcial ao restaurar Huawei:", huaweiRestoreError);
                 showToast("Sessão Huawei recuperada. Algumas leituras precisam ser atualizadas.");
