@@ -194,7 +194,7 @@ class HuaweiWebClient:
                 ):
                     return True
 
-            except requests.RequestException:
+            except (requests.RequestException, RuntimeError):
                 pass
 
             time.sleep(0.35)
