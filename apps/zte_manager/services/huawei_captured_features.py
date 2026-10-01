@@ -648,14 +648,36 @@ class HuaweiCapturedFeatureService:
         return rows
 
     def _lan_client_records(self) -> list[dict[str, Any]]:
-        _html, records = self._records(
+        chunks: list[str] = []
+        for page in (
             USER_DEVICE_PAGE,
             LAN_USER_INFO_PAGE,
             LAN_USER_DEV_PAGE,
             LAN_USER_DHCP_PAGE,
             DHCP_INFO_PAGE,
-        )
-        return records
+        ):
+            try:
+                chunks.append(self._page(page))
+            except Exception:
+                continue
+
+        # In the real WebUI these two inventory feeds are AJAX POSTs with no
+        # body. GETing only their script/definition pages yields zero clients.
+        for endpoint in (
+            LAN_USER_DEV_PAGE,
+            LAN_USER_DHCP_PAGE,
+        ):
+            try:
+                chunks.append(
+                    self.client.post_read(
+                        endpoint,
+                        referer=USER_DEVICE_PAGE,
+                    )
+                )
+            except Exception:
+                continue
+
+        return parse_huawei_js_records("\n".join(chunks))
 
     def lan_clients(self) -> list[dict[str, Any]]:
         try:
@@ -688,16 +710,36 @@ class HuaweiCapturedFeatureService:
         return list(by_mac.values())
 
     def wifi_clients(self) -> list[dict[str, Any]]:
-        try:
-            _html, association_records = self._records(
-                WLAN_INFO_PAGE,
-                WLAN_LIST_PAGE,
-                WLAN_ASSOC_PAGE,
-                WLAN_STA_BOOST_PAGE,
-            )
-        except Exception:
-            return []
+        chunks: list[str] = []
+        for page in (
+            WLAN_INFO_PAGE,
+            WLAN_LIST_PAGE,
+        ):
+            try:
+                chunks.append(self._page(page))
+            except Exception:
+                continue
 
+        # Huawei serves association state through POST-only XHR endpoints.
+        # They are read-only and HuaweiWebClient.post_read safely retries once
+        # only when authentication expired.
+        for endpoint in (
+            WLAN_ASSOC_PAGE,
+            WLAN_STA_BOOST_PAGE,
+        ):
+            try:
+                chunks.append(
+                    self.client.post_read(
+                        endpoint,
+                        referer=WLAN_INFO_PAGE,
+                    )
+                )
+            except Exception:
+                continue
+
+        association_records = parse_huawei_js_records(
+            "\n".join(chunks)
+        )
         try:
             lan_records = self._lan_client_records()
         except Exception:
