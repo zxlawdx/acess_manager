@@ -514,6 +514,8 @@ class HuaweiCapturedFeatureService:
                 "gateway_write": False,
                 "lease_read": True,
                 "reservation_write": False,
+                "reservation_update": True,
+                "reservation_delete": False,
                 "ipv6_read": False,
                 "ipv6_write": False,
             },
@@ -603,6 +605,55 @@ class HuaweiCapturedFeatureService:
         )
         result["basic"] = verify() if result["verified"] else None
         return result
+
+    def update_dhcp_reservation(
+        self,
+        instance_or_domain: str,
+        *,
+        ip: str,
+        mac: str,
+    ) -> dict[str, Any]:
+        raw = str(instance_or_domain or "").strip()
+        prefix = (
+            "InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.DHCPStaticAddress."
+        )
+        if raw.isdigit():
+            domain = prefix + raw
+        elif raw.startswith(prefix) and raw[len(prefix):].isdigit():
+            domain = raw
+        else:
+            raise ValueError(
+                "Instância DHCP Static Huawei inválida."
+            )
+
+        path = (
+            "/html/bbsp/dhcpstatic/set.cgi"
+            f"?x={domain}"
+            "&RequestFile=html/bbsp/dhcpstatic/dhcpstatic.asp"
+        )
+
+        def verify():
+            actual = self.dhcp_status()
+            for item in actual.get("reservations") or []:
+                if (
+                    item.get("_InstID") == domain
+                    and str(item.get("IPAddr") or "") == str(ip)
+                    and str(item.get("MACAddr") or "").upper()
+                    == str(mac).upper()
+                ):
+                    return item
+            return None
+
+        return self._post_verified(
+            path=path,
+            request_file=DHCP_STATIC_PAGE,
+            payload={
+                "x.Yiaddr": str(ip),
+                "x.Chaddr": str(mac),
+            },
+            verifier=verify,
+        )
 
     # ----------------------------- DNS
 
@@ -703,6 +754,51 @@ class HuaweiCapturedFeatureService:
             path=path,
             request_file=DNS_PAGE,
             payload=payload,
+            verifier=verify,
+        )
+
+    def update_dns_host(
+        self,
+        instance_or_domain: str,
+        *,
+        ip: str,
+        domain_name: str,
+    ) -> dict[str, Any]:
+        raw = str(instance_or_domain or "").strip()
+        prefix = "InternetGatewayDevice.X_HW_DNS.HOSTS."
+        if raw.isdigit():
+            domain = prefix + raw
+        elif raw.startswith(prefix) and raw[len(prefix):].isdigit():
+            domain = raw
+        else:
+            raise ValueError(
+                "Instância DNS HOSTS Huawei inválida."
+            )
+
+        path = (
+            "/html/bbsp/dnsconfiguration/set.cgi"
+            f"?x={domain}"
+            "&RequestFile=html/bbsp/dnsconfiguration/dnsconfigcommon.asp"
+        )
+
+        def verify():
+            actual = self.dns_status()
+            for item in actual.get("hosts") or []:
+                if (
+                    item.get("id") == domain
+                    and str(item.get("ip") or "") == str(ip)
+                    and str(item.get("nome") or "") == str(domain_name)
+                ):
+                    return item
+            return None
+
+        return self._post_verified(
+            path=path,
+            request_file=DNS_PAGE,
+            payload={
+                "x.IPAddress": str(ip),
+                "x.DomainName": str(domain_name),
+            },
             verifier=verify,
         )
 
