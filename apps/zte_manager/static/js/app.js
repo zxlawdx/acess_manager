@@ -2083,6 +2083,24 @@ function renderWifiNetworks(networks) {
                     "submit",
                     applySsidForm
                 );
+
+                if (currentVendor === "huawei") {
+                    for (const fieldName of [
+                        "password",
+                        "encryption",
+                        "isolation"
+                    ]) {
+                        const field = form.querySelector(
+                            `[data-field="${fieldName}"]`
+                        );
+                        if (!field) continue;
+                        field.disabled = true;
+                        field.title = (
+                            "Este campo não teve mutation equivalente " +
+                            "capturada na EG8041X7-10."
+                        );
+                    }
+                }
             }
         );
 }
@@ -2341,6 +2359,24 @@ async function renderWifiRadios(radios) {
                         );
                     }
                 );
+
+                if (currentVendor === "huawei") {
+                    for (const fieldName of [
+                        "bandwidth",
+                        "standard",
+                        "sgi"
+                    ]) {
+                        const field = form.querySelector(
+                            `[data-field="${fieldName}"]`
+                        );
+                        if (!field) continue;
+                        field.disabled = true;
+                        field.title = (
+                            "Valor exibido da Huawei; alteração ainda não " +
+                            "foi validada com um segundo valor físico."
+                        );
+                    }
+                }
             }
         );
 
