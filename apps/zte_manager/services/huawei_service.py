@@ -382,6 +382,23 @@ class HuaweiService:
             wan_udp_port=str(config.get("wan_udp_port") or ""),
         )
 
+    def device_status(self) -> dict:
+        """Return the authenticated Huawei session identity without ZTE probes."""
+        with self._lock:
+            if not self.connected:
+                raise RuntimeError(
+                    "Conecte-se a uma ONT Huawei antes de consultar o equipamento."
+                )
+            return {
+                "fabricante": "Huawei",
+                "modelo": self.model or self._device_info.get("modelo") or "Huawei",
+                "host": self.current_host,
+                "profile": self.profile_key,
+                "provider": type(self).__name__,
+                "model_verified": self.model_verified,
+                "capabilities": self.capabilities,
+            }
+
     def list_ipv4_filters(self) -> dict:
         with self._lock:
             result = self._require_ipv4_filter().list_ipv4_filters()
