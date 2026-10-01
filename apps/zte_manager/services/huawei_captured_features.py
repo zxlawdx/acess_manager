@@ -1232,6 +1232,242 @@ class HuaweiCapturedFeatureService:
             "igmp": _record_value(records, "IGMPEnable", default=""),
         }
 
+    def alg_status(self) -> dict[str, Any]:
+        _html, records = self._records(ALG_PAGE)
+        return {
+            key: _record_value(records, key, default="")
+            for key in (
+                "FtpEnable", "TftpEnable", "H323Enable", "SipEnable",
+                "RTSPEnable", "PptpEnable", "L2TPForward",
+                "IPSecForward", "RTCPEnable", "RTCPPort",
+            )
+        }
+
+    def set_alg(self, config: dict[str, Any]) -> dict[str, Any]:
+        current = self.alg_status()
+        keys = (
+            "FtpEnable", "TftpEnable", "H323Enable", "SipEnable",
+            "RTSPEnable", "PptpEnable", "L2TPForward",
+            "IPSecForward", "RTCPEnable", "RTCPPort",
+        )
+        aliases = {
+            "ftp": "FtpEnable",
+            "tftp": "TftpEnable",
+            "h323": "H323Enable",
+            "sip": "SipEnable",
+            "rtsp": "RTSPEnable",
+            "pptp": "PptpEnable",
+            "l2tp": "L2TPForward",
+            "ipsec": "IPSecForward",
+            "rtcp": "RTCPEnable",
+            "rtcp_port": "RTCPPort",
+        }
+        normalized = dict(current)
+        for key, value in config.items():
+            target = aliases.get(key, key)
+            if target not in keys:
+                raise ValueError(
+                    f"Parâmetro ALG Huawei não mapeado: {key}."
+                )
+            normalized[target] = value
+
+        payload = {
+            f"x.{key}": (
+                str(value)
+                if key == "RTCPPort"
+                else _as01(value)
+            )
+            for key, value in normalized.items()
+            if key in keys
+        }
+        path = (
+            "/html/bbsp/alg/set.cgi"
+            "?x=InternetGatewayDevice.X_HW_ALG"
+            "&RequestFile=html/bbsp/alg/alg.asp"
+        )
+
+        def verify():
+            actual = self.alg_status()
+            for key in keys:
+                expected = payload.get(f"x.{key}")
+                if expected is None:
+                    continue
+                if str(actual.get(key) or "") != str(expected):
+                    return None
+            return actual
+
+        return self._post_verified(
+            path=path,
+            request_file=ALG_PAGE,
+            payload=payload,
+            verifier=verify,
+        )
+
+    def igmp_status(self) -> dict[str, Any]:
+        _html, records = self._records(IGMP_PAGE)
+        raw = _record_value(records, "IGMPEnable", default="")
+        return {
+            "IGMPEnable": raw,
+            "enabled": _enabled(raw),
+        }
+
+    def set_igmp(self, config: dict[str, Any]) -> dict[str, Any]:
+        enabled = config.get(
+            "enabled",
+            config.get(
+                "IGMPEnable",
+                self.igmp_status().get("IGMPEnable"),
+            ),
+        )
+        expected = _as01(enabled)
+        path = (
+            "/html/bbsp/igmp/set.cgi"
+            "?x=InternetGatewayDevice.Services.X_HW_IPTV"
+            "&RequestFile=html/bbsp/igmp/igmp.asp"
+        )
+
+        def verify():
+            actual = self.igmp_status()
+            return actual if str(actual.get("IGMPEnable") or "") == expected else None
+
+        return self._post_verified(
+            path=path,
+            request_file=IGMP_PAGE,
+            payload={"x.IGMPEnable": expected},
+            verifier=verify,
+        )
+
+    def dos_status(self) -> dict[str, Any]:
+        _html, records = self._records(DOS_PAGE)
+        return {
+            key: _record_value(records, key, default="")
+            for key in (
+                "SynFloodEn", "IcmpEchoReplyEn", "IcmpRedirectEn",
+                "LandEn", "SmurfEn", "WinnukeEn", "PingSweepEn",
+            )
+        }
+
+    def set_dos(self, config: dict[str, Any]) -> dict[str, Any]:
+        keys = (
+            "SynFloodEn", "IcmpEchoReplyEn", "IcmpRedirectEn",
+            "LandEn", "SmurfEn", "WinnukeEn", "PingSweepEn",
+        )
+        current = self.dos_status()
+        normalized = dict(current)
+        for key, value in config.items():
+            if key not in keys:
+                raise ValueError(
+                    f"Parâmetro DoS Huawei não mapeado: {key}."
+                )
+            normalized[key] = value
+
+        payload = {
+            f"x.{key}": _as01(normalized.get(key))
+            for key in keys
+        }
+        path = (
+            "/html/bbsp/Dos/set.cgi"
+            "?x=InternetGatewayDevice.X_HW_Security.Dosfilter"
+            "&RequestFile=html/bbsp/Dos/Dos.asp"
+        )
+
+        def verify():
+            actual = self.dos_status()
+            for key in keys:
+                if str(actual.get(key) or "") != payload[f"x.{key}"]:
+                    return None
+            return actual
+
+        return self._post_verified(
+            path=path,
+            request_file=DOS_PAGE,
+            payload=payload,
+            verifier=verify,
+        )
+
+    def ipv6_firewall_status(self) -> dict[str, Any]:
+        _html, records = self._records(IPV6_FIREWALL_PAGE)
+        raw = _record_value(
+            records,
+            "X_HW_IPv6FWDFireWallEnable",
+            default="",
+        )
+        return {
+            "X_HW_IPv6FWDFireWallEnable": raw,
+            "enabled": _enabled(raw),
+        }
+
+    def set_ipv6_firewall(self, config: dict[str, Any]) -> dict[str, Any]:
+        enabled = config.get(
+            "enabled",
+            config.get(
+                "X_HW_IPv6FWDFireWallEnable",
+                self.ipv6_firewall_status().get(
+                    "X_HW_IPv6FWDFireWallEnable"
+                ),
+            ),
+        )
+        expected = _as01(enabled)
+        path = (
+            "/html/bbsp/ipv6firewall/set.cgi"
+            "?x=InternetGatewayDevice.X_HW_Security"
+            "&RequestFile=html/bbsp/ipv6firewall/firewall.asp"
+        )
+
+        def verify():
+            actual = self.ipv6_firewall_status()
+            return (
+                actual
+                if str(
+                    actual.get("X_HW_IPv6FWDFireWallEnable")
+                    or ""
+                ) == expected
+                else None
+            )
+
+        return self._post_verified(
+            path=path,
+            request_file=IPV6_FIREWALL_PAGE,
+            payload={
+                "x.X_HW_IPv6FWDFireWallEnable": expected
+            },
+            verifier=verify,
+        )
+
+    def internet_control_status(self) -> dict[str, Any]:
+        _html, records = self._records(INTERNET_CONTROL_PAGE)
+        raw = _record_value(records, "Enable", default="")
+        return {
+            "Enable": raw,
+            "enabled": _enabled(raw),
+        }
+
+    def set_internet_control(self, config: dict[str, Any]) -> dict[str, Any]:
+        enabled = config.get(
+            "enabled",
+            config.get(
+                "Enable",
+                self.internet_control_status().get("Enable"),
+            ),
+        )
+        expected = _as01(enabled)
+        path = (
+            "/html/bbsp/internetcontrol/set.cgi"
+            "?x=InternetGatewayDevice.X_HW_Security.X_HW_InternetOffCtrl"
+            "&RequestFile=html/bbsp/internetcontrol/internetcontrol.asp"
+        )
+
+        def verify():
+            actual = self.internet_control_status()
+            return actual if str(actual.get("Enable") or "") == expected else None
+
+        return self._post_verified(
+            path=path,
+            request_file=INTERNET_CONTROL_PAGE,
+            payload={"x.Enable": expected},
+            verifier=verify,
+        )
+
     def set_management_firewall(
         self,
         config: dict[str, Any],
