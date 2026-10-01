@@ -212,6 +212,7 @@
     });
     document.addEventListener("device:page-open", event => {
       if (event.detail?.pageName !== "tr069") return;
+      if (event.detail?.vendor === "huawei") return;
       void guard(async () => {
         await listProviders();
         if (ontConnected) await refreshWan();
