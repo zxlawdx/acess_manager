@@ -1,0 +1,718 @@
+from __future__ import annotations
+
+import logging
+from threading import RLock
+from uuid import uuid4
+
+from apps.zte_manager.infrastructure.huawei import (
+    HuaweiDetector,
+    HuaweiWebClient,
+)
+from apps.zte_manager.model.device_adapters.huawei import (
+    HuaweiProfile,
+    HuaweiUnknownProfile,
+    HuaweiWebAdapter,
+    canonical_huawei_model,
+    resolve_huawei_profile,
+)
+from apps.zte_manager.repositories.history_repository import history_repository
+from apps.zte_manager.services.attendance_report_service import AttendanceReportService
+from apps.zte_manager.services.huawei_ipv4_filter_service import (
+    HuaweiIPv4FilterRule,
+    HuaweiIPv4FilterService,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class HuaweiService:
+    vendor = "huawei"
+
+    def __init__(
+        self,
+        *,
+        client_factory=HuaweiWebClient,
+        detector=HuaweiDetector,
+    ) -> None:
+        self._client_factory = client_factory
+        self._detector = detector
+        self._lock = RLock()
+        self._client: HuaweiWebClient | None = None
+        self._ipv4_filter: HuaweiIPv4FilterService | None = None
+        self._profile: HuaweiProfile | None = None
+        self._capabilities: dict[str, dict[str, bool]] = {}
+        self._history_session_id: int | None = None
+        self._device_info: dict = {}
+        self.current_host: str | None = None
+        self.current_attendant: str | None = None
+        self.model: str | None = None
+        self.model_verified = False
+        self.model_source: str | None = None
+        self.session_revision = uuid4().hex
+
+    @property
+    def connected(self) -> bool:
+        return self._client is not None
+
+    @property
+    def profile_key(self) -> str | None:
+        return self._profile.key if self._profile is not None else None
+
+    @property
+    def capabilities(self) -> dict[str, dict[str, bool]]:
+        return {
+            key: dict(value)
+            for key, value in self._capabilities.items()
+        }
+
+    @property
+    def writes_enabled(self) -> bool:
+        cap = self._capabilities.get("ipv4_filter") or {}
+        return bool(
+            cap.get("create")
+            or cap.get("update")
+            or cap.get("delete")
+        )
+
+    @property
+    def device_info(self) -> dict:
+        return dict(self._device_info)
+
+    def connect(
+        self,
+        ip: str,
+        username: str,
+        password: str,
+        *,
+        https: bool = False,
+        attendant: str | None = None,
+        model_hint: str | None = None,
+    ) -> dict:
+        with self._lock:
+            manual_profile = resolve_huawei_profile(
+                model_hint,
+                unknown=False,
+            )
+
+            if self._can_reuse(ip, username, password, https):
+                self.current_attendant = (
+                    attendant.strip()
+                    if attendant and attendant.strip()
+                    else self.current_attendant
+                    or "default"
+                )
+                if manual_profile is not None and (
+                    self._profile is None
+                    or manual_profile.key != self._profile.key
+                ):
+                    raise ValueError(
+                        "O profile Huawei escolhido mudou. "
+                        "Desconecte e conecte novamente."
+                    )
+                return self._connect_response(reused_session=True)
+
+            self.disconnect()
+            client = self._client_factory(
+                host=ip,
+                username=username,
+                password=password,
+                https=https,
+            )
+            client.login()
+
+            detection = self._detector.detect_authenticated(client)
+            detected_profile = resolve_huawei_profile(
+                detection.model,
+                unknown=False,
+            )
+
+            if (
+                manual_profile is not None
+                and detected_profile is not None
+                and manual_profile.key != detected_profile.key
+            ):
+                client.close()
+                raise ValueError(
+                    "O modelo Huawei escolhido diverge do modelo "
+                    "identificado pelo equipamento."
+                )
+
+            profile = (
+                detected_profile
+                or manual_profile
+                or HuaweiUnknownProfile(
+                    detection.model
+                    or model_hint
+                    or "Huawei"
+                )
+            )
+
+            selected_model = (
+                profile.model
+                if profile.key != "huawei_unknown"
+                else canonical_huawei_model(
+                    detection.model
+                    or model_hint
+                    or "Huawei"
+                )
+                or "Huawei"
+            )
+
+            model_verified = bool(
+                detected_profile is not None
+                or manual_profile is not None
+            )
+            model_source = (
+                "detected"
+                if detected_profile is not None
+                else "manual_profile"
+                if manual_profile is not None
+                else "unknown"
+            )
+
+            ipv4_filter = HuaweiIPv4FilterService(
+                client,
+                model=selected_model,
+                capability=profile.ipv4_filter,
+            )
+            operations = profile.ipv4_filter.as_dict()
+
+            # Unknown Huawei devices may expose the read page, but the lab
+            # evidence must never be generalized into write permission.
+            if profile.key == "huawei_unknown":
+                probed = ipv4_filter.capability(
+                    probe_read=True
+                )
+                operations["read"] = bool(
+                    probed.get("read")
+                )
+                operations["create"] = False
+                operations["update"] = False
+                operations["delete"] = False
+                operations["verified"] = False
+
+            self._client = client
+            self._ipv4_filter = ipv4_filter
+            self._profile = profile
+            self._capabilities = {
+                "ipv4_filter": operations,
+            }
+            self.current_host = ip
+            self.current_attendant = (
+                attendant.strip()
+                if attendant and attendant.strip()
+                else "default"
+            )
+            self.model = selected_model
+            self.model_verified = model_verified
+            self.model_source = model_source
+            self.session_revision = uuid4().hex
+            self._device_info = {
+                "fabricante": "Huawei",
+                "modelo": selected_model,
+            }
+
+            logger.info("[device-detect] vendor=huawei")
+            logger.info(
+                "[device-detect] model_raw=%s",
+                detection.model_raw or model_hint or "unknown",
+            )
+            logger.info(
+                "[device-detect] model_normalized=%s",
+                selected_model,
+            )
+            logger.info(
+                "[device-profile] selected=%s",
+                profile.key,
+            )
+            logger.info(
+                "[device-capability] ipv4_filter "
+                "read=%d create=%d update=%d delete=%d verified=%d",
+                int(bool(operations.get("read"))),
+                int(bool(operations.get("create"))),
+                int(bool(operations.get("update"))),
+                int(bool(operations.get("delete"))),
+                int(bool(operations.get("verified"))),
+            )
+
+            self._start_history()
+            return self._connect_response(reused_session=False)
+
+    def _can_reuse(
+        self,
+        ip: str,
+        username: str,
+        password: str,
+        https: bool,
+    ) -> bool:
+        if self._client is None:
+            return False
+        scheme = "https" if https else "http"
+        raw = ip.rstrip("/")
+        base = (
+            raw
+            if raw.startswith(("http://", "https://"))
+            else f"{scheme}://{raw}"
+        )
+        return bool(
+            self._client.base_url == base
+            and self._client.username == username
+            and self._client.password == password
+        )
+
+    def _connect_response(
+        self,
+        *,
+        reused_session: bool,
+    ) -> dict:
+        return {
+            "success": True,
+            "vendor": self.vendor,
+            "host": self.current_host,
+            "attendant": self.current_attendant,
+            "reused_session": reused_session,
+            "model": self.model,
+            "model_verified": self.model_verified,
+            "model_source": self.model_source,
+            "profile": self.profile_key,
+            "provider": type(self).__name__,
+            "session_revision": self.session_revision,
+            "writes_enabled": self.writes_enabled,
+            "device": self.device_info,
+            "adapter": "huawei-webui",
+            "capabilities": self.capabilities,
+        }
+
+    def _start_history(self) -> None:
+        try:
+            self._history_session_id = history_repository.start_session(
+                host=self.current_host,
+                attendant=self.current_attendant,
+                device=self._device_info,
+            )
+        except Exception as exc:
+            logger.warning(
+                "history_start_failed provider=huawei error_type=%s",
+                type(exc).__name__,
+            )
+            self._history_session_id = None
+            return
+
+        try:
+            history_repository.save_snapshot(
+                self._history_session_id,
+                "connect",
+                {
+                    "device": self._device_info,
+                    "provider": type(self).__name__,
+                    "profile": self.profile_key,
+                    "capabilities": self.capabilities,
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "history_snapshot_failed provider=huawei error_type=%s",
+                type(exc).__name__,
+            )
+
+    def disconnect(self) -> None:
+        with self._lock:
+            if self._history_session_id is not None:
+                try:
+                    history_repository.end_session(
+                        self._history_session_id
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "history_end_failed provider=huawei error_type=%s",
+                        type(exc).__name__,
+                    )
+
+            if self._client is not None:
+                try:
+                    self._client.close()
+                except Exception as exc:
+                    logger.warning(
+                        "huawei_session_close_failed error_type=%s",
+                        type(exc).__name__,
+                    )
+
+            self._client = None
+            self._ipv4_filter = None
+            self._profile = None
+            self._capabilities = {}
+            self._history_session_id = None
+            self._device_info = {}
+            self.current_host = None
+            self.current_attendant = None
+            self.model = None
+            self.model_verified = False
+            self.model_source = None
+            self.session_revision = uuid4().hex
+
+    def _require_ipv4_filter(self) -> HuaweiIPv4FilterService:
+        if self._ipv4_filter is None:
+            raise RuntimeError(
+                "Conecte-se a uma ONT Huawei antes de usar IPv4 Filtering."
+            )
+        return self._ipv4_filter
+
+    @staticmethod
+    def _rule_from_config(
+        config,
+        *,
+        domain: str = "",
+    ) -> HuaweiIPv4FilterRule:
+        if not isinstance(config, dict):
+            raise ValueError(
+                "Parâmetros IPv4 Filtering inválidos."
+            )
+        return HuaweiIPv4FilterRule(
+            domain=domain,
+            name=str(config.get("name") or ""),
+            protocol=str(config.get("protocol") or ""),
+            direction=str(config.get("direction") or ""),
+            lan_start_ip=str(config.get("lan_start_ip") or ""),
+            lan_end_ip=str(config.get("lan_end_ip") or ""),
+            wan_start_ip=str(config.get("wan_start_ip") or ""),
+            wan_end_ip=str(config.get("wan_end_ip") or ""),
+            lan_tcp_port=str(config.get("lan_tcp_port") or ""),
+            lan_udp_port=str(config.get("lan_udp_port") or ""),
+            wan_tcp_port=str(config.get("wan_tcp_port") or ""),
+            wan_udp_port=str(config.get("wan_udp_port") or ""),
+        )
+
+    def list_ipv4_filters(self) -> dict:
+        with self._lock:
+            result = self._require_ipv4_filter().list_ipv4_filters()
+            # The session profile is authoritative for write permissions.
+            result["capability"] = dict(
+                self._capabilities.get("ipv4_filter") or {}
+            )
+            result["vendor"] = self.vendor
+            result["model"] = self.model
+            result["profile"] = self.profile_key
+            return result
+
+    def create_ipv4_filter(self, config) -> dict:
+        with self._lock:
+            rule = self._rule_from_config(config)
+            result = self._require_ipv4_filter().create_ipv4_filter(rule)
+            self._audit_ipv4_filter(
+                operation="huawei_ipv4_filter_create",
+                target=rule.name,
+                before=None,
+                after=result.get("rule") or rule.as_dict(),
+                result=result,
+            )
+            return result
+
+    def update_ipv4_filter(
+        self,
+        instance_or_domain,
+        config,
+    ) -> dict:
+        with self._lock:
+            service = self._require_ipv4_filter()
+            current = service.list_ipv4_filters().get("rules", [])
+            domain = str(instance_or_domain)
+            before = next(
+                (
+                    item
+                    for item in current
+                    if item.get("domain") == domain
+                    or item.get("domain", "").endswith("." + domain)
+                ),
+                None,
+            )
+            rule = self._rule_from_config(
+                config,
+                domain=domain,
+            )
+            result = service.update_ipv4_filter(
+                instance_or_domain,
+                rule,
+            )
+            self._audit_ipv4_filter(
+                operation="huawei_ipv4_filter_update",
+                target=rule.name,
+                before=before,
+                after=result.get("rule") or rule.as_dict(),
+                result=result,
+            )
+            return result
+
+    def delete_ipv4_filter(
+        self,
+        instance_or_domain,
+    ) -> dict:
+        with self._lock:
+            result = self._require_ipv4_filter().delete_ipv4_filter(
+                instance_or_domain
+            )
+            previous = result.get("previous")
+            self._audit_ipv4_filter(
+                operation="huawei_ipv4_filter_delete",
+                target=(
+                    previous.get("name")
+                    if isinstance(previous, dict)
+                    else str(instance_or_domain)
+                ),
+                before=previous,
+                after=None,
+                result=result,
+            )
+            return result
+
+    def _audit_ipv4_filter(
+        self,
+        *,
+        operation,
+        target,
+        before,
+        after,
+        result,
+    ) -> None:
+        if self._history_session_id is None:
+            return
+        outcome = (
+            "verified"
+            if result.get("verified")
+            else "uncertain"
+            if result.get("uncertain")
+            else "failed"
+        )
+        history_repository.save_change(
+            self._history_session_id,
+            operation=operation,
+            target=str(target or "")[:128],
+            before=before,
+            after=after,
+            success=bool(result.get("verified")),
+            message=(
+                "Read-back semântico Huawei"
+                if result.get("verified")
+                else result.get("error")
+            ),
+            outcome=outcome,
+        )
+
+    def capability_catalog(self) -> dict:
+        with self._lock:
+            if self._profile is None:
+                raise RuntimeError(
+                    "Conecte-se a uma ONT Huawei antes de consultar capabilities."
+                )
+            adapter = HuaweiWebAdapter(
+                self.model,
+                profile=self._profile,
+            )
+            data = adapter.describe()
+            feature = data["features"]["ipv4_filter"]
+            operations = dict(
+                self._capabilities.get("ipv4_filter") or {}
+            )
+            feature["operations"] = operations
+            feature["verified"] = bool(
+                operations.get("verified")
+            )
+            feature["writable"] = bool(
+                operations.get("create")
+                or operations.get("update")
+                or operations.get("delete")
+            )
+            data["vendor"] = self.vendor
+            data["profile"] = self.profile_key
+            return data
+
+    def probe_capabilities(self, features=None) -> dict:
+        with self._lock:
+            requested = list(features or ["ipv4_filter"])
+            invalid = [
+                feature
+                for feature in requested
+                if feature != "ipv4_filter"
+            ]
+            if invalid:
+                raise ValueError(
+                    "Capabilities Huawei desconhecidas: "
+                    + ", ".join(invalid)
+                )
+
+            operations = dict(
+                self._capabilities.get("ipv4_filter") or {}
+            )
+            if (
+                self._profile is not None
+                and self._profile.key == "huawei_unknown"
+            ):
+                probe = self._require_ipv4_filter().capability(
+                    probe_read=True
+                )
+                operations["read"] = bool(
+                    probe.get("read")
+                )
+                self._capabilities["ipv4_filter"] = operations
+
+            return {
+                "adapter": "huawei-webui",
+                "vendor": self.vendor,
+                "profile": self.profile_key,
+                "features": [{
+                    "feature": "ipv4_filter",
+                    "label": "IPv4 Filtering",
+                    "available": bool(operations.get("read")),
+                    "status": (
+                        "confirmed"
+                        if operations.get("read")
+                        else "inconclusive"
+                    ),
+                    "probeable": True,
+                    "writable": bool(
+                        operations.get("create")
+                        or operations.get("update")
+                        or operations.get("delete")
+                    ),
+                    "dangerous": False,
+                    "verified": bool(
+                        operations.get("verified")
+                    ),
+                    "operations": operations,
+                    "notes": (
+                        "CRUD fisicamente validado para EG8041X7-10; "
+                        "Huawei desconhecida permanece sem escrita."
+                    ),
+                }],
+            }
+
+    def capability_shape(self, feature: str) -> dict:
+        if feature != "ipv4_filter":
+            raise ValueError(
+                "Capability Huawei desconhecida."
+            )
+        result = self.list_ipv4_filters()
+        rules = result.get("rules", [])
+        return {
+            "feature": "ipv4_filter",
+            "available": True,
+            "count": len(rules),
+            "keys": [
+                "domain",
+                "name",
+                "protocol",
+                "direction",
+                "lan_start_ip",
+                "lan_end_ip",
+                "wan_start_ip",
+                "wan_end_ip",
+                "lan_tcp_port",
+                "lan_udp_port",
+                "wan_tcp_port",
+                "wan_udp_port",
+                "source_interface",
+                "vlan_id",
+                "priority",
+                "action",
+            ],
+        }
+
+    def read_capability(self, feature: str) -> dict:
+        if feature != "ipv4_filter":
+            raise ValueError(
+                "Capability Huawei desconhecida."
+            )
+        result = self.list_ipv4_filters()
+        capability = result.get("capability", {})
+        return {
+            "feature": "ipv4_filter",
+            "label": "IPv4 Filtering",
+            "available": True,
+            "writable": bool(
+                capability.get("create")
+                or capability.get("update")
+                or capability.get("delete")
+            ),
+            "objects": {
+                "rules": result.get("rules", [])
+            },
+            "capability": capability,
+        }
+
+    def generate_attendance(self, diagnostic_id=None) -> dict:
+        with self._lock:
+            if not self._history_session_id:
+                raise RuntimeError(
+                    "Conecte-se ao equipamento antes de gerar a OS."
+                )
+            timeline = history_repository.session_timeline(
+                self._history_session_id
+            )
+            diagnostic = history_repository.diagnostic(
+                diagnostic_id,
+                session_id=self._history_session_id,
+            )
+            if diagnostic_id and (
+                not diagnostic
+                or diagnostic.get("session_id")
+                != self._history_session_id
+            ):
+                raise ValueError(
+                    "Diagnóstico não pertence à sessão atual."
+                )
+            if not diagnostic:
+                diagnostic = {
+                    "mode": "general",
+                    "sections": {},
+                    "findings": [],
+                    "status": "info",
+                }
+            report = AttendanceReportService().build(
+                diagnostic=diagnostic,
+                timeline=timeline,
+            )
+            return {
+                **report,
+                "diagnostic_id": diagnostic.get("history_id"),
+                "session_id": self._history_session_id,
+            }
+
+    def capture_snapshot(
+        self,
+        reason="manual",
+    ) -> dict:
+        with self._lock:
+            if self._history_session_id is None:
+                raise RuntimeError(
+                    "Conecte-se ao equipamento antes de capturar histórico."
+                )
+            payload = {
+                "device": self.device_info,
+                "provider": type(self).__name__,
+                "profile": self.profile_key,
+                "capabilities": self.capabilities,
+            }
+            try:
+                payload["ipv4_filter"] = self.list_ipv4_filters()
+                partial = False
+            except Exception as exc:
+                payload["ipv4_filter"] = {
+                    "_error": type(exc).__name__
+                }
+                partial = True
+            snapshot_id = history_repository.save_snapshot(
+                self._history_session_id,
+                reason,
+                payload,
+            )
+            return {
+                "success": True,
+                "snapshot_id": snapshot_id,
+                "payload": payload,
+                "partial": partial,
+                "failed_sections": (
+                    ["ipv4_filter"] if partial else []
+                ),
+            }
+
+    def history(self, limit=50):
+        return history_repository.recent(limit)

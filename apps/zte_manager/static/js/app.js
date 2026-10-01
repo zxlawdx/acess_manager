@@ -279,6 +279,19 @@ async function apiRequest(
 }
 
 
+function huaweiIpv4CrudEnabled(capabilities) {
+    const capability = (
+        capabilities?.ipv4_filter
+        || {}
+    );
+    return (
+        capability.create === true
+        || capability.update === true
+        || capability.delete === true
+    );
+}
+
+
 // =========================================================
 // CONEXÃO
 // =========================================================
@@ -793,8 +806,12 @@ document
                     throw new Error("A API não confirmou a autenticação na ONT.");
                 }
                 authenticated = true;
-                routerWriteEnabled = response.writes_enabled !== false;
                 currentVendor = response.vendor || "zte";
+                routerWriteEnabled = (
+                    currentVendor === "huawei"
+                        ? huaweiIpv4CrudEnabled(response.capabilities)
+                        : response.writes_enabled !== false
+                );
                 currentHost = response.host || ip;
                 currentAttendant = response.attendant || attendant || "default";
 
@@ -4789,7 +4806,11 @@ async function restoreDesktopSession() {
         currentHost = status.host || null;
         currentAttendant = status.attendant || "default";
         currentVendor = status.vendor || "zte";
-        routerWriteEnabled = status.writes_enabled !== false;
+        routerWriteEnabled = (
+            currentVendor === "huawei"
+                ? huaweiIpv4CrudEnabled(status.capabilities)
+                : status.writes_enabled !== false
+        );
 
         document.getElementById("connectedHost").textContent =
             currentHost || "-";
