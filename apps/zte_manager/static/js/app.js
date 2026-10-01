@@ -300,6 +300,7 @@ const HUAWEI_SUPPORTED_PAGES = new Set([
     "wifi",
     "wan",
     "clients",
+    "profiles",
     "tr069",
     "advanced"
 ]);
