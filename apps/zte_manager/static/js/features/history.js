@@ -123,7 +123,7 @@
     finally {setBusy(false);}
   }
   if(typeof document.addEventListener==="function")
-    document.addEventListener("zte:session-changed",()=>{generation++;});
+    document.addEventListener("device:session-changed",()=>{generation++;});
   if(typeof window!=="undefined") window.AccessManagerHistory=
     Object.freeze({renderHistory,load,snapshot,backup});
 })();
