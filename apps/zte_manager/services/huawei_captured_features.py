@@ -32,6 +32,7 @@ IGMP_PAGE = "/html/bbsp/igmp/igmp.asp"
 TR069_PAGE = "/html/ssmp/tr069/tr069.asp"
 OPTICAL_PAGE = "/html/amp/opticinfo/opticinfo.asp"
 WAN_INFO_PAGE = "/html/bbsp/common/wan_list_info.asp"
+WAN_CACHE_PAGE = "/html/bbsp/common/wan_list_cache_wan.asp"
 
 WLAN_BASIC_PAGE = "/html/amp/wlanbasic/WlanBasic.asp"
 WLAN_ADV_PAGE = "/html/amp/wlanadv/WlanAdvance.asp"
@@ -331,7 +332,14 @@ class HuaweiCapturedFeatureService:
         }
 
     def _wan_records(self) -> list[dict[str, Any]]:
-        _html, records = self._records(WAN_INFO_PAGE)
+        # wan_list_info.asp defines WanIP/WanPPP constructors while
+        # wan_list_cache_wan.asp returns the live new WanPPP/new WanIP
+        # instances. Parsing the concatenated sources lets the generic
+        # constructor mapper attach the live arguments to their properties.
+        _html, records = self._records(
+            WAN_INFO_PAGE,
+            WAN_CACHE_PAGE,
+        )
         return [
             item
             for item in records
@@ -352,8 +360,18 @@ class HuaweiCapturedFeatureService:
                 or item.get("name")
                 or domain
             )
-            dns1 = item.get("PrimaryDNS") or item.get("DNS1") or ""
-            dns2 = item.get("SecondaryDNS") or item.get("DNS2") or ""
+            dns1 = (
+                item.get("IPv4PrimaryDNS")
+                or item.get("PrimaryDNS")
+                or item.get("DNS1")
+                or ""
+            )
+            dns2 = (
+                item.get("IPv4SecondaryDNS")
+                or item.get("SecondaryDNS")
+                or item.get("DNS2")
+                or ""
+            )
             result.append({
                 "id": domain,
                 "nome": name,
@@ -362,15 +380,34 @@ class HuaweiCapturedFeatureService:
                     or item.get("Status")
                     or ""
                 ),
-                "ip": item.get("IPAddress") or item.get("ExternalIPAddress") or "",
-                "gateway": item.get("Gateway") or item.get("DefaultGateway") or "",
+                "ip": (
+                    item.get("IPv4IPAddress")
+                    or item.get("IPAddress")
+                    or item.get("ExternalIPAddress")
+                    or ""
+                ),
+                "gateway": (
+                    item.get("IPv4Gateway")
+                    or item.get("Gateway")
+                    or item.get("DefaultGateway")
+                    or ""
+                ),
                 "vlan": item.get("VlanId") or item.get("VLANID") or "",
-                "mtu": item.get("MTU") or item.get("MaxMRUSize") or "",
+                "mtu": (
+                    item.get("IPv4MXU")
+                    or item.get("MTU")
+                    or item.get("MaxMRUSize")
+                    or ""
+                ),
                 "dns1": dns1,
                 "dns2": dns2,
-                "nat": item.get("NATEnable") or "",
+                "nat": (
+                    item.get("IPv4NATEnable")
+                    or item.get("NATEnable")
+                    or ""
+                ),
                 "uptime": item.get("Uptime") or "",
-                "ipv6": item.get("IPv6Address") or "",
+                "ipv6": item.get("IPv6IPAddress") or item.get("IPv6Address") or "",
                 "wan_type": (
                     "PPPoE"
                     if "WANPPPConnection" in domain
