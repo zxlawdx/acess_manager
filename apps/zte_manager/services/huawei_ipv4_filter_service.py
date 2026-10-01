@@ -530,6 +530,7 @@ class HuaweiIPv4FilterService:
         uncertain = bool(
             transport.timed_out
             or transport.connection_uncertain
+            or transport.http_status in {401, 403}
             or (
                 transport.http_status
                 is not None
