@@ -49,6 +49,26 @@ class ProviderFeatureUnavailable(ApplicationFailure):
     code, category = "PROVIDER_FEATURE_UNAVAILABLE", "unsupported"
     user_message = "Este recurso ainda não está disponível para o fabricante conectado."
 
+    def __init__(
+        self,
+        *,
+        vendor: str | None = None,
+        model: str | None = None,
+    ) -> None:
+        label = " ".join(
+            part for part in (
+                str(vendor or "").strip().title(),
+                str(model or "").strip(),
+            )
+            if part
+        )
+        self.user_message = (
+            f"Recurso ainda não disponível para {label}."
+            if label
+            else type(self).user_message
+        )
+        super().__init__(self.user_message)
+
 
 class CapabilityUnconfirmed(ApplicationFailure):
     code, category, retryable = "CAPABILITY_UNCONFIRMED", "unconfirmed", True
