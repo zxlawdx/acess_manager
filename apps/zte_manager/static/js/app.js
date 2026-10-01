@@ -641,7 +641,7 @@ function openPage(pageName) {
         // The named preset controller owns this editor until the operator
         // selects the legacy primary profile again.
         document.dispatchEvent(new CustomEvent(
-            "zte:page-open", {detail:{pageName}}
+            "device:page-open", {detail:{pageName}}
         ));
         return;
     }
@@ -729,7 +729,7 @@ function openPage(pageName) {
 
     // Todas as entradas (sidebar, cartões, topo e restore) carregam dados.
     document.dispatchEvent(new CustomEvent(
-        "zte:page-open", { detail: { pageName } }
+        "device:page-open", { detail: { pageName } }
     ));
 }
 
@@ -818,7 +818,7 @@ document
                 // A resposta de /connect sempre pertence à sessão
                 // recém autenticada. Invalidar os painéis adaptativos
                 // anteriores ANTES de renderizar o novo modelo.
-                document.dispatchEvent(new CustomEvent("zte:session-changed"));
+                document.dispatchEvent(new CustomEvent("device:session-changed"));
                 document.getElementById("connectedModel").textContent =
                     (response.model || response.device?.modelo || "Não identificado") +
                     (response.model_verified === false ? " · não confirmado" : "");
@@ -985,7 +985,7 @@ document
             pppoeRevealed = false;
             wifiPasswordsRevealed = false;
 
-            document.dispatchEvent(new CustomEvent("zte:session-changed"));
+            document.dispatchEvent(new CustomEvent("device:session-changed"));
             setConnectionStatus(
                 false
             );
@@ -4640,7 +4640,7 @@ document.addEventListener(
                 return;
             }
             if (jump === "advanced") {
-                // O loader da página inicia pelo evento zte:page-open.
+                // O loader da página inicia pelo evento device:page-open.
                 // A probe só começa após catálogo ter sido carregado.
                 window.setTimeout(() => {
                     if (typeof window.startQuickProbe === "function") {
@@ -4802,7 +4802,7 @@ async function restoreDesktopSession() {
         }
 
         // Clear orphaned cards from any earlier WebView/router state.
-        document.dispatchEvent(new CustomEvent("zte:session-changed"));
+        document.dispatchEvent(new CustomEvent("device:session-changed"));
         currentHost = status.host || null;
         currentAttendant = status.attendant || "default";
         currentVendor = status.vendor || "zte";
