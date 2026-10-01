@@ -63,9 +63,10 @@ class UIActionRegressions(unittest.TestCase):
         management = js("management.js")
         self.assertIn('id="requestStatusIndicator"', html)
         self.assertIn("pendingApiRequests++", source)
-        self.assertIn("zte:page-open", source)
-        self.assertIn("zte:page-open", advanced)
-        self.assertIn("zte:page-open", management)
+        self.assertIn("device:page-open", source)
+        self.assertIn("device:page-open", advanced)
+        self.assertIn("device:page-open", management)
+        self.assertNotIn("zte:page-open", source)
         self.assertIn("window.startQuickProbe", advanced)
         self.assertIn("window.runQuickSupportDiagnostic", js("support_diagnostics.js"))
 
