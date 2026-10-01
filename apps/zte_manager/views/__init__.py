@@ -6,7 +6,7 @@ def register_routes(router):
         "/",
         console_view,
         name="zte_console",
-        title="ZTE Automatic",
+        title="Access Manager",
         icon="",
         layout="blank",
         show_in_sidebar=False,
