@@ -506,7 +506,6 @@ class ZTEService:
 
                 return {
                     "success": True,
-                    "vendor": "zte",
                     "writes_enabled": getattr(self._zte, "writes_enabled", True),
                     "attendant": self.current_attendant,
                     "host": self.current_host,
@@ -716,7 +715,6 @@ class ZTEService:
 
             return {
                 "success": True,
-                "vendor": "zte",
                 "attendant": self.current_attendant,
                 "host": self.current_host,
                 "reused_session": False,
