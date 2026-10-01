@@ -816,15 +816,11 @@ def huawei_ipv4_filter_delete(context=None):
 
 @api.get("/discovery/bootstrap")
 def discovery_bootstrap(context=None):
-    """Estado de UI sem chamadas HTTP ao roteador ou bloqueio de RLock.
-
-    Retornar catálogo e modelo em uma única operação evita que uma leitura
-    lenta do firmware bloqueie a exibição dos controles no QtWebEngine.
-    """
+    """Vendor-neutral UI bootstrap without device I/O."""
     try:
-        device = zte_service._device_info or {}
-        if device_service.vendor == "huawei":
-            status = device_service.status()
+        status = device_service.status()
+
+        if status.get("vendor") == "huawei":
             return {
                 "connected": status.get("connected", False),
                 "vendor": "huawei",
@@ -842,17 +838,17 @@ def discovery_bootstrap(context=None):
                 "reason": None,
             }
 
+        device = zte_service._device_info or {}
         return {
-            "connected": zte_service.connected,
+            "connected": status.get("connected", False),
             "vendor": "zte",
             "model": (
-                zte_service._selected_model
+                status.get("model")
                 or device.get("modelo")
                 or device.get("model")
             ),
             "detected_model": device.get("modelo") or device.get("model"),
-            "model_verified": zte_service._model_verified,
-            # Leitura/probe nativo não depende de autorização de POST.
+            "model_verified": status.get("model_verified", False),
             "native_diagnostics_available": bool(
                 zte_service.connected
                 and zte_service._model_verified
@@ -862,23 +858,19 @@ def discovery_bootstrap(context=None):
                     "zte-f6201b-thinklua",
                 }
             ),
-            "session_revision": zte_service._session_revision,
+            "session_revision": status.get("session_revision"),
             "firmware": device.get("firmware"),
-            "writes_enabled": (
-                bool(getattr(zte_service._zte, "writes_enabled", False))
-                if zte_service.connected else False
-            ),
+            "writes_enabled": status.get("writes_enabled", False),
             "catalog": zte_service.multimodel_catalog(),
             "reason": (
-                None if zte_service.connected
-                else "Nenhum equipamento autenticado no servidor local"
+                None if status.get("connected")
+                else "Conecte-se a uma ONT para detectar recursos."
             ),
         }
-    except Exception:
-        return {
-            "connected": False,
-            "error": "Não foi possível obter o estado da descoberta local.",
-        }
+    except Exception as error:
+        return _safe_call(
+            lambda: (_ for _ in ()).throw(error)
+        )
 
 
 @api.get("/multimodel/catalog")
