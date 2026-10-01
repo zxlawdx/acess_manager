@@ -15,6 +15,8 @@ DHCP_PAGE = "/html/bbsp/dhcp/dhcp.asp"
 DHCP_SERVER_PAGE = "/html/bbsp/dhcpservercfg/dhcp2.asp"
 DHCP_STATIC_PAGE = "/html/bbsp/dhcpstatic/dhcpstatic.asp"
 DHCP_INFO_PAGE = "/html/bbsp/common/dhcpinfo.asp"
+LAYER3_PAGE = "/html/bbsp/layer3/layer3.asp"
+LAN_ADDRESS_PAGE = "/html/bbsp/lanaddress/lanaddress.asp"
 
 DNS_PAGE = "/html/bbsp/dnsconfiguration/dnsconfigcommon.asp"
 DNS_HOSTS_PAGE = "/html/bbsp/common/dnshostslist.asp"
@@ -440,6 +442,313 @@ class HuaweiCapturedFeatureService:
     def lan_ports(self) -> list[dict[str, Any]]:
         # Link counters/speed were not semantically captured. Expose no fake state.
         return []
+
+    # ----------------------------- LAN / Layer3
+
+    def layer3_status(self) -> dict[str, Any]:
+        _html, records = self._records(LAYER3_PAGE)
+        ports: list[dict[str, Any]] = []
+        prefix = (
+            "InternetGatewayDevice.LANDevice.1."
+            "LANEthernetInterfaceConfig."
+        )
+        for instance in ("1", "2", "3", "4"):
+            domain = prefix + instance
+            record = next(
+                (
+                    item for item in records
+                    if _record_domain(item) == domain
+                ),
+                {},
+            )
+            value = (
+                record.get("X_HW_L3Enable")
+                or record.get("L3Enable")
+                or ""
+            )
+            ports.append({
+                "port": int(instance),
+                "domain": domain,
+                "enabled": _enabled(value),
+                "raw": str(value),
+            })
+        return {
+            "ports": ports,
+        }
+
+    def set_layer3_ports(
+        self,
+        config: dict[str, Any],
+    ) -> dict[str, Any]:
+        current = self.layer3_status()
+        current_by_port = {
+            str(item["port"]): item
+            for item in current.get("ports") or []
+        }
+        values: dict[str, str] = {}
+        for instance in ("1", "2", "3", "4"):
+            source = (
+                config.get(f"LAN{instance}")
+                if f"LAN{instance}" in config
+                else config.get(instance)
+            )
+            if source is None:
+                source = (
+                    current_by_port.get(instance, {})
+                    .get("enabled", True)
+                )
+            values[f"LAN{instance}.X_HW_L3Enable"] = _as01(source)
+
+        query = "&".join(
+            f"LAN{i}=InternetGatewayDevice.LANDevice.1."
+            f"LANEthernetInterfaceConfig.{i}"
+            for i in ("1", "2", "3", "4")
+        )
+        path = (
+            "/html/bbsp/layer3/set.cgi?"
+            + query
+            + "&RequestFile=html/bbsp/layer3/layer3.asp"
+        )
+
+        def verify():
+            actual = self.layer3_status()
+            for item in actual.get("ports") or []:
+                expected = values.get(
+                    f"LAN{item['port']}.X_HW_L3Enable"
+                )
+                if expected is None:
+                    continue
+                if item.get("raw") not in ("", expected):
+                    return None
+            return actual
+
+        return self._post_verified(
+            path=path,
+            request_file=LAYER3_PAGE,
+            payload=values,
+            verifier=verify,
+        )
+
+    def lan_ipv4_status(self) -> dict[str, Any]:
+        _html, records = self._records(DHCP_PAGE)
+        interfaces = []
+        prefix = (
+            "InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.IPInterface."
+        )
+        for instance in ("1", "2"):
+            domain = prefix + instance
+            record = next(
+                (
+                    item for item in records
+                    if _record_domain(item) == domain
+                ),
+                {},
+            )
+            interfaces.append({
+                "domain": domain,
+                "instance": int(instance),
+                "enabled": _enabled(
+                    record.get("Enable", "1")
+                ),
+                "ip": (
+                    record.get("IPInterfaceIPAddress")
+                    or record.get("IPAddress")
+                    or ""
+                ),
+                "subnet_mask": (
+                    record.get("IPInterfaceSubnetMask")
+                    or record.get("SubnetMask")
+                    or ""
+                ),
+            })
+        return {"interfaces": interfaces}
+
+    def set_lan_ipv4(
+        self,
+        config: dict[str, Any],
+    ) -> dict[str, Any]:
+        current = self.lan_ipv4_status()
+        by_instance = {
+            str(item["instance"]): item
+            for item in current.get("interfaces") or []
+        }
+        primary = by_instance.get("1") or {}
+        secondary = by_instance.get("2") or {}
+
+        primary_ip = str(
+            config.get("primary_ip", primary.get("ip") or "")
+        )
+        primary_mask = str(
+            config.get(
+                "primary_subnet_mask",
+                primary.get("subnet_mask") or "",
+            )
+        )
+        secondary_enabled = bool(
+            config.get(
+                "secondary_enabled",
+                secondary.get("enabled", True),
+            )
+        )
+        secondary_ip = str(
+            config.get("secondary_ip", secondary.get("ip") or "")
+        )
+        secondary_mask = str(
+            config.get(
+                "secondary_subnet_mask",
+                secondary.get("subnet_mask") or "",
+            )
+        )
+        if not primary_ip or not primary_mask:
+            raise ValueError(
+                "IPv4/máscara primários da LAN são obrigatórios."
+            )
+
+        path = (
+            "/html/bbsp/dhcp/set.cgi"
+            "?x=InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.IPInterface.1"
+            "&z=InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.IPInterface.2"
+            "&RequestFile=html/bbsp/dhcp/dhcp.asp"
+        )
+        payload = {
+            "x.IPInterfaceIPAddress": primary_ip,
+            "x.IPInterfaceSubnetMask": primary_mask,
+            "z.Enable": _as01(secondary_enabled),
+            "z.IPInterfaceIPAddress": secondary_ip,
+            "z.IPInterfaceSubnetMask": secondary_mask,
+        }
+
+        # Changing the primary LAN address can intentionally break this HTTP
+        # path. In that case _post_verified returns uncertain instead of
+        # repeating the mutation.
+        def verify():
+            actual = self.lan_ipv4_status()
+            rows = {
+                str(item["instance"]): item
+                for item in actual.get("interfaces") or []
+            }
+            one = rows.get("1") or {}
+            two = rows.get("2") or {}
+            if str(one.get("ip") or "") != primary_ip:
+                return None
+            if str(one.get("subnet_mask") or "") != primary_mask:
+                return None
+            if secondary_ip and str(two.get("ip") or "") != secondary_ip:
+                return None
+            return actual
+
+        return self._post_verified(
+            path=path,
+            request_file=DHCP_PAGE,
+            payload=payload,
+            verifier=verify,
+        )
+
+    def ipv6_lan_status(self) -> dict[str, Any]:
+        _html, records = self._records(LAN_ADDRESS_PAGE)
+        keys = (
+            "IPv6Address", "Prefix", "PreferredLifeTime",
+            "ValidLifeTime", "Mode", "ParentPrefix",
+            "ChildPrefixMask", "MTU", "LanInterface",
+            "mode", "Enable", "IPv6DNSConfigType",
+            "IPv6DNSWANConnection", "IPv6DNSServers",
+            "ULAmode", "IAPDAddLength",
+        )
+        return {
+            key: _record_value(records, key, default="")
+            for key in keys
+        }
+
+    def set_ipv6_lan(
+        self,
+        config: dict[str, Any],
+    ) -> dict[str, Any]:
+        current = self.ipv6_lan_status()
+        aliases = {
+            "ipv6_address": "IPv6Address",
+            "prefix": "Prefix",
+            "preferred_lifetime": "PreferredLifeTime",
+            "valid_lifetime": "ValidLifeTime",
+            "prefix_mode": "Mode",
+            "parent_prefix": "ParentPrefix",
+            "child_prefix_mask": "ChildPrefixMask",
+            "mtu": "MTU",
+            "lan_interface": "LanInterface",
+            "ra_mode": "mode",
+            "ra_enable": "Enable",
+            "dns_config_type": "IPv6DNSConfigType",
+            "dns_wan_connection": "IPv6DNSWANConnection",
+            "dns_servers": "IPv6DNSServers",
+            "ula_mode": "ULAmode",
+            "iapd_add_length": "IAPDAddLength",
+        }
+        normalized = dict(current)
+        for key, value in config.items():
+            target = aliases.get(key, key)
+            if target not in current:
+                raise ValueError(
+                    f"Parâmetro IPv6 LAN Huawei não mapeado: {key}."
+                )
+            normalized[target] = value
+
+        path = (
+            "/html/bbsp/lanaddress/set.cgi"
+            "?x=InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.X_HW_IPv6Interface.1.IPv6Address.1"
+            "&y=InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.X_HW_IPv6Interface.1.IPv6Prefix.1"
+            "&z=InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.X_HW_IPv6Interface.1"
+            "&p=InternetGatewayDevice.LANDevice.1.X_HW_IPv6Config"
+            "&m=InternetGatewayDevice.LANDevice.1.X_HW_RouterAdvertisement"
+            "&r=InternetGatewayDevice.LANDevice.1.X_HW_DHCPv6.Server"
+            "&n=InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.X_HW_IPv6Interface.1.ULAIPv6Prefix"
+            "&t=InternetGatewayDevice.LANDevice.1.X_HW_DHCPv6.Server.Pool.1"
+            "&RequestFile=html/bbsp/lanaddress/lanaddress.asp"
+        )
+        payload = {
+            "x.IPv6Address": str(normalized.get("IPv6Address") or ""),
+            "y.Prefix": str(normalized.get("Prefix") or ""),
+            "y.PreferredLifeTime": str(normalized.get("PreferredLifeTime") or ""),
+            "y.ValidLifeTime": str(normalized.get("ValidLifeTime") or ""),
+            "y.Mode": str(normalized.get("Mode") or ""),
+            "y.ParentPrefix": str(normalized.get("ParentPrefix") or ""),
+            "y.ChildPrefixMask": str(normalized.get("ChildPrefixMask") or ""),
+            "m.MTU": str(normalized.get("MTU") or ""),
+            "z.LanInterface": str(normalized.get("LanInterface") or ""),
+            "m.mode": str(normalized.get("mode") or ""),
+            "m.Enable": _as01(normalized.get("Enable")),
+            "r.Enable": _as01(normalized.get("Enable")),
+            "p.IPv6DNSConfigType": str(normalized.get("IPv6DNSConfigType") or ""),
+            "p.IPv6DNSWANConnection": str(normalized.get("IPv6DNSWANConnection") or ""),
+            "p.IPv6DNSServers": str(normalized.get("IPv6DNSServers") or ""),
+            "n.ULAmode": str(normalized.get("ULAmode") or ""),
+            "t.IAPDAddLength": str(normalized.get("IAPDAddLength") or ""),
+        }
+
+        def verify():
+            actual = self.ipv6_lan_status()
+            expected = {
+                "IPv6Address": payload["x.IPv6Address"],
+                "Prefix": payload["y.Prefix"],
+                "MTU": payload["m.MTU"],
+                "IPv6DNSConfigType": payload["p.IPv6DNSConfigType"],
+            }
+            for key, value in expected.items():
+                if value and str(actual.get(key) or "") != str(value):
+                    return None
+            return actual
+
+        return self._post_verified(
+            path=path,
+            request_file=LAN_ADDRESS_PAGE,
+            payload=payload,
+            verifier=verify,
+        )
 
     # ----------------------------- DHCP
 
