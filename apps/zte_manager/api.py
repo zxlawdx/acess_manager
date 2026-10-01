@@ -219,6 +219,31 @@ def _active_provider_service():
         return device_service
     return zte_service
 
+def _call_device(method_name: str, *args, **kwargs):
+    """Resolve provider methods inside the API error boundary."""
+    return getattr(
+        device_service,
+        method_name,
+    )(*args, **kwargs)
+
+
+def _call_active_provider(method_name: str, *args, **kwargs):
+    """Compatibility for provider-local state endpoints.
+
+    Huawei always resolves through DeviceService. ZTE uses the module's
+    current ZTEService object so tests/runtime injections keep the same
+    progress/session state.
+    """
+    provider = (
+        device_service
+        if device_service.vendor == "huawei"
+        else zte_service
+    )
+    return getattr(
+        provider,
+        method_name,
+    )(*args, **kwargs)
+
 
 # =========================================================
 # SISTEMA / CONEXÃO
@@ -288,7 +313,44 @@ def disconnect(context=None):
 
 @api.get("/connection/status")
 def connection_status(context=None):
-    return device_service.status()
+    if device_service.vendor == "huawei":
+        return device_service.status()
+
+    return {
+        "connected": zte_service.connected,
+        "attendant": zte_service.current_attendant,
+        "host": zte_service.current_host,
+        "model": (
+            zte_service._selected_model
+            or zte_service._device_info.get("modelo")
+        ),
+        "firmware": zte_service._device_info.get("firmware"),
+        "model_verified": zte_service._model_verified,
+        "session_revision": zte_service._session_revision,
+        "vendor": "zte" if zte_service.connected else None,
+        "profile": (
+            zte_service._adapter.name
+            if zte_service._adapter
+            else None
+        ),
+        "provider": (
+            type(zte_service).__name__
+            if zte_service.connected
+            else None
+        ),
+        "capabilities": {},
+        "writes_enabled": (
+            bool(
+                getattr(
+                    zte_service._zte,
+                    "writes_enabled",
+                    False,
+                )
+            )
+            if zte_service.connected
+            else False
+        ),
+    }
 
 
 @api.get("/debug/security")
@@ -306,21 +368,24 @@ def security_status(context=None):
 @api.get("/device/status")
 def device_status(context=None):
     return _safe_call(
-        device_service.device_status
+        _call_device,
+        "device_status"
     )
 
 
 @api.get("/device/optical")
 def optical_status(context=None):
     return _safe_call(
-        device_service.optical_status
+        _call_device,
+        "optical_status"
     )
 
 
 @api.get("/device/accounts")
 def account_status(context=None):
     return _safe_call(
-        device_service.account_status
+        _call_device,
+        "account_status"
     )
 
 
@@ -344,7 +409,8 @@ def change_admin_password(context=None):
 @api.post("/device/reboot")
 def reboot_device(context=None):
     return _safe_call(
-        device_service.reboot
+        _call_device,
+        "reboot"
     )
 
 
@@ -356,7 +422,8 @@ def reboot_device(context=None):
 @api.get("/wan/status")
 def wan_status(context=None):
     return _safe_call(
-        device_service.wan_status
+        _call_device,
+        "wan_status"
     )
 
 
@@ -367,7 +434,8 @@ def pppoe_status(context=None):
     )
 
     return _safe_call(
-        device_service.pppoe_status,
+        _call_device,
+        "pppoe_status",
         reveal_password=_bool(
             query.get("reveal_password")
         )
@@ -377,21 +445,24 @@ def pppoe_status(context=None):
 @api.get("/clients/wifi")
 def wifi_clients(context=None):
     return _safe_call(
-        device_service.wifi_clients
+        _call_device,
+        "wifi_clients"
     )
 
 
 @api.get("/clients/lan")
 def lan_clients(context=None):
     return _safe_call(
-        device_service.lan_clients
+        _call_device,
+        "lan_clients"
     )
 
 
 @api.get("/lan/ports")
 def lan_ports(context=None):
     return _safe_call(
-        device_service.lan_ports
+        _call_device,
+        "lan_ports"
     )
 
 
@@ -407,7 +478,8 @@ def wifi_networks(context=None):
     )
 
     return _safe_call(
-        device_service.wifi_networks,
+        _call_device,
+        "wifi_networks",
         reveal_password=_bool(
             query.get("reveal_password")
         )
@@ -450,7 +522,8 @@ def set_wifi_network(context=None):
 @api.get("/wifi/radios")
 def get_radios(context=None):
     return _safe_call(
-        device_service.wifi_radios
+        _call_device,
+        "wifi_radios"
     )
 
 
@@ -461,7 +534,8 @@ def get_channels(context=None):
     )
 
     return _safe_call(
-        device_service.wifi_channels,
+        _call_device,
+        "wifi_channels",
         band=query.get("band"),
         bandwidth=query.get("bandwidth"),
         country=query.get("country") or "BRI",
@@ -504,7 +578,8 @@ def set_radio(context=None):
 @api.get("/wifi/power")
 def wifi_power_status(context=None):
     return _safe_call(
-        device_service.radio_power_status
+        _call_device,
+        "radio_power_status"
     )
 
 
@@ -529,7 +604,8 @@ def set_wifi_power(context=None):
 @api.get("/wifi/schedule")
 def wifi_schedule_status(context=None):
     return _safe_call(
-        device_service.wifi_schedule_status
+        _call_device,
+        "wifi_schedule_status"
     )
 
 
@@ -553,7 +629,8 @@ def set_wifi_schedule(context=None):
 @api.get("/wifi/wps")
 def wifi_wps_status(context=None):
     return _safe_call(
-        device_service.wps_status
+        _call_device,
+        "wps_status"
     )
 
 
@@ -578,7 +655,8 @@ def set_wifi_wps(context=None):
 @api.get("/wifi/band-steering")
 def band_steering_status(context=None):
     return _safe_call(
-        device_service.band_steering_status
+        _call_device,
+        "band_steering_status"
     )
 
 
@@ -626,7 +704,8 @@ def configure_band_steering(context=None):
 @api.get("/upnp")
 def upnp_status(context=None):
     return _safe_call(
-        device_service.upnp_status
+        _call_device,
+        "upnp_status"
     )
 
 
@@ -652,7 +731,8 @@ def set_upnp(context=None):
 @api.get("/dns/status")
 def dns_status(context=None):
     return _safe_call(
-        device_service.dns_status
+        _call_device,
+        "dns_status"
     )
 
 
@@ -722,7 +802,8 @@ def traceroute(context=None):
 @api.post("/system/backup")
 def export_configuration_backup(context=None):
     return _safe_call(
-        device_service.export_user_configuration
+        _call_device,
+        "export_user_configuration"
     )
 
 
@@ -753,7 +834,8 @@ def capability_probe(context=None):
 @api.get("/huawei/ipv4-filters")
 def huawei_ipv4_filters(context=None):
     return _safe_call(
-        device_service.list_ipv4_filters
+        _call_device,
+        "list_ipv4_filters"
     )
 
 
@@ -1111,7 +1193,8 @@ def read_feature(context=None):
 @api.get("/network/dhcp")
 def dhcp_status(context=None):
     return _safe_call(
-        device_service.dhcp_status
+        _call_device,
+        "dhcp_status"
     )
 
 
@@ -1171,7 +1254,8 @@ def delete_dhcp_reservation(context=None):
 @api.get("/network/port-forwarding")
 def port_forwarding_status(context=None):
     return _safe_call(
-        device_service.port_forwarding_status
+        _call_device,
+        "port_forwarding_status"
     )
 
 
@@ -1213,7 +1297,8 @@ def delete_port_forward(context=None):
 @api.get("/network/dmz")
 def dmz_status(context=None):
     return _safe_call(
-        device_service.dmz_status
+        _call_device,
+        "dmz_status"
     )
 
 
@@ -1259,7 +1344,7 @@ def automatic_diagnostic(context=None):
 @api.get("/diagnostics/support/progress")
 def support_diagnostic_progress(context=None):
     """Progress is in-memory and independent of the active ONT RLock."""
-    return _safe_call(device_service.support_progress)
+    return _safe_call(_call_active_provider, "support_progress")
 
 
 @api.post("/diagnostics/support")
@@ -1307,7 +1392,7 @@ def remediate_diagnostic(context=None):
 @api.get("/diagnostics/workstation")
 def workstation_diagnostic(context=None):
     """Read-only comparison from the technician's computer (not the ONT)."""
-    return _safe_call(device_service.workstation_diagnostic)
+    return _safe_call(_call_device, "workstation_diagnostic")
 
 
 @api.post("/diagnostics/speedtest")
@@ -1387,7 +1472,8 @@ def history(context=None):
 @api.get("/configuration/current")
 def current_configuration(context=None):
     return _safe_call(
-        device_service.current_configuration
+        _call_device,
+        "current_configuration"
     )
 
 
@@ -2031,7 +2117,8 @@ def management_mesh_pair(context=None):
 @api.get("/management/qos")
 def management_qos(context=None):
     return _safe_call(
-        device_service.qos_management_status
+        _call_device,
+        "qos_management_status"
     )
 
 
@@ -2079,7 +2166,8 @@ def management_qos_delete(context=None):
 @api.get("/management/firewall")
 def management_firewall(context=None):
     return _safe_call(
-        device_service.firewall_management_status
+        _call_device,
+        "firewall_management_status"
     )
 
 
@@ -2166,7 +2254,8 @@ def management_filter_global(context=None):
 @api.get("/management/sntp")
 def management_sntp(context=None):
     return _safe_call(
-        device_service.sntp_management_status
+        _call_device,
+        "sntp_management_status"
     )
 
 
@@ -2211,7 +2300,7 @@ def delete_tr069_provider(context=None):
 
 @api.get("/tr069/setup")
 def tr069_setup(context=None):
-    return _safe_call(device_service.tr069_setup)
+    return _safe_call(_call_device, "tr069_setup")
 
 
 @api.post("/tr069/providers/apply")
@@ -2231,7 +2320,8 @@ def apply_tr069_provider(context=None):
 @api.get("/management/tr069")
 def management_tr069(context=None):
     return _safe_call(
-        device_service.tr069_management_status
+        _call_device,
+        "tr069_management_status"
     )
 
 
@@ -2256,7 +2346,8 @@ def management_tr069_update(context=None):
 @api.get("/management/wan")
 def management_wan(context=None):
     return _safe_call(
-        device_service.wan_configurations
+        _call_device,
+        "wan_configurations"
     )
 
 
@@ -2460,7 +2551,8 @@ def management_firmware_register(context=None):
 @api.get("/management/firmware/status")
 def management_firmware_status(context=None):
     return _safe_call(
-        device_service.firmware_management_status
+        _call_device,
+        "firmware_management_status"
     )
 
 
