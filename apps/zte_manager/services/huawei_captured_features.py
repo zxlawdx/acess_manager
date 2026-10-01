@@ -414,18 +414,110 @@ class HuaweiCapturedFeatureService:
 
     # ----------------------------- WAN / device reads
 
-    def optical_status(self) -> dict[str, Any]:
-        _html, records = self._records(OPTICAL_PAGE)
+    def device_status(self) -> dict[str, Any]:
+        html, records = self._records(
+            DEVICE_INFO_PAGE,
+            DEVICE_INFO_CUS_PAGE,
+        )
+
+        def value(*names: str, default=""):
+            from_records = _record_value(
+                records,
+                *names,
+                default=None,
+            )
+            if from_records not in (None, ""):
+                return from_records
+            return _source_value(
+                html,
+                *names,
+                default=default,
+            )
+
         return {
-            "rx_power_dbm": _record_value(records, "RxPower", "RXPower", "RxOpticalPower", "ReceivePower"),
-            "tx_power_dbm": _record_value(records, "TxPower", "TXPower", "TxOpticalPower", "TransmitPower"),
-            "temperature_c": _record_value(records, "Temperature", "TemperatureC", "ChipTemperature"),
-            "voltage": _record_value(records, "Voltage", "SupplyVoltage"),
-            "current_ma": _record_value(records, "Current", "BiasCurrent", "TxBias"),
-            "registration_status": _record_value(records, "Status", "ONTState", "RegisterStatus", default="Huawei GPON"),
-            "onu_id": _record_value(records, "OnuId", "ONUId", "ONTID", default="-"),
-            "los": _record_value(records, "LOS", "LosStatus", default="-"),
-            "pon_uptime": _record_value(records, "Uptime", "PONUptime"),
+            "fabricante": value(
+                "Manufacturer", "Vendor", "ManufacturerName",
+                default="Huawei",
+            ) or "Huawei",
+            "modelo": value(
+                "ProductClass", "ModelName", "Model",
+                "DeviceType", default=self.model,
+            ) or self.model,
+            "firmware": value(
+                "SoftwareVersion", "SoftwareVer",
+                "FirmwareVersion", "MainSoftwareVersion",
+            ),
+            "hardware": value(
+                "HardwareVersion", "HardwareVer",
+            ),
+            "boot": value(
+                "BootLoaderVersion", "BootVersion",
+            ),
+            "serial": value(
+                "SerialNumber", "SerialNo", "SN",
+            ),
+            "uptime": value(
+                "UpTime", "Uptime", "DeviceUpTime",
+            ),
+            "temperatura_cpu": value(
+                "Temperature", "CPUTemperature", "CpuTemperature",
+            ),
+            "memoria_percent": value(
+                "MemoryUsage", "MemoryUsedPercent",
+            ),
+            "flash_usado_percent": value(
+                "FlashUsage", "FlashUsedPercent",
+            ),
+        }
+
+    def optical_status(self) -> dict[str, Any]:
+        html, records = self._records(OPTICAL_PAGE)
+
+        def value(*names: str, default=""):
+            from_records = _record_value(
+                records,
+                *names,
+                default=None,
+            )
+            if from_records not in (None, ""):
+                return from_records
+            return _source_value(
+                html,
+                *names,
+                default=default,
+            )
+
+        return {
+            "rx_power_dbm": value(
+                "RxPower", "RXPower", "RxOpticalPower",
+                "ReceivePower", "RxPowerValue",
+            ),
+            "tx_power_dbm": value(
+                "TxPower", "TXPower", "TxOpticalPower",
+                "TransmitPower", "TxPowerValue",
+            ),
+            "temperature_c": value(
+                "Temperature", "TemperatureC", "ChipTemperature",
+            ),
+            "voltage": value(
+                "Voltage", "SupplyVoltage",
+            ),
+            "current_ma": value(
+                "Current", "BiasCurrent", "TxBias",
+            ),
+            "registration_status": value(
+                "Status", "ONTState", "RegisterStatus",
+                default="Huawei GPON",
+            ),
+            "onu_id": value(
+                "OnuId", "ONUId", "ONTID", default="-",
+            ),
+            "los": value(
+                "LOS", "LosStatus", default="-",
+            ),
+            "pon_uptime": value(
+                "Uptime", "PONUptime",
+            ),
         }
 
     def _wan_records(self) -> list[dict[str, Any]]:
