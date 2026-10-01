@@ -1892,6 +1892,7 @@ class HuaweiCapturedFeatureService:
             )
             radios.append({
                 "id": f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{instance}",
+                "ssid": basic.get("ssid") or "",
                 "banda": display,
                 "canal": str(channel),
                 "canal_automatico": auto or str(channel) == "0",
