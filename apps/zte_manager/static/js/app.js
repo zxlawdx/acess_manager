@@ -343,8 +343,10 @@ function syncVendorUi() {
             button.classList.toggle("hidden", unavailable);
             button.disabled = unavailable;
             if (unavailable) {
+                button.dataset.providerUnavailable = "1";
                 button.title = providerUnavailableMessage();
-            } else if (button.title === providerUnavailableMessage()) {
+            } else if (button.dataset.providerUnavailable === "1") {
+                delete button.dataset.providerUnavailable;
                 button.removeAttribute("title");
             }
         });
@@ -359,7 +361,13 @@ function syncVendorUi() {
             const unavailable = !vendorSupportsPage(pageName);
             button.classList.toggle("hidden", unavailable);
             if ("disabled" in button) button.disabled = unavailable;
-            if (unavailable) button.title = providerUnavailableMessage();
+            if (unavailable) {
+                button.dataset.providerUnavailable = "1";
+                button.title = providerUnavailableMessage();
+            } else if (button.dataset.providerUnavailable === "1") {
+                delete button.dataset.providerUnavailable;
+                button.removeAttribute("title");
+            }
         });
 
     const optical = document.querySelector("#page-device .optical-panel");
