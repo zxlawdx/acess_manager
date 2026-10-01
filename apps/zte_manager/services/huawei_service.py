@@ -13,6 +13,7 @@ from apps.zte_manager.model.device_adapters.huawei import (
     HuaweiProfile,
     HuaweiUnknownProfile,
     HuaweiWebAdapter,
+    HUAWEI_EG8041X7_FULLY_INTEGRATED,
     canonical_huawei_model,
     resolve_huawei_profile,
 )
@@ -1942,16 +1943,51 @@ class HuaweiService:
                 operations = dict(
                     self._capabilities.get(key) or {}
                 )
-                feature["operations"] = operations
-                feature["verified"] = bool(
-                    operations.get("verified")
-                )
-                feature["writable"] = bool(
+                writable = bool(
                     operations.get("create")
                     or operations.get("update")
                     or operations.get("delete")
                     or operations.get("write")
                 )
+                states = ["CAPTURED"]
+                if operations.get("read"):
+                    states.append("READ_IMPLEMENTED")
+                if writable:
+                    states.append("WRITE_CAPTURED")
+                    if operations.get("verified"):
+                        states.append("WRITE_PHYSICALLY_VERIFIED")
+                if (
+                    self.profile_key == "huawei_eg8041x7_10"
+                    and key in HUAWEI_EG8041X7_FULLY_INTEGRATED
+                ):
+                    states.append("FULLY_INTEGRATED")
+                feature["operations"] = operations
+                feature["verified"] = bool(
+                    operations.get("verified")
+                )
+                feature["writable"] = writable
+                feature["evidence_states"] = states
+                feature["state"] = states[-1]
+            data["state_definitions"] = {
+                "CAPTURED": "Endpoint/objeto apareceu no material capturado.",
+                "READ_IMPLEMENTED": "Parser + serviço + API de leitura integrados.",
+                "WRITE_CAPTURED": "Mutation/payload apareceu no material físico.",
+                "WRITE_PHYSICALLY_VERIFIED": (
+                    "Mutation exercitada fisicamente com read-back positivo."
+                ),
+                "FULLY_INTEGRATED": (
+                    "Backend, UI, capability, histórico, read-back e testes."
+                ),
+                "OBSERVED_ONLY": (
+                    "Observado na WebUI, ainda sem integração end-to-end."
+                ),
+                "UNSUPPORTED": (
+                    "Somente para evidência concreta de impossibilidade."
+                ),
+                "NOT_YET_VALIDATED": (
+                    "Não há evidência física suficiente para liberar a operação."
+                ),
+            }
             data["vendor"] = self.vendor
             data["profile"] = self.profile_key
             return data
