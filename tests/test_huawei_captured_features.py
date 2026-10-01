@@ -11,6 +11,8 @@ from apps.zte_manager.services.huawei_captured_features import (
     HuaweiCapturedFeatureService,
     WLAN_ADV_PAGE,
     WLAN_BASIC_PAGE,
+    WAN_CACHE_PAGE,
+    WAN_INFO_PAGE,
     parse_huawei_js_records,
 )
 
@@ -129,8 +131,32 @@ class FakeHuaweiClient:
                     "11ax", "100",
                 ],
             )
-        if path == "/html/bbsp/common/wan_list_info.asp":
-            return '<input id="hwonttoken" value="' + TOKEN + '">'
+        if path == WAN_INFO_PAGE:
+            return (
+                "function WanPPP("
+                "domain,Status,Name,IPAddress,Gateway,NATEnable,dnsstr,"
+                "Username,Password,VlanId,ServiceList,MaxMRUSize,Uptime"
+                "){"
+                "this.domain=domain;this.Status=Status;this.Name=Name;"
+                "this.IPAddress=IPAddress;this.Gateway=Gateway;"
+                "this.NATEnable=NATEnable;this.Username=Username;"
+                "this.Password=Password;this.VlanId=VlanId;"
+                "this.ServiceList=ServiceList;this.Uptime=Uptime;"
+                "}"
+            )
+        if path == WAN_CACHE_PAGE:
+            return (
+                "function(){var obj={};"
+                "obj.IPWanList=new Array(null);"
+                "obj.PPPWanList=new Array("
+                'new WanPPP("InternetGatewayDevice.WANDevice.1.'
+                'WANConnectionDevice.1.WANPPPConnection.1",'
+                '"Connected","1_TR069_INTERNET_R_VID_2000",'
+                '"100.64.0.2","100.64.0.1","1",'
+                '"1.1.1.1,8.8.8.8","labuser","masked",'
+                '"2000","TR069_INTERNET","1492","321"),null);'
+                "return obj;}"
+            )
         if path in {
             "/html/bbsp/firewalllevel/firewalllevel.asp",
             "/html/bbsp/Dos/Dos.asp",
@@ -245,6 +271,25 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
             payload["x.DMZHostIPAddress"],
             "192.168.18.50",
         )
+
+    def test_wan_cache_uses_constructor_definition_and_live_values(self):
+        service = self.make_service()
+        rows = service.wan_status()
+        self.assertEqual(len(rows), 1)
+        wan = rows[0]
+        self.assertEqual(wan["status"], "Connected")
+        self.assertEqual(wan["ip"], "100.64.0.2")
+        self.assertEqual(wan["gateway"], "100.64.0.1")
+        self.assertEqual(wan["dns1"], "1.1.1.1")
+        self.assertEqual(wan["dns2"], "8.8.8.8")
+        self.assertEqual(wan["vlan"], "2000")
+        self.assertEqual(wan["services"], "TR069_INTERNET")
+
+        pppoe = service.pppoe_status(reveal_password=False)
+        self.assertEqual(len(pppoe), 1)
+        self.assertEqual(pppoe[0]["username"], "labuser")
+        self.assertEqual(pppoe[0]["password"], "")
+        self.assertTrue(pppoe[0]["password_hidden"])
 
     def test_wifi_read_maps_both_bands(self):
         service = self.make_service()
