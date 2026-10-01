@@ -684,8 +684,11 @@ class ZTEService:
                     "inventory_registrar_failed error_type=%s", type(exc).__name__
                 )
 
+            self._vendor = "zte"
+
             return {
                 "success": True,
+                "vendor": "zte",
                 "attendant": self.current_attendant,
                 "host": self.current_host,
                 "reused_session": False,
@@ -699,28 +702,47 @@ class ZTEService:
 
     def disconnect(self) -> None:
         with self._lock:
-            if self._zte is None:
+            if self._zte is None and self._huawei is None:
                 return
-            # Local socket only; never log the remote administrative user out.
+
             try:
                 if self._history_session_id is not None:
                     try:
-                        history_repository.end_session(self._history_session_id)
+                        history_repository.end_session(
+                            self._history_session_id
+                        )
                     except Exception as exc:
                         logger.warning(
-                            "history_end_failed error_type=%s", type(exc).__name__
+                            "history_end_failed error_type=%s",
+                            type(exc).__name__,
                         )
-                try:
-                    self._zte.session.close()
-                except Exception as exc:
-                    logger.warning(
-                        "session_local_close_failed error_type=%s", type(exc).__name__
-                    )
+
+                if self._zte is not None:
+                    try:
+                        self._zte.session.close()
+                    except Exception as exc:
+                        logger.warning(
+                            "session_local_close_failed error_type=%s",
+                            type(exc).__name__,
+                        )
+
+                if self._huawei is not None:
+                    try:
+                        self._huawei.close()
+                    except Exception as exc:
+                        logger.warning(
+                            "huawei_session_close_failed error_type=%s",
+                            type(exc).__name__,
+                        )
             finally:
                 if self._runtime_driver is not None:
                     self._runtime_driver.close()
                     self._runtime_driver = None
+
                 self._zte = None
+                self._huawei = None
+                self._huawei_ipv4_filter = None
+                self._vendor = "zte"
                 self.current_host = None
                 self.current_attendant = None
                 self._adapter = None
@@ -746,7 +768,10 @@ class ZTEService:
 
     @property
     def connected(self) -> bool:
-        return self._zte is not None
+        return (
+            self._zte is not None
+            or self._huawei is not None
+        )
 
     def _capabilities(self) -> CapabilityService:
         if self._capability_service is None:
