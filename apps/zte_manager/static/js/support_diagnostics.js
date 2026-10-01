@@ -2381,10 +2381,10 @@ document.addEventListener("device:session-changed", () => {
     }
 });
 document.addEventListener("device:page-open", event => {
-    if (event.detail?.pageName === "supportDiagnostic") {
-        document.getElementById("supportReportActions")?.classList.toggle(
-            "hidden", !ontConnected
-        );
-        void loadFirmwareDiagnosticOptions();
-    }
+    if (event.detail?.pageName !== "supportDiagnostic") return;
+    if (event.detail?.vendor === "huawei") return;
+    document.getElementById("supportReportActions")?.classList.toggle(
+        "hidden", !ontConnected
+    );
+    void loadFirmwareDiagnosticOptions();
 });
