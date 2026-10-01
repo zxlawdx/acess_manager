@@ -772,6 +772,40 @@ class HuaweiService:
             )
             return result
 
+    def layer3_status(self):
+        with self._lock:
+            return self._require_captured().layer3_status()
+
+    def lan_ipv4_status(self):
+        with self._lock:
+            return self._require_captured().lan_ipv4_status()
+
+    def ipv6_lan_status(self):
+        with self._lock:
+            return self._require_captured().ipv6_lan_status()
+
+    def dhcp_static_status(self):
+        with self._lock:
+            return {
+                "reservations": (
+                    self._require_captured()
+                    .dhcp_status()
+                    .get("reservations")
+                    or []
+                )
+            }
+
+    def dns_host_status(self):
+        with self._lock:
+            return {
+                "hosts": (
+                    self._require_captured()
+                    .dns_status()
+                    .get("hosts")
+                    or []
+                )
+            }
+
     def dhcp_status(self):
         with self._lock:
             return self._require_captured().dhcp_status()
@@ -953,19 +987,17 @@ class HuaweiService:
     def update_captured_feature(self, feature: str, config: dict):
         with self._lock:
             service = self._require_captured()
+            values = dict(config or {})
             writers = {
+                "layer3": service.set_layer3_ports,
+                "lan_ipv4": service.set_lan_ipv4,
+                "ipv6_lan": service.set_ipv6_lan,
                 "alg": service.set_alg,
                 "igmp": service.set_igmp,
                 "dos": service.set_dos,
                 "ipv6_firewall": service.set_ipv6_firewall,
                 "internet_control": service.set_internet_control,
             }
-            try:
-                writer = writers[feature]
-            except KeyError as exc:
-                raise ValueError(
-                    f"Escrita Huawei não disponível para a capability {feature}."
-                ) from exc
 
             capability = (
                 self._capabilities.get(feature)
@@ -976,7 +1008,47 @@ class HuaweiService:
                     "Escrita não validada para esta capability Huawei."
                 )
 
-            result = writer(dict(config or {}))
+            if feature == "dhcp_static":
+                instance = (
+                    values.pop("id", None)
+                    or values.pop("instance_or_domain", None)
+                )
+                if not instance:
+                    raise ValueError(
+                        "Informe id/instance_or_domain da reserva DHCP Huawei."
+                    )
+                result = service.update_dhcp_reservation(
+                    instance,
+                    ip=str(values.get("ip") or values.get("Yiaddr") or ""),
+                    mac=str(values.get("mac") or values.get("Chaddr") or ""),
+                )
+            elif feature == "dns_host":
+                instance = (
+                    values.pop("id", None)
+                    or values.pop("instance_or_domain", None)
+                )
+                if not instance:
+                    raise ValueError(
+                        "Informe id/instance_or_domain do DNS Host Huawei."
+                    )
+                result = service.update_dns_host(
+                    instance,
+                    ip=str(values.get("ip") or values.get("IPAddress") or ""),
+                    domain_name=str(
+                        values.get("domain_name")
+                        or values.get("DomainName")
+                        or values.get("name")
+                        or ""
+                    ),
+                )
+            else:
+                try:
+                    writer = writers[feature]
+                except KeyError as exc:
+                    raise ValueError(
+                        f"Escrita Huawei não disponível para a capability {feature}."
+                    ) from exc
+                result = writer(values)
             self._audit_captured(
                 operation=f"huawei_{feature}_update",
                 target=feature,
@@ -1168,8 +1240,13 @@ class HuaweiService:
             "ipv4_filter": self.list_ipv4_filters,
             "wan": self.wan_status,
             "optical": self.optical_status,
+            "layer3": self.layer3_status,
+            "lan_ipv4": self.lan_ipv4_status,
+            "ipv6_lan": self.ipv6_lan_status,
             "dhcp": self.dhcp_status,
+            "dhcp_static": self.dhcp_static_status,
             "dns": self.dns_status,
+            "dns_host": self.dns_host_status,
             "dmz": self.dmz_status,
             "wifi_basic": self.wifi_networks,
             "wifi_radio": self.wifi_radios,
