@@ -202,6 +202,76 @@ class HuaweiService:
                 "state": deepcopy(self._session_snapshot),
             }
 
+    def warm_session_snapshot(self, *, refresh: bool = False) -> dict:
+        """Load the normalized state for all integrated Huawei read domains.
+
+        This is the only broad read pass. Ordinary navigation consumes the
+        resulting snapshot and explicit refreshes remain resource-scoped.
+        Derived readers (DHCP static, DNS hosts, radio power, TR-069 setup)
+        are intentionally omitted because their source resource is already
+        loaded here.
+        """
+        with self._lock:
+            if not self.connected:
+                raise RuntimeError(
+                    "Conecte-se a uma ONT Huawei antes de carregar a sessão."
+                )
+
+            readers = (
+                ("device", self.device_status),
+                ("optical", self.optical_status),
+                ("wan", self.wan_status),
+                ("pppoe", self.pppoe_status),
+                ("lan_clients", self.lan_clients),
+                ("wifi_clients", self.wifi_clients),
+                ("lan_ports", self.lan_ports),
+                ("wifi_networks", self.wifi_networks),
+                ("wifi_radios", self.wifi_radios),
+                ("layer3", self.layer3_status),
+                ("lan_ipv4", self.lan_ipv4_status),
+                ("ipv6_lan", self.ipv6_lan_status),
+                ("dhcp", self.dhcp_status),
+                ("dns", self.dns_status),
+                ("dmz", self.dmz_status),
+                ("tr069", self.tr069_management_status),
+                ("firewall_level", self.firewall_level_status),
+                ("alg", self.alg_status),
+                ("igmp", self.igmp_status),
+                ("dos", self.dos_status),
+                ("ipv6_firewall", self.ipv6_firewall_status),
+                ("internet_control", self.internet_control_status),
+                ("ipv4_filter", self.list_ipv4_filters),
+            )
+
+            loaded: list[str] = []
+            cached: list[str] = []
+            failed: dict[str, str] = {}
+            for key, reader in readers:
+                if not refresh and self._snapshot_cached(key) is not None:
+                    cached.append(key)
+                    continue
+                try:
+                    reader(refresh=refresh)
+                    loaded.append(key)
+                except Exception as exc:
+                    failed[key] = type(exc).__name__
+                    logger.warning(
+                        "huawei_snapshot_warm_failed resource=%s error_type=%s",
+                        key,
+                        type(exc).__name__,
+                    )
+
+            snapshot = self.session_snapshot()
+            return {
+                "success": not failed,
+                "partial": bool(failed),
+                "loaded": loaded,
+                "cached": cached,
+                "failed": failed,
+                "loaded_resources": snapshot["loaded_resources"],
+                "session_revision": self.session_revision,
+            }
+
     def connect(
         self,
         ip: str,
