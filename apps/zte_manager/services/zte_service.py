@@ -246,11 +246,29 @@ class ZTEService:
         )
         client.login()
 
+        detected_model = client.detect_known_model(
+            ("EG8041X7-10",)
+        )
         selected_model = (
             model_hint.strip()
             if model_hint and model_hint.strip()
-            else "Huawei"
+            else detected_model
+            or "Huawei"
         )
+        if (
+            model_hint
+            and detected_model
+            and (
+                str(model_hint).strip().upper().replace(" ", "")
+                != str(detected_model).strip().upper().replace(" ", "")
+            )
+        ):
+            client.close()
+            raise ValueError(
+                "Modelo Huawei informado diverge do modelo "
+                "identificado pelo equipamento."
+            )
+
         adapter = HuaweiWebAdapter(
             selected_model
         )
@@ -283,12 +301,19 @@ class ZTEService:
             else "default"
         )
         self._selected_model = selected_model
-        # The profile is laboratory-verified, but a manual model hint is not
-        # equivalent to a device-reported identity.
-        self._model_verified = False
+        self._model_verified = bool(
+            detected_model
+            and (
+                str(selected_model).strip().upper().replace(" ", "")
+                == str(detected_model).strip().upper().replace(" ", "")
+            )
+        )
         self._device_info = {
             "fabricante": "Huawei",
-            "modelo": selected_model,
+            "modelo": (
+                detected_model
+                or selected_model
+            ),
         }
         self._adapter = adapter
 
