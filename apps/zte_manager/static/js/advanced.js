@@ -1557,10 +1557,22 @@ function syncAdvancedNetworkForms() {
     for (const [key, selector] of controls) {
         const control = document.querySelector(selector);
         if (!control) continue;
-        const ready = Boolean(ontConnected && routerWriteEnabled && loaded[key]) &&
+        const unsupportedHuaweiWrite = (
+            currentVendor === "huawei"
+            && (
+                selector.includes("dhcpReservationForm")
+                || selector.includes("portForwardForm")
+            )
+        );
+        const ready = !unsupportedHuaweiWrite &&
+            Boolean(ontConnected && routerWriteEnabled && loaded[key]) &&
             (key !== "dhcp" || advancedState.dhcp?.write_safe !== false);
         control.disabled = !ready;
-        control.title = ready ? "" : "Carregue os dados atuais antes de configurar.";
+        control.title = unsupportedHuaweiWrite
+            ? "Esta operação específica ainda não foi capturada/validada para Huawei."
+            : ready
+                ? ""
+                : "Carregue os dados atuais antes de configurar.";
     }
 }
 
@@ -1690,27 +1702,45 @@ function renderDhcpReservations(items) {
         ).join("")
         : '<span class="muted">Nenhuma reserva cadastrada.</span>';
 
-    container
-        .querySelectorAll(
-            ".reservation-edit"
-        )
-        .forEach(
-            button => button.addEventListener(
-                "click",
-                editDhcpReservation
-            )
-        );
+    const reservationWrite = (
+        advancedState.dhcp?.capabilities?.reservation_write !== false
+        && currentVendor !== "huawei"
+    );
 
     container
         .querySelectorAll(
-            ".reservation-delete"
+            ".reservation-edit, .reservation-delete"
         )
-        .forEach(
-            button => button.addEventListener(
-                "click",
-                deleteDhcpReservation
+        .forEach(button => {
+            button.disabled = !reservationWrite;
+            button.title = reservationWrite
+                ? ""
+                : "A captura Huawei validou leitura/edição existente, mas não CREATE/DELETE de reserva.";
+        });
+
+    if (reservationWrite) {
+        container
+            .querySelectorAll(
+                ".reservation-edit"
             )
-        );
+            .forEach(
+                button => button.addEventListener(
+                    "click",
+                    editDhcpReservation
+                )
+            );
+
+        container
+            .querySelectorAll(
+                ".reservation-delete"
+            )
+            .forEach(
+                button => button.addEventListener(
+                    "click",
+                    deleteDhcpReservation
+                )
+            );
+    }
 }
 
 
@@ -1846,6 +1876,22 @@ async function deleteDhcpReservation(event) {
 // =========================================================
 
 async function loadNatOperations() {
+    if (currentVendor === "huawei") {
+        const forwarding = document.getElementById(
+            "portForwardList"
+        );
+        if (forwarding) {
+            forwarding.innerHTML = featureUnavailable(
+                "Port Forwarding",
+                "A captura da EG8041X7-10 validou DMZ, mas não um CRUD de Port Forwarding."
+            );
+        }
+        advancedState.portForwarding = [];
+        advancedState.networkLoaded.portForwarding = false;
+        syncAdvancedNetworkForms();
+        return await loadDmz();
+    }
+
     const forwarding = await loadPortForwarding();
     const dmz = await loadDmz();
     return forwarding && dmz;
@@ -2311,18 +2357,18 @@ function syncHuaweiAdvancedMode() {
         !huawei
     );
 
+    // DHCP e DMZ possuem implementação Huawei validada pela captura.
+    // Estas abas são multi-vendor; somente recursos não mapeados ficam ocultos.
     for (const id of [
         "advanced-tab-dhcp",
         "advanced-tab-nat"
     ]) {
-        document.getElementById(id)?.classList.toggle(
-            "hidden",
-            huawei
+        document.getElementById(id)?.classList.remove(
+            "hidden"
         );
     }
 
     for (const id of [
-        "refreshAdvancedNetworkButton",
         "multimodelProbeButton",
         "multimodelDiagnosticButton",
         "multimodelMeshButton",
