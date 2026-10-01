@@ -214,6 +214,11 @@
       }
       if (byId("tr069ProviderApply")) byId("tr069ProviderApply").disabled = true;
     });
+    document.addEventListener("huawei:snapshot-refreshed", () => {
+      if (currentVendor !== "huawei") return;
+      loadedEpoch = -1;
+      setupSnapshot = null;
+    });
     window.warmHuaweiTr069Snapshot = async function warmHuaweiTr069Snapshot() {
       if (!ontConnected || currentVendor !== "huawei") return;
       if (loadedEpoch === epoch && setupSnapshot) return;
