@@ -115,6 +115,75 @@ class HuaweiWebClient:
         finally:
             session.close()
 
+    def _authenticate_current_session(self) -> bool:
+        self.session.get(
+            self.base_url + "/",
+            timeout=self.timeout,
+        )
+
+        challenge_response = self.session.post(
+            self.url(RAND_PATH),
+            headers={
+                "Accept": "*/*",
+                "X-Requested-With": "XMLHttpRequest",
+                "Origin": self.base_url,
+                "Referer": self.base_url + "/",
+            },
+            timeout=self.timeout,
+            allow_redirects=False,
+        )
+        challenge = (
+            challenge_response.text
+            .lstrip("\ufeff")
+            .strip()
+        )
+        if len(challenge) < 16:
+            raise RuntimeError(
+                "Huawei authentication challenge was not returned"
+            )
+
+        payload = {
+            "UserName": self.username,
+            "PassWord": base64.b64encode(
+                self.password.encode("utf-8")
+            ).decode("ascii"),
+            "Language": "english",
+            "x.X_HW_Token": challenge,
+        }
+
+        self.session.post(
+            self.url(LOGIN_PATH),
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Cookie": "Cookie=body:Language:english:id=-1",
+                "Origin": self.base_url,
+                "Referer": self.base_url + "/",
+                "Upgrade-Insecure-Requests": "1",
+            },
+            data=payload,
+            timeout=self.timeout,
+            allow_redirects=True,
+        )
+
+        menu = self.session.post(
+            self.url(MENU_PATH),
+            headers={
+                "Accept": "*/*",
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": self.url("/index.asp"),
+            },
+            timeout=self.timeout,
+        )
+        body = (menu.text or "").lower()
+        return bool(
+            menu.status_code == 200
+            and (
+                "home page" in body
+                or "ipincoming" in body
+                or "bbsp" in body
+            )
+        )
+
     def login(self, retries: int = 4) -> bool:
         for _attempt in range(max(1, int(retries))):
             try:
@@ -124,82 +193,56 @@ class HuaweiWebClient:
             self.session = self._new_session()
 
             try:
-                self.session.get(
-                    self.base_url + "/",
-                    timeout=self.timeout,
-                )
-
-                challenge_response = self.session.post(
-                    self.url(RAND_PATH),
-                    headers={
-                        "Accept": "*/*",
-                        "X-Requested-With": "XMLHttpRequest",
-                        "Origin": self.base_url,
-                        "Referer": self.base_url + "/",
-                    },
-                    timeout=self.timeout,
-                    allow_redirects=False,
-                )
-                challenge = (
-                    challenge_response.text
-                    .lstrip("\ufeff")
-                    .strip()
-                )
-                if len(challenge) < 16:
-                    raise RuntimeError(
-                        "Huawei authentication challenge was not returned"
-                    )
-
-                payload = {
-                    "UserName": self.username,
-                    "PassWord": base64.b64encode(
-                        self.password.encode("utf-8")
-                    ).decode("ascii"),
-                    "Language": "english",
-                    "x.X_HW_Token": challenge,
-                }
-
-                self.session.post(
-                    self.url(LOGIN_PATH),
-                    headers={
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "Cookie": "Cookie=body:Language:english:id=-1",
-                        "Origin": self.base_url,
-                        "Referer": self.base_url + "/",
-                        "Upgrade-Insecure-Requests": "1",
-                    },
-                    data=payload,
-                    timeout=self.timeout,
-                    allow_redirects=True,
-                )
-
-                menu = self.session.post(
-                    self.url(MENU_PATH),
-                    headers={
-                        "Accept": "*/*",
-                        "X-Requested-With": "XMLHttpRequest",
-                        "Referer": self.url("/index.asp"),
-                    },
-                    timeout=self.timeout,
-                )
-                body = (menu.text or "").lower()
-
-                if (
-                    menu.status_code == 200
-                    and (
-                        "home page" in body
-                        or "ipincoming" in body
-                        or "bbsp" in body
-                    )
-                ):
+                if self._authenticate_current_session():
                     return True
-
             except (requests.RequestException, RuntimeError):
                 pass
 
             time.sleep(0.35)
 
         raise RuntimeError("Não foi possível autenticar na ONT Huawei.")
+
+    def reauthenticate(self) -> bool:
+        """Refresh authentication once without replacing the active Session."""
+        try:
+            self.session.cookies.clear()
+        except Exception:
+            pass
+
+        try:
+            if self._authenticate_current_session():
+                return True
+        except (requests.RequestException, RuntimeError):
+            pass
+
+        raise RuntimeError(
+            "Sessão expirada; não foi possível reautenticar na ONT Huawei."
+        )
+
+    @staticmethod
+    def is_login_response(response) -> bool:
+        status = getattr(response, "status_code", None)
+        if status in {401, 403}:
+            return True
+
+        body = str(getattr(response, "text", "") or "").lower()
+        final_url = str(getattr(response, "url", "") or "").lower()
+        login_markup = (
+            "login.cgi" in body
+            and (
+                "getrandcount.asp" in body
+                or "username" in body
+                or "password" in body
+            )
+        )
+        redirected_login = (
+            "login.cgi" in final_url
+            and (
+                "username" in body
+                or "password" in body
+            )
+        )
+        return bool(login_markup or redirected_login)
 
     @staticmethod
     def extract_token(html: str) -> str:
@@ -220,17 +263,31 @@ class HuaweiWebClient:
             "Token Huawei não encontrado na página atual."
         )
 
-    def get_page(self, path: str) -> str:
-        response = self.session.get(
+    def _protected_get(self, path: str):
+        return self.session.get(
             self.url(path),
             headers={"Referer": self.url("/index.asp")},
             timeout=self.timeout,
             allow_redirects=True,
         )
+
+    def get_page(self, path: str) -> str:
+        response = self._protected_get(path)
+
+        if self.is_login_response(response):
+            self.reauthenticate()
+            response = self._protected_get(path)
+
+        if self.is_login_response(response):
+            raise RuntimeError(
+                "Sessão expirada; a página Huawei continuou exigindo autenticação."
+            )
+
         if response.status_code != 200:
             raise RuntimeError(
-                f"Página Huawei indisponível (HTTP {response.status_code})."
+                "Página Huawei indisponível."
             )
+
         return response.text
 
     def post_form(
@@ -240,6 +297,11 @@ class HuaweiWebClient:
         *,
         referer: str,
     ) -> HuaweiMutationTransport:
+        """Send a mutation exactly once.
+
+        Authentication recovery after a submitted mutation never retries the
+        mutation. The caller must decide success exclusively through read-back.
+        """
         try:
             response = self.session.post(
                 self.url(path),
@@ -257,8 +319,17 @@ class HuaweiWebClient:
                 timeout=(5, self.timeout),
                 allow_redirects=True,
             )
+
+            auth_lost = self.is_login_response(response)
+            if auth_lost:
+                try:
+                    self.reauthenticate()
+                except RuntimeError:
+                    pass
+
             return HuaweiMutationTransport(
-                http_status=response.status_code
+                http_status=response.status_code,
+                connection_uncertain=auth_lost,
             )
         except requests.exceptions.ReadTimeout:
             return HuaweiMutationTransport(
