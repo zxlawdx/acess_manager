@@ -1151,6 +1151,59 @@ class HuaweiService:
             )
             return result
 
+    def port_forwarding_status(self):
+        return []
+
+    def sntp_management_status(self):
+        return {
+            "available": False,
+            "vendor": "huawei",
+            "message": (
+                "SNTP aparece no firmware Huawei, mas não houve mutation "
+                "validada nesta captura."
+            ),
+        }
+
+    def qos_management_status(self):
+        return {
+            "available": False,
+            "vendor": "huawei",
+            "message": (
+                "QoS Huawei não possui fluxo de escrita validado neste profile."
+            ),
+        }
+
+    def firmware_management_status(self):
+        return {
+            "available": False,
+            "vendor": "huawei",
+            "model": self.model,
+        }
+
+    def wan_configurations(self):
+        # The generic management reader expects a WAN collection. Reuse the
+        # authenticated Huawei WAN parser rather than falling into ZTE.
+        return self.wan_status()
+
+    def workstation_diagnostic(self):
+        return {
+            "available": False,
+            "vendor": "huawei",
+            "message": (
+                "Diagnóstico de estação ThinkLua não se aplica à sessão Huawei."
+            ),
+        }
+
+    def export_user_configuration(self):
+        raise PermissionError(
+            "Backup/export Huawei ainda não foi validado para este profile."
+        )
+
+    def reboot(self):
+        raise PermissionError(
+            "Reboot Huawei não foi exercitado na captura de laboratório."
+        )
+
     def account_status(self):
         return {
             "available": False,
