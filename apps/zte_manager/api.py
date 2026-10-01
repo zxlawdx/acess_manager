@@ -1594,7 +1594,7 @@ def management_inventory_sync(context=None):
         )
 
         return cpe_management_service.sync_inventory(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -1661,7 +1661,7 @@ def management_drift(context=None):
         )
 
         return cpe_management_service.drift(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -1679,7 +1679,7 @@ def management_drift_remediate(context=None):
         )
 
         return cpe_management_service.remediate_drift(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -1697,7 +1697,7 @@ def management_batch_create(context=None):
         )
 
         return cpe_management_service.create_batch(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -1799,7 +1799,7 @@ def management_remote_open(context=None):
         )
 
         return cpe_management_service.open_remote(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -1873,7 +1873,7 @@ def management_monitor_start(context=None):
         )
 
         return cpe_management_service.start_monitor(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2565,7 +2565,7 @@ def management_zero_touch(context=None):
         )
 
         return cpe_management_service.zero_touch(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
