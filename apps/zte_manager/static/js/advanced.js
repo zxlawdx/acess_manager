@@ -1083,7 +1083,7 @@ async function showMultimodelMesh() {
 }
 
 
-document.addEventListener("zte:session-changed", () => {
+document.addEventListener("device:session-changed", () => {
     trackerSessionGeneration++;
     trackerQuickScanKey = null;
     trackerQuickScanPromise = null;
@@ -3059,7 +3059,7 @@ function initAdvancedOperations() {
     syncAdvancedNetworkForms();
     const info = document.getElementById("dhcpLeaseList");
     if (info) info.textContent = "Clique em Carregar DHCP / NAT para consultar o estado atual.";
-    document.addEventListener("zte:page-open", event => {
+    document.addEventListener("device:page-open", event => {
         if (event.detail?.pageName === "advanced" && ontConnected) {
             syncHuaweiAdvancedMode();
             void loadOperationsConsole();
