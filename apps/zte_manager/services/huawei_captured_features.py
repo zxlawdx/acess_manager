@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html as html_module
 import re
 import time
 from typing import Any, Callable, Iterable
@@ -256,6 +257,28 @@ def _source_value(source: str, *names: str, default=None):
     return default
 
 
+def _label_value(source: str, *labels: str, default=""):
+    """Extract simple two-cell label/value rows from Huawei information pages."""
+    text = source or ""
+    for label in labels:
+        escaped = re.escape(str(label))
+        patterns = (
+            rf"<(?:td|th)[^>]*>\s*{escaped}\s*</(?:td|th)>\s*"
+            rf"<(?:td|th)[^>]*>\s*(.*?)\s*</(?:td|th)>",
+            rf"<label[^>]*>\s*{escaped}\s*</label>\s*"
+            rf"<[^>]+>\s*(.*?)\s*</[^>]+>",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, text, re.I | re.S)
+            if not match:
+                continue
+            value = re.sub(r"<[^>]+>", "", match.group(1))
+            value = html_module.unescape(value).strip()
+            if value:
+                return decode_huawei_js_string(value)
+    return default
+
+
 def _real_wan_domain(value: str) -> bool:
     return bool(re.fullmatch(
         r"InternetGatewayDevice\.WANDevice\.\d+\."
@@ -420,7 +443,7 @@ class HuaweiCapturedFeatureService:
             DEVICE_INFO_CUS_PAGE,
         )
 
-        def value(*names: str, default=""):
+        def value(*names: str, default="", labels=()):
             from_records = _record_value(
                 records,
                 *names,
@@ -428,9 +451,16 @@ class HuaweiCapturedFeatureService:
             )
             if from_records not in (None, ""):
                 return from_records
-            return _source_value(
+            scalar = _source_value(
                 html,
                 *names,
+                default=None,
+            )
+            if scalar not in (None, ""):
+                return scalar
+            return _label_value(
+                html,
+                *(labels or names),
                 default=default,
             )
 
@@ -438,26 +468,39 @@ class HuaweiCapturedFeatureService:
             "fabricante": value(
                 "Manufacturer", "Vendor", "ManufacturerName",
                 default="Huawei",
+                labels=("Manufacturer", "Fabricante"),
             ) or "Huawei",
             "modelo": value(
                 "ProductClass", "ProductName", "ModelName", "Model",
                 "DeviceType", default=self.model,
+                labels=(
+                    "Product Name", "Product Class", "Device Type",
+                    "Model", "Modelo",
+                ),
             ) or self.model,
             "firmware": value(
                 "SoftwareVersion", "SoftwareVer",
                 "FirmwareVersion", "MainSoftwareVersion",
+                labels=(
+                    "Software Version", "Firmware Version",
+                    "Versão de software",
+                ),
             ),
             "hardware": value(
                 "HardwareVersion", "HardwareVer",
+                labels=("Hardware Version", "Versão de hardware"),
             ),
             "boot": value(
                 "BootLoaderVersion", "BootVersion",
+                labels=("Boot Loader Version", "Boot Version"),
             ),
             "serial": value(
                 "SerialNumber", "SerialNo", "SN",
+                labels=("Serial Number", "Serial No.", "SN"),
             ),
             "uptime": value(
                 "UpTime", "Uptime", "DeviceUpTime",
+                labels=("Up Time", "Uptime", "Device Up Time"),
             ),
             "temperatura_cpu": value(
                 "Temperature", "CPUTemperature", "CpuTemperature",
