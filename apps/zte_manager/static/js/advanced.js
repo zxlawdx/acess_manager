@@ -29,6 +29,30 @@ pageInfo.advanced = {
 const baseCollectRadioFormPayload = collectRadioFormPayload;
 
 renderRadioAdvancedFields = function (radio) {
+    if (currentVendor === "huawei") {
+        return `
+            <div class="advanced-radio-fields">
+                <span class="section-kicker">HUAWEI RF VALIDADO</span>
+                <div class="form-grid two-fields with-top-space">
+                    <div class="form-group">
+                        <label>RTS/CTS</label>
+                        <input data-field="rts_cts" type="number" min="0" max="2347"
+                            value="${escapeHtml(radio.rts_cts ?? 2346)}">
+                    </div>
+                    <div class="form-group">
+                        <label>DTIM</label>
+                        <input data-field="dtim" type="number" min="1" max="5"
+                            value="${escapeHtml(radio.dtim ?? 1)}">
+                    </div>
+                </div>
+                <p class="muted">
+                    Canal, potência, país, beacon, RTS e DTIM usam o formulário
+                    WLAN Advanced capturado na EG8041X7-10.
+                </p>
+            </div>
+        `;
+    }
+
     const checked = value => value ? "checked" : "";
 
     return `
@@ -125,16 +149,18 @@ collectRadioFormPayload = function (
         channelValue
     );
 
-    const booleanFields = [
-        "mu_mimo",
-        "uplink_mu_mimo",
-        "downlink_mu_mimo",
-        "uplink_ofdma",
-        "downlink_ofdma",
-        "twt",
-        "spatial_reuse",
-        "ssid_isolation"
-    ];
+    const booleanFields = currentVendor === "huawei"
+        ? []
+        : [
+            "mu_mimo",
+            "uplink_mu_mimo",
+            "downlink_mu_mimo",
+            "uplink_ofdma",
+            "downlink_ofdma",
+            "twt",
+            "spatial_reuse",
+            "ssid_isolation"
+        ];
 
     for (const name of booleanFields) {
         const field = form.querySelector(
@@ -166,11 +192,15 @@ collectRadioFormPayload = function (
         }
     }
 
-    for (const name of [
-        "qos_type",
-        "work_mode",
-        "preamble_type"
-    ]) {
+    for (const name of (
+        currentVendor === "huawei"
+            ? []
+            : [
+                "qos_type",
+                "work_mode",
+                "preamble_type"
+            ]
+    )) {
         const field = form.querySelector(
             `[data-field="${name}"]`
         );
