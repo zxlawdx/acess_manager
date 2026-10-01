@@ -290,6 +290,51 @@ class HuaweiWebClient:
 
         return response.text
 
+    def post_read(
+        self,
+        path: str,
+        payload: dict[str, str] | None = None,
+        *,
+        referer: str = "/index.asp",
+    ) -> str:
+        """Execute a read-only Huawei AJAX POST with one auth recovery.
+
+        Several Huawei information endpoints (associated stations and LAN
+        inventory) are POST-only even though they do not mutate state. Unlike
+        post_form(), this method may retry once after reauthentication because
+        the request is read-only and idempotent.
+        """
+        def request():
+            return self.session.post(
+                self.url(path),
+                headers={
+                    "Accept": "*/*",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Origin": self.base_url,
+                    "Referer": self.url(referer),
+                },
+                data=payload or None,
+                timeout=self.timeout,
+                allow_redirects=True,
+            )
+
+        response = request()
+        if self.is_login_response(response):
+            self.reauthenticate()
+            response = request()
+
+        if self.is_login_response(response):
+            raise RuntimeError(
+                "Sessão expirada; o endpoint Huawei continuou exigindo autenticação."
+            )
+
+        if response.status_code != 200:
+            raise RuntimeError(
+                "Endpoint Huawei de leitura indisponível."
+            )
+
+        return response.text
+
     def post_form(
         self,
         path: str,
