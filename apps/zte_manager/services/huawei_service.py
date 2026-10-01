@@ -910,6 +910,61 @@ class HuaweiService:
             confirm=True,
         )
 
+    def alg_status(self):
+        with self._lock:
+            return self._require_captured().alg_status()
+
+    def igmp_status(self):
+        with self._lock:
+            return self._require_captured().igmp_status()
+
+    def dos_status(self):
+        with self._lock:
+            return self._require_captured().dos_status()
+
+    def ipv6_firewall_status(self):
+        with self._lock:
+            return self._require_captured().ipv6_firewall_status()
+
+    def internet_control_status(self):
+        with self._lock:
+            return self._require_captured().internet_control_status()
+
+    def update_captured_feature(self, feature: str, config: dict):
+        with self._lock:
+            service = self._require_captured()
+            writers = {
+                "alg": service.set_alg,
+                "igmp": service.set_igmp,
+                "dos": service.set_dos,
+                "ipv6_firewall": service.set_ipv6_firewall,
+                "internet_control": service.set_internet_control,
+            }
+            try:
+                writer = writers[feature]
+            except KeyError as exc:
+                raise ValueError(
+                    f"Escrita Huawei não disponível para a capability {feature}."
+                ) from exc
+
+            capability = (
+                self._capabilities.get(feature)
+                or {}
+            )
+            if not capability.get("update"):
+                raise PermissionError(
+                    "Escrita não validada para esta capability Huawei."
+                )
+
+            result = writer(dict(config or {}))
+            self._audit_captured(
+                operation=f"huawei_{feature}_update",
+                target=feature,
+                result=result,
+                after=dict(config or {}),
+            )
+            return result
+
     def firewall_management_status(self):
         with self._lock:
             return self._require_captured().firewall_management_status()
@@ -1100,9 +1155,11 @@ class HuaweiService:
             "wifi_radio": self.wifi_radios,
             "tr069_url": self.tr069_management_status,
             "firewall_level": self.firewall_management_status,
-            "alg": self.firewall_management_status,
-            "igmp": self.firewall_management_status,
-            "dos": self.firewall_management_status,
+            "alg": self.alg_status,
+            "igmp": self.igmp_status,
+            "dos": self.dos_status,
+            "ipv6_firewall": self.ipv6_firewall_status,
+            "internet_control": self.internet_control_status,
         }
         try:
             return readers[feature]
