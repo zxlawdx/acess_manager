@@ -1,0 +1,51 @@
+name: huawei-runtime-fix-ci
+
+on:
+  push:
+    branches:
+      - fix/huawei-runtime-capture-readers
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+      - name: Compile
+        run: python -m compileall -q apps config tests manage.py launcher.py tools/build_frontend_template.py
+      - name: Template consistency
+        run: python tools/build_frontend_template.py --check
+      - name: Python tests
+        run: python -m unittest discover -s tests -v
+      - name: JavaScript syntax
+        run: |
+          node --check apps/zte_manager/static/js/app.js
+          node --check apps/zte_manager/static/js/advanced.js
+          node --check apps/zte_manager/static/js/dhcp_module.js
+          node --check apps/zte_manager/static/js/tr069_profiles.js
+      - name: Focused UI tests
+        run: |
+          node --test tests/test_history_view.cjs
+          node --test tests/test_structured_forms.cjs
+          node --test tests/test_provider_diagnostics_ui.cjs
+          node --test tests/test_tangerine_feature_experience.cjs
+          node --test tests/test_operator_outcomes.cjs
+          node --test tests/test_shell_and_support_layout.cjs
+          node --test tests/test_connection_inventory.cjs
+          node --test tests/test_clients_workbench.cjs
+          node --test tests/test_device_tr069_workflow.cjs
+          node --test tests/test_management_tabs.cjs
+          node --test tests/test_diagnostic_tabs.cjs
+          node --test tests/test_api_client_ui.cjs tests/test_advanced_workbench.cjs
+          node --test tests/test_tangerine_v2.cjs
+          node --test tests/test_tangerine_ui.cjs
