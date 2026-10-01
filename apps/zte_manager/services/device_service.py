@@ -381,6 +381,11 @@ class DeviceService:
     def huawei_session_snapshot(self):
         return self._require_huawei().session_snapshot()
 
+    def warm_huawei_session_snapshot(self, *, refresh=False):
+        return self._require_huawei().warm_session_snapshot(
+            refresh=refresh
+        )
+
     def generate_attendance(self, diagnostic_id=None):
         return self.active_service.generate_attendance(
             diagnostic_id
