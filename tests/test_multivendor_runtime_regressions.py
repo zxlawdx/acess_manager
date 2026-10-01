@@ -186,6 +186,8 @@ class FakeSession:
             return response(200, "Home Page ipincoming bbsp", url)
         if any(name in url for name in ("add.cgi", "set.cgi", "del.cgi")):
             self.mutation_calls += 1
+            if self.mutation_status == "timeout":
+                raise requests.exceptions.ReadTimeout("fixture timeout")
             return response(
                 self.mutation_status if self.mutation_status is not None else 200,
                 "",
@@ -269,7 +271,7 @@ class HuaweiSessionRecoveryTests(unittest.TestCase):
             readback_tries=1,
         )
 
-    def test_mutation_post_403_is_not_replayed_create_update_delete(self):
+    def test_mutation_post_403_or_timeout_is_not_replayed_create_update_delete(self):
         empty = (
             '<input type="hidden" id="hwonttoken" '
             'value="fixture-token-1234567890">'
@@ -299,14 +301,18 @@ class HuaweiSessionRecoveryTests(unittest.TestCase):
             ),
         )
 
-        for name, pages, action in cases:
-            with self.subTest(name=name):
-                session = FakeSession(pages, mutation_status=403)
-                client = client_with_session(session)
-                result = action(self.service(client))
-                self.assertTrue(result["verified"])
-                self.assertTrue(result["success"])
-                self.assertEqual(session.mutation_calls, 1)
+        for transport_state in (403, "timeout"):
+            for name, pages, action in cases:
+                with self.subTest(name=name, transport=transport_state):
+                    session = FakeSession(
+                        list(pages),
+                        mutation_status=transport_state,
+                    )
+                    client = client_with_session(session)
+                    result = action(self.service(client))
+                    self.assertTrue(result["verified"])
+                    self.assertTrue(result["success"])
+                    self.assertEqual(session.mutation_calls, 1)
 
 
 if __name__ == "__main__":
