@@ -201,6 +201,38 @@ class HuaweiWebClient:
 
         raise RuntimeError("Não foi possível autenticar na ONT Huawei.")
 
+    def detect_known_model(
+        self,
+        candidates: tuple[str, ...],
+    ) -> str | None:
+        """Conservatively confirm a supported model from authenticated pages."""
+        pages = (
+            "/html/ssmp/deviceinfo/deviceinfo.asp",
+            "/index.asp",
+        )
+        normalized = [
+            (
+                candidate,
+                candidate.lower(),
+            )
+            for candidate in candidates
+            if str(candidate).strip()
+        ]
+
+        for page in pages:
+            try:
+                body = self.get_page(
+                    page
+                ).lower()
+            except Exception:
+                continue
+
+            for original, needle in normalized:
+                if needle in body:
+                    return original
+
+        return None
+
     @staticmethod
     def extract_token(html: str) -> str:
         patterns = (
