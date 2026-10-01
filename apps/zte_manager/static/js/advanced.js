@@ -2780,7 +2780,7 @@ function renderHuaweiIpv4Filters() {
     );
 }
 
-async function loadHuaweiIpv4Filters() {
+async function loadHuaweiIpv4Filters(refresh = false) {
     if (
         !ontConnected
         || currentVendor !== "huawei"
@@ -2795,13 +2795,18 @@ async function loadHuaweiIpv4Filters() {
     );
     if (status) {
         status.innerHTML = (
-            '<span class="muted">Consultando regras na ONT...</span>'
+            '<span class="muted">'
+            + (refresh
+                ? "Atualizando regras na ONT..."
+                : "Carregando regras da sessão...")
+            + "</span>"
         );
     }
 
     try {
         const data = await apiRequest(
-            "/huawei/ipv4-filters",
+            "/huawei/ipv4-filters"
+            + (refresh ? "?refresh=1" : ""),
             { expected: "object" }
         );
         huaweiIpv4FilterState.rules = Array.isArray(
@@ -3074,9 +3079,13 @@ function huaweiFlag(value) {
     );
 }
 
-async function readHuaweiCapturedFeature(feature) {
+async function readHuaweiCapturedFeature(feature, refresh = false) {
+    const query = new URLSearchParams({
+        feature,
+    });
+    if (refresh) query.set("refresh", "1");
     const result = await apiRequest(
-        "/features/read?feature=" + encodeURIComponent(feature)
+        "/features/read?" + query.toString()
     );
     return result?.objects?.items ?? null;
 }
@@ -3141,7 +3150,7 @@ function collectHuaweiSecurityForm() {
     };
 }
 
-async function loadHuaweiSecurityControls() {
+async function loadHuaweiSecurityControls(refresh = false) {
     if (!ontConnected || currentVendor !== "huawei") return;
 
     const status = document.getElementById("huaweiSecurityStatus");
@@ -3160,7 +3169,10 @@ async function loadHuaweiSecurityControls() {
     const state = {};
 
     for (const feature of features) {
-        state[feature] = await readHuaweiCapturedFeature(feature);
+        state[feature] = await readHuaweiCapturedFeature(
+            feature,
+            refresh
+        );
     }
 
     const firewall = state.firewall_level?.firewall || {};
@@ -3294,11 +3306,23 @@ let operationsLoadPromise = null;
 
 function loadOperationsConsole() {
     if (!ontConnected) return Promise.resolve();
+    if (
+        currentVendor === "huawei"
+        && advancedState.loaded
+        && !operationsLoadPromise
+    ) {
+        return Promise.resolve();
+    }
     if (operationsLoadPromise) return operationsLoadPromise;
     operationsLoadPromise = loadOperationsConsoleInternal()
         .finally(() => { operationsLoadPromise = null; });
     return operationsLoadPromise;
 }
+
+window.warmHuaweiAdvancedSnapshot = async function warmHuaweiAdvancedSnapshot() {
+    if (!ontConnected || currentVendor !== "huawei") return;
+    await loadOperationsConsole();
+};
 
 async function loadOperationsConsoleInternal() {
     if (!ontConnected) return;
@@ -3488,8 +3512,17 @@ function initAdvancedOperations() {
     document.addEventListener("device:page-open", event => {
         if (event.detail?.pageName === "advanced" && ontConnected) {
             syncHuaweiAdvancedMode();
-            void loadOperationsConsole();
+            if (currentVendor !== "huawei" || !advancedState.loaded) {
+                void loadOperationsConsole();
+            }
         }
+    });
+    document.addEventListener("device:session-changed", () => {
+        advancedState.loaded = false;
+        huaweiSecurityState.loaded = false;
+        huaweiSecurityState.snapshot = null;
+        huaweiIpv4FilterState.rules = [];
+        huaweiIpv4FilterState.capability = null;
     });
 
     document
@@ -3534,27 +3567,21 @@ function initAdvancedOperations() {
     document.getElementById("huaweiIpv4FilterForm")
         ?.addEventListener("submit", saveHuaweiIpv4Filter);
     document.getElementById("huaweiIpv4FilterRefresh")
-        ?.addEventListener("click", loadHuaweiIpv4Filters);
+        ?.addEventListener(
+            "click",
+            () => void loadHuaweiIpv4Filters(true)
+        );
     document.getElementById("huaweiIpv4FilterCancel")
         ?.addEventListener("click", resetHuaweiIpv4FilterForm);
     document.getElementById("huaweiIpv4FilterProtocol")
         ?.addEventListener("change", syncHuaweiPortFields);
     document.getElementById("huaweiSecurityRefresh")
-        ?.addEventListener("click", () => void loadHuaweiSecurityControls());
+        ?.addEventListener(
+            "click",
+            () => void loadHuaweiSecurityControls(true)
+        );
     document.getElementById("huaweiSecuritySave")
         ?.addEventListener("click", () => void saveHuaweiSecurityControls());
-    document.addEventListener(
-        "huawei:ipv4-filter-refresh",
-        () => {
-            if (
-                ontConnected
-                && currentVendor === "huawei"
-            ) {
-                void loadHuaweiIpv4Filters();
-            }
-        }
-    );
-
     document
         .getElementById(
             "exportFeatureShapesButton"
