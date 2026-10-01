@@ -64,17 +64,18 @@ class DeviceService:
         self._session: DeviceSession | None = None
 
     def __getattr__(self, name: str):
-        """Delegate vendor-neutral operations to the active provider.
+        """Delegate public provider surface to the active service.
 
-        Missing methods are an explicit provider capability gap. They never
-        fall back from Huawei to ZTE.
+        Missing methods/attributes are an explicit capability gap. An active
+        Huawei session can never fall through to the ZTE provider.
         """
         if name.startswith("_"):
             raise AttributeError(name)
 
         service = self.active_service
-        target = getattr(service, name, None)
-        if target is None or not callable(target):
+        missing = object()
+        target = getattr(service, name, missing)
+        if target is missing:
             status = self.status()
             raise ProviderFeatureUnavailable(
                 vendor=status.get("vendor"),
