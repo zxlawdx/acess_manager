@@ -45,6 +45,11 @@ class MissingFirmwareCapability(ApplicationFailure):
     user_message = "O equipamento confirmou que este recurso não está disponível."
 
 
+class ProviderFeatureUnavailable(ApplicationFailure):
+    code, category = "PROVIDER_FEATURE_UNAVAILABLE", "unsupported"
+    user_message = "Este recurso ainda não está disponível para o fabricante conectado."
+
+
 class CapabilityUnconfirmed(ApplicationFailure):
     code, category, retryable = "CAPABILITY_UNCONFIRMED", "unconfirmed", True
     user_message = (
