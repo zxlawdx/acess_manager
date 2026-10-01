@@ -165,6 +165,7 @@
     });
     document.addEventListener("device:page-open", event => {
       if (event.detail?.pageName !== "profiles" || !currentAttendant) return;
+      if (event.detail?.vendor === "huawei") return;
       void execute(async () => {
         await refreshNames();
         // Primary editor is loaded by app.js; alternate editor is ours.
