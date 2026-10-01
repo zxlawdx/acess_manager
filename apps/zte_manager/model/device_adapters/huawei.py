@@ -30,7 +30,7 @@ class HuaweiProfile:
     model: str
     aliases: tuple[str, ...]
     ipv4_filter: HuaweiIPv4FilterCapability
-    captured_features: dict[str, dict[str, bool]] = field(
+    captured_features: dict[str, dict[str, object]] = field(
         default_factory=dict
     )
 
@@ -104,6 +104,198 @@ class HuaweiUnknownProfile(HuaweiProfile):
 KNOWN_HUAWEI_PROFILES: tuple[HuaweiProfile, ...] = (
     HuaweiEG8041X7Profile(),
 )
+
+
+# Features present in the captured WebUI/menu but not yet end-to-end
+# integrated. Their presence is evidence of observation, not permission to
+# invent a parser or mutation.
+HUAWEI_EG8041X7_OBSERVED_ONLY: dict[str, dict[str, object]] = {
+    "wifi_schedule": {
+        "label": "Wi-Fi Schedule",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/amp/wifische/WlanSchedule.asp"],
+    },
+    "wifi_cover": {
+        "label": "Wi-Fi Cover / Home Network",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": [
+            "/html/amp/wificovercfg/wifiCover.asp",
+            "/html/amp/wificoverinfo/wlancoverinfo.asp",
+        ],
+    },
+    "easymesh_topology": {
+        "label": "EasyMesh topology",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/amp/wlaninfo/easymeshTopo.asp"],
+    },
+    "port_isolation": {
+        "label": "Port Isolation",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/bbsp/portinfo/portisolate.asp"],
+        "note": "set.cgi was observed, but functional parameters were not proven.",
+    },
+    "ipv6_filter": {
+        "label": "IPv6 Filtering",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/bbsp/ipv6ipincoming/ipv6ipincoming.asp"],
+    },
+    "ipv6_port_mapping": {
+        "label": "IPv6 Port Mapping",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/bbsp/ipv6portmapping/ipv6portmapping.asp"],
+    },
+    "upnp": {
+        "label": "UPnP",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/bbsp/upnp/upnp.asp"],
+    },
+    "ddns": {
+        "label": "DDNS",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/bbsp/ddns/ddns.asp"],
+    },
+    "routing": {
+        "label": "Routing / Static Route / Service Route",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": [
+            "/html/bbsp/route/route.asp",
+            "/html/bbsp/routeinfo/routeinfo.asp",
+            "/html/bbsp/staticroute/staticroute.asp",
+            "/html/bbsp/serviceroute/serviceroute.asp",
+        ],
+    },
+    "port_mapping": {
+        "label": "Port Mapping / Trigger",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": [
+            "/html/bbsp/portmapping/portmapping.asp",
+            "/html/bbsp/porttrigger/porttrigger.asp",
+        ],
+    },
+    "mac_filter": {
+        "label": "MAC filtering",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": [
+            "/html/bbsp/macfilter/macfilter.asp",
+            "/html/bbsp/wlanmacfilter/wlanmacfilter.asp",
+        ],
+    },
+    "parental_control": {
+        "label": "Parental control",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": [
+            "/html/bbsp/parentalctrl/parentalctrlmac.asp",
+            "/html/bbsp/parentalctrl/parentalctrlstatus.asp",
+        ],
+    },
+    "port_acl": {
+        "label": "Port ACL",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/bbsp/portacl/newacl.asp"],
+    },
+    "sntp": {
+        "label": "SNTP",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/ssmp/sntp/sntp.asp"],
+    },
+    "reboot": {
+        "label": "Reboot",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/ssmp/reboot/reboot.asp"],
+    },
+    "firmware": {
+        "label": "Firmware upgrade",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/ssmp/fireware/firmware.asp"],
+    },
+    "config_backup": {
+        "label": "Configuration file",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/ssmp/cfgfile/cfgfile.asp"],
+    },
+    "security_check": {
+        "label": "Security Check",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/ssmp/securitycheck/securitycheck.asp"],
+    },
+    "led": {
+        "label": "LED configuration",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/ssmp/ledcfg/ledcfg.asp"],
+    },
+    "collect": {
+        "label": "Support collection",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/ssmp/collect/collectInfo.asp"],
+    },
+    "qos_smart": {
+        "label": "QoS Smart / statistics",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/bbsp/qossmart/qossmart.asp"],
+    },
+    "dscp_to_pbit": {
+        "label": "DSCP to P-bit",
+        "state": "OBSERVED_ONLY",
+        "write_state": "WRITE_CAPTURED",
+        "endpoints": ["/html/bbsp/dscptopbit/dscptopbit.asp"],
+        "note": "Mutation observed, but not in the physically reproduced 21-write suite.",
+    },
+    "speed_test": {
+        "label": "Section speed test",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": ["/html/ssmp/Sectionspeed/Sectionspeed.asp"],
+    },
+    "diagnostics_webui": {
+        "label": "WebUI diagnostics",
+        "state": "OBSERVED_ONLY",
+        "write_state": "NOT_YET_VALIDATED",
+        "endpoints": [
+            "/html/bbsp/maintenance/diagnosecommon.asp",
+            "/html/ssmp/maintain/smartdiagnose.asp",
+        ],
+    },
+}
+
+
+HUAWEI_EG8041X7_FULLY_INTEGRATED = frozenset({
+    "ipv4_filter",
+    "wan",
+    "optical",
+    "dhcp",
+    "dns",
+    "dmz",
+    "wifi_basic",
+    "wifi_radio",
+    "tr069_url",
+    "firewall_level",
+    "alg",
+    "igmp",
+    "dos",
+    "ipv6_firewall",
+    "internet_control",
+})
 
 
 def _compact_huawei_model(model: str | None) -> str:
@@ -269,5 +461,21 @@ class HuaweiWebAdapter(DeviceAdapter):
         feature["verified"] = capability.verified
         data["profile"] = (
             self.profile.key if self.profile is not None else "huawei_unknown"
+        )
+        data["observed_only"] = (
+            {
+                key: {
+                    inner_key: (
+                        list(inner_value)
+                        if isinstance(inner_value, tuple)
+                        else inner_value
+                    )
+                    for inner_key, inner_value in spec.items()
+                }
+                for key, spec in HUAWEI_EG8041X7_OBSERVED_ONLY.items()
+            }
+            if self.profile is not None
+            and self.profile.key == "huawei_eg8041x7_10"
+            else {}
         )
         return data
