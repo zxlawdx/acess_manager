@@ -84,6 +84,7 @@ from apps.zte_manager.services.desktop_capabilities import (
     get_desktop_capabilities,
 )
 from apps.zte_manager.services.zte_service import zte_service
+from apps.zte_manager.services.device_service import device_service
 from apps.zte_manager.services.tr069_profile_service import tr069_provider_profiles
 from apps.zte_manager.services.error_policy import PublicFailure, classify
 
@@ -208,6 +209,17 @@ def _safe_call(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         return envelope
 
 
+def _active_provider_service():
+    """Return Huawei provider only for an active Huawei DeviceSession.
+
+    ZTE remains the direct service for legacy routes/tests while /connect is
+    vendor-neutral.
+    """
+    if device_service.vendor == "huawei":
+        return device_service
+    return zte_service
+
+
 # =========================================================
 # SISTEMA / CONEXÃO
 # =========================================================
@@ -245,7 +257,7 @@ def connect(context=None):
             context
         )
 
-        return zte_service.connect(
+        return device_service.connect(
             ip=data.ip,
             username=data.username,
             password=data.password,
@@ -262,7 +274,7 @@ def connect(context=None):
 @api.post("/disconnect")
 def disconnect(context=None):
     def action():
-        zte_service.disconnect()
+        device_service.disconnect()
 
         return {
             "success": True,
@@ -276,12 +288,13 @@ def disconnect(context=None):
 
 @api.get("/connection/status")
 def connection_status(context=None):
+    if device_service.vendor == "huawei":
+        return device_service.status()
+
     return {
         "connected": zte_service.connected,
         "attendant": zte_service.current_attendant,
         "host": zte_service.current_host,
-        # Estado para recuperar a SPA após reload do WebView.
-        # Nunca retornar credenciais, cookies ou token da ONT.
         "model": (
             zte_service._selected_model
             or zte_service._device_info.get("modelo")
@@ -289,15 +302,22 @@ def connection_status(context=None):
         "firmware": zte_service._device_info.get("firmware"),
         "model_verified": zte_service._model_verified,
         "session_revision": zte_service._session_revision,
-        "vendor": zte_service._vendor,
+        "vendor": "zte" if zte_service.connected else None,
+        "profile": (
+            zte_service._adapter.name
+            if zte_service._adapter
+            else None
+        ),
+        "provider": (
+            type(zte_service).__name__
+            if zte_service.connected
+            else None
+        ),
+        "capabilities": {},
         "writes_enabled": (
             bool(
                 getattr(
-                    (
-                        zte_service._huawei
-                        if zte_service._vendor == "huawei"
-                        else zte_service._zte
-                    ),
+                    zte_service._zte,
                     "writes_enabled",
                     False,
                 )
@@ -746,7 +766,7 @@ def export_configuration_backup(context=None):
 @api.get("/device/capabilities")
 def capability_catalog(context=None):
     return _safe_call(
-        zte_service.capability_catalog
+        _active_provider_service().capability_catalog
     )
 
 
@@ -758,7 +778,7 @@ def capability_probe(context=None):
             context
         )
 
-        return zte_service.probe_capabilities(
+        return _active_provider_service().probe_capabilities(
             data.features or None
         )
 
@@ -770,7 +790,7 @@ def capability_probe(context=None):
 @api.get("/huawei/ipv4-filters")
 def huawei_ipv4_filters(context=None):
     return _safe_call(
-        zte_service.list_ipv4_filters
+        device_service.list_ipv4_filters
     )
 
 
@@ -781,7 +801,7 @@ def huawei_ipv4_filter_create(context=None):
             HuaweiIPv4FilterRuleRequest,
             context,
         )
-        return zte_service.create_ipv4_filter(
+        return device_service.create_ipv4_filter(
             data.model_dump(
                 exclude={"instance_or_domain"}
             )
@@ -803,7 +823,7 @@ def huawei_ipv4_filter_update(context=None):
             raise ValueError(
                 "Informe a instância da regra IPv4."
             )
-        return zte_service.update_ipv4_filter(
+        return device_service.update_ipv4_filter(
             data.instance_or_domain,
             data.model_dump(
                 exclude={"instance_or_domain"}
@@ -822,7 +842,7 @@ def huawei_ipv4_filter_delete(context=None):
             HuaweiIPv4FilterDeleteRequest,
             context,
         )
-        return zte_service.delete_ipv4_filter(
+        return device_service.delete_ipv4_filter(
             data.instance_or_domain
         )
 
@@ -840,28 +860,21 @@ def discovery_bootstrap(context=None):
     """
     try:
         device = zte_service._device_info or {}
-        if zte_service._vendor == "huawei":
-            writes_enabled = bool(
-                getattr(
-                    zte_service._huawei,
-                    "writes_enabled",
-                    False,
-                )
-            )
+        if device_service.vendor == "huawei":
+            status = device_service.status()
             return {
-                "connected": zte_service.connected,
+                "connected": status.get("connected", False),
                 "vendor": "huawei",
-                "model": (
-                    zte_service._selected_model
-                    or device.get("modelo")
-                    or "Huawei"
-                ),
-                "detected_model": device.get("modelo"),
-                "model_verified": zte_service._model_verified,
+                "model": status.get("model"),
+                "detected_model": status.get("model"),
+                "model_verified": status.get("model_verified", False),
+                "profile": status.get("profile"),
+                "provider": status.get("provider"),
+                "capabilities": status.get("capabilities") or {},
                 "native_diagnostics_available": False,
-                "session_revision": zte_service._session_revision,
-                "firmware": device.get("firmware"),
-                "writes_enabled": writes_enabled,
+                "session_revision": status.get("session_revision"),
+                "firmware": None,
+                "writes_enabled": status.get("writes_enabled", False),
                 "catalog": [],
                 "reason": None,
             }
@@ -1104,7 +1117,7 @@ def feature_shape(context=None):
         }
 
     return _safe_call(
-        zte_service.capability_shape,
+        _active_provider_service().capability_shape,
         feature,
     )
 
@@ -1126,7 +1139,7 @@ def read_feature(context=None):
         }
 
     return _safe_call(
-        zte_service.read_capability,
+        _active_provider_service().read_capability,
         feature
     )
 
@@ -1363,7 +1376,7 @@ def generate_attendance(context=None):
             context
         )
 
-        return zte_service.generate_attendance(
+        return _active_provider_service().generate_attendance(
             data.diagnostic_id
         )
 
@@ -1380,7 +1393,7 @@ def capture_snapshot(context=None):
     )[:120]
 
     return _safe_call(
-        zte_service.capture_snapshot,
+        _active_provider_service().capture_snapshot,
         reason
     )
 
@@ -1402,7 +1415,7 @@ def history(context=None):
         limit = 50
 
     return _safe_call(
-        zte_service.history,
+        _active_provider_service().history,
         limit
     )
 
