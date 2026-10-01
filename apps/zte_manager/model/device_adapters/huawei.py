@@ -75,6 +75,12 @@ class HuaweiEG8041X7Profile(HuaweiProfile):
                 "alg": {"read": True, "update": True, "verified": True},
                 "igmp": {"read": True, "update": True, "verified": True},
                 "dos": {"read": True, "update": True, "verified": True},
+                "ipv6_firewall": {
+                    "read": True, "update": True, "verified": True,
+                },
+                "internet_control": {
+                    "read": True, "update": True, "verified": True,
+                },
             },
         )
 
@@ -210,6 +216,8 @@ class HuaweiWebAdapter(DeviceAdapter):
             "alg": "ALG",
             "igmp": "IGMP",
             "dos": "DoS Protection",
+            "ipv6_firewall": "IPv6 Firewall",
+            "internet_control": "Internet Control",
         }
         for key, operations in (
             (self.profile.captured_features.items())
@@ -228,6 +236,7 @@ class HuaweiWebAdapter(DeviceAdapter):
                 dangerous=key in {
                     "dhcp", "wifi_basic", "wifi_radio",
                     "tr069_url", "firewall_level",
+                    "ipv6_firewall", "internet_control",
                 },
                 notes=(
                     "Endpoint/payload exercitado na EG8041X7-10 de laboratório; "
