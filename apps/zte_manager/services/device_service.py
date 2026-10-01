@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -105,7 +106,10 @@ class DeviceService:
         )
         detected_huawei = False
 
-        if not manual_huawei:
+        if (
+            not manual_huawei
+            and self._should_probe_vendor(ip)
+        ):
             detected_huawei = (
                 self._huawei_client_type
                 .looks_like_huawei(
@@ -131,6 +135,27 @@ class DeviceService:
             https=https,
             attendant=attendant,
             model_hint=model_hint,
+        )
+
+    @staticmethod
+    def _should_probe_vendor(host: str) -> bool:
+        raw = str(host or "").strip()
+        if "://" in raw:
+            raw = raw.split("://", 1)[1]
+        raw = raw.split("/", 1)[0].split(":", 1)[0]
+        try:
+            address = ipaddress.ip_address(raw)
+        except ValueError:
+            return True
+
+        private_networks = (
+            ipaddress.ip_network("10.0.0.0/8"),
+            ipaddress.ip_network("172.16.0.0/12"),
+            ipaddress.ip_network("192.168.0.0/16"),
+        )
+        return any(
+            address in network
+            for network in private_networks
         )
 
     def _connect_huawei(self, **kwargs) -> dict:
