@@ -433,6 +433,11 @@ class HuaweiCapturedFeatureService:
                 )
             ),
             "http_status": transport.http_status,
+            # Verifiers return normalized/parsed state only. Keeping the
+            # successful read-back in the result lets HuaweiService replace
+            # exactly one session-snapshot segment without issuing a second
+            # router request after the mutation.
+            "readback": verified if verified else None,
         }
 
     # ----------------------------- WAN / device reads
@@ -2293,37 +2298,52 @@ class HuaweiCapturedFeatureService:
 
     # ----------------------------- Security / misc captured toggles
 
-    def firewall_management_status(self) -> dict[str, Any]:
-        pages = (
-            FIREWALL_PAGE, DOS_PAGE, IPV6_FIREWALL_PAGE,
-            INTERNET_CONTROL_PAGE, ALG_PAGE, IGMP_PAGE,
-        )
-        _html, records = self._records(*pages)
+    def firewall_level_status(self) -> dict[str, Any]:
+        """Read only the global firewall page.
+
+        The former capability reader fetched six security pages in one call
+        and the Advanced screen then fetched five of them again individually.
+        Keeping this reader narrow is important for the stateful Huawei WebUI
+        and for targeted session-snapshot refreshes.
+        """
+        _html, records = self._records(FIREWALL_PAGE)
         return {
             "available": bool(records),
             "firewall": {
                 "Enable": _record_value(records, "Enable", default=""),
-                "AdvancedLevel": _record_value(records, "AdvancedLevel", default=""),
+                "AdvancedLevel": _record_value(
+                    records, "AdvancedLevel", default=""
+                ),
             },
-            "dos": {
-                key: _record_value(records, key, default="")
-                for key in (
-                    "SynFloodEn", "IcmpEchoReplyEn", "IcmpRedirectEn",
-                    "LandEn", "SmurfEn", "WinnukeEn", "PingSweepEn",
-                )
-            },
-            "ipv6_firewall": _record_value(
-                records, "X_HW_IPv6FWDFireWallEnable", default=""
+        }
+
+    def firewall_management_status(self) -> dict[str, Any]:
+        # Compatibility aggregate for callers that explicitly ask for the
+        # complete security overview. Normal capability reads use the narrow
+        # per-feature methods and therefore do not duplicate router I/O.
+        firewall = self.firewall_level_status()
+        dos = self.dos_status()
+        ipv6 = self.ipv6_firewall_status()
+        alg = self.alg_status()
+        igmp = self.igmp_status()
+        internet = self.internet_control_status()
+        return {
+            "available": any((
+                firewall.get("available"),
+                bool(dos),
+                bool(ipv6),
+                bool(alg),
+                bool(igmp),
+                bool(internet),
+            )),
+            "firewall": firewall.get("firewall") or {},
+            "dos": dos,
+            "ipv6_firewall": ipv6.get(
+                "X_HW_IPv6FWDFireWallEnable", ""
             ),
-            "alg": {
-                key: _record_value(records, key, default="")
-                for key in (
-                    "FtpEnable", "TftpEnable", "H323Enable", "SipEnable",
-                    "RTSPEnable", "PptpEnable", "L2TPForward",
-                    "IPSecForward", "RTCPEnable", "RTCPPort",
-                )
-            },
-            "igmp": _record_value(records, "IGMPEnable", default=""),
+            "alg": alg,
+            "igmp": igmp.get("IGMPEnable", ""),
+            "internet_control": internet.get("Enable", ""),
         }
 
     def alg_status(self) -> dict[str, Any]:
@@ -2580,7 +2600,7 @@ class HuaweiCapturedFeatureService:
             raise ValueError(
                 "Este formulário Huawei aceita apenas nível/estado global do firewall; use as capabilities específicas para outros filtros."
             )
-        current = self.firewall_management_status()["firewall"]
+        current = self.firewall_level_status()["firewall"]
         enabled = config.get("enabled", config.get("Enable", current.get("Enable")))
         level = str(
             config.get(
@@ -2601,7 +2621,7 @@ class HuaweiCapturedFeatureService:
         )
 
         def verify():
-            actual = self.firewall_management_status()["firewall"]
+            actual = self.firewall_level_status()["firewall"]
             if str(actual.get("Enable") or "") != _as01(enabled):
                 return None
             if level and str(actual.get("AdvancedLevel") or "") != level:
