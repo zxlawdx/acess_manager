@@ -24,6 +24,9 @@ from apps.zte_manager.services.huawei_ipv4_filter_service import (
 from apps.zte_manager.services.huawei_captured_features import (
     HuaweiCapturedFeatureService,
 )
+from apps.zte_manager.services.tr069_profile_service import (
+    tr069_provider_profiles,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -662,6 +665,41 @@ class HuaweiService:
                 },
             )
             return result
+
+    def apply_tr069_provider(
+        self,
+        name: str,
+        wan_name: str,
+        *,
+        password=None,
+        connection_request_password=None,
+    ):
+        # The physical capture validated the ACS URL mutation only.
+        # Keep existing Huawei credentials untouched instead of inventing
+        # username/password form parameters that were never captured.
+        profiles = tr069_provider_profiles.list()
+        profile = next(
+            (item for item in profiles if item.get("name") == name),
+            None,
+        )
+        if not profile:
+            raise ValueError("Perfil ACS não encontrado.")
+        url = str(profile.get("url") or "").strip()
+        if not url:
+            raise ValueError("O perfil ACS não possui URL.")
+        setup = self.tr069_setup()
+        candidates = setup.get("wan_candidates") or []
+        if candidates and wan_name and not any(
+            item.get("name") == wan_name
+            for item in candidates
+        ):
+            raise ValueError(
+                "A WAN selecionada não foi identificada como TR069 na Huawei."
+            )
+        return self.set_management_tr069(
+            {"url": url},
+            confirm=True,
+        )
 
     def firewall_management_status(self):
         with self._lock:
