@@ -387,6 +387,14 @@ async function loadWifiSchedule() {
         return;
     }
 
+    if (data?.available === false) {
+        container.innerHTML = featureUnavailable(
+            "Agendamento Wi-Fi",
+            data.message || "Recurso ainda não validado para esta Huawei."
+        );
+        return;
+    }
+
     container.innerHTML = `
         <article class="panel schedule-card">
             <form id="wifiScheduleForm" class="schedule-layout">
