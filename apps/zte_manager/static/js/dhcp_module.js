@@ -343,11 +343,12 @@
   }
   id("dhcpRefresh")?.addEventListener("click",()=>void refresh());
   id("dhcpConfigForm")?.addEventListener("submit",event=>void apply(event));
-  document.addEventListener("zte:session-changed",() => {
+  document.addEventListener("device:session-changed",() => {
     pageEpoch++; snapshot = null;
     feedback("Conecte a uma ONT para consultar DHCP.");
   });
-  document.addEventListener("zte:page-open",event => {
+  document.addEventListener("device:page-open",event => {
+    if (event.detail?.vendor === "huawei") return;
     if (event.detail?.pageName === "wan")
       void refresh();
   });

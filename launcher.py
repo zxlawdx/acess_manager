@@ -1,5 +1,5 @@
 """
-ZTE Automatic - Launcher do executável.
+Access Manager - Launcher do executável.
 
 No desenvolvimento:
     python manage.py runapp
@@ -101,7 +101,7 @@ if sys.platform == "win32":
 
     except Exception as exc:
         print(
-            "[ZTE Automatic] "
+            "[Access Manager] "
             f"Não foi possível configurar Qt: {exc}",
             file=sys.stderr,
         )

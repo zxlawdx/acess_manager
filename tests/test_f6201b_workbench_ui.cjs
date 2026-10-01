@@ -17,7 +17,7 @@ for (const id of [
   "lanPorts", "wifiClientsTable", "supportDiagnosticForm"
 ]) assert.ok(index.includes('id="' + id + '"'), "Native component lost: " + id);
 for (const contract of [
-  "zte:session-changed", "zte:page-open", "checkedModel",
+  "device:session-changed", "device:page-open", "checkedModel",
   "model_verified", "norm.endsWith(\"F6201B\")", "/discovery/bootstrap",
   "/f6201b/workbench/catalog", "/f6201b/workbench/inspect",
   "/f6201b/workbench/update", "dangerous", "textContent",

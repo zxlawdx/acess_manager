@@ -199,7 +199,7 @@
         button.disabled = false;
       }
     }));
-    document.addEventListener("zte:session-changed", () => {
+    document.addEventListener("device:session-changed", () => {
       epoch++;
       setupSnapshot = null;
       clearSecrets();
@@ -210,8 +210,9 @@
       }
       if (byId("tr069ProviderApply")) byId("tr069ProviderApply").disabled = true;
     });
-    document.addEventListener("zte:page-open", event => {
+    document.addEventListener("device:page-open", event => {
       if (event.detail?.pageName !== "tr069") return;
+      if (event.detail?.vendor === "huawei") return;
       void guard(async () => {
         await listProviders();
         if (ontConnected) await refreshWan();

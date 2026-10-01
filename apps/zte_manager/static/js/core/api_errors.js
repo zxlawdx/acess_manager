@@ -8,6 +8,7 @@
     AUTH_FAILED: ["authentication","As credenciais não foram aceitas. Revise o acesso.",true],
     SESSION_EXPIRED: ["session","A sessão expirou. Reconecte-se ao equipamento.",true],
     FEATURE_ABSENT: ["unsupported","O equipamento confirmou que este recurso não está disponível.",false],
+    PROVIDER_FEATURE_UNAVAILABLE: ["unsupported","Este recurso ainda não está disponível para o fabricante conectado.",false],
     CAPABILITY_UNCONFIRMED: ["unconfirmed","Não foi possível confirmar o recurso. Verifique a sessão e refaça a identificação.",true],
     OPERATION_FORBIDDEN: ["permission","A sessão atual não tem permissão para realizar a alteração.",false],
     NETWORK_UNREACHABLE: ["connection","Não foi possível comunicar com o equipamento. Verifique a conexão.",true],
@@ -47,8 +48,11 @@
     constructor(code, options={}) {
       const known = Object.hasOwn(RULES, code) ? code : "OPERATION_STATE";
       const [kind, defaultMessage, retryable] = RULES[known];
-      const backendMessage = (kind === "validation" || kind === "state")
-        ? safeText(options.error) : "";
+      const backendMessage = (
+        kind === "validation"
+        || kind === "state"
+        || known === "PROVIDER_FEATURE_UNAVAILABLE"
+      ) ? safeText(options.error) : "";
       let message = backendMessage || defaultMessage;
       if (known === "INTERNAL_ERROR" && /^[0-9a-f]{32}$/i.test(options.error_id || "")) {
         message += " Código: " + options.error_id + ".";

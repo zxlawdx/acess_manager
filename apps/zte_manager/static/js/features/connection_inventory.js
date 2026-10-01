@@ -111,10 +111,10 @@
       $("connectionInventorySearch").value="";
       draw();
     });
-    document.addEventListener("zte:page-open",event=>{
+    document.addEventListener("device:page-open",event=>{
       if(event.detail?.pageName==="connection") void refresh();
     });
-    document.addEventListener("zte:session-changed",()=>{
+    document.addEventListener("device:session-changed",()=>{
       // Never misrepresent stale inventory as live session state.
       const visible=$("page-connection")?.classList.contains("active");
       if(visible)draw();

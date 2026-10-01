@@ -402,8 +402,8 @@
             body.append(notice);
         }
     }
-    document.addEventListener("zte:session-changed", teardownOldPanels);
-    document.addEventListener("zte:page-open", event => {
+    document.addEventListener("device:session-changed", teardownOldPanels);
+    document.addEventListener("device:page-open", event => {
         const page = event.detail?.pageName;
         // O painel original é o ÚNICO layout para todas as famílias.
         // Este módulo continua exportando renderAdaptiveDiagnostic somente
@@ -567,7 +567,8 @@
         rebuild();
         catalogLoaded = true;
     }
-    document.addEventListener("zte:page-open", event => {
+    document.addEventListener("device:page-open", event => {
+        if (event.detail?.vendor === "huawei") return;
         if (event.detail?.pageName === "advanced") {
             void loadCapturedRoutes().catch(error =>
                 console.warn("Catálogo capturado indisponível:", error));

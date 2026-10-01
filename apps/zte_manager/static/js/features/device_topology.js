@@ -244,7 +244,7 @@
   function init(){
     document.addEventListener("am:clients-updated",event=>
       render(event.detail?.wifi,event.detail?.lan));
-    document.addEventListener("zte:session-changed",reset);
+    document.addEventListener("device:session-changed",reset);
     for(const id of ["topologyRssiOneMeter","topologyPathLoss"]){
       document.getElementById(id)?.addEventListener("input",()=>{
         const currentDevice=[...current.wifi,...current.lan].find(d=>

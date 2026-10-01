@@ -387,8 +387,9 @@
     renderDetails(root);
     void renderGetInventory(root);
   }
-  document.addEventListener("zte:session-changed", reset);
-  document.addEventListener("zte:page-open", event => {
+  document.addEventListener("device:session-changed", reset);
+  document.addEventListener("device:page-open", event => {
+    if (event.detail?.vendor === "huawei") return;
     if (event.detail?.pageName === "advanced")
       void open().catch(error => {
         const root = document.getElementById(ID);

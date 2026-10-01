@@ -3,7 +3,7 @@ from vela.template_engine.engine import render_template
 
 def console_view(params: dict) -> str:
     """
-    Renderiza a SPA do ZTE Automatic dentro do shell do Vela.
+    Renderiza a SPA do Access Manager dentro do shell do Vela.
 
     A navegação entre Dashboard/Wi-Fi/WAN/etc continua no JavaScript da
     própria aplicação. O Vela fica responsável pela janela, pelo shell,
@@ -12,7 +12,7 @@ def console_view(params: dict) -> str:
     return render_template(
         "apps/zte_manager/templates/index.html",
         context={
-            "app_name": "ZTE Automatic",
+            "app_name": "Access Manager",
         },
         router=params["router"],
     )

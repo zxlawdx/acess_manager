@@ -152,6 +152,7 @@ let ontConnected = false;
 let sessionEpoch = 0;
 let routerWriteEnabled = true;
 let currentVendor = "zte";
+let currentModel = null;
 let currentHost = null;
 let currentAttendant = null;
 let currentProfile = null;
@@ -291,6 +292,97 @@ function huaweiIpv4CrudEnabled(capabilities) {
     );
 }
 
+
+const HUAWEI_SUPPORTED_PAGES = new Set([
+    "connection",
+    "device",
+    "advanced"
+]);
+
+function currentProviderLabel() {
+    if (!ontConnected) return "EQUIPAMENTOS";
+    return currentVendor === "huawei"
+        ? "HUAWEI"
+        : "ZTE";
+}
+
+function providerUnavailableMessage() {
+    const label = currentVendor === "huawei"
+        ? `Huawei ${currentModel || "conectada"}`
+        : (currentModel || "equipamento conectado");
+    return `Recurso ainda não disponível para ${label}.`;
+}
+
+function vendorSupportsPage(pageName) {
+    return (
+        currentVendor !== "huawei"
+        || !ontConnected
+        || HUAWEI_SUPPORTED_PAGES.has(pageName)
+    );
+}
+
+function syncVendorUi() {
+    document.title = "Access Manager";
+
+    const provider = currentProviderLabel();
+    const workspace = document.getElementById("workspaceVendorLabel");
+    if (workspace) workspace.textContent = provider;
+
+    const context = document.getElementById("amCurrentContext");
+    if (context) {
+        context.textContent = ontConnected
+            ? provider
+            : "EQUIPAMENTOS";
+    }
+
+    document
+        .querySelectorAll(".menu-item[data-page]")
+        .forEach(button => {
+            const pageName = button.dataset.page;
+            const unavailable = !vendorSupportsPage(pageName);
+            button.classList.toggle("hidden", unavailable);
+            button.disabled = unavailable;
+            if (unavailable) {
+                button.dataset.providerUnavailable = "1";
+                button.title = providerUnavailableMessage();
+            } else if (button.dataset.providerUnavailable === "1") {
+                delete button.dataset.providerUnavailable;
+                button.removeAttribute("title");
+            }
+        });
+
+    document
+        .querySelectorAll("[data-jump]")
+        .forEach(button => {
+            const pageName = button.dataset.jump;
+            if (!pageInfo?.[pageName] && ![
+                "advanced", "supportDiagnostic", "management"
+            ].includes(pageName)) return;
+            const unavailable = !vendorSupportsPage(pageName);
+            button.classList.toggle("hidden", unavailable);
+            if ("disabled" in button) button.disabled = unavailable;
+            if (unavailable) {
+                button.dataset.providerUnavailable = "1";
+                button.title = providerUnavailableMessage();
+            } else if (button.dataset.providerUnavailable === "1") {
+                delete button.dataset.providerUnavailable;
+                button.removeAttribute("title");
+            }
+        });
+
+    const optical = document.querySelector("#page-device .optical-panel");
+    optical?.classList.toggle(
+        "hidden",
+        ontConnected && currentVendor === "huawei"
+    );
+    const maintenance = document.querySelector(
+        "#page-device .am-device-maintenance"
+    );
+    maintenance?.classList.toggle(
+        "hidden",
+        ontConnected && currentVendor === "huawei"
+    );
+}
 
 // =========================================================
 // CONEXÃO
@@ -519,6 +611,8 @@ function setConnectionStatus(connected) {
                 )
             );
     }
+
+    syncVendorUi();
 }
 
 
@@ -567,6 +661,13 @@ const pageInfo = {
 
 
 function openPage(pageName) {
+    if (!vendorSupportsPage(pageName)) {
+        showToast(providerUnavailableMessage());
+        pageName = currentVendor === "huawei"
+            ? "advanced"
+            : "connection";
+    }
+
     if (
         ![
             "connection",
@@ -641,7 +742,7 @@ function openPage(pageName) {
         // The named preset controller owns this editor until the operator
         // selects the legacy primary profile again.
         document.dispatchEvent(new CustomEvent(
-            "zte:page-open", {detail:{pageName}}
+            "device:page-open", {detail:{pageName}}
         ));
         return;
     }
@@ -727,9 +828,25 @@ function openPage(pageName) {
         }
     }
 
+    if (
+        pageName === "device"
+        && ontConnected
+        && currentVendor === "huawei"
+    ) {
+        void loadDevice().catch(error => {
+            showToast(error.message);
+        });
+    }
+
     // Todas as entradas (sidebar, cartões, topo e restore) carregam dados.
     document.dispatchEvent(new CustomEvent(
-        "zte:page-open", { detail: { pageName } }
+        "device:page-open", {
+            detail: {
+                pageName,
+                vendor: currentVendor,
+                model: currentModel
+            }
+        }
     ));
 }
 
@@ -807,6 +924,7 @@ document
                 }
                 authenticated = true;
                 currentVendor = response.vendor || "zte";
+                currentModel = response.model || response.device?.modelo || null;
                 routerWriteEnabled = (
                     currentVendor === "huawei"
                         ? huaweiIpv4CrudEnabled(response.capabilities)
@@ -818,7 +936,7 @@ document
                 // A resposta de /connect sempre pertence à sessão
                 // recém autenticada. Invalidar os painéis adaptativos
                 // anteriores ANTES de renderizar o novo modelo.
-                document.dispatchEvent(new CustomEvent("zte:session-changed"));
+                document.dispatchEvent(new CustomEvent("device:session-changed"));
                 document.getElementById("connectedModel").textContent =
                     (response.model || response.device?.modelo || "Não identificado") +
                     (response.model_verified === false ? " · não confirmado" : "");
@@ -971,6 +1089,7 @@ document
 
             routerWriteEnabled = true;
             currentVendor = "zte";
+            currentModel = null;
             currentHost = null;
             currentAttendant = null;
             currentProfile = null;
@@ -985,7 +1104,7 @@ document
             pppoeRevealed = false;
             wifiPasswordsRevealed = false;
 
-            document.dispatchEvent(new CustomEvent("zte:session-changed"));
+            document.dispatchEvent(new CustomEvent("device:session-changed"));
             setConnectionStatus(
                 false
             );
@@ -1035,7 +1154,7 @@ async function loadDevice() {
 
     document.getElementById(
         "connectedModel"
-    ).textContent = data.modelo ?? "ZTE";
+    ).textContent = data.modelo ?? currentModel ?? "ONT";
 
     document.getElementById(
         "deviceFirmware"
@@ -1098,7 +1217,7 @@ async function loadDevice() {
 
     document.getElementById(
         "topDeviceModel"
-    ).textContent = data.modelo ?? "ZTE";
+    ).textContent = data.modelo ?? currentModel ?? "ONT";
 
     document.getElementById(
         "topDeviceMeta"
@@ -4640,7 +4759,7 @@ document.addEventListener(
                 return;
             }
             if (jump === "advanced") {
-                // O loader da página inicia pelo evento zte:page-open.
+                // O loader da página inicia pelo evento device:page-open.
                 // A probe só começa após catálogo ter sido carregado.
                 window.setTimeout(() => {
                     if (typeof window.startQuickProbe === "function") {
@@ -4802,10 +4921,11 @@ async function restoreDesktopSession() {
         }
 
         // Clear orphaned cards from any earlier WebView/router state.
-        document.dispatchEvent(new CustomEvent("zte:session-changed"));
+        document.dispatchEvent(new CustomEvent("device:session-changed"));
         currentHost = status.host || null;
         currentAttendant = status.attendant || "default";
         currentVendor = status.vendor || "zte";
+        currentModel = status.model || null;
         routerWriteEnabled = (
             currentVendor === "huawei"
                 ? huaweiIpv4CrudEnabled(status.capabilities)
@@ -4817,7 +4937,7 @@ async function restoreDesktopSession() {
         document.getElementById("connectedAttendant").textContent =
             `Atendente: ${currentAttendant}`;
         document.getElementById("connectedModel").textContent =
-            (status.model || "ZTE") +
+            (status.model || currentModel || "ONT") +
             (status.model_verified === false ? " · não confirmado" : "");
         document.getElementById("dashboardProfileName").textContent =
             currentAttendant;

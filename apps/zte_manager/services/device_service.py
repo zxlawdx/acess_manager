@@ -8,6 +8,7 @@ from typing import Any
 from apps.zte_manager.infrastructure.huawei import HuaweiWebClient
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
 from apps.zte_manager.services.huawei_service import HuaweiService
+from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,26 @@ class DeviceService:
         self._huawei_client_type = huawei_client_type
         self._session: DeviceSession | None = None
 
+    def __getattr__(self, name: str):
+        """Delegate public provider surface to the active service.
+
+        Missing methods/attributes are an explicit capability gap. An active
+        Huawei session can never fall through to the ZTE provider.
+        """
+        if name.startswith("_"):
+            raise AttributeError(name)
+
+        service = self.active_service
+        missing = object()
+        target = getattr(service, name, missing)
+        if target is missing:
+            status = self.status()
+            raise ProviderFeatureUnavailable(
+                vendor=status.get("vendor"),
+                model=status.get("model"),
+            )
+        return target
+
     @property
     def session(self) -> DeviceSession | None:
         return self._session
@@ -77,11 +98,10 @@ class DeviceService:
     def active_service(self):
         if self._session is not None:
             return self._session.service
-        if self._zte_service.connected:
-            return self._zte_service
-        raise RuntimeError(
-            "Nenhum equipamento conectado."
-        )
+        # Before /connect, the historical ZTE provider remains the default
+        # object so legacy tests/local callers keep their normal session error.
+        # An active Huawei session always wins and can never fall back to ZTE.
+        return self._zte_service
 
     @property
     def vendor(self) -> str | None:

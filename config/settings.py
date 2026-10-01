@@ -1,8 +1,8 @@
 """
-Configuração do ZTE Automatic no Vela Framework.
+Configuração do Access Manager no Vela Framework.
 """
 
-APP_TITLE = "ZTE Automatic"
+APP_TITLE = "Access Manager"
 ENTRY_ROUTE = "/"
 
 WINDOW_WIDTH = 1480

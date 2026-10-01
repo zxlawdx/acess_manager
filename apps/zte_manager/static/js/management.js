@@ -2841,10 +2841,10 @@ document.querySelectorAll(".management-tab").forEach(button=>{
 });
 
 
-document.addEventListener("zte:page-open", event => {
-    if (event.detail?.pageName === "management") {
-        void refreshManagement();
-    }
+document.addEventListener("device:page-open", event => {
+    if (event.detail?.pageName !== "management") return;
+    if (event.detail?.vendor === "huawei") return;
+    void refreshManagement();
 });
 
 
