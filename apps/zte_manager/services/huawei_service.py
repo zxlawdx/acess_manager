@@ -790,9 +790,29 @@ class HuaweiService:
             return result
 
     def save_dhcp_reservation(self, config):
-        raise PermissionError(
-            "A captura validou edição de reserva existente, não CREATE de reserva DHCP Huawei."
-        )
+        with self._lock:
+            values = dict(config or {})
+            instance_id = values.get("id")
+            if not instance_id:
+                raise PermissionError(
+                    "A captura validou UPDATE de reserva existente, "
+                    "não CREATE de reserva DHCP Huawei."
+                )
+            result = self._require_captured().update_dhcp_reservation(
+                instance_id,
+                ip=str(values.get("ip") or ""),
+                mac=str(values.get("mac") or ""),
+            )
+            self._audit_captured(
+                operation="huawei_dhcp_static_update",
+                target=str(instance_id),
+                result=result,
+                after={
+                    "ip": values.get("ip"),
+                    "mac": values.get("mac"),
+                },
+            )
+            return result
 
     def delete_dhcp_reservation(self, instance_id):
         raise PermissionError(
