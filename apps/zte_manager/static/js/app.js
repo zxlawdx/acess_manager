@@ -2443,7 +2443,7 @@ function renderRadioEditor(radio) {
             <div class="radio-card-hero">
                 <div>
                     <span class="section-kicker">RF ${escapeHtml(radio.banda)}</span>
-                    <h3>${escapeHtml(radio.id ?? "Rádio")}</h3>
+                    <h3>${escapeHtml(radio.ssid ?? radio.id ?? "Rádio")}</h3>
                     <p>
                         Canal <strong>${escapeHtml(radio.canal_automatico ? "Auto" : radio.canal)}</strong>
                         • ${escapeHtml(radio.largura ?? "-")}
