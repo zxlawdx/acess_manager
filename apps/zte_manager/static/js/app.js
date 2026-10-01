@@ -3325,6 +3325,32 @@ async function renderProfileForm(profile) {
                 );
             }
         );
+
+        if (currentVendor === "huawei") {
+            for (const fieldName of [
+                "bandwidth",
+                "standard",
+                "sgi"
+            ]) {
+                const field = container.querySelector(
+                    `[data-field="${fieldName}"]`
+                );
+                if (!field) continue;
+                field.disabled = true;
+                field.title = (
+                    "Este parâmetro permanece como está na Huawei; " +
+                    "a captura validou canal, região, potência e beacon."
+                );
+            }
+
+            const note = document.createElement("p");
+            note.className = "muted";
+            note.textContent = (
+                "Huawei EG8041X7-10: o perfil aplica somente parâmetros " +
+                "com mutation capturada e releitura disponível."
+            );
+            container.appendChild(note);
+        }
     }
 
     const dns = profile.dns || {};
@@ -3354,6 +3380,31 @@ async function renderProfileForm(profile) {
             ? dns.hosts
             : []
     );
+
+    if (currentVendor === "huawei") {
+        for (const id of [
+            "profileDns4_2",
+            "profileDns6_1",
+            "profileDns6_2",
+            "addProfileHostButton"
+        ]) {
+            const field = document.getElementById(id);
+            if (!field) continue;
+            field.disabled = true;
+            field.title = (
+                "Este campo não possui CREATE/UPDATE validado no profile Huawei atual."
+            );
+        }
+        document
+            .querySelectorAll("#profileHosts input, #profileHosts button")
+            .forEach(field => {
+                field.disabled = true;
+                field.title = (
+                    "DNS HOST pode ser lido/atualizado por instância, " +
+                    "mas o perfil em lote não cria nem remove entradas Huawei."
+                );
+            });
+    }
 }
 
 
