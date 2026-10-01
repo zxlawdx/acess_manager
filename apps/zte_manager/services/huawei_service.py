@@ -463,20 +463,45 @@ class HuaweiService:
         )
 
     def device_status(self) -> dict:
-        """Return the authenticated Huawei session identity without ZTE probes."""
+        """Return Huawei identity plus the authenticated device-info page."""
         with self._lock:
             if not self.connected:
                 raise RuntimeError(
                     "Conecte-se a uma ONT Huawei antes de consultar o equipamento."
                 )
+            details: dict = {}
+            try:
+                details = self._require_captured().device_status()
+            except Exception as exc:
+                logger.warning(
+                    "huawei_device_status_partial error_type=%s",
+                    type(exc).__name__,
+                )
+
+            raw_uptime = details.get("uptime")
+            uptime_days = None
+            try:
+                if raw_uptime not in (None, ""):
+                    uptime_days = int(float(raw_uptime)) // 86400
+            except (TypeError, ValueError):
+                uptime_days = None
+
             return {
-                "fabricante": "Huawei",
-                "modelo": self.model or self._device_info.get("modelo") or "Huawei",
+                **details,
+                "fabricante": details.get("fabricante") or "Huawei",
+                "modelo": (
+                    details.get("modelo")
+                    or self.model
+                    or self._device_info.get("modelo")
+                    or "Huawei"
+                ),
                 "host": self.current_host,
                 "profile": self.profile_key,
                 "provider": type(self).__name__,
                 "model_verified": self.model_verified,
                 "capabilities": self.capabilities,
+                "uptime_dias": uptime_days,
+                "cpu": details.get("cpu") or {},
             }
 
     # =========================================================
@@ -565,10 +590,40 @@ class HuaweiService:
             )
             if not config:
                 continue
+
+            # Perfis antigos do Access Manager contêm parâmetros ZTE que não
+            # pertencem ao formulário Huawei capturado. Não transformar isso
+            # em falha da aplicação inteira: aplique somente os campos que a
+            # EG8041X7-10 realmente teve mutation exercitada.
+            supported = {
+                "auto_channel",
+                "channel",
+                "country",
+                "tx_power",
+                "beacon_interval",
+                "rts_cts",
+                "dtim",
+            }
+            safe_config = {
+                key: value
+                for key, value in config.items()
+                if key in supported and value is not None
+            }
+            for key in config:
+                if (
+                    key not in supported
+                    and config.get(key) not in (None, "", False)
+                ):
+                    omitted.append(f"Wi-Fi {band}: {key}")
+
+            # Perfis históricos usam BRI; a WebUI Huawei capturada submeteu BR.
+            if str(safe_config.get("country") or "").upper() == "BRI":
+                safe_config["country"] = "BR"
+
             try:
                 result = captured.set_wifi_radio(
                     band,
-                    config,
+                    safe_config,
                 )
                 verified = bool(result.get("verified"))
                 steps.append({
@@ -771,6 +826,26 @@ class HuaweiService:
                 after={"enabled": bool(enabled)},
             )
             return result
+
+    def wifi_schedule_status(self):
+        # O menu existe na captura, mas nenhuma mutation de agenda foi
+        # exercitada. Retornar indisponível evita que o frontend trate isso
+        # como ausência do provider Huawei.
+        return {
+            "available": False,
+            "enabled": False,
+            "schedule": {},
+            "vendor": "huawei",
+            "message": (
+                "Agendamento Wi-Fi Huawei ainda não possui mutation "
+                "validada para este profile."
+            ),
+        }
+
+    def set_wifi_schedule(self, config):
+        raise PermissionError(
+            "Agendamento Wi-Fi Huawei ainda não foi validado."
+        )
 
     def layer3_status(self):
         with self._lock:
