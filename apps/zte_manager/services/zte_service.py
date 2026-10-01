@@ -6,11 +6,17 @@ from threading import Lock, RLock
 from typing import Optional
 
 from apps.zte_manager.model.device_adapters import select_adapter
+from apps.zte_manager.model.device_adapters.huawei import (
+    HuaweiWebAdapter,
+    huawei_ipv4_filter_capability,
+    is_known_huawei_model,
+)
 from apps.zte_manager.application.operations.audit_executor import AuditedOperation
 from apps.zte_manager.application.operations.verifiers import (
     verify_dhcp, verify_ssid, verify_channel_choice,
 )
 from apps.zte_manager.application.inventory import DeviceRegistrar
+from apps.zte_manager.infrastructure.huawei import HuaweiWebClient
 from apps.zte_manager.infrastructure.zte.adapters import ThinkLuaDeviceAdapter
 from apps.zte_manager.infrastructure.zte.adapters.thinklua_device import (
     DeviceWriteNotApproved,
@@ -39,6 +45,10 @@ from apps.zte_manager.services.f6201b_dns_writes import ExperimentalF6201BDNS
 from apps.zte_manager.services.f6201b_profile import ExperimentalF6201BProfile
 from apps.zte_manager.services.f6201b_diagnostics import F6201BDiagnostics, PING, TRACE, host_name
 from apps.zte_manager.services.f6201b_support import run_f6201b_support
+from apps.zte_manager.services.huawei_ipv4_filter_service import (
+    HuaweiIPv4FilterRule,
+    HuaweiIPv4FilterService,
+)
 from apps.zte_manager.services import f6201b_dhcp
 from apps.zte_manager.services.f6201b_workbench import CapturedFormWorkbench, catalog as captured_catalog
 from apps.zte_manager.services.profile_service import profile_service
@@ -84,6 +94,9 @@ class ZTEService:
         self._registrar = registrar or DeviceRegistrar(management_repository)
         self._runtime_driver: ThinkLuaDeviceAdapter | None = None
         self._zte: Optional[ZTE] = None
+        self._huawei: HuaweiWebClient | None = None
+        self._huawei_ipv4_filter: HuaweiIPv4FilterService | None = None
+        self._vendor = "zte"
         self._lock = RLock()
         self.current_attendant = None
         self.current_host = None
