@@ -229,7 +229,7 @@ def _active_provider_service():
 def health(context=None):
     return {
         "status": "ok",
-        "service": "ZTE Automatic",
+        "service": "Access Manager",
         "runtime": "Vela Framework",
     }
 
@@ -288,44 +288,7 @@ def disconnect(context=None):
 
 @api.get("/connection/status")
 def connection_status(context=None):
-    if device_service.vendor == "huawei":
-        return device_service.status()
-
-    return {
-        "connected": zte_service.connected,
-        "attendant": zte_service.current_attendant,
-        "host": zte_service.current_host,
-        "model": (
-            zte_service._selected_model
-            or zte_service._device_info.get("modelo")
-        ),
-        "firmware": zte_service._device_info.get("firmware"),
-        "model_verified": zte_service._model_verified,
-        "session_revision": zte_service._session_revision,
-        "vendor": "zte" if zte_service.connected else None,
-        "profile": (
-            zte_service._adapter.name
-            if zte_service._adapter
-            else None
-        ),
-        "provider": (
-            type(zte_service).__name__
-            if zte_service.connected
-            else None
-        ),
-        "capabilities": {},
-        "writes_enabled": (
-            bool(
-                getattr(
-                    zte_service._zte,
-                    "writes_enabled",
-                    False,
-                )
-            )
-            if zte_service.connected
-            else False
-        ),
-    }
+    return device_service.status()
 
 
 @api.get("/debug/security")
@@ -343,21 +306,21 @@ def security_status(context=None):
 @api.get("/device/status")
 def device_status(context=None):
     return _safe_call(
-        zte_service.device_status
+        device_service.device_status
     )
 
 
 @api.get("/device/optical")
 def optical_status(context=None):
     return _safe_call(
-        zte_service.optical_status
+        device_service.optical_status
     )
 
 
 @api.get("/device/accounts")
 def account_status(context=None):
     return _safe_call(
-        zte_service.account_status
+        device_service.account_status
     )
 
 
@@ -369,7 +332,7 @@ def change_admin_password(context=None):
             context
         )
 
-        return zte_service.change_admin_password(
+        return device_service.change_admin_password(
             data.new_password
         )
 
@@ -381,7 +344,7 @@ def change_admin_password(context=None):
 @api.post("/device/reboot")
 def reboot_device(context=None):
     return _safe_call(
-        zte_service.reboot
+        device_service.reboot
     )
 
 
@@ -393,7 +356,7 @@ def reboot_device(context=None):
 @api.get("/wan/status")
 def wan_status(context=None):
     return _safe_call(
-        zte_service.wan_status
+        device_service.wan_status
     )
 
 
@@ -404,7 +367,7 @@ def pppoe_status(context=None):
     )
 
     return _safe_call(
-        zte_service.pppoe_status,
+        device_service.pppoe_status,
         reveal_password=_bool(
             query.get("reveal_password")
         )
@@ -414,21 +377,21 @@ def pppoe_status(context=None):
 @api.get("/clients/wifi")
 def wifi_clients(context=None):
     return _safe_call(
-        zte_service.wifi_clients
+        device_service.wifi_clients
     )
 
 
 @api.get("/clients/lan")
 def lan_clients(context=None):
     return _safe_call(
-        zte_service.lan_clients
+        device_service.lan_clients
     )
 
 
 @api.get("/lan/ports")
 def lan_ports(context=None):
     return _safe_call(
-        zte_service.lan_ports
+        device_service.lan_ports
     )
 
 
@@ -444,7 +407,7 @@ def wifi_networks(context=None):
     )
 
     return _safe_call(
-        zte_service.wifi_networks,
+        device_service.wifi_networks,
         reveal_password=_bool(
             query.get("reveal_password")
         )
@@ -474,7 +437,7 @@ def set_wifi_network(context=None):
                 "Nenhuma alteração foi informada."
             )
 
-        return zte_service.set_ssid_config(
+        return device_service.set_ssid_config(
             data.ssid_id,
             config
         )
@@ -487,7 +450,7 @@ def set_wifi_network(context=None):
 @api.get("/wifi/radios")
 def get_radios(context=None):
     return _safe_call(
-        zte_service.wifi_radios
+        device_service.wifi_radios
     )
 
 
@@ -498,7 +461,7 @@ def get_channels(context=None):
     )
 
     return _safe_call(
-        zte_service.wifi_channels,
+        device_service.wifi_channels,
         band=query.get("band"),
         bandwidth=query.get("bandwidth"),
         country=query.get("country") or "BRI",
@@ -528,7 +491,7 @@ def set_radio(context=None):
                 "Nenhuma alteração foi informada."
             )
 
-        return zte_service.set_wifi_radio(
+        return device_service.set_wifi_radio(
             data.band,
             config
         )
@@ -541,7 +504,7 @@ def set_radio(context=None):
 @api.get("/wifi/power")
 def wifi_power_status(context=None):
     return _safe_call(
-        zte_service.radio_power_status
+        device_service.radio_power_status
     )
 
 
@@ -553,7 +516,7 @@ def set_wifi_power(context=None):
             context
         )
 
-        return zte_service.set_radio_power(
+        return device_service.set_radio_power(
             data.band,
             data.enabled
         )
@@ -566,7 +529,7 @@ def set_wifi_power(context=None):
 @api.get("/wifi/schedule")
 def wifi_schedule_status(context=None):
     return _safe_call(
-        zte_service.wifi_schedule_status
+        device_service.wifi_schedule_status
     )
 
 
@@ -578,7 +541,7 @@ def set_wifi_schedule(context=None):
             context
         )
 
-        return zte_service.set_wifi_schedule(
+        return device_service.set_wifi_schedule(
             data.model_dump()
         )
 
@@ -590,7 +553,7 @@ def set_wifi_schedule(context=None):
 @api.get("/wifi/wps")
 def wifi_wps_status(context=None):
     return _safe_call(
-        zte_service.wps_status
+        device_service.wps_status
     )
 
 
@@ -602,7 +565,7 @@ def set_wifi_wps(context=None):
             context
         )
 
-        return zte_service.set_wps(
+        return device_service.set_wps(
             data.band,
             data.mode
         )
@@ -615,7 +578,7 @@ def set_wifi_wps(context=None):
 @api.get("/wifi/band-steering")
 def band_steering_status(context=None):
     return _safe_call(
-        zte_service.band_steering_status
+        device_service.band_steering_status
     )
 
 
@@ -627,7 +590,7 @@ def set_band_steering(context=None):
             context
         )
 
-        return zte_service.set_band_steering(
+        return device_service.set_band_steering(
             data.enabled
         )
 
@@ -644,7 +607,7 @@ def configure_band_steering(context=None):
             context
         )
 
-        return zte_service.configure_band_steering(
+        return device_service.configure_band_steering(
             data.model_dump(
                 exclude_none=True
             )
@@ -663,7 +626,7 @@ def configure_band_steering(context=None):
 @api.get("/upnp")
 def upnp_status(context=None):
     return _safe_call(
-        zte_service.upnp_status
+        device_service.upnp_status
     )
 
 
@@ -675,7 +638,7 @@ def set_upnp(context=None):
             context
         )
 
-        return zte_service.set_upnp(
+        return device_service.set_upnp(
             data.model_dump(
                 exclude_none=True
             )
@@ -689,7 +652,7 @@ def set_upnp(context=None):
 @api.get("/dns/status")
 def dns_status(context=None):
     return _safe_call(
-        zte_service.dns_status
+        device_service.dns_status
     )
 
 
@@ -701,7 +664,7 @@ def set_dns(context=None):
             context
         )
 
-        return zte_service.set_dns(
+        return device_service.set_dns(
             data.model_dump(
                 exclude_none=True
             )
@@ -725,7 +688,7 @@ def ping(context=None):
             context
         )
 
-        return zte_service.ping(
+        return device_service.ping(
             data.model_dump()
         )
 
@@ -742,7 +705,7 @@ def traceroute(context=None):
             context
         )
 
-        return zte_service.traceroute(
+        return device_service.traceroute(
             data.model_dump()
         )
 
@@ -759,7 +722,7 @@ def traceroute(context=None):
 @api.post("/system/backup")
 def export_configuration_backup(context=None):
     return _safe_call(
-        zte_service.export_user_configuration
+        device_service.export_user_configuration
     )
 
 
@@ -1152,7 +1115,7 @@ def read_feature(context=None):
 @api.get("/network/dhcp")
 def dhcp_status(context=None):
     return _safe_call(
-        zte_service.dhcp_status
+        device_service.dhcp_status
     )
 
 
@@ -1164,7 +1127,7 @@ def update_dhcp(context=None):
             context
         )
 
-        return zte_service.set_dhcp_basic(
+        return device_service.set_dhcp_basic(
             data.model_dump(
                 exclude_none=True
             )
@@ -1183,7 +1146,7 @@ def save_dhcp_reservation(context=None):
             context
         )
 
-        return zte_service.save_dhcp_reservation(
+        return device_service.save_dhcp_reservation(
             data.model_dump()
         )
 
@@ -1200,7 +1163,7 @@ def delete_dhcp_reservation(context=None):
             context
         )
 
-        return zte_service.delete_dhcp_reservation(
+        return device_service.delete_dhcp_reservation(
             data.id
         )
 
@@ -1212,7 +1175,7 @@ def delete_dhcp_reservation(context=None):
 @api.get("/network/port-forwarding")
 def port_forwarding_status(context=None):
     return _safe_call(
-        zte_service.port_forwarding_status
+        device_service.port_forwarding_status
     )
 
 
@@ -1224,7 +1187,7 @@ def save_port_forward(context=None):
             context
         )
 
-        return zte_service.save_port_forward(
+        return device_service.save_port_forward(
             data.model_dump()
         )
 
@@ -1241,7 +1204,7 @@ def delete_port_forward(context=None):
             context
         )
 
-        return zte_service.delete_port_forward(
+        return device_service.delete_port_forward(
             data.id,
             confirm=data.confirm,
         )
@@ -1254,7 +1217,7 @@ def delete_port_forward(context=None):
 @api.get("/network/dmz")
 def dmz_status(context=None):
     return _safe_call(
-        zte_service.dmz_status
+        device_service.dmz_status
     )
 
 
@@ -1266,7 +1229,7 @@ def update_dmz(context=None):
             context
         )
 
-        return zte_service.set_dmz(
+        return device_service.set_dmz(
             data.model_dump()
         )
 
@@ -1288,7 +1251,7 @@ def automatic_diagnostic(context=None):
             context
         )
 
-        return zte_service.automatic_diagnostic(
+        return device_service.automatic_diagnostic(
             data.model_dump()
         )
 
@@ -1300,7 +1263,7 @@ def automatic_diagnostic(context=None):
 @api.get("/diagnostics/support/progress")
 def support_diagnostic_progress(context=None):
     """Progress is in-memory and independent of the active ONT RLock."""
-    return _safe_call(zte_service.support_progress)
+    return _safe_call(device_service.support_progress)
 
 
 @api.post("/diagnostics/support")
@@ -1311,7 +1274,7 @@ def support_diagnostic(context=None):
             context
         )
 
-        return zte_service.support_diagnostic(
+        return device_service.support_diagnostic(
             data.model_dump()
         )
 
@@ -1336,7 +1299,7 @@ def remediate_diagnostic(context=None):
             context
         )
 
-        return zte_service.remediate_diagnostic(
+        return device_service.remediate_diagnostic(
             data.model_dump()
         )
 
@@ -1348,7 +1311,7 @@ def remediate_diagnostic(context=None):
 @api.get("/diagnostics/workstation")
 def workstation_diagnostic(context=None):
     """Read-only comparison from the technician's computer (not the ONT)."""
-    return _safe_call(zte_service.workstation_diagnostic)
+    return _safe_call(device_service.workstation_diagnostic)
 
 
 @api.post("/diagnostics/speedtest")
@@ -1359,7 +1322,7 @@ def speedtest(context=None):
             context
         )
 
-        return zte_service.speedtest(
+        return device_service.speedtest(
             data.model_dump()
         )
 
@@ -1428,7 +1391,7 @@ def history(context=None):
 @api.get("/configuration/current")
 def current_configuration(context=None):
     return _safe_call(
-        zte_service.current_configuration
+        device_service.current_configuration
     )
 
 
@@ -1519,7 +1482,7 @@ def delete_named_preset(context=None):
 def apply_named_preset(context=None):
     def action():
         data = _validated(NamedPresetRequest, context)
-        return zte_service.apply_named_preset(data.attendant, data.name)
+        return device_service.apply_named_preset(data.attendant, data.name)
     return _safe_call(action)
 
 
@@ -1531,7 +1494,7 @@ def capture_profile(context=None):
             context
         )
 
-        return zte_service.capture_profile(
+        return device_service.capture_profile(
             data.attendant
         )
 
@@ -1576,7 +1539,7 @@ def apply_profile(context=None):
             context
         )
 
-        return zte_service.apply_profile(
+        return device_service.apply_profile(
             data.attendant
         )
 
@@ -1978,7 +1941,7 @@ def management_topology(context=None):
 
     return _safe_call(
         cpe_management_service.topology,
-        zte_service,
+        device_service,
         int(
             device_id
         ),
@@ -2021,7 +1984,7 @@ def management_incidents_correlate(context=None):
 def management_network_overview(context=None):
     return _safe_call(
         cpe_management_service.network_overview,
-        zte_service,
+        device_service,
     )
 
 
@@ -2029,7 +1992,7 @@ def management_network_overview(context=None):
 def management_mesh_status(context=None):
     return _safe_call(
         cpe_management_service.mesh_status,
-        zte_service,
+        device_service,
     )
 
 
@@ -2042,7 +2005,7 @@ def management_mesh_configure(context=None):
         )
 
         return cpe_management_service.mesh_configure(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2060,7 +2023,7 @@ def management_mesh_pair(context=None):
         )
 
         return cpe_management_service.mesh_pair(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2072,7 +2035,7 @@ def management_mesh_pair(context=None):
 @api.get("/management/qos")
 def management_qos(context=None):
     return _safe_call(
-        zte_service.qos_management_status
+        device_service.qos_management_status
     )
 
 
@@ -2085,7 +2048,7 @@ def management_qos_save(context=None):
         )
 
         return cpe_management_service.qos_save(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2108,7 +2071,7 @@ def management_qos_delete(context=None):
             )
 
         return cpe_management_service.qos_delete(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2120,7 +2083,7 @@ def management_qos_delete(context=None):
 @api.get("/management/firewall")
 def management_firewall(context=None):
     return _safe_call(
-        zte_service.firewall_management_status
+        device_service.firewall_management_status
     )
 
 
@@ -2133,7 +2096,7 @@ def management_firewall_update(context=None):
         )
 
         return cpe_management_service.firewall_set(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2146,7 +2109,7 @@ def management_firewall_update(context=None):
 def management_firewall_rules(context=None):
     return _safe_call(
         cpe_management_service.firewall_rules,
-        zte_service,
+        device_service,
     )
 
 
@@ -2159,7 +2122,7 @@ def management_firewall_rule_save(context=None):
         )
 
         return cpe_management_service.firewall_rule_save(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2177,7 +2140,7 @@ def management_firewall_rule_delete(context=None):
         )
 
         return cpe_management_service.firewall_rule_delete(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2195,7 +2158,7 @@ def management_filter_global(context=None):
         )
 
         return cpe_management_service.filter_global_set(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2207,7 +2170,7 @@ def management_filter_global(context=None):
 @api.get("/management/sntp")
 def management_sntp(context=None):
     return _safe_call(
-        zte_service.sntp_management_status
+        device_service.sntp_management_status
     )
 
 
@@ -2220,7 +2183,7 @@ def management_sntp_update(context=None):
         )
 
         return cpe_management_service.sntp_set(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2252,7 +2215,7 @@ def delete_tr069_provider(context=None):
 
 @api.get("/tr069/setup")
 def tr069_setup(context=None):
-    return _safe_call(zte_service.tr069_setup)
+    return _safe_call(device_service.tr069_setup)
 
 
 @api.post("/tr069/providers/apply")
@@ -2261,7 +2224,7 @@ def apply_tr069_provider(context=None):
         data = _validated(TR069ProviderApplyRequest, context)
         if data.confirm is not True:
             raise ValueError("Confirme a aplicação dos parâmetros ACS.")
-        return zte_service.apply_tr069_provider(
+        return device_service.apply_tr069_provider(
             data.name, data.wan_name,
             password=data.password,
             connection_request_password=data.connection_request_password,
@@ -2272,7 +2235,7 @@ def apply_tr069_provider(context=None):
 @api.get("/management/tr069")
 def management_tr069(context=None):
     return _safe_call(
-        zte_service.tr069_management_status
+        device_service.tr069_management_status
     )
 
 
@@ -2285,7 +2248,7 @@ def management_tr069_update(context=None):
         )
 
         return cpe_management_service.tr069_set(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2297,7 +2260,7 @@ def management_tr069_update(context=None):
 @api.get("/management/wan")
 def management_wan(context=None):
     return _safe_call(
-        zte_service.wan_configurations
+        device_service.wan_configurations
     )
 
 
@@ -2310,7 +2273,7 @@ def management_wan_create(context=None):
         )
 
         return cpe_management_service.wan_create(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2328,7 +2291,7 @@ def management_wan_update(context=None):
         )
 
         return cpe_management_service.wan_update(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2346,7 +2309,7 @@ def management_wan_delete(context=None):
         )
 
         return cpe_management_service.wan_delete(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2364,7 +2327,7 @@ def management_wan_action(context=None):
         )
 
         return cpe_management_service.wan_action(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2382,7 +2345,7 @@ def management_bridge(context=None):
         )
 
         return cpe_management_service.bridge(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2425,7 +2388,7 @@ def management_backup_create(context=None):
         )
 
         return cpe_management_service.backup(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2460,7 +2423,7 @@ def management_backup_restore(context=None):
         )
 
         return cpe_management_service.restore(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
@@ -2501,7 +2464,7 @@ def management_firmware_register(context=None):
 @api.get("/management/firmware/status")
 def management_firmware_status(context=None):
     return _safe_call(
-        zte_service.firmware_management_status
+        device_service.firmware_management_status
     )
 
 
@@ -2514,7 +2477,7 @@ def management_firmware_upgrade(context=None):
         )
 
         return cpe_management_service.firmware_upgrade(
-            zte_service,
+            device_service,
             data.model_dump(),
         )
 
