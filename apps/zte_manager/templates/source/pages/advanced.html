@@ -55,6 +55,9 @@
                         <button class="am-workbench-tab" type="button" role="tab" id="advanced-tab-nat" aria-controls="advanced-panel-nat" aria-selected="false" data-am-tab="nat">
                             <span class="material-symbols-outlined" aria-hidden="true">device_hub</span> NAT e DMZ
                         </button>
+                        <button class="am-workbench-tab hidden" type="button" role="tab" id="advanced-tab-ipv4-filter" aria-controls="advanced-panel-ipv4-filter" aria-selected="false" data-am-tab="ipv4-filter">
+                            <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span> IPv4 Filtering
+                        </button>
                         <button class="am-workbench-tab" type="button" role="tab" id="advanced-tab-inspector" aria-controls="advanced-panel-inspector" aria-selected="false" data-am-tab="inspector">
                             <span class="material-symbols-outlined" aria-hidden="true">manage_search</span> Inspeção
                         </button>
@@ -116,7 +119,7 @@
                     <section class="am-toolpanel" role="tabpanel" id="advanced-panel-diagnostics" aria-labelledby="advanced-tab-diagnostics" data-am-panel="diagnostics" hidden>
 
                 <div class="advanced-grid with-top-space">
-                    <article class="panel">
+                    <article class="panel" id="automaticDiagnosticPanel">
                         <div class="panel-header">
                             <div>
                                 <span class="section-kicker">AUTOMATIC DIAGNOSTIC</span>
@@ -265,6 +268,112 @@
                             <button class="button danger with-top-space" type="submit">Aplicar DMZ</button>
                         </form>
                         <div id="dmzStatus" class="operations-output with-top-space"></div>
+                    </article>
+                </div>
+                    </section>
+
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-ipv4-filter" aria-labelledby="advanced-tab-ipv4-filter" data-am-panel="ipv4-filter" hidden>
+                <div class="subsection-title with-top-space">
+                    <div>
+                        <span class="material-symbols-outlined">filter_alt</span>
+                        <h3>IPv4 Filtering</h3>
+                    </div>
+                    <span>Regras de filtro IPv4 da ONT Huawei autenticada.</span>
+                </div>
+
+                <div class="advanced-grid">
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">HUAWEI IPV4 FILTER</span>
+                                <h3 id="huaweiIpv4FilterFormTitle">Nova regra</h3>
+                            </div>
+                            <span id="huaweiIpv4FilterCapability" class="badge">Não carregado</span>
+                        </div>
+
+                        <form id="huaweiIpv4FilterForm" class="operations-form">
+                            <input id="huaweiIpv4FilterDomain" type="hidden">
+                            <div class="operations-form-grid">
+                                <label class="field">
+                                    <span>NOME</span>
+                                    <input id="huaweiIpv4FilterName" type="text" maxlength="128" required>
+                                </label>
+                                <label class="field">
+                                    <span>PROTOCOLO</span>
+                                    <select id="huaweiIpv4FilterProtocol" required>
+                                        <option value="TCP">TCP</option>
+                                        <option value="UDP">UDP</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span>DIREÇÃO</span>
+                                    <select id="huaweiIpv4FilterDirection" required>
+                                        <option value="Bidirectional">Bidirectional</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span>LAN START IP</span>
+                                    <input id="huaweiIpv4FilterLanStart" type="text" autocomplete="off">
+                                </label>
+                                <label class="field">
+                                    <span>LAN END IP</span>
+                                    <input id="huaweiIpv4FilterLanEnd" type="text" autocomplete="off">
+                                </label>
+                                <label class="field">
+                                    <span>WAN START IP</span>
+                                    <input id="huaweiIpv4FilterWanStart" type="text" autocomplete="off">
+                                </label>
+                                <label class="field">
+                                    <span>WAN END IP</span>
+                                    <input id="huaweiIpv4FilterWanEnd" type="text" autocomplete="off">
+                                </label>
+                                <label class="field huawei-ipv4-tcp-field">
+                                    <span>LAN TCP PORT</span>
+                                    <input id="huaweiIpv4FilterLanTcp" type="number" min="1" max="65535">
+                                </label>
+                                <label class="field huawei-ipv4-tcp-field">
+                                    <span>WAN TCP PORT</span>
+                                    <input id="huaweiIpv4FilterWanTcp" type="number" min="1" max="65535">
+                                </label>
+                                <label class="field huawei-ipv4-udp-field hidden">
+                                    <span>LAN UDP PORT</span>
+                                    <input id="huaweiIpv4FilterLanUdp" type="number" min="1" max="65535">
+                                </label>
+                                <label class="field huawei-ipv4-udp-field hidden">
+                                    <span>WAN UDP PORT</span>
+                                    <input id="huaweiIpv4FilterWanUdp" type="number" min="1" max="65535">
+                                </label>
+                            </div>
+                            <div class="advanced-actions with-top-space">
+                                <button id="huaweiIpv4FilterSave" class="button primary" type="submit">
+                                    <span class="material-symbols-outlined">save</span>
+                                    Salvar regra
+                                </button>
+                                <button id="huaweiIpv4FilterCancel" class="button ghost hidden" type="button">
+                                    Cancelar edição
+                                </button>
+                                <button id="huaweiIpv4FilterRefresh" class="button ghost" type="button">
+                                    <span class="material-symbols-outlined">refresh</span>
+                                    Atualizar regras
+                                </button>
+                            </div>
+                        </form>
+                        <div id="huaweiIpv4FilterStatus" class="operations-output with-top-space">
+                            <span class="muted">Conecte-se a uma Huawei compatível para carregar as regras.</span>
+                        </div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">REGRAS ATIVAS</span>
+                                <h3>Filtros configurados</h3>
+                            </div>
+                            <span id="huaweiIpv4FilterCount" class="badge">0 regras</span>
+                        </div>
+                        <div id="huaweiIpv4FilterList" class="operations-output">
+                            <span class="muted">Nenhuma leitura realizada.</span>
+                        </div>
                     </article>
                 </div>
                     </section>
