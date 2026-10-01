@@ -560,6 +560,7 @@
     }
     document.addEventListener("device:session-changed",reset);
     document.addEventListener("device:page-open",event=>{
+        if(event.detail?.vendor==="huawei")return;
         const page=event.detail?.pageName;
         void open(page).catch(error=>
             console.warn("Leitura nativa F6201B indisponível:",error));
