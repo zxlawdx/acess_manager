@@ -399,14 +399,25 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
         )
         self.assertTrue(all(item["canal_automatico"] for item in radios))
 
-    def test_wifi_password_write_is_rejected_without_post(self):
+    def test_wifi_password_write_uses_captured_pre_shared_key(self):
         service = self.make_service()
-        with self.assertRaises(ValueError):
-            service.set_ssid_config(
-                "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1",
-                {"password": "not-captured"},
-            )
-        self.assertEqual(service.client.posts, [])
+        result = service.set_ssid_config(
+            "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1",
+            {"password": "MappedPassword123"},
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(len(service.client.posts), 1)
+        path, payload, referer = service.client.posts[0]
+        self.assertIn("/html/amp/wlanbasic/set.cgi", path)
+        self.assertIn(
+            "k=InternetGatewayDevice.LANDevice.1."
+            "WLANConfiguration.1.PreSharedKey.1",
+            path,
+        )
+        self.assertEqual(payload["k.PreSharedKey"], "MappedPassword123")
+        self.assertEqual(payload["x.X_HW_Token"], TOKEN)
+        self.assertTrue(referer.startswith(WLAN_BASIC_PAGE))
 
 
 if __name__ == "__main__":
