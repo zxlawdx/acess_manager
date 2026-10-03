@@ -48,6 +48,16 @@ class WifiRadioRequest(BaseModel):
         le=5
     )
     preamble_type: str | None = None
+    frag_threshold: int | None = Field(
+        default=None,
+        ge=256,
+        le=2346
+    )
+    band_steering: bool | None = None
+    band_steering_policy: int | str | None = None
+    airtime_fairness: bool | None = None
+    auto_channel_scope: int | str | None = None
+    bandwidth_code: int | str | None = None
 
 
 class WifiSSIDRequest(BaseModel):
@@ -64,6 +74,11 @@ class WifiSSIDRequest(BaseModel):
         le=64
     )
     encryption: str | None = None
+    authentication_mode: str | None = None
+    encryption_mode: str | None = None
+    group_rekey: int | None = Field(default=None, ge=0)
+    wps_enabled: bool | None = None
+    wps_method: str | None = None
 
 
 class AdminPasswordRequest(BaseModel):
@@ -312,6 +327,9 @@ class AttendanceReportRequest(BaseModel):
 
 class DhcpBasicRequest(BaseModel):
     enabled: bool | None = None
+    dhcp_enable: bool | None = None
+    l2_relay_enable: bool | None = None
+    option125_enable: bool | None = None
     min_address: str | None = None
     max_address: str | None = None
     dns_source: str | None = None

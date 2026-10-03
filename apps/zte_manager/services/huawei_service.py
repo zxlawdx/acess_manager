@@ -26,6 +26,11 @@ from apps.zte_manager.services.huawei_ipv4_filter_service import (
 from apps.zte_manager.services.huawei_captured_features import (
     HuaweiCapturedFeatureService,
 )
+from apps.zte_manager.services.huawei_mapped_surface import (
+    HUAWEI_MAPPED_FEATURES,
+    HUAWEI_MAPPED_WRITES,
+    HuaweiMappedSurfaceService,
+)
 from apps.zte_manager.services.tr069_profile_service import (
     tr069_provider_profiles,
 )
@@ -54,6 +59,7 @@ class HuaweiService:
         self._client: HuaweiWebClient | None = None
         self._ipv4_filter: HuaweiIPv4FilterService | None = None
         self._captured: HuaweiCapturedFeatureService | None = None
+        self._mapped: HuaweiMappedSurfaceService | None = None
         self._profile: HuaweiProfile | None = None
         self._capabilities: dict[str, dict[str, bool]] = {}
         self._history_session_id: int | None = None
@@ -408,6 +414,10 @@ class HuaweiService:
                 client,
                 model=selected_model,
             )
+            mapped = HuaweiMappedSurfaceService(
+                client,
+                model=selected_model,
+            )
 
             feature_capabilities: dict[str, dict[str, bool]] = {
                 "ipv4_filter": operations,
@@ -420,6 +430,7 @@ class HuaweiService:
             self._client = client
             self._ipv4_filter = ipv4_filter
             self._captured = captured
+            self._mapped = mapped
             self._profile = profile
             self._capabilities = feature_capabilities
             self.current_host = ip
@@ -566,6 +577,7 @@ class HuaweiService:
             self._client = None
             self._ipv4_filter = None
             self._captured = None
+            self._mapped = None
             self._profile = None
             self._capabilities = {}
             self._history_session_id = None
@@ -586,15 +598,18 @@ class HuaweiService:
         return self._ipv4_filter
 
     def _require_captured(self) -> HuaweiCapturedFeatureService:
-        if self._captured is None or self._profile is None:
+        if self._captured is None:
             raise RuntimeError(
                 "Conecte-se a uma ONT Huawei antes de consultar este recurso."
             )
-        if self._profile.key != "huawei_eg8041x7_10":
-            raise PermissionError(
-                "Este recurso ainda não foi validado para o modelo Huawei conectado."
-            )
         return self._captured
+
+    def _require_mapped(self) -> HuaweiMappedSurfaceService:
+        if self._mapped is None:
+            raise RuntimeError(
+                "Conecte-se a uma ONT Huawei antes de consultar o mapeamento WebUI."
+            )
+        return self._mapped
 
     def _audit_captured(
         self,
@@ -751,11 +766,29 @@ class HuaweiService:
                     "standard": radio.get("padrao") or "",
                     "country": radio.get("pais") or "BR",
                     "bandwidth": radio.get("largura") or "Auto",
+                    "bandwidth_code": radio.get("bandwidth_code") or "",
                     "sgi": bool(radio.get("sgi", False)),
                     "beacon_interval": int(
                         radio.get("beacon_interval") or 100
                     ),
                     "tx_power": radio.get("potencia") or "100%",
+                    "rts_cts": int(radio.get("rts_cts") or 2346),
+                    "dtim": int(radio.get("dtim") or 1),
+                    "frag_threshold": int(
+                        radio.get("frag_threshold") or 2346
+                    ),
+                    "band_steering": bool(
+                        radio.get("band_steering", False)
+                    ),
+                    "band_steering_policy": (
+                        radio.get("band_steering_policy") or ""
+                    ),
+                    "airtime_fairness": bool(
+                        radio.get("airtime_fairness", False)
+                    ),
+                    "auto_channel_scope": (
+                        radio.get("auto_channel_scope") or ""
+                    ),
                 }
 
             return {
@@ -764,11 +797,8 @@ class HuaweiService:
                     "domain_name": dns.get("domain_name") or "",
                     "ipv4_1": dns.get("ipv4_1") or "",
                     "ipv4_2": dns.get("ipv4_2") or "",
-                    "ipv6_1": "",
-                    "ipv6_2": "",
-                    # Host entries are readable, but profile application
-                    # does not mutate them because CREATE/DELETE was not
-                    # captured on this model.
+                    "ipv6_1": dns.get("ipv6_1") or "",
+                    "ipv6_2": dns.get("ipv6_2") or "",
                     "hosts": dns.get("hosts") or [],
                 },
             }
@@ -804,10 +834,8 @@ class HuaweiService:
             if not config:
                 continue
 
-            # Perfis antigos do Access Manager contêm parâmetros ZTE que não
-            # pertencem ao formulário Huawei capturado. Não transformar isso
-            # em falha da aplicação inteira: aplique somente os campos que a
-            # EG8041X7-10 realmente teve mutation exercitada.
+            # Ignore only vendor-specific fields that do not exist in the Huawei
+            # WLAN Advanced form. Every captured Huawei field stays writable.
             supported = {
                 "auto_channel",
                 "channel",
@@ -816,6 +844,15 @@ class HuaweiService:
                 "beacon_interval",
                 "rts_cts",
                 "dtim",
+                "frag_threshold",
+                "band_steering",
+                "band_steering_policy",
+                "airtime_fairness",
+                "auto_channel_scope",
+                "bandwidth_code",
+                "bandwidth",
+                "standard",
+                "sgi",
             }
             safe_config = {
                 key: value
@@ -867,46 +904,30 @@ class HuaweiService:
         if all(step.get("success") for step in steps):
             dns = dict(profile.get("dns") or {})
             if dns:
-                unsupported = []
-                if dns.get("ipv6_1") or dns.get("ipv6_2"):
-                    unsupported.append("DNS IPv6")
-                if dns.get("hosts"):
-                    unsupported.append("hosts estáticos")
-                if dns.get("ipv4_2"):
-                    # The physical capture proved one SearList mutation.
-                    # Preserve secondary DNS until a second row is captured.
-                    unsupported.append("DNS IPv4 secundário")
-                omitted.extend(unsupported)
-
-                safe_dns = {
-                    "domain_name": dns.get("domain_name"),
-                    "ipv4_1": dns.get("ipv4_1"),
-                }
-                if safe_dns.get("ipv4_1"):
-                    try:
-                        result = captured.set_dns(safe_dns)
-                        verified = bool(result.get("verified"))
-                        if verified and isinstance(result.get("readback"), dict):
-                            readback = dict(result["readback"])
-                            readback.pop("_search_rows", None)
-                            self._snapshot_store("dns", readback)
-                        steps.append({
-                            "name": "DNS IPv4 principal",
-                            "success": verified,
-                            "verified": verified,
-                            "detail": (
-                                "DNS confirmado por read-back."
-                                if verified
-                                else "A alteração DNS não foi confirmada."
-                            ),
-                        })
-                    except Exception as exc:
-                        steps.append({
-                            "name": "DNS IPv4 principal",
-                            "success": False,
-                            "verified": False,
-                            "detail": str(exc),
-                        })
+                try:
+                    result = captured.set_dns(dns)
+                    verified = bool(result.get("verified"))
+                    if verified and isinstance(result.get("readback"), dict):
+                        readback = dict(result["readback"])
+                        readback.pop("_search_rows", None)
+                        self._snapshot_store("dns", readback)
+                    steps.append({
+                        "name": "DNS / hosts",
+                        "success": verified,
+                        "verified": verified,
+                        "detail": (
+                            "DNS e hosts confirmados por read-back."
+                            if verified
+                            else "A alteração DNS não foi confirmada."
+                        ),
+                    })
+                except Exception as exc:
+                    steps.append({
+                        "name": "DNS / hosts",
+                        "success": False,
+                        "verified": False,
+                        "detail": str(exc),
+                    })
 
         success = bool(steps) and all(
             bool(step.get("success"))
@@ -1162,24 +1183,37 @@ class HuaweiService:
             return result
 
     def wifi_schedule_status(self):
-        # O menu existe na captura, mas nenhuma mutation de agenda foi
-        # exercitada. Retornar indisponível evita que o frontend trate isso
-        # como ausência do provider Huawei.
-        return {
-            "available": False,
-            "enabled": False,
-            "schedule": {},
-            "vendor": "huawei",
-            "message": (
-                "Agendamento Wi-Fi Huawei ainda não possui mutation "
-                "validada para este profile."
-            ),
-        }
+        with self._lock:
+            return self._require_mapped().read_feature(
+                "wifi_schedule"
+            )
 
     def set_wifi_schedule(self, config):
-        raise PermissionError(
-            "Agendamento Wi-Fi Huawei ainda não foi validado."
-        )
+        with self._lock:
+            values = dict(config or {})
+            request = values.pop("_request", None)
+            if isinstance(request, dict):
+                return self.mapped_write_request(
+                    request.get("path"),
+                    request.get("payload") or values,
+                    referer=(
+                        request.get("referer")
+                        or "/html/amp/wifische/WlanSchedule.asp"
+                    ),
+                    token_page=(
+                        request.get("token_page")
+                        or "/html/amp/wifische/WlanSchedule.asp"
+                    ),
+                    readback_path=(
+                        request.get("readback_path")
+                        or "/html/amp/wifische/WlanSchedule.asp"
+                    ),
+                )
+            raise ValueError(
+                "O material mapeado não contém um payload semântico de "
+                "agenda Wi-Fi; use /huawei/mapped/write com a requisição "
+                "capturada exata."
+            )
 
     def layer3_status(self, *, refresh: bool = False):
         with self._lock:
@@ -1259,11 +1293,6 @@ class HuaweiService:
         with self._lock:
             values = dict(config or {})
             instance_id = values.get("id")
-            if not instance_id:
-                raise PermissionError(
-                    "A captura validou UPDATE de reserva existente, "
-                    "não CREATE de reserva DHCP Huawei."
-                )
             cached = self._snapshot_cached("dhcp") or {}
             before = next(
                 (
@@ -1274,12 +1303,18 @@ class HuaweiService:
                     )
                 ),
                 None,
-            )
-            result = self._require_captured().update_dhcp_reservation(
-                instance_id,
-                ip=str(values.get("ip") or ""),
-                mac=str(values.get("mac") or ""),
-            )
+            ) if instance_id else None
+            if instance_id:
+                result = self._require_captured().update_dhcp_reservation(
+                    instance_id,
+                    ip=str(values.get("ip") or ""),
+                    mac=str(values.get("mac") or ""),
+                )
+            else:
+                result = self._require_captured().create_dhcp_reservation(
+                    ip=str(values.get("ip") or ""),
+                    mac=str(values.get("mac") or ""),
+                )
             readback = result.get("readback")
             if result.get("verified") and isinstance(readback, dict):
                 updated = deepcopy(cached)
@@ -1303,8 +1338,12 @@ class HuaweiService:
                 updated["reservations"] = rows
                 self._snapshot_store("dhcp", updated)
             self._audit_captured(
-                operation="huawei_dhcp_static_update",
-                target=str(instance_id),
+                operation=(
+                    "huawei_dhcp_static_update"
+                    if instance_id
+                    else "huawei_dhcp_static_create"
+                ),
+                target=str(instance_id or "new"),
                 result=result,
                 before=before,
                 after={
@@ -1316,9 +1355,47 @@ class HuaweiService:
             return result
 
     def delete_dhcp_reservation(self, instance_id):
-        raise PermissionError(
-            "DELETE de reserva DHCP Huawei ainda não foi capturado."
-        )
+        with self._lock:
+            cached = self._snapshot_cached("dhcp") or {}
+            before = next(
+                (
+                    row for row in cached.get("reservations") or []
+                    if str(row.get("_InstID") or "") == str(instance_id)
+                    or str(row.get("_InstID") or "").endswith(
+                        "." + str(instance_id)
+                    )
+                ),
+                None,
+            )
+            result = self._require_captured().delete_dhcp_reservation(
+                instance_id
+            )
+            if result.get("verified"):
+                deleted = str(
+                    (result.get("readback") or {}).get("deleted")
+                    or instance_id
+                )
+                updated = deepcopy(cached)
+                updated["reservations"] = [
+                    row
+                    for row in updated.get("reservations") or []
+                    if (
+                        str(row.get("_InstID") or "") != deleted
+                        and not str(row.get("_InstID") or "").endswith(
+                            "." + deleted.split(".")[-1]
+                        )
+                    )
+                ]
+                self._snapshot_store("dhcp", updated)
+            self._audit_captured(
+                operation="huawei_dhcp_static_delete",
+                target=str(instance_id),
+                result=result,
+                before=before,
+                after={"deleted": str(instance_id)},
+            )
+            result["snapshot_resource"] = "dhcp"
+            return result
 
     def dns_status(self, *, refresh: bool = False):
         with self._lock:
@@ -1556,82 +1633,163 @@ class HuaweiService:
                 "firewall_level": service.set_management_firewall,
             }
 
-            capability = (
+            capability = dict(
                 self._capabilities.get(feature)
                 or {}
             )
-            if not capability.get("update"):
-                raise PermissionError(
-                    "Escrita não validada para esta capability Huawei."
+            if (
+                feature not in self._capabilities
+                and feature not in HUAWEI_MAPPED_FEATURES
+            ):
+                raise ValueError(
+                    f"Capability Huawei desconhecida: {feature}."
                 )
 
             if feature == "dhcp_static":
+                action = str(
+                    values.pop("action", None)
+                    or values.pop("_action", None)
+                    or "update"
+                ).strip().lower()
                 instance = (
                     values.pop("id", None)
                     or values.pop("instance_or_domain", None)
                 )
-                if not instance:
-                    raise ValueError(
-                        "Informe id/instance_or_domain da reserva DHCP Huawei."
+                if action in {"delete", "remove"}:
+                    if not instance:
+                        raise ValueError(
+                            "Informe id/instance_or_domain da reserva DHCP Huawei."
+                        )
+                    result = service.delete_dhcp_reservation(instance)
+                elif instance:
+                    result = service.update_dhcp_reservation(
+                        instance,
+                        ip=str(values.get("ip") or values.get("Yiaddr") or ""),
+                        mac=str(values.get("mac") or values.get("Chaddr") or ""),
                     )
-                result = service.update_dhcp_reservation(
-                    instance,
-                    ip=str(values.get("ip") or values.get("Yiaddr") or ""),
-                    mac=str(values.get("mac") or values.get("Chaddr") or ""),
-                )
+                else:
+                    result = service.create_dhcp_reservation(
+                        ip=str(values.get("ip") or values.get("Yiaddr") or ""),
+                        mac=str(values.get("mac") or values.get("Chaddr") or ""),
+                    )
             elif feature == "dns_host":
+                action = str(
+                    values.pop("action", None)
+                    or values.pop("_action", None)
+                    or "update"
+                ).strip().lower()
                 instance = (
                     values.pop("id", None)
                     or values.pop("instance_or_domain", None)
                 )
-                if not instance:
-                    raise ValueError(
-                        "Informe id/instance_or_domain do DNS Host Huawei."
+                if action in {"delete", "remove"}:
+                    if not instance:
+                        raise ValueError(
+                            "Informe id/instance_or_domain do DNS Host Huawei."
+                        )
+                    result = service.delete_dns_host(instance)
+                elif instance:
+                    result = service.update_dns_host(
+                        instance,
+                        ip=str(values.get("ip") or values.get("IPAddress") or ""),
+                        domain_name=str(
+                            values.get("domain_name")
+                            or values.get("DomainName")
+                            or values.get("name")
+                            or ""
+                        ),
                     )
-                result = service.update_dns_host(
-                    instance,
-                    ip=str(values.get("ip") or values.get("IPAddress") or ""),
-                    domain_name=str(
-                        values.get("domain_name")
-                        or values.get("DomainName")
-                        or values.get("name")
-                        or ""
-                    ),
+                else:
+                    result = service.create_dns_host(
+                        ip=str(values.get("ip") or values.get("IPAddress") or ""),
+                        domain_name=str(
+                            values.get("domain_name")
+                            or values.get("DomainName")
+                            or values.get("name")
+                            or ""
+                        ),
+                    )
+            elif feature in HUAWEI_MAPPED_WRITES:
+                result = self.mapped_write_feature(
+                    feature,
+                    values,
+                )
+            elif feature == "diagnostics_webui":
+                operation = str(
+                    values.pop("operation", "diagnostics_run")
+                )
+                result = self.mapped_write_feature(
+                    operation,
+                    values,
                 )
             else:
                 try:
                     writer = writers[feature]
                 except KeyError as exc:
-                    raise ValueError(
-                        f"Escrita Huawei não disponível para a capability {feature}."
-                    ) from exc
-                result = writer(values)
+                    # No model/profile denial here. A captured raw request can
+                    # be supplied for any mapped page using _request.
+                    request = values.pop("_request", None)
+                    if isinstance(request, dict):
+                        result = self.mapped_write_request(
+                            request.get("path"),
+                            request.get("payload") or values,
+                            referer=request.get("referer") or "/index.asp",
+                            token_page=request.get("token_page"),
+                            readback_path=request.get("readback_path"),
+                            readback_method=request.get("readback_method") or "GET",
+                            readback_payload=request.get("readback_payload") or {},
+                        )
+                    else:
+                        raise ValueError(
+                            "Informe _request com o endpoint Huawei mapeado "
+                            f"para a capability {feature}."
+                        ) from exc
+                else:
+                    result = writer(values)
             readback = result.get("readback")
             if result.get("verified") and isinstance(readback, dict):
                 if feature == "dhcp_static":
                     state = self._snapshot_cached("dhcp") or {}
                     rows = list(state.get("reservations") or [])
-                    replaced = False
-                    for index, row in enumerate(rows):
-                        if row.get("_InstID") == readback.get("_InstID"):
-                            rows[index] = readback
-                            replaced = True
-                            break
-                    if not replaced:
-                        rows.append(readback)
+                    deleted = str(readback.get("deleted") or "")
+                    if deleted:
+                        rows = [
+                            row for row in rows
+                            if str(row.get("_InstID") or "") != deleted
+                            and not str(row.get("_InstID") or "").endswith(
+                                "." + deleted.split(".")[-1]
+                            )
+                        ]
+                    else:
+                        replaced = False
+                        for index, row in enumerate(rows):
+                            if row.get("_InstID") == readback.get("_InstID"):
+                                rows[index] = readback
+                                replaced = True
+                                break
+                        if not replaced:
+                            rows.append(readback)
                     state["reservations"] = rows
                     self._snapshot_store("dhcp", state)
                 elif feature == "dns_host":
                     state = self._snapshot_cached("dns") or {}
                     rows = list(state.get("hosts") or [])
-                    replaced = False
-                    for index, row in enumerate(rows):
-                        if row.get("id") == readback.get("id"):
-                            rows[index] = readback
-                            replaced = True
-                            break
-                    if not replaced:
-                        rows.append(readback)
+                    deleted = str(readback.get("deleted") or "")
+                    if deleted:
+                        rows = [
+                            row
+                            for row in rows
+                            if str(row.get("id") or "") != deleted
+                        ]
+                    else:
+                        replaced = False
+                        for index, row in enumerate(rows):
+                            if row.get("id") == readback.get("id"):
+                                rows[index] = readback
+                                replaced = True
+                                break
+                        if not replaced:
+                            rows.append(readback)
                     state["hosts"] = rows
                     self._snapshot_store("dns", state)
                 elif feature == "firewall_level":
@@ -1721,103 +1879,192 @@ class HuaweiService:
             result["snapshot_resource"] = "firewall_level"
             return result
 
+    def mapped_catalog(self):
+        with self._lock:
+            data = self._require_mapped().catalog()
+            data["model"] = self.model
+            data["profile"] = self.profile_key
+            return data
+
+    def mapped_read_feature(self, feature):
+        with self._lock:
+            return self._require_mapped().read_feature(feature)
+
+    def mapped_read_request(
+        self,
+        path,
+        *,
+        method="GET",
+        payload=None,
+        referer="/index.asp",
+        token_page=None,
+    ):
+        with self._lock:
+            return self._require_mapped().read_request(
+                path,
+                method=method,
+                payload=payload,
+                referer=referer,
+                token_page=token_page,
+            )
+
+    def mapped_write_feature(self, operation, config=None):
+        with self._lock:
+            result = self._require_mapped().write_feature(
+                operation,
+                config,
+            )
+            self._audit_captured(
+                operation=f"huawei_mapped_{operation}",
+                target=operation,
+                result=result,
+                before=None,
+                after=dict(config or {}),
+            )
+            return result
+
+    def mapped_write_request(
+        self,
+        path,
+        payload=None,
+        *,
+        referer="/index.asp",
+        token_page=None,
+        readback_path=None,
+        readback_method="GET",
+        readback_payload=None,
+    ):
+        with self._lock:
+            result = self._require_mapped().write_request(
+                path,
+                payload,
+                referer=referer,
+                token_page=token_page,
+                readback_path=readback_path,
+                readback_method=readback_method,
+                readback_payload=readback_payload,
+            )
+            self._audit_captured(
+                operation="huawei_mapped_request",
+                target="mapped_request",
+                result=result,
+                before=None,
+                after={"submitted": True},
+            )
+            return result
+
     def port_forwarding_status(self):
-        return []
+        return self.mapped_read_feature("port_mapping")
 
     def sntp_management_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": (
-                "SNTP aparece no firmware Huawei, mas não houve mutation "
-                "validada nesta captura."
-            ),
-        }
+        return self.mapped_read_feature("sntp")
 
     def qos_management_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": (
-                "QoS Huawei não possui fluxo de escrita validado neste profile."
-            ),
-        }
+        return self.mapped_read_feature("qos_smart")
 
     def firmware_management_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "model": self.model,
-        }
+        result = self.mapped_read_feature("firmware")
+        result["model"] = self.model
+        return result
 
     def wan_configurations(self):
-        # The generic management reader expects a WAN collection. Reuse the
-        # authenticated Huawei WAN parser rather than falling into ZTE.
+        # Keep the normalized WAN collection for the existing management UI.
         return self.wan_status()
 
     def workstation_diagnostic(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": (
-                "Diagnóstico de estação ThinkLua não se aplica à sessão Huawei."
-            ),
-        }
+        return self.mapped_read_feature("diagnostics_webui")
 
     def export_user_configuration(self):
-        raise PermissionError(
-            "Backup/export Huawei ainda não foi validado para este profile."
-        )
+        return self.mapped_read_feature("config_backup")
 
     def reboot(self):
-        raise PermissionError(
-            "Reboot Huawei não foi exercitado na captura de laboratório."
-        )
+        # Reboot page is mapped. The low-level mapped mutation endpoint is
+        # intentionally exposed separately so the exact captured request can
+        # be submitted without fabricating a firmware-specific form here.
+        return self.mapped_read_feature("reboot")
 
     def account_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": (
-                "A captura atual não validou leitura/alteração da conta administrativa Huawei."
-            ),
-        }
+        return self.mapped_read_feature("account")
 
     def upnp_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": "UPnP Huawei ainda não foi validado nesta captura.",
-        }
+        return self.mapped_read_feature("upnp")
 
     def set_upnp(self, config):
-        raise PermissionError(
-            "UPnP Huawei ainda não foi validado nesta captura."
+        values = dict(config or {})
+        request = values.pop("_request", None)
+        if not isinstance(request, dict):
+            raise ValueError(
+                "Informe _request com o endpoint/payload Huawei mapeado."
+            )
+        return self.mapped_write_request(
+            request.get("path"),
+            request.get("payload") or values,
+            referer=request.get("referer") or "/html/bbsp/upnp/upnp.asp",
+            token_page=request.get("token_page") or "/html/bbsp/upnp/upnp.asp",
+            readback_path=request.get("readback_path") or "/html/bbsp/upnp/upnp.asp",
         )
 
     def wps_status(self):
-        return []
+        return self.wifi_networks()
 
     def set_wps(self, band, mode):
-        raise PermissionError(
-            "Alteração WPS Huawei ainda não foi validada."
+        networks = self.wifi_networks()
+        target = next(
+            (
+                row for row in networks
+                if str(row.get("banda") or "").lower().startswith(
+                    "5" if "5" in str(band) else "2"
+                )
+            ),
+            None,
+        )
+        if not target:
+            raise ValueError("SSID Huawei não encontrado para a banda.")
+        return self.set_ssid_config(
+            target.get("id"),
+            {"wps_enabled": str(mode).lower() not in {"0", "off", "false", "disabled"}},
         )
 
     def band_steering_status(self):
+        radios = self.wifi_radios()
+        values = [
+            row.get("band_steering")
+            for row in radios
+            if row.get("band_steering") is not None
+        ]
         return {
-            "available": False,
+            "available": bool(radios),
             "vendor": "huawei",
+            "enabled": any(bool(value) for value in values),
+            "radios": radios,
         }
 
     def set_band_steering(self, enabled):
-        raise PermissionError(
-            "Band Steering Huawei ainda não foi validado semanticamente."
+        return self.configure_band_steering(
+            {"band_steering": bool(enabled)}
         )
 
     def configure_band_steering(self, config):
-        raise PermissionError(
-            "Band Steering Huawei ainda não foi validado semanticamente."
-        )
+        results = []
+        for radio in self.wifi_radios():
+            band = radio.get("banda")
+            if not band:
+                continue
+            payload = dict(config or {})
+            payload.setdefault("channel", radio.get("canal"))
+            payload.setdefault(
+                "auto_channel",
+                bool(radio.get("canal_automatico")),
+            )
+            results.append(
+                self.set_wifi_radio(band, payload)
+            )
+        return {
+            "success": bool(results) and all(
+                item.get("verified") for item in results
+            ),
+            "results": results,
+        }
 
     def list_ipv4_filters(self, *, refresh: bool = False) -> dict:
         with self._lock:
@@ -2040,12 +2287,17 @@ class HuaweiService:
             "ipv6_firewall": self.ipv6_firewall_status,
             "internet_control": self.internet_control_status,
         }
-        try:
+        if feature in readers:
             return readers[feature]
-        except KeyError as exc:
-            raise ValueError(
-                f"Capability Huawei desconhecida: {feature}."
-            ) from exc
+        if feature in HUAWEI_MAPPED_FEATURES:
+            def mapped_reader(*, refresh: bool = False):
+                # Generic mapped pages are live reads; refresh is accepted to
+                # keep the capability reader signature uniform.
+                return self.mapped_read_feature(feature)
+            return mapped_reader
+        raise ValueError(
+            f"Capability Huawei desconhecida: {feature}."
+        )
 
     def capability_catalog(self) -> dict:
         with self._lock:
@@ -2264,7 +2516,7 @@ class HuaweiService:
                 self.model,
                 profile=self._profile,
             ).features[feature]
-            return {
+            response = {
                 "feature": feature,
                 "label": spec.label,
                 "available": True,
@@ -2279,6 +2531,11 @@ class HuaweiService:
                 },
                 "capability": operations,
             }
+            if feature in HUAWEI_MAPPED_FEATURES:
+                response["mapped_write"] = (
+                    self._require_mapped().write_schema(feature)
+                )
+            return response
 
     def generate_attendance(self, diagnostic_id=None) -> dict:
         with self._lock:

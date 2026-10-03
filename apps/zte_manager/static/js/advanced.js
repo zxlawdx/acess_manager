@@ -30,9 +30,22 @@ const baseCollectRadioFormPayload = collectRadioFormPayload;
 
 renderRadioAdvancedFields = function (radio) {
     if (currentVendor === "huawei") {
+        const checked = value => value ? "checked" : "";
         return `
             <div class="advanced-radio-fields">
-                <span class="section-kicker">HUAWEI RF VALIDADO</span>
+                <span class="section-kicker">HUAWEI RF MAPEADO</span>
+                <div class="advanced-switch-grid with-top-space">
+                    <label class="advanced-switch">
+                        <span>Band steering</span>
+                        <input data-field="band_steering" type="checkbox"
+                            ${checked(radio.band_steering)}>
+                    </label>
+                    <label class="advanced-switch">
+                        <span>Airtime fairness</span>
+                        <input data-field="airtime_fairness" type="checkbox"
+                            ${checked(radio.airtime_fairness)}>
+                    </label>
+                </div>
                 <div class="form-grid two-fields with-top-space">
                     <div class="form-group">
                         <label>RTS/CTS</label>
@@ -40,14 +53,36 @@ renderRadioAdvancedFields = function (radio) {
                             value="${escapeHtml(radio.rts_cts ?? 2346)}">
                     </div>
                     <div class="form-group">
+                        <label>Fragmentação</label>
+                        <input data-field="frag_threshold" type="number" min="256" max="2346"
+                            value="${escapeHtml(radio.frag_threshold ?? 2346)}">
+                    </div>
+                    <div class="form-group">
                         <label>DTIM</label>
                         <input data-field="dtim" type="number" min="1" max="5"
                             value="${escapeHtml(radio.dtim ?? 1)}">
                     </div>
+                    <div class="form-group">
+                        <label>Código de largura do firmware</label>
+                        <input data-field="bandwidth_code" type="text"
+                            value="${escapeHtml(radio.bandwidth_code ?? "")}">
+                    </div>
+                    <div class="form-group">
+                        <label>Política de band steering</label>
+                        <input data-field="band_steering_policy" type="text"
+                            value="${escapeHtml(radio.band_steering_policy ?? "")}">
+                    </div>
+                    ${radio.banda === "5GHz" ? `
+                        <div class="form-group">
+                            <label>Escopo do canal automático</label>
+                            <input data-field="auto_channel_scope" type="text"
+                                value="${escapeHtml(radio.auto_channel_scope ?? "0")}">
+                        </div>
+                    ` : ""}
                 </div>
                 <p class="muted">
-                    Canal, potência, país, beacon, RTS e DTIM usam o formulário
-                    WLAN Advanced capturado na EG8041X7-10.
+                    Os campos acima correspondem diretamente ao formulário WLAN Advanced
+                    capturado da EG8041X7-10 e são gravados com releitura do rádio.
                 </p>
             </div>
         `;
@@ -150,7 +185,10 @@ collectRadioFormPayload = function (
     );
 
     const booleanFields = currentVendor === "huawei"
-        ? []
+        ? [
+            "band_steering",
+            "airtime_fairness"
+        ]
         : [
             "mu_mimo",
             "uplink_mu_mimo",
@@ -174,7 +212,8 @@ collectRadioFormPayload = function (
 
     const numericFields = [
         "rts_cts",
-        "dtim"
+        "dtim",
+        "frag_threshold"
     ];
 
     for (const name of numericFields) {
@@ -194,7 +233,11 @@ collectRadioFormPayload = function (
 
     for (const name of (
         currentVendor === "huawei"
-            ? []
+            ? [
+                "bandwidth_code",
+                "band_steering_policy",
+                "auto_channel_scope"
+            ]
             : [
                 "qos_type",
                 "work_mode",
@@ -1660,33 +1703,37 @@ function syncAdvancedNetworkForms() {
     for (const [key, selector] of controls) {
         const control = document.querySelector(selector);
         if (!control) continue;
-        const huaweiReservationUpdate = (
-            currentVendor === "huawei"
-            && selector.includes("dhcpReservationForm")
-            && advancedState.dhcp?.capabilities?.reservation_update === true
-            && Boolean(
-                document.getElementById("dhcpReservationId")?.value
+        const reservationForm = selector.includes(
+            "dhcpReservationForm"
+        );
+        const reservationId = document.getElementById(
+            "dhcpReservationId"
+        )?.value;
+        const reservationAllowed = (
+            !reservationForm
+            || currentVendor !== "huawei"
+            || (
+                reservationId
+                    ? advancedState.dhcp?.capabilities?.reservation_update === true
+                    : advancedState.dhcp?.capabilities?.reservation_create === true
             )
         );
         const unsupportedHuaweiWrite = (
             currentVendor === "huawei"
-            && (
-                selector.includes("portForwardForm")
-                || (
-                    selector.includes("dhcpReservationForm")
-                    && !huaweiReservationUpdate
-                )
-            )
+            && selector.includes("portForwardForm")
         );
         const ready = !unsupportedHuaweiWrite &&
+            reservationAllowed &&
             Boolean(ontConnected && routerWriteEnabled && loaded[key]) &&
             (key !== "dhcp" || advancedState.dhcp?.write_safe !== false);
         control.disabled = !ready;
         control.title = unsupportedHuaweiWrite
-            ? "Esta operação específica ainda não foi capturada/validada para Huawei."
-            : ready
-                ? ""
-                : "Carregue os dados atuais antes de configurar.";
+            ? "Use a operação Huawei mapeada desta funcionalidade."
+            : !reservationAllowed
+                ? "A operação de reserva não está disponível nesta sessão."
+                : ready
+                    ? ""
+                    : "Carregue os dados atuais antes de configurar.";
     }
 }
 
@@ -1714,6 +1761,26 @@ async function loadDhcpOperations() {
         ).checked = (
             String(basic.ServerEnable) === "1"
         );
+
+        document.querySelectorAll(
+            ".huawei-dhcp-extra"
+        ).forEach(
+            element => element.classList.toggle(
+                "hidden",
+                currentVendor !== "huawei"
+            )
+        );
+        if (currentVendor === "huawei") {
+            document.getElementById(
+                "huaweiDhcpEnable"
+            ).checked = String(basic.DHCPEnable) === "1";
+            document.getElementById(
+                "huaweiDhcpL2Relay"
+            ).checked = String(basic.L2RelayEnable) === "1";
+            document.getElementById(
+                "huaweiDhcpOption125"
+            ).checked = String(basic.Option125Enable) === "1";
+        }
 
         document.getElementById(
             "dhcpMinAddress"
@@ -1816,13 +1883,13 @@ function renderDhcpReservations(items) {
         ).join("")
         : '<span class="muted">Nenhuma reserva cadastrada.</span>';
 
-    const huaweiReservationUpdate = (
-        currentVendor === "huawei"
-        && advancedState.dhcp?.capabilities?.reservation_update === true
-    );
-    const reservationCreateDelete = (
+    const reservationUpdate = (
         currentVendor !== "huawei"
-        && advancedState.dhcp?.capabilities?.reservation_write !== false
+        || advancedState.dhcp?.capabilities?.reservation_update === true
+    );
+    const reservationDelete = (
+        currentVendor !== "huawei"
+        || advancedState.dhcp?.capabilities?.reservation_delete === true
     );
 
     container
@@ -1830,10 +1897,7 @@ function renderDhcpReservations(items) {
             ".reservation-edit"
         )
         .forEach(button => {
-            const allowed = (
-                huaweiReservationUpdate
-                || reservationCreateDelete
-            );
+            const allowed = reservationUpdate;
             button.disabled = !allowed;
             button.title = allowed
                 ? ""
@@ -1851,11 +1915,11 @@ function renderDhcpReservations(items) {
             ".reservation-delete"
         )
         .forEach(button => {
-            const allowed = reservationCreateDelete;
+            const allowed = reservationDelete;
             button.disabled = !allowed;
             button.title = allowed
                 ? ""
-                : "DELETE de reserva DHCP Huawei ainda não foi capturado.";
+                : "Exclusão de reserva não disponível nesta sessão.";
             if (allowed) {
                 button.addEventListener(
                     "click",
@@ -1891,6 +1955,18 @@ async function saveDhcpBasic(event) {
             ).value
         )
     };
+
+    if (currentVendor === "huawei") {
+        payload.dhcp_enable = document.getElementById(
+            "huaweiDhcpEnable"
+        ).checked;
+        payload.l2_relay_enable = document.getElementById(
+            "huaweiDhcpL2Relay"
+        ).checked;
+        payload.option125_enable = document.getElementById(
+            "huaweiDhcpOption125"
+        ).checked;
+    }
 
     await operationRequest(
         "/network/dhcp/update",

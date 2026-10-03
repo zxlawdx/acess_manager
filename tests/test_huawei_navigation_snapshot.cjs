@@ -27,7 +27,7 @@ test("Huawei tab navigation is render-only", () => {
 test("Huawei core refresh is explicit", () => {
   assert.match(
     app,
-    /"refreshButton"[\s\S]{0,260}loadAll\(\{refresh: true\}\)/
+    /"refreshButton"[\s\S]{0,520}warmHuaweiSessionState\(\{refresh: true\}\)/
   );
   assert.match(
     app,

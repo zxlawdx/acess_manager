@@ -76,6 +76,38 @@ class FakeHuaweiClient:
             "DMZEnable": "0",
             "DMZHostIPAddress": "192.168.18.4",
         }
+        self.radios = {
+            "1": {
+                "Channel": "0",
+                "AutoChannelEnable": "1",
+                "RegulatoryDomain": "BR",
+                "TransmitPower": "100",
+                "X_HW_HT20": "0",
+                "X_HW_Standard": "11ax",
+                "DtimPeriod": "1",
+                "BeaconPeriod": "100",
+                "RTSThreshold": "2346",
+                "FragThreshold": "2346",
+                "BandSteeringPolicy": "1",
+                "X_HW_AirtimeFairness": "0",
+                "X_HW_AutoChannelScope": "0",
+            },
+            "5": {
+                "Channel": "0",
+                "AutoChannelEnable": "1",
+                "RegulatoryDomain": "BR",
+                "TransmitPower": "100",
+                "X_HW_HT20": "4",
+                "X_HW_Standard": "11ax",
+                "DtimPeriod": "1",
+                "BeaconPeriod": "100",
+                "RTSThreshold": "2346",
+                "FragThreshold": "2346",
+                "BandSteeringPolicy": "1",
+                "X_HW_AirtimeFairness": "0",
+                "X_HW_AutoChannelScope": "0",
+            },
+        }
 
     def extract_token(self, html):
         return TOKEN
@@ -151,19 +183,19 @@ class FakeHuaweiClient:
             )
         if path.startswith(WLAN_ADV_PAGE):
             instance = "5" if "5G" in path else "1"
-            return constructor(
-                "stRadio",
-                [
-                    "Domain", "Channel", "AutoChannelEnable",
-                    "RegulatoryDomain", "TransmitPower", "X_HW_HT20",
-                    "X_HW_Standard", "BeaconPeriod",
-                ],
-                [
-                    f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{instance}",
-                    "0", "1", "BR", "100", "4" if instance == "5" else "0",
-                    "11ax", "100",
-                ],
-            )
+            radio = self.radios[instance]
+            params = [
+                "Domain", "Channel", "AutoChannelEnable",
+                "RegulatoryDomain", "TransmitPower", "X_HW_HT20",
+                "X_HW_Standard", "DtimPeriod", "BeaconPeriod",
+                "RTSThreshold", "FragThreshold", "BandSteeringPolicy",
+                "X_HW_AirtimeFairness", "X_HW_AutoChannelScope",
+            ]
+            values = [
+                f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{instance}",
+                *[radio[name] for name in params[1:]],
+            ]
+            return constructor("stRadio", params, values)
         if path == WAN_INFO_PAGE:
             return (
                 "function WanPPP("
@@ -242,6 +274,9 @@ class FakeHuaweiClient:
                 "z.MinAddress": "MinAddress",
                 "z.MaxAddress": "MaxAddress",
                 "z.DHCPLeaseTime": "DHCPLeaseTime",
+                "y.DHCPEnable": "DHCPEnable",
+                "z.X_HW_DHCPL2RelayEnable": "X_HW_DHCPL2RelayEnable",
+                "z.X_HW_Option125Enable": "X_HW_Option125Enable",
             }
             for source, target in mapping.items():
                 if source in payload:
@@ -253,6 +288,26 @@ class FakeHuaweiClient:
         elif "/dmz/set.cgi" in path:
             self.dmz["DMZEnable"] = str(payload["x.DMZEnable"])
             self.dmz["DMZHostIPAddress"] = str(payload["x.DMZHostIPAddress"])
+        elif "/html/amp/wlanadv/set.cgi" in path:
+            instance = "5" if "WLANConfiguration.5" in path else "1"
+            mapping = {
+                "y.Channel": "Channel",
+                "y.AutoChannelEnable": "AutoChannelEnable",
+                "y.RegulatoryDomain": "RegulatoryDomain",
+                "y.TransmitPower": "TransmitPower",
+                "y.X_HW_HT20": "X_HW_HT20",
+                "y.X_HW_Standard": "X_HW_Standard",
+                "x.DtimPeriod": "DtimPeriod",
+                "x.BeaconPeriod": "BeaconPeriod",
+                "x.RTSThreshold": "RTSThreshold",
+                "x.FragThreshold": "FragThreshold",
+                "z.BandSteeringPolicy": "BandSteeringPolicy",
+                "v.X_HW_AirtimeFairness": "X_HW_AirtimeFairness",
+                "y.X_HW_AutoChannelScope": "X_HW_AutoChannelScope",
+            }
+            for source, target in mapping.items():
+                if source in payload:
+                    self.radios[instance][target] = str(payload[source])
         return HuaweiMutationTransport(http_status=200)
 
 
@@ -304,6 +359,26 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
         self.assertEqual(payload["z.MinAddress"], "192.168.18.10")
         self.assertEqual(payload["z.X_HW_DNSList"], "1.1.1.1,8.8.8.8")
         self.assertEqual(payload["x.X_HW_Token"], TOKEN)
+
+    def test_dhcp_update_can_change_all_captured_toggles(self):
+        service = self.make_service()
+        result = service.set_dhcp_basic({
+            "enabled": True,
+            "dhcp_enable": True,
+            "l2_relay_enable": False,
+            "option125_enable": False,
+            "min_address": "192.168.18.2",
+            "max_address": "192.168.18.254",
+            "dns1": "177.221.56.3",
+            "dns2": "177.221.56.10",
+            "lease_time": 3600,
+        })
+
+        self.assertTrue(result["verified"])
+        payload = service.client.posts[0][1]
+        self.assertEqual(payload["y.DHCPEnable"], "1")
+        self.assertEqual(payload["z.X_HW_DHCPL2RelayEnable"], "0")
+        self.assertEqual(payload["z.X_HW_Option125Enable"], "0")
 
     def test_dns_update_preserves_captured_interface(self):
         service = self.make_service()
@@ -399,14 +474,78 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
         )
         self.assertTrue(all(item["canal_automatico"] for item in radios))
 
-    def test_wifi_password_write_is_rejected_without_post(self):
+    def test_wifi_advanced_write_uses_all_captured_fields(self):
         service = self.make_service()
-        with self.assertRaises(ValueError):
-            service.set_ssid_config(
-                "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1",
-                {"password": "not-captured"},
-            )
-        self.assertEqual(service.client.posts, [])
+        result = service.set_wifi_radio(
+            "5GHz",
+            {
+                "auto_channel": False,
+                "channel": 44,
+                "country": "BR",
+                "tx_power": "50%",
+                "beacon_interval": 200,
+                "rts_cts": 2200,
+                "dtim": 2,
+                "frag_threshold": 2200,
+                "bandwidth_code": "4",
+                "standard": "a,n,ac,ax",
+                "band_steering": False,
+                "airtime_fairness": True,
+                "auto_channel_scope": "1",
+            },
+        )
+
+        self.assertTrue(result["verified"])
+        self.assertEqual(len(service.client.posts), 1)
+        path, payload, _referer = service.client.posts[0]
+        self.assertIn("/html/amp/wlanadv/set.cgi", path)
+        self.assertIn("WLANConfiguration.5", path)
+        self.assertEqual(payload["y.Channel"], "44")
+        self.assertEqual(payload["y.AutoChannelEnable"], "0")
+        self.assertEqual(payload["y.TransmitPower"], "50")
+        self.assertEqual(payload["y.X_HW_HT20"], "4")
+        self.assertEqual(payload["y.X_HW_Standard"], "11ax")
+        self.assertEqual(payload["x.DtimPeriod"], "2")
+        self.assertEqual(payload["x.BeaconPeriod"], "200")
+        self.assertEqual(payload["x.RTSThreshold"], "2200")
+        self.assertEqual(payload["x.FragThreshold"], "2200")
+        self.assertEqual(payload["z.BandSteeringPolicy"], "0")
+        self.assertEqual(payload["v.X_HW_AirtimeFairness"], "1")
+        self.assertEqual(payload["y.X_HW_AutoChannelScope"], "1")
+        self.assertEqual(payload["x.X_HW_Token"], TOKEN)
+
+    def test_wifi_radio_read_exposes_captured_advanced_state(self):
+        service = self.make_service()
+        five = next(
+            item for item in service.wifi_radios()
+            if item["banda"] == "5GHz"
+        )
+        self.assertEqual(five["bandwidth_code"], "4")
+        self.assertEqual(five["standard_raw"], "11ax")
+        self.assertEqual(five["frag_threshold"], "2346")
+        self.assertTrue(five["band_steering"])
+        self.assertFalse(five["airtime_fairness"])
+        self.assertEqual(five["auto_channel_scope"], "0")
+
+    def test_wifi_password_write_uses_captured_pre_shared_key(self):
+        service = self.make_service()
+        result = service.set_ssid_config(
+            "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1",
+            {"password": "MappedPassword123"},
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(len(service.client.posts), 1)
+        path, payload, referer = service.client.posts[0]
+        self.assertIn("/html/amp/wlanbasic/set.cgi", path)
+        self.assertIn(
+            "k=InternetGatewayDevice.LANDevice.1."
+            "WLANConfiguration.1.PreSharedKey.1",
+            path,
+        )
+        self.assertEqual(payload["k.PreSharedKey"], "MappedPassword123")
+        self.assertEqual(payload["x.X_HW_Token"], TOKEN)
+        self.assertTrue(referer.startswith(WLAN_BASIC_PAGE))
 
 
 if __name__ == "__main__":

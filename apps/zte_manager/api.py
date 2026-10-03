@@ -776,7 +776,8 @@ def set_dns(context=None):
 
         return device_service.set_dns(
             data.model_dump(
-                exclude_none=True
+                exclude_none=True,
+                exclude_unset=True,
             )
         )
 
@@ -951,6 +952,87 @@ def huawei_feature_update(context=None):
         return device_service.update_captured_feature(
             data.feature,
             data.config,
+        )
+
+    return _safe_call(action)
+
+
+@api.get("/huawei/mapped")
+def huawei_mapped_catalog(context=None):
+    return _safe_call(
+        _call_device,
+        "mapped_catalog",
+    )
+
+
+@api.post("/huawei/mapped/read")
+def huawei_mapped_read(context=None):
+    def action():
+        data = _json(context)
+        feature = str(data.get("feature") or "").strip()
+        if feature:
+            return _call_device(
+                "mapped_read_feature",
+                feature,
+            )
+
+        path = str(data.get("path") or "").strip()
+        if not path:
+            raise ValueError(
+                "Informe feature ou path para a leitura Huawei."
+            )
+        return _call_device(
+            "mapped_read_request",
+            path,
+            method=str(data.get("method") or "GET"),
+            payload=data.get("payload") or {},
+            referer=str(data.get("referer") or "/index.asp"),
+            token_page=(
+                str(data.get("token_page"))
+                if data.get("token_page")
+                else None
+            ),
+        )
+
+    return _safe_call(action)
+
+
+@api.post("/huawei/mapped/write")
+def huawei_mapped_write(context=None):
+    def action():
+        data = _json(context)
+        operation = str(data.get("operation") or "").strip()
+        if operation:
+            return _call_device(
+                "mapped_write_feature",
+                operation,
+                data.get("config") or data.get("payload") or {},
+            )
+
+        path = str(data.get("path") or "").strip()
+        if not path:
+            raise ValueError(
+                "Informe operation ou path para a escrita Huawei."
+            )
+        return _call_device(
+            "mapped_write_request",
+            path,
+            data.get("payload") or {},
+            referer=str(data.get("referer") or "/index.asp"),
+            token_page=(
+                str(data.get("token_page"))
+                if data.get("token_page")
+                else None
+            ),
+            readback_path=(
+                str(data.get("readback_path"))
+                if data.get("readback_path")
+                else None
+            ),
+            readback_method=str(
+                data.get("readback_method") or "GET"
+            ),
+            readback_payload=data.get("readback_payload") or {},
         )
 
     return _safe_call(action)
