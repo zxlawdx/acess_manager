@@ -15,6 +15,7 @@ on:
       - "apps/zte_manager/static/js/app.js"
       - "apps/zte_manager/static/js/advanced.js"
       - "apps/zte_manager/static/js/features/firmware_inspector.js"
+      - "apps/zte_manager/static/js/features/device_topology.js"
       - "apps/zte_manager/static/js/tr069_profiles.js"
       - "tests/test_huawei*"
       - "tests/test_multivendor_runtime_regressions.py"
@@ -49,6 +50,7 @@ jobs:
           node --check apps/zte_manager/static/js/app.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
+          node --check apps/zte_manager/static/js/features/device_topology.js
           node --check apps/zte_manager/static/js/tr069_profiles.js
 
       - name: Huawei backend regressions
