@@ -7,6 +7,7 @@ from typing import Any, Callable, Iterable
 
 from apps.zte_manager.infrastructure.huawei import (
     HuaweiMutationTransport,
+    HuaweiResponseParser,
     HuaweiWebClient,
     decode_huawei_js_string,
 )
@@ -52,6 +53,7 @@ WLAN_ASSOC_PAGE = "/html/amp/wlaninfo/getassociateddeviceinfo.asp"
 WLAN_STA_BOOST_PAGE = "/html/amp/wlaninfo/getassociatedstaboost.asp"
 WLAN_ADV_COMMON_PAGE = "/html/amp/wlanadv/wlanadvance_com_api.asp"
 WLAN_ADV_API_PAGE = "/html/amp/wlanadv/wlanadvance_api.asp"
+WLAN_CHANNEL_PAGE = "/html/amp/common/WlanChannel.asp?1=1"
 
 WAN_DMZ_DOMAIN = (
     "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1."
@@ -407,8 +409,14 @@ class HuaweiCapturedFeatureService:
             body,
             referer=request_file,
         )
+        parsed = HuaweiResponseParser.parse(
+            http_status=transport.http_status,
+            body=transport.body,
+            content_type=transport.content_type,
+        )
+
         verified = None
-        if verifier is not None:
+        if verifier is not None and parsed.accepted:
             for delay in (0.35, 0.55, 0.8, 1.0, 1.4, 1.8)[: self.readback_tries]:
                 self.sleep(delay)
                 try:
@@ -417,22 +425,36 @@ class HuaweiCapturedFeatureService:
                     verified = None
                 if verified:
                     break
-        success = bool(verified) if verifier is not None else (
-            transport.http_status is not None
-            and 200 <= transport.http_status < 400
+
+        success = (
+            bool(verified)
+            if verifier is not None
+            else bool(parsed.accepted)
+        )
+        uncertain = bool(
+            not success
+            and (
+                transport.timed_out
+                or transport.connection_uncertain
+                or (parsed.accepted and verifier is not None)
+            )
         )
         return {
             "success": success,
-            "verified": bool(verified),
-            "uncertain": (
-                not success
-                and (
-                    transport.timed_out
-                    or transport.connection_uncertain
-                    or transport.http_status is not None
-                )
+            "accepted": parsed.accepted,
+            "verified": bool(verified) or (
+                verifier is None and parsed.confirmed
             ),
+            "uncertain": uncertain,
             "http_status": transport.http_status,
+            "response_type": parsed.response_type,
+            "error_code": parsed.error_code,
+            "error_message": parsed.error_message,
+            "response_data": (
+                parsed.data
+                if isinstance(parsed.data, (dict, list))
+                else None
+            ),
             # Verifiers return normalized/parsed state only. Keeping the
             # successful read-back in the result lets HuaweiService replace
             # exactly one session-snapshot segment without issuing a second
@@ -752,8 +774,50 @@ class HuaweiCapturedFeatureService:
                     item,
                     "HostName", "hostname", "DeviceName", "Name",
                 ),
+                "alias": _record_text(
+                    item,
+                    "UserDevAlias", "Alias", "Description",
+                ),
                 "ip": ip,
+                "ipv4": _record_text(
+                    item,
+                    "IPv4Address", "IpAddr", "IPAddress",
+                    default=ip,
+                ),
+                "ipv6": _record_text(
+                    item,
+                    "IPv6Address", "IPv6Addr", "GlobalIPv6Address",
+                ),
                 "mac": mac,
+                "interface": _record_text(
+                    item,
+                    "Interface", "InterfaceType", "Layer2Interface",
+                    "Port", "PortName",
+                ),
+                "connection_type": _record_text(
+                    item,
+                    "PortType", "ConnectionType", "InterfaceType",
+                ),
+                "status": _record_text(
+                    item,
+                    "Status", "Active", "Online", "DeviceStatus",
+                ),
+                "address_source": _record_text(
+                    item,
+                    "AddressSource", "IPType", "DhcpType", "DHCPType",
+                ),
+                "lease": _record_text(
+                    item,
+                    "RemainingLeaseTime", "LeaseTime", "LeaseTimeRemaining",
+                ),
+                "vendor": _record_text(
+                    item,
+                    "Vendor", "Manufacturer", "Brand",
+                ),
+                "os": _record_text(
+                    item,
+                    "OS", "OperatingSystem", "OsType",
+                ),
             }
         return list(by_mac.values())
 
@@ -853,6 +917,42 @@ class HuaweiCapturedFeatureService:
                 "tx_rate": _record_text(
                     item,
                     "TxRate", "TransmitRate", "LastDataUplinkRate",
+                ),
+                "interface": _record_text(
+                    item,
+                    "Interface", "InterfaceType", "Layer2Interface",
+                    "Port", "PortName",
+                ) or _record_text(
+                    lan,
+                    "Interface", "InterfaceType", "Layer2Interface",
+                    "Port", "PortName",
+                ),
+                "status": _record_text(
+                    item,
+                    "Status", "Active", "Online", "DeviceStatus",
+                ) or _record_text(
+                    lan,
+                    "Status", "Active", "Online", "DeviceStatus",
+                ),
+                "address_source": _record_text(
+                    lan,
+                    "AddressSource", "IPType", "DhcpType", "DHCPType",
+                ),
+                "ipv6": _record_text(
+                    lan,
+                    "IPv6Address", "IPv6Addr", "GlobalIPv6Address",
+                ),
+                "lease": _record_text(
+                    lan,
+                    "RemainingLeaseTime", "LeaseTime", "LeaseTimeRemaining",
+                ),
+                "vendor": _record_text(
+                    lan,
+                    "Vendor", "Manufacturer", "Brand",
+                ),
+                "os": _record_text(
+                    lan,
+                    "OS", "OperatingSystem", "OsType",
                 ),
             }
         return list(clients.values())
@@ -2567,17 +2667,80 @@ class HuaweiCapturedFeatureService:
         country: str = "BRI",
     ) -> list[dict[str, Any]]:
         normalized = "5GHz" if "5" in str(band or "") else "2.4GHz"
-        channels = (
-            [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112,
-             116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165]
-            if normalized == "5GHz"
-            else list(range(1, 12))
-        )
+        query_band = "5G" if normalized == "5GHz" else "2G"
+        country_code = str(country or "BR").upper()
+        if country_code == "BRI":
+            country_code = "BR"
+
+        raw_width = None
+        standard = "11ax"
+        display_width = bandwidth or "Auto"
+        try:
+            current = next(
+                row for row in self.wifi_radios()
+                if row.get("banda") == normalized
+            )
+            raw_width = str(current.get("bandwidth_code") or "")
+            standard = str(current.get("standard_raw") or "11ax")
+            if bandwidth in (None, "", "Auto"):
+                display_width = current.get("largura") or "Auto"
+        except Exception:
+            current = None
+
+        if bandwidth not in (None, "", "Auto"):
+            value = str(bandwidth)
+            if value.isdigit():
+                raw_width = value
+
+        if not raw_width:
+            raw_width = "4" if normalized == "5GHz" else "0"
+
+        firmware_channels = False
+        try:
+            source = self.client.post_read(
+                WLAN_CHANNEL_PAGE,
+                {
+                    "freq": query_band,
+                    "country": country_code,
+                    "standard": standard,
+                    "width": raw_width,
+                },
+                referer=(
+                    f"{WLAN_ADV_PAGE}?5G"
+                    if normalized == "5GHz"
+                    else f"{WLAN_ADV_PAGE}?2G"
+                ),
+            )
+            channels = [
+                int(value)
+                for value in re.findall(r"(?<!\d)(\d{1,3})(?!\d)", source)
+                if 1 <= int(value) <= 196
+            ]
+            # Preserve firmware order while removing duplicates.
+            channels = list(dict.fromkeys(channels))
+            firmware_channels = bool(channels)
+        except Exception:
+            channels = []
+
+        if not channels:
+            channels = (
+                [
+                    36, 40, 44, 48, 52, 56, 60, 64,
+                    100, 104, 108, 112, 116, 120, 124, 128,
+                    132, 136, 140, 144, 149, 153, 157, 161,
+                ]
+                if normalized == "5GHz"
+                else list(range(1, 14))
+            )
+
         return [{
             "banda": normalized,
-            "largura": bandwidth or "Auto",
-            "pais": country,
+            "largura": display_width,
+            "bandwidth_code": raw_width,
+            "pais": country_code,
+            "standard": standard,
             "canais": channels,
+            "source": "firmware" if firmware_channels else "fallback",
         }]
 
     def set_wifi_radio(self, band: str, config: dict[str, Any]) -> dict[str, Any]:

@@ -138,6 +138,7 @@ class CountingCaptured:
 
     def set_wifi_radio(self, band, config):
         self.calls.append("wifi_radio_write")
+        self.last_radio_config = dict(config)
         self.calls.append("wifi_radio_readback")
         self.radio = {
             **self.radio,
@@ -263,6 +264,59 @@ class HuaweiSessionSnapshotTests(unittest.TestCase):
 
         self.assertEqual(service._captured.calls, [])
         self.assertEqual(service._ipv4_filter.calls, [])
+
+    def test_profile_noop_does_not_submit_or_fake_history_change(self):
+        service = self.make_service()
+        service._captured.calls.clear()
+
+        result = service._apply_profile_payload(
+            {
+                "wifi": {
+                    "2.4GHz": {
+                        "auto_channel": False,
+                        "channel": 1,
+                        "country": "BR",
+                        "tx_power": "100%",
+                        "bandwidth_code": "",
+                    }
+                }
+            },
+            operation="huawei_profile_apply",
+            target="tester",
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["steps"], [])
+        self.assertIn("Wi-Fi 2.4GHz", result["unchanged"])
+        self.assertNotIn("wifi_radio_write", service._captured.calls)
+
+    def test_profile_change_preserves_unknown_bandwidth_when_raw_code_empty(self):
+        service = self.make_service()
+        service._captured.calls.clear()
+
+        result = service._apply_profile_payload(
+            {
+                "wifi": {
+                    "2.4GHz": {
+                        "auto_channel": False,
+                        "channel": 6,
+                        "bandwidth_code": "",
+                    }
+                }
+            },
+            operation="huawei_profile_apply",
+            target="tester",
+        )
+
+        self.assertTrue(result["verified"])
+        self.assertEqual(
+            service._captured.last_radio_config["channel"],
+            6,
+        )
+        self.assertNotIn(
+            "bandwidth_code",
+            service._captured.last_radio_config,
+        )
 
     def test_explicit_clients_refresh_touches_only_clients(self):
         service = self.make_service()

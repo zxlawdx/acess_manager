@@ -1033,6 +1033,7 @@ def huawei_mapped_write(context=None):
                 data.get("readback_method") or "GET"
             ),
             readback_payload=data.get("readback_payload") or {},
+            readback_expect=data.get("readback_expect") or None,
         )
 
     return _safe_call(action)
@@ -1186,6 +1187,12 @@ def multimodel_probe(context=None):
             features = []
             for key, spec in (catalog.get("features") or {}).items():
                 operations = spec.get("operations") or {}
+                writable = bool(
+                    operations.get("create")
+                    or operations.get("update")
+                    or operations.get("delete")
+                    or operations.get("write")
+                )
                 features.append({
                     "feature": key,
                     "label": spec.get("label") or key,
@@ -1196,6 +1203,13 @@ def multimodel_probe(context=None):
                         else "not_tested"
                     ),
                     "available": bool(operations.get("read")),
+                    "read": bool(operations.get("read")),
+                    "write": writable,
+                    "partial": bool(operations.get("partial")),
+                    "readback": (
+                        "FULLY_INTEGRATED"
+                        in (spec.get("evidence_states") or [])
+                    ),
                     "verified": bool(operations.get("verified")),
                 })
             return {

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/huawei-session-state-audit
+      - feat/huawei-eg8041x7-response-readback
   pull_request:
     paths:
       - "apps/zte_manager/infrastructure/huawei/**"
@@ -14,6 +15,7 @@ on:
       - "apps/zte_manager/static/js/app.js"
       - "apps/zte_manager/static/js/advanced.js"
       - "apps/zte_manager/static/js/features/firmware_inspector.js"
+      - "apps/zte_manager/static/js/features/device_topology.js"
       - "apps/zte_manager/static/js/tr069_profiles.js"
       - "tests/test_huawei*"
       - "tests/test_multivendor_runtime_regressions.py"
@@ -41,18 +43,19 @@ jobs:
 
       - name: Python syntax
         run: |
-          python -m py_compile             apps/zte_manager/services/huawei_service.py             apps/zte_manager/services/huawei_captured_features.py             apps/zte_manager/services/huawei_mapped_surface.py             apps/zte_manager/services/huawei_ipv4_filter_service.py             apps/zte_manager/services/device_service.py             apps/zte_manager/model/device_adapters/huawei.py             apps/zte_manager/api.py
+          python -m py_compile             apps/zte_manager/infrastructure/huawei/client.py             apps/zte_manager/infrastructure/huawei/response.py             apps/zte_manager/services/huawei_service.py             apps/zte_manager/services/huawei_captured_features.py             apps/zte_manager/services/huawei_mapped_surface.py             apps/zte_manager/services/huawei_ipv4_filter_service.py             apps/zte_manager/services/device_service.py             apps/zte_manager/model/device_adapters/huawei.py             apps/zte_manager/api.py
 
       - name: JavaScript syntax
         run: |
           node --check apps/zte_manager/static/js/app.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
+          node --check apps/zte_manager/static/js/features/device_topology.js
           node --check apps/zte_manager/static/js/tr069_profiles.js
 
       - name: Huawei backend regressions
         run: |
-          python -m unittest             tests.test_huawei_session_snapshot             tests.test_huawei_captured_features             tests.test_huawei_mapped_surface             tests.test_huawei_diagnostics             tests.test_huawei_provider_architecture             tests.test_huawei_ipv4_filter             tests.test_multivendor_runtime_regressions
+          python -m unittest             tests.test_huawei_session_snapshot             tests.test_huawei_captured_features             tests.test_huawei_mapped_surface             tests.test_huawei_response_protocol             tests.test_huawei_diagnostics             tests.test_huawei_provider_architecture             tests.test_huawei_ipv4_filter             tests.test_multivendor_runtime_regressions
 
       - name: Huawei UI snapshot regressions
         run: |

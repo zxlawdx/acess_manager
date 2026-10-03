@@ -828,6 +828,39 @@ class HuaweiService:
         captured = self._require_captured()
         steps: list[dict] = []
         omitted: list[str] = []
+        unchanged: list[str] = []
+        before_config = self.current_configuration()
+
+        def equivalent(key: str, left, right) -> bool:
+            if key == "country":
+                def country(value):
+                    text = str(value or "").upper()
+                    return "BR" if text == "BRI" else text
+                return country(left) == country(right)
+            if key == "tx_power":
+                def power(value):
+                    return str(value or "").strip().rstrip("%")
+                return power(left) == power(right)
+            if key in {
+                "auto_channel", "sgi", "band_steering",
+                "airtime_fairness",
+            }:
+                return bool(left) == bool(right)
+            if key in {
+                "channel", "beacon_interval", "rts_cts",
+                "dtim", "frag_threshold",
+            }:
+                if left in (None, "") and right in (None, ""):
+                    return True
+                try:
+                    return int(left) == int(right)
+                except (TypeError, ValueError):
+                    pass
+            return str(left if left is not None else "") == str(
+                right if right is not None else ""
+            )
+
+        applied_after: dict[str, object] = {"wifi": {}}
 
         for band in ("2.4GHz", "5GHz"):
             config = dict(
@@ -837,8 +870,6 @@ class HuaweiService:
             if not config:
                 continue
 
-            # Ignore only vendor-specific fields that do not exist in the Huawei
-            # WLAN Advanced form. Every captured Huawei field stays writable.
             supported = {
                 "auto_channel",
                 "channel",
@@ -860,7 +891,14 @@ class HuaweiService:
             safe_config = {
                 key: value
                 for key, value in config.items()
-                if key in supported and value is not None
+                if (
+                    key in supported
+                    and value is not None
+                    and not (
+                        key in {"bandwidth_code", "auto_channel_scope"}
+                        and value == ""
+                    )
+                )
             }
             for key in config:
                 if (
@@ -869,14 +907,36 @@ class HuaweiService:
                 ):
                     omitted.append(f"Wi-Fi {band}: {key}")
 
-            # Perfis históricos usam BRI; a WebUI Huawei capturada submeteu BR.
             if str(safe_config.get("country") or "").upper() == "BRI":
                 safe_config["country"] = "BR"
+
+            current = dict(
+                (before_config.get("wifi") or {}).get(band)
+                or {}
+            )
+            changed = {
+                key: value
+                for key, value in safe_config.items()
+                if not equivalent(key, current.get(key), value)
+            }
+
+            # When Auto Channel is already enabled, a stale stored channel does
+            # not represent a requested mutation.
+            if (
+                changed.get("auto_channel") is True
+                or bool(safe_config.get("auto_channel"))
+            ):
+                if safe_config.get("channel") in (None, "", 0, "0", "Auto"):
+                    changed.pop("channel", None)
+
+            if not changed:
+                unchanged.append(f"Wi-Fi {band}")
+                continue
 
             try:
                 result = captured.set_wifi_radio(
                     band,
-                    safe_config,
+                    changed,
                 )
                 verified = bool(result.get("verified"))
                 if verified and isinstance(result.get("readback"), dict):
@@ -885,12 +945,14 @@ class HuaweiService:
                         result["readback"],
                         identity_fields=("banda", "id"),
                     )
+                    applied_after["wifi"][band] = result["readback"]
                 steps.append({
                     "name": f"Wi-Fi {band}",
                     "success": verified,
                     "verified": verified,
+                    "changed_fields": sorted(changed),
                     "detail": (
-                        "Canal/RF confirmado por read-back."
+                        "Campos alterados e confirmados por read-back."
                         if verified
                         else "A alteração não foi confirmada pela releitura."
                     ),
@@ -900,6 +962,7 @@ class HuaweiService:
                     "name": f"Wi-Fi {band}",
                     "success": False,
                     "verified": False,
+                    "changed_fields": sorted(changed),
                     "detail": str(exc),
                 })
                 break
@@ -907,52 +970,73 @@ class HuaweiService:
         if all(step.get("success") for step in steps):
             dns = dict(profile.get("dns") or {})
             if dns:
-                try:
-                    result = captured.set_dns(dns)
-                    verified = bool(result.get("verified"))
-                    if verified and isinstance(result.get("readback"), dict):
-                        readback = dict(result["readback"])
-                        readback.pop("_search_rows", None)
-                        self._snapshot_store("dns", readback)
-                    steps.append({
-                        "name": "DNS / hosts",
-                        "success": verified,
-                        "verified": verified,
-                        "detail": (
-                            "DNS e hosts confirmados por read-back."
-                            if verified
-                            else "A alteração DNS não foi confirmada."
-                        ),
-                    })
-                except Exception as exc:
-                    steps.append({
-                        "name": "DNS / hosts",
-                        "success": False,
-                        "verified": False,
-                        "detail": str(exc),
-                    })
+                current_dns = dict(before_config.get("dns") or {})
+                comparable = {
+                    key: value
+                    for key, value in dns.items()
+                    if key in {
+                        "domain_name", "ipv4_1", "ipv4_2",
+                        "ipv6_1", "ipv6_2", "hosts",
+                    }
+                }
+                dns_changed = any(
+                    current_dns.get(key) != value
+                    for key, value in comparable.items()
+                )
+                if not dns_changed:
+                    unchanged.append("DNS / hosts")
+                else:
+                    try:
+                        result = captured.set_dns(dns)
+                        verified = bool(result.get("verified"))
+                        if verified and isinstance(result.get("readback"), dict):
+                            readback = dict(result["readback"])
+                            readback.pop("_search_rows", None)
+                            self._snapshot_store("dns", readback)
+                            applied_after["dns"] = readback
+                        steps.append({
+                            "name": "DNS / hosts",
+                            "success": verified,
+                            "verified": verified,
+                            "changed_fields": sorted(comparable),
+                            "detail": (
+                                "DNS e hosts confirmados por read-back."
+                                if verified
+                                else "A alteração DNS não foi confirmada."
+                            ),
+                        })
+                    except Exception as exc:
+                        steps.append({
+                            "name": "DNS / hosts",
+                            "success": False,
+                            "verified": False,
+                            "changed_fields": sorted(comparable),
+                            "detail": str(exc),
+                        })
 
-        success = bool(steps) and all(
+        success = all(
             bool(step.get("success"))
             for step in steps
         )
         result = {
             "success": success,
             "verified": success,
-            "audit_outcome": (
-                "verified"
-                if success
-                else "failed"
-            ),
+            "audit_outcome": "verified" if success else "failed",
             "steps": steps,
+            "unchanged": unchanged,
             "not_included": omitted,
         }
-        self._audit_captured(
-            operation=operation,
-            target=target,
-            result=result,
-            after=profile,
-        )
+
+        # A no-op profile application is successful but must not create a
+        # history entry pretending that something changed.
+        if steps:
+            self._audit_captured(
+                operation=operation,
+                target=target,
+                result=result,
+                before=before_config,
+                after=applied_after,
+            )
         return result
 
     def apply_profile(self, attendant=None):
@@ -1926,19 +2010,40 @@ class HuaweiService:
 
     @staticmethod
     def _diagnostic_complete(state: str) -> bool:
-        return "complete" in str(state or "").casefold()
+        value = str(state or "").strip().casefold()
+        if not value:
+            return False
+        return (
+            "complete" in value
+            and "err" not in value
+            and "error" not in value
+        )
 
     @staticmethod
     def _diagnostic_terminal_failure(state: str) -> bool:
-        value = str(state or "").casefold()
+        value = str(state or "").strip().casefold()
         if not value:
             return False
         if any(
             marker in value
-            for marker in ("requested", "doing", "none", "start")
+            for marker in ("requested", "doing", "running", "none", "start")
         ):
             return False
-        return not HuaweiService._diagnostic_complete(state)
+        if HuaweiService._diagnostic_complete(state):
+            return False
+        return (
+            "err" in value
+            or "error" in value
+            or "fail" in value
+            or "exceeded" in value
+        )
+
+    @staticmethod
+    def _diagnostic_terminal(state: str) -> bool:
+        return (
+            HuaweiService._diagnostic_complete(state)
+            or HuaweiService._diagnostic_terminal_failure(state)
+        )
 
     def _poll_huawei_diagnostic(
         self,
@@ -1967,10 +2072,8 @@ class HuaweiService:
             if state:
                 last_state = state
 
-            if self._diagnostic_complete(last_state):
+            if self._diagnostic_terminal(last_state):
                 return last_output, last_state, True
-            if self._diagnostic_terminal_failure(last_state):
-                return last_output, last_state, False
             if time.monotonic() >= deadline:
                 return last_output, last_state or "Timeout", False
 
@@ -2075,6 +2178,8 @@ class HuaweiService:
 
     @staticmethod
     def _diagnostic_transport_failed(result: dict) -> bool:
+        if result.get("accepted") is False:
+            return True
         status = result.get("http_status")
         return (
             status is not None
@@ -2127,6 +2232,15 @@ class HuaweiService:
                     ),
                 ),
             )
+            ping_stats = self._parse_ping_output(
+                output,
+                requested_count=count,
+            )
+            connectivity_success = bool(
+                complete
+                and not self._diagnostic_terminal_failure(state)
+                and (ping_stats.get("sucesso") or 0) > 0
+            )
             result = {
                 "provider": "huawei",
                 "host": host,
@@ -2136,13 +2250,12 @@ class HuaweiService:
                 "resultado": output or (
                     f"Diagnóstico Huawei finalizado em estado {state or 'desconhecido'}."
                 ),
+                # verified means the ONT reached a terminal diagnostic state;
+                # connectivity success is reported separately below.
                 "verified": complete,
-                "success": complete,
-                "uncertain": not complete and not self._diagnostic_terminal_failure(state),
-                **self._parse_ping_output(
-                    output,
-                    requested_count=count,
-                ),
+                "success": connectivity_success,
+                "uncertain": not complete,
+                **ping_stats,
             }
             self._audit_captured(
                 operation="diagnostic_ping",
@@ -2208,6 +2321,10 @@ class HuaweiService:
                     max(20.0, (timeout_ms / 1000.0) + 15.0),
                 ),
             )
+            diagnostic_success = bool(
+                complete
+                and not self._diagnostic_terminal_failure(state)
+            )
             result = {
                 "provider": "huawei",
                 "host": host,
@@ -2225,8 +2342,8 @@ class HuaweiService:
                     f"Diagnóstico Huawei finalizado em estado {state or 'desconhecido'}."
                 ),
                 "verified": complete,
-                "success": complete,
-                "uncertain": not complete and not self._diagnostic_terminal_failure(state),
+                "success": diagnostic_success,
+                "uncertain": not complete,
             }
             self._audit_captured(
                 operation="diagnostic_traceroute",
@@ -2301,6 +2418,7 @@ class HuaweiService:
         readback_path=None,
         readback_method="GET",
         readback_payload=None,
+        readback_expect=None,
     ):
         with self._lock:
             result = self._require_mapped().write_request(
@@ -2311,6 +2429,7 @@ class HuaweiService:
                 readback_path=readback_path,
                 readback_method=readback_method,
                 readback_payload=readback_payload,
+                readback_expect=readback_expect,
             )
             self._audit_captured(
                 operation="huawei_mapped_request",
@@ -2360,16 +2479,28 @@ class HuaweiService:
     def set_upnp(self, config):
         values = dict(config or {})
         request = values.pop("_request", None)
-        if not isinstance(request, dict):
-            raise ValueError(
-                "Informe _request com o endpoint/payload Huawei mapeado."
+        if isinstance(request, dict):
+            return self.mapped_write_request(
+                request.get("path"),
+                request.get("payload") or values,
+                referer=request.get("referer") or "/html/bbsp/upnp/upnp.asp",
+                token_page=request.get("token_page") or "/html/bbsp/upnp/upnp.asp",
+                readback_path=request.get("readback_path") or "/html/bbsp/upnp/upnp.asp",
+                readback_expect=request.get("readback_expect"),
             )
-        return self.mapped_write_request(
-            request.get("path"),
-            request.get("payload") or values,
-            referer=request.get("referer") or "/html/bbsp/upnp/upnp.asp",
-            token_page=request.get("token_page") or "/html/bbsp/upnp/upnp.asp",
-            readback_path=request.get("readback_path") or "/html/bbsp/upnp/upnp.asp",
+
+        enabled = values.get("enabled")
+        main_enabled = values.get("main_enabled", enabled)
+        slave_enabled = values.get("slave_enabled", enabled)
+        if main_enabled is None and slave_enabled is None:
+            raise ValueError("Informe enabled, main_enabled ou slave_enabled.")
+
+        return self.mapped_write_feature(
+            "upnp",
+            {
+                "x.Enable": "1" if bool(main_enabled) else "0",
+                "y.Enable": "1" if bool(slave_enabled) else "0",
+            },
         )
 
     def wps_status(self):

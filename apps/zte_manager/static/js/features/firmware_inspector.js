@@ -407,14 +407,30 @@
     root.replaceChildren();
     const records=new Map();
     const insert=(entry)=>{
-      if(!entry||typeof entry!=="object"||typeof entry.feature!=="string")return;
-      const name=entry.feature;
-      const state=entry.available===true||entry.status==="detected"?"confirmed":
+      if(!entry||typeof entry!=="object")return;
+      const name=String(entry.feature ?? entry.key ?? "");
+      if(!name)return;
+      const state=entry.available===true||entry.read===true||entry.status==="detected"?"confirmed":
         entry.status==="not_tested"?"untested":"unconfirmed";
+      const write=entry.write===true||entry.writable===true||
+        entry.update===true||entry.create===true||entry.delete===true;
+      const partial=entry.partial===true||
+        (Array.isArray(entry.unconfirmed)&&entry.unconfirmed.length>0);
+      const readback=entry.readback===true||entry.verified===true;
+      const diagnostic=/diagnostic|speed_test|arp_ping/.test(name);
+      const candidate={
+        name:label(name,entry.label),feature:name,state,write,partial,readback,diagnostic
+      };
       const before=records.get(name);
       if(!before||state==="confirmed"||
-        (state==="unconfirmed"&&before.state==="untested"))
-        records.set(name,{name:label(name,entry.label),feature:name,state});
+        (state==="unconfirmed"&&before.state==="untested")){
+        records.set(name,{...(before||{}),...candidate,
+          write:Boolean(write||before?.write),
+          partial:Boolean(partial||before?.partial),
+          readback:Boolean(readback||before?.readback),
+          diagnostic:Boolean(diagnostic||before?.diagnostic)
+        });
+      }
     };
     for(const item of report?.tracker?.capabilities||[])insert(item);
     for(const item of report?.tracker?.candidate_features||[])insert(item);
@@ -434,10 +450,14 @@
       row.appendChild(el("span","am-inspector-map-state "+item.state,
         item.state==="confirmed"?"Leitura confirmada":
         item.state==="untested"?"Não testado":"Não confirmado"));
-      row.appendChild(el("small","",
-        Object.prototype.hasOwnProperty.call(EDITORS,item.feature)?
-        "Possui formulário separado, sujeito à autorização da sessão":
-        "Consulta neste aplicativo"));
+      const modes=[
+        item.state==="confirmed"?"Leitura: suportada":"Leitura: não confirmada",
+        item.write?(item.partial?"Escrita: parcial":"Escrita: suportada"):
+          "Escrita: somente leitura",
+        item.readback?"Read-back: disponível":"Read-back: conforme operação",
+        item.diagnostic?"Diagnóstico: disponível":null
+      ].filter(Boolean);
+      row.appendChild(el("small","",modes.join(" · ")));
       list.appendChild(row);
     }
     if(!values.length)list.appendChild(el("li","am-inspector-quiet",

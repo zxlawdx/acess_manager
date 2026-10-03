@@ -173,7 +173,11 @@ class HuaweiMappedSurfaceTests(unittest.TestCase):
             {"speed_test", "speed_test_mode"},
         )
         upnp = HuaweiMappedSurfaceService.write_schema("upnp")
-        self.assertFalse(upnp["available"])
+        self.assertTrue(upnp["available"])
+        self.assertEqual(
+            {item["key"] for item in upnp["operations"]},
+            {"upnp"},
+        )
 
     def test_request_never_leaves_connected_huawei_host(self):
         service = self.make_service()
@@ -197,6 +201,7 @@ class HuaweiMappedSurfaceTests(unittest.TestCase):
             referer="/html/test/page.asp",
             token_page="/html/test/page.asp",
             readback_path="/html/test/page.asp",
+            readback_expect={"Name": "ok"},
         )
 
         self.assertEqual(len(self.client.post_form_calls), 1)
@@ -258,7 +263,8 @@ class HuaweiMappedSurfaceTests(unittest.TestCase):
             },
         )
 
-        self.assertTrue(result["verified"])
+        self.assertTrue(result["accepted"])
+        self.assertFalse(result["verified"])
         self.assertEqual(len(self.client.post_form_calls), 1)
         payload = self.client.post_form_calls[0][1]
         self.assertNotIn("not.captured", payload)

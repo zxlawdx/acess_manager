@@ -19,6 +19,7 @@ from apps.zte_manager.services.huawei_captured_features import (
     WLAN_ADV_PAGE,
     WLAN_ASSOC_PAGE,
     WLAN_BASIC_PAGE,
+    WLAN_CHANNEL_PAGE,
     WLAN_INFO_PAGE,
     WLAN_LIST_PAGE,
     WLAN_STA_BOOST_PAGE,
@@ -263,6 +264,16 @@ class FakeHuaweiClient:
             )
         if path == WLAN_STA_BOOST_PAGE:
             return ""
+        if path == WLAN_CHANNEL_PAGE:
+            values = dict(payload or {})
+            if values.get("freq") == "5G":
+                self.assert_width = values.get("width")
+                return (
+                    "36,40,44,48,52,56,60,64,100,104,108,112,"
+                    "116,120,124,128,132,136,140,144,149,153,157,161\r\n"
+                )
+            self.assert_width = values.get("width")
+            return "1,2,3,4,5,6,7,8,9,10,11,12,13\r\n"
         raise RuntimeError(path)
 
     def post_form(self, path, payload, *, referer):
@@ -473,6 +484,56 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
             ["2.4GHz", "5GHz"],
         )
         self.assertTrue(all(item["canal_automatico"] for item in radios))
+
+    def test_wifi_channels_are_discovered_from_firmware(self):
+        service = self.make_service()
+
+        two = service.wifi_channels("2.4GHz")[0]
+        five = service.wifi_channels("5GHz")[0]
+
+        self.assertEqual(two["source"], "firmware")
+        self.assertEqual(two["bandwidth_code"], "0")
+        self.assertEqual(two["canais"], list(range(1, 14)))
+        self.assertEqual(five["source"], "firmware")
+        self.assertEqual(five["bandwidth_code"], "4")
+        self.assertEqual(
+            five["canais"],
+            [
+                36, 40, 44, 48, 52, 56, 60, 64,
+                100, 104, 108, 112, 116, 120, 124, 128,
+                132, 136, 140, 144, 149, 153, 157, 161,
+            ],
+        )
+
+    def test_lan_inventory_keeps_rich_user_device_fields(self):
+        service = self.make_service()
+        service.client.post_read = lambda path, payload=None, referer="/index.asp": (
+            (
+                "function USERDevice(IpAddr,MacAddr,HostName,Interface,"
+                "AddressSource,Status,IPv6Address,RemainingLeaseTime,"
+                "Vendor,OS){"
+                "this.IpAddr=IpAddr;this.MacAddr=MacAddr;"
+                "this.HostName=HostName;this.Interface=Interface;"
+                "this.AddressSource=AddressSource;this.Status=Status;"
+                "this.IPv6Address=IPv6Address;"
+                "this.RemainingLeaseTime=RemainingLeaseTime;"
+                "this.Vendor=Vendor;this.OS=OS;}"
+                'new USERDevice("192.168.18.34","02:7A:4C:91:B3:E8",'
+                '"Notebook","LAN4","DHCP","Online","2001:db8::34",'
+                '"3200","ExampleVendor","Linux");'
+            )
+            if path == LAN_USER_DEV_PAGE
+            else ""
+        )
+
+        row = service.lan_clients()[0]
+        self.assertEqual(row["interface"], "LAN4")
+        self.assertEqual(row["address_source"], "DHCP")
+        self.assertEqual(row["status"], "Online")
+        self.assertEqual(row["ipv6"], "2001:db8::34")
+        self.assertEqual(row["lease"], "3200")
+        self.assertEqual(row["vendor"], "ExampleVendor")
+        self.assertEqual(row["os"], "Linux")
 
     def test_wifi_advanced_write_uses_all_captured_fields(self):
         service = self.make_service()
