@@ -2173,6 +2173,12 @@ class HuaweiService:
             )
             timeout_ms = max(2000, int(values.get("timeout") or 5000))
 
+            protocol = str(values.get("protocol") or "AUTO").strip().upper()
+            protocol_code = values.get("protocol_code")
+            if protocol_code in (None, "") and protocol == "AUTO":
+                # Physically captured EG8041X7-10 WebUI payload.
+                protocol_code = "0"
+
             payload = {
                 "x.DiagnosticsState": "Requested",
                 "x.Host": host,
@@ -2181,6 +2187,8 @@ class HuaweiService:
             }
             if interface:
                 payload["x.Interface"] = interface
+            if protocol_code not in (None, ""):
+                payload["x.X_HW_ProtocolType"] = str(protocol_code)
 
             submitted = self._require_mapped().write_request(
                 self._TRACE_ACTION,
@@ -2205,7 +2213,12 @@ class HuaweiService:
                 "host": host,
                 "interface": interface,
                 "ip_version": str(values.get("ip_version") or "IPv4"),
-                "protocol": str(values.get("protocol") or "AUTO"),
+                "protocol": protocol,
+                "protocol_code": (
+                    str(protocol_code)
+                    if protocol_code not in (None, "")
+                    else ""
+                ),
                 "diagnostics_state": state,
                 "hops": self._parse_traceroute_hops(output),
                 "resultado": output or (
@@ -2224,6 +2237,12 @@ class HuaweiService:
                     "host": host,
                     "interface": interface,
                     "data_size": data_size,
+                    "protocol": protocol,
+                    "protocol_code": (
+                        str(protocol_code)
+                        if protocol_code not in (None, "")
+                        else ""
+                    ),
                 },
             )
             return result
