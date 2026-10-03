@@ -25,6 +25,16 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
         "pages": [
             "/html/amp/wificovercfg/wifiCover.asp",
             "/html/amp/wificoverinfo/wlancoverinfo.asp",
+            "/html/amp/wificoverinfo/apNeighborList.asp",
+            "/html/amp/wificoverinfo/apssidStat.asp",
+            "/html/amp/wificoverinfo/apssidStation.asp",
+        ],
+        "reads": [
+            {
+                "path": "/html/amp/wificoverinfo/getTopoInfo.asp",
+                "method": "POST",
+                "referer": "/html/amp/wificoverinfo/wlancoverinfo.asp",
+            },
         ],
     },
     "easymesh_topology": {
@@ -117,12 +127,85 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
         "label": "WAN configuration",
         "pages": [
             "/html/bbsp/wan/wan.asp",
+            "/html/bbsp/wan/wan.cus",
             "/html/bbsp/waninfo/waninfo.asp",
+            "/html/bbsp/common/wan_list.asp",
+            "/html/bbsp/common/wan_list_info.asp",
+            "/html/bbsp/common/wan_list_cache_wan.asp",
+            "/html/bbsp/common/wan_list_cache_wanipv6.asp",
+            "/html/bbsp/common/getWanDynamicData.asp",
+            "/html/bbsp/common/get_wan_list_ipdslite.asp",
+            "/html/bbsp/common/get_wan_list_ipversion.asp",
+            "/html/bbsp/common/get_wan_list_ipwanstat.asp",
+            "/html/bbsp/common/get_wan_list_ispwlan.asp",
+            "/html/bbsp/common/get_wan_list_policyroute.asp",
+            "/html/bbsp/common/get_wan_list_pppdslite.asp",
+            "/html/bbsp/common/get_wan_list_pppwanstat.asp",
+            "/html/bbsp/common/get_wan_list_radiowanpara.asp",
+            "/html/bbsp/common/get_wan_list_radiowanps.asp",
+            "/html/bbsp/common/get_wan_list_v6iptunnel.asp",
+            "/html/bbsp/common/get_wan_list_v6ppptunnel.asp",
+            "/html/bbsp/common/get_wan_list_wanaccesstype.asp",
+            "/html/bbsp/common/get_wan_list_wlaninfo.asp",
+            "/html/bbsp/common/wanStateMonitor.asp",
+            "/html/bbsp/common/wan_check.asp",
+            "/html/bbsp/common/wan_control.asp",
+            "/html/bbsp/common/wan_pageparse.asp",
+            "/html/bbsp/common/wan_settings.asp",
+            "/html/bbsp/common/wanaddressacquire.asp",
+            "/html/bbsp/common/wandns.asp",
+            "/html/bbsp/common/wanipv6state.asp",
+        ],
+        "reads": [
+            {
+                "path": "/html/bbsp/common/getwanlist.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/wan/wan.asp",
+                "token_page": "/html/bbsp/wan/wan.asp",
+            },
+            {
+                "path": "/html/bbsp/common/get_wan_list_time.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/wan/wan.asp",
+            },
+            {
+                "path": "/html/bbsp/common/wanStateMonitor.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/wan/wan.asp",
+            },
+            {
+                "path": "/html/bbsp/common/wan_list_cache_wan.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/wan/wan.asp",
+            },
         ],
     },
     "user_devices": {
         "label": "User devices",
-        "pages": ["/html/bbsp/userdevinfo/userdevinfo1.asp"],
+        "pages": [
+            "/CustomApp/mainpage.asp",
+            "/html/bbsp/common/lanuserinfo.asp",
+            "/html/bbsp/common/dhcpinfo.asp",
+            "/html/bbsp/userdevinfo/userdevinfo1.asp",
+            "/html/bbsp/userdevinfo/userdetdevinfo.asp",
+        ],
+        "reads": [
+            {
+                "path": "/html/bbsp/common/GetLanUserDevInfo.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/userdevinfo/userdevinfo1.asp",
+            },
+            {
+                "path": "/html/bbsp/common/GetLanUserDhcpInfo.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/userdevinfo/userdevinfo1.asp",
+            },
+            {
+                "path": "/html/bbsp/userdevinfo/getuserdevinfo.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/userdevinfo/userdevinfo1.asp",
+            },
+        ],
     },
     "vlan": {
         "label": "VLAN",
@@ -133,6 +216,15 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
         "pages": [
             "/html/bbsp/qossmart/qossmart.asp",
             "/html/bbsp/qossmartstatistics/qossmartstatistics.asp",
+            "/html/bbsp/qossmartstatistics/qossmartstatistics.cus",
+            "/html/bbsp/qossmartstatistics/GetQosStatisticsResult.asp",
+        ],
+        "reads": [
+            {
+                "path": "/html/bbsp/qossmartstatistics/GetQosStatisticsResult.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/qossmartstatistics/qossmartstatistics.asp",
+            },
         ],
     },
     "dscp_to_pbit": {
@@ -162,6 +254,13 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
     "security_check": {
         "label": "Security Check",
         "pages": ["/html/ssmp/securitycheck/securitycheck.asp"],
+        "reads": [
+            {
+                "path": "/html/ssmp/securitycheck/getSecCheckStatus.asp",
+                "method": "POST",
+                "referer": "/html/ssmp/securitycheck/securitycheck.asp",
+            },
+        ],
     },
     "led": {
         "label": "LED configuration",
@@ -170,6 +269,13 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
     "collect": {
         "label": "Support collection",
         "pages": ["/html/ssmp/collect/collectInfo.asp"],
+        "reads": [
+            {
+                "path": "/html/ssmp/common/getCollectStatus.asp",
+                "method": "POST",
+                "referer": "/html/ssmp/collect/collectInfo.asp",
+            },
+        ],
     },
     "speed_test": {
         "label": "Section speed test / iPerf",
@@ -177,12 +283,53 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
             "/html/ssmp/Sectionspeed/Sectionspeed.asp",
             "/html/ssmp/Sectionspeed/clientspeedResult.asp",
         ],
+        "reads": [
+            {
+                "path": "/html/ssmp/Sectionspeed/clientspeedResult.asp",
+                "method": "POST",
+                "referer": "/html/ssmp/Sectionspeed/Sectionspeed.asp",
+            },
+        ],
     },
     "diagnostics_webui": {
         "label": "WebUI diagnostics",
         "pages": [
             "/html/bbsp/maintenance/diagnosecommon.asp",
             "/html/ssmp/maintain/smartdiagnose.asp",
+            "/html/ssmp/maintain/multicast.asp",
+        ],
+        "reads": [
+            {
+                "path": "/html/bbsp/maintenance/GetPingDnsResult.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/maintenance/diagnosecommon.asp",
+            },
+            {
+                "path": "/html/bbsp/maintenance/GetPingResult.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/maintenance/diagnosecommon.asp",
+            },
+            {
+                "path": "/html/bbsp/maintenance/GetRouteResult.asp",
+                "method": "POST",
+                "referer": "/html/bbsp/maintenance/diagnosecommon.asp",
+            },
+            {
+                "path": "/html/bbsp/maintenance/getEquipTestResultsmart.asp",
+                "method": "POST",
+                "referer": "/html/ssmp/maintain/smartdiagnose.asp",
+            },
+            {
+                "path": "/html/amp/common/getSmartDiagnoseResult.asp",
+                "method": "POST",
+                "referer": "/html/ssmp/maintain/smartdiagnose.asp",
+                "token_page": "/html/ssmp/maintain/smartdiagnose.asp",
+            },
+            {
+                "path": "/html/bbsp/common/EquipTestResultsmart.asp",
+                "method": "POST",
+                "referer": "/html/ssmp/maintain/smartdiagnose.asp",
+            },
         ],
     },
     "account": {
@@ -193,18 +340,41 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
         "label": "Device logs",
         "pages": [
             "/html/ssmp/aplog/aplog.asp",
+            "/html/ssmp/aplog/aplogview.asp",
             "/html/ssmp/debuglog/debuglog.asp",
+            "/html/ssmp/debuglog/debuglogview.asp",
             "/html/ssmp/instrusionlog/instrusionlog.asp",
             "/html/ssmp/userlog/userlog.asp",
+            "/html/ssmp/userlog/logview.asp",
         ],
     },
     "mirror_port": {
         "label": "Mirror port",
         "pages": ["/html/ssmp/mirrorportcfg/mirrorportcfg.asp"],
+        "reads": [
+            {
+                "path": "/html/ssmp/mirrorportcfg/getmirrorport.cgi",
+                "method": "POST",
+                "payload": {"MirrorPortGet": "0"},
+                "referer": "/html/ssmp/mirrorportcfg/mirrorportcfg.asp",
+            },
+        ],
     },
     "voip_interface": {
         "label": "VoIP interface",
         "pages": ["/html/voip/voipinterface/voipinterface.asp"],
+        "reads": [
+            {
+                "path": "/html/voip/voipinterface/voiceprofileinfoSIP.asp",
+                "method": "POST",
+                "referer": "/html/voip/voipinterface/voipinterface.asp",
+            },
+            {
+                "path": "/html/voip/voipinterface/voiceprofileinfoH248.asp",
+                "method": "POST",
+                "referer": "/html/voip/voipinterface/voipinterface.asp",
+            },
+        ],
     },
 }
 
@@ -503,6 +673,7 @@ class HuaweiMappedSurfaceService:
                 "write": bool(writes),
                 "mapped_writes": writes,
                 "page_count": len(spec.get("pages") or ()),
+                "read_request_count": len(spec.get("reads") or ()),
             })
         return {
             "vendor": "huawei",
@@ -562,6 +733,7 @@ class HuaweiMappedSurfaceService:
         method: str = "GET",
         payload: dict[str, Any] | None = None,
         referer: str = "/index.asp",
+        token_page: str | None = None,
     ) -> dict[str, Any]:
         relative = _relative_path(path)
         verb = str(method or "GET").upper()
@@ -570,6 +742,13 @@ class HuaweiMappedSurfaceService:
             for key, value in dict(payload or {}).items()
             if not _secret_key(key)
         }
+        if token_page:
+            token_source = self.client.get_page(
+                _relative_path(token_page)
+            )
+            clean_payload["x.X_HW_Token"] = (
+                self.client.extract_token(token_source)
+            )
         if verb == "GET":
             source = self.client.get_page(relative)
         elif verb == "POST":
@@ -601,6 +780,24 @@ class HuaweiMappedSurfaceService:
             except Exception as exc:
                 errors.append({
                     "path": path,
+                    "method": "GET",
+                    "error": type(exc).__name__,
+                })
+        for request in spec.get("reads") or ():
+            try:
+                pages.append(
+                    self.read_request(
+                        request["path"],
+                        method=request.get("method") or "POST",
+                        payload=request.get("payload") or {},
+                        referer=request.get("referer") or "/index.asp",
+                        token_page=request.get("token_page"),
+                    )["data"]
+                )
+            except Exception as exc:
+                errors.append({
+                    "path": request.get("path") or "",
+                    "method": request.get("method") or "POST",
                     "error": type(exc).__name__,
                 })
         return {
