@@ -20,6 +20,9 @@ class HuaweiMutationTransport:
     http_status: int | None
     timed_out: bool = False
     connection_uncertain: bool = False
+    body: str = ""
+    content_type: str = ""
+    final_url: str = ""
 
 
 class HuaweiWebClient:
@@ -72,8 +75,32 @@ class HuaweiWebClient:
         })
         return session
 
+    @staticmethod
+    def _preserve_request_file(path: str) -> str:
+        """Keep Huawei RequestFile slashes literal.
+
+        The EG8041X7-10 WebUI submits RequestFile=html/bbsp/... and rejects
+        the otherwise equivalent %2F-encoded form on several CGI handlers.
+        Decode only slashes inside RequestFile; leave every other query value
+        untouched.
+        """
+        value = str(path or "")
+        pattern = re.compile(r"([?&]RequestFile=)([^&#]*)", re.I)
+
+        def repl(match):
+            request_file = re.sub(
+                r"%2f",
+                "/",
+                match.group(2),
+                flags=re.I,
+            )
+            return match.group(1) + request_file
+
+        return pattern.sub(repl, value)
+
     def url(self, path: str) -> str:
-        return urljoin(self.base_url + "/", path.lstrip("/"))
+        safe_path = self._preserve_request_file(path)
+        return urljoin(self.base_url + "/", safe_path.lstrip("/"))
 
     @classmethod
     def looks_like_huawei(
@@ -222,7 +249,7 @@ class HuaweiWebClient:
     @staticmethod
     def is_login_response(response) -> bool:
         status = getattr(response, "status_code", None)
-        if status in {401, 403}:
+        if status == 401:
             return True
 
         body = str(getattr(response, "text", "") or "").lower()
@@ -375,6 +402,11 @@ class HuaweiWebClient:
             return HuaweiMutationTransport(
                 http_status=response.status_code,
                 connection_uncertain=auth_lost,
+                body=str(response.text or ""),
+                content_type=str(
+                    response.headers.get("Content-Type") or ""
+                ),
+                final_url=str(response.url or ""),
             )
         except requests.exceptions.ReadTimeout:
             return HuaweiMutationTransport(
