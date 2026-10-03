@@ -247,9 +247,15 @@ class HuaweiWebClient:
         )
 
     @staticmethod
-    def is_login_response(response) -> bool:
+    def is_login_response(
+        response,
+        *,
+        forbidden_is_login: bool = True,
+    ) -> bool:
         status = getattr(response, "status_code", None)
-        if status == 401:
+        if status == 401 or (
+            status == 403 and forbidden_is_login
+        ):
             return True
 
         body = str(getattr(response, "text", "") or "").lower()
@@ -392,7 +398,10 @@ class HuaweiWebClient:
                 allow_redirects=True,
             )
 
-            auth_lost = self.is_login_response(response)
+            auth_lost = self.is_login_response(
+                response,
+                forbidden_is_login=False,
+            )
             if auth_lost:
                 try:
                     self.reauthenticate()
@@ -402,11 +411,14 @@ class HuaweiWebClient:
             return HuaweiMutationTransport(
                 http_status=response.status_code,
                 connection_uncertain=auth_lost,
-                body=str(response.text or ""),
+                body=str(getattr(response, "text", "") or ""),
                 content_type=str(
-                    response.headers.get("Content-Type") or ""
+                    (getattr(response, "headers", {}) or {}).get(
+                        "Content-Type"
+                    )
+                    or ""
                 ),
-                final_url=str(response.url or ""),
+                final_url=str(getattr(response, "url", "") or ""),
             )
         except requests.exceptions.ReadTimeout:
             return HuaweiMutationTransport(
