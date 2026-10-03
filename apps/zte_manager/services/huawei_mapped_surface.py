@@ -47,7 +47,7 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
     },
     "ont_auth": {
         "label": "ONT authentication",
-        "pages": ["/html/amp/ontauth/ontauth.asp"],
+        "pages": ["/html/amp/ontauth/passwordcommon.asp"],
     },
     "port_isolation": {
         "label": "Port Isolation",
@@ -121,7 +121,7 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
     },
     "firewall_log": {
         "label": "Firewall log",
-        "pages": ["/html/bbsp/firewalllog/firewalllog.asp"],
+        "pages": ["/html/bbsp/firewalllog/firewalllogview.asp"],
     },
     "wan_config": {
         "label": "WAN configuration",
@@ -234,6 +234,17 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
     "remote_packet_mirror": {
         "label": "Remote packet mirror",
         "pages": ["/html/bbsp/remotepktmirror/remotepktmirror.asp"],
+        "reads": [
+            {
+                "path": (
+                    "/html/bbsp/remotepktmirror/getchunkedcapt.cgi?"
+                    "RequestFile=html/bbsp/remotepktmirror/remotepktmirror.asp"
+                ),
+                "method": "POST",
+                "referer": "/html/bbsp/remotepktmirror/remotepktmirror.asp",
+                "token_page": "/html/bbsp/remotepktmirror/remotepktmirror.asp",
+            },
+        ],
     },
     "sntp": {
         "label": "SNTP",
@@ -280,6 +291,7 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
     "speed_test": {
         "label": "Section speed test / iPerf",
         "pages": [
+            "/html/ssmp/testspeed/testspeed.asp",
             "/html/ssmp/Sectionspeed/Sectionspeed.asp",
             "/html/ssmp/Sectionspeed/clientspeedResult.asp",
         ],
@@ -332,9 +344,24 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "support_config": {
+        "label": "Maintenance support configuration",
+        "pages": ["/html/ssmp/mainupportcfg/mainupportconfig.asp"],
+        "reads": [
+            {
+                "path": "/html/ssmp/mainupportcfg/getForbidLanFlag.asp",
+                "method": "POST",
+                "referer": "/html/ssmp/mainupportcfg/mainupportconfig.asp",
+            },
+        ],
+    },
+    "software_notice": {
+        "label": "Software notice",
+        "pages": ["/html/ssmp/softnotice/opensfnotice.asp"],
+    },
     "account": {
         "label": "Account configuration",
-        "pages": ["/html/ssmp/accoutcfg/accoutcfg.asp"],
+        "pages": ["/html/ssmp/accoutcfg/accountadmin.asp"],
     },
     "logs": {
         "label": "Device logs",
@@ -350,13 +377,16 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
     },
     "mirror_port": {
         "label": "Mirror port",
-        "pages": ["/html/ssmp/mirrorportcfg/mirrorportcfg.asp"],
+        "pages": ["/html/ssmp/mirrorportcfg/mirrorportconfig.asp"],
         "reads": [
             {
-                "path": "/html/ssmp/mirrorportcfg/getmirrorport.cgi",
+                "path": (
+                    "/html/ssmp/mirrorportcfg/getmirrorport.cgi?"
+                    "&RequestFile=/html/ssmp/mirrorportcfg/mirrorportconfig.asp"
+                ),
                 "method": "POST",
                 "payload": {"MirrorPortGet": "0"},
-                "referer": "/html/ssmp/mirrorportcfg/mirrorportcfg.asp",
+                "referer": "/html/ssmp/mirrorportcfg/mirrorportconfig.asp",
             },
         ],
     },
