@@ -46,13 +46,23 @@
       "Dispositivo sem nome",48);
     const mac=clean(item.mac ?? item.MACAddr ?? item.MAC ?? item.mac_address,"Não informado",48);
     const ip=clean(item.ip ?? item.IPAddr ?? item.IP ?? item.ip_address,"Não informado",48);
+    const suppliedType=clean(item.device_type ?? item.DeviceType ?? "","",64);
     return {
       name,mac,ip,kind,ssid:clean(item.ssid ?? item.SSID,"Não informado",48),
+      alias:clean(item.alias ?? item.UserDevAlias,"Não informado",48),
+      ipv4:clean(item.ipv4 ?? item.IPv4Address ?? ip,"Não informado",64),
+      ipv6:clean(item.ipv6 ?? item.IPv6Address,"Não informado",96),
+      interface:clean(item.interface ?? item.Interface ?? item.port ?? item.Port,"Não informado",64),
+      status:clean(item.status ?? item.Status,"Não informado",48),
+      addressSource:clean(item.address_source ?? item.AddressSource,"Não informado",48),
+      lease:clean(item.lease ?? item.RemainingLeaseTime ?? item.LeaseTime,"Não informado",48),
+      vendor:clean(item.vendor ?? item.Manufacturer ?? item.Brand,"Não informado",64),
+      os:clean(item.os ?? item.OperatingSystem ?? item.OS,"Não informado",64),
       rssi:rssiValue(item.rssi ?? item.RSSI ?? item.signal),
       snr:clean(item.snr ?? item.SNR,"Não informado",32),
       rx:clean(item.rx_rate ?? item.RxRate,"Não informado",32),
       tx:clean(item.tx_rate ?? item.TxRate,"Não informado",32),
-      type:clientType(name)
+      type:suppliedType || clientType(name)
     };
   }
   function node(tag,cls,value){
@@ -85,7 +95,16 @@
     const fields=[
       ["Conexão",device.kind==="wifi"?"Wi-Fi":"Ethernet"],
       ["IP informado",device.ip],
+      ["IPv4",device.ipv4],
+      ["IPv6",device.ipv6],
       ["MAC informado",device.mac],
+      ["Interface / porta",device.interface],
+      ["Estado",device.status],
+      ["Endereçamento",device.addressSource],
+      ["Lease",device.lease],
+      ["Fabricante",device.vendor],
+      ["Sistema operacional",device.os],
+      ["Apelido",device.alias],
       ["Tipo",device.type]
     ];
     if(device.kind==="wifi"){
