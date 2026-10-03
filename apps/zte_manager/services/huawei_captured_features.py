@@ -1565,6 +1565,13 @@ class HuaweiCapturedFeatureService:
             str(item.get("DNSServer") or "")
             for item in search_rows
             if item.get("DNSServer")
+            and ":" not in str(item.get("DNSServer") or "")
+        ]
+        ipv6 = [
+            str(item.get("DNSServer") or "")
+            for item in search_rows
+            if item.get("DNSServer")
+            and ":" in str(item.get("DNSServer") or "")
         ]
         domain = ""
         if search_rows:
@@ -1575,8 +1582,8 @@ class HuaweiCapturedFeatureService:
             "domain_name": domain,
             "ipv4_1": ipv4[0] if ipv4 else "",
             "ipv4_2": ipv4[1] if len(ipv4) > 1 else "",
-            "ipv6_1": "",
-            "ipv6_2": "",
+            "ipv6_1": ipv6[0] if ipv6 else "",
+            "ipv6_2": ipv6[1] if len(ipv6) > 1 else "",
             "hosts": [
                 {
                     "id": _record_domain(item),
@@ -1588,61 +1595,95 @@ class HuaweiCapturedFeatureService:
             "_search_rows": search_rows,
         }
 
-    def set_dns(self, config: dict[str, Any]) -> dict[str, Any]:
-        if config.get("ipv6_1") or config.get("ipv6_2"):
-            raise ValueError("DNS IPv6 Huawei ainda não foi validado neste profile.")
-        if config.get("hosts"):
-            raise ValueError(
-                "Criação/remoção de hosts DNS Huawei não foi capturada; somente a lista DNS validada pode ser alterada."
+    def _write_dns_search(
+        self,
+        *,
+        dns_server: str,
+        domain_name: str,
+        interface: str,
+        instance_or_domain: str | None = None,
+    ) -> dict[str, Any]:
+        root = "InternetGatewayDevice.X_HW_DNS.SearList"
+        raw = str(instance_or_domain or "").strip()
+        if raw:
+            if raw.isdigit():
+                domain = root + "." + raw
+            elif raw.startswith(root + ".") and raw[len(root) + 1:].isdigit():
+                domain = raw
+            else:
+                raise ValueError("Instância DNS SearList Huawei inválida.")
+            path = (
+                "/html/bbsp/dnsconfiguration/set.cgi"
+                f"?x={domain}"
+                "&RequestFile=html/bbsp/dnsconfiguration/dnsconfigcommon.asp"
             )
-
-        current = self.dns_status()
-        requested_secondary = config.get("ipv4_2")
-        if (
-            requested_secondary not in (None, "")
-            and str(requested_secondary)
-            != str(current.get("ipv4_2") or "")
-        ):
-            raise ValueError(
-                "A captura validou apenas SearList.1; alteração do DNS IPv4 "
-                "secundário ainda não foi mapeada."
+        else:
+            domain = ""
+            path = (
+                "/html/bbsp/dnsconfiguration/add.cgi"
+                f"?x={root}"
+                "&RequestFile=html/bbsp/dnsconfiguration/dnsconfigcommon.asp"
             )
-        rows = current.pop("_search_rows", [])
-        row = rows[0] if rows else {}
-        interface = str(row.get("Interface") or "")
-        if not interface:
-            raise RuntimeError(
-                "A interface WAN vinculada ao DNS não foi identificada; nenhuma alteração foi enviada."
-            )
-        domain_obj = _record_domain(row) or "InternetGatewayDevice.X_HW_DNS.SearList.1"
-        dns1 = str(config.get("ipv4_1", current.get("ipv4_1") or "") or "")
-        domain_name = str(config.get("domain_name", current.get("domain_name") or "") or "")
-        if not dns1:
-            raise ValueError("Informe o DNS IPv4 principal.")
-
-        path = (
-            "/html/bbsp/dnsconfiguration/set.cgi"
-            f"?x={domain_obj}"
-            "&RequestFile=html/bbsp/dnsconfiguration/dnsconfigcommon.asp"
-        )
-        payload = {
-            "x.DNSServer": dns1,
-            "x.DomainName": domain_name,
-            "x.Interface": interface,
-        }
 
         def verify():
             actual = self.dns_status()
-            if str(actual.get("ipv4_1") or "") != dns1:
-                return None
-            if domain_name and str(actual.get("domain_name") or "") != domain_name:
-                return None
-            return actual
+            for item in actual.get("_search_rows") or []:
+                item_domain = _record_domain(item)
+                if (
+                    str(item.get("DNSServer") or "") == str(dns_server)
+                    and str(item.get("DomainName") or "") == str(domain_name)
+                    and str(item.get("Interface") or "") == str(interface)
+                    and (not domain or item_domain == domain)
+                ):
+                    return {
+                        "id": item_domain,
+                        "dns_server": item.get("DNSServer") or "",
+                        "domain_name": item.get("DomainName") or "",
+                        "interface": item.get("Interface") or "",
+                    }
+            return None
 
         return self._post_verified(
             path=path,
             request_file=DNS_PAGE,
-            payload=payload,
+            payload={
+                "x.DNSServer": str(dns_server),
+                "x.DomainName": str(domain_name),
+                "x.Interface": str(interface),
+            },
+            verifier=verify,
+        )
+
+    def create_dns_host(
+        self,
+        *,
+        ip: str,
+        domain_name: str,
+    ) -> dict[str, Any]:
+        root = "InternetGatewayDevice.X_HW_DNS.HOSTS"
+        path = (
+            "/html/bbsp/dnsconfiguration/add.cgi"
+            f"?x={root}"
+            "&RequestFile=html/bbsp/dnsconfiguration/dnsconfigcommon.asp"
+        )
+
+        def verify():
+            actual = self.dns_status()
+            for item in actual.get("hosts") or []:
+                if (
+                    str(item.get("ip") or "") == str(ip)
+                    and str(item.get("nome") or "") == str(domain_name)
+                ):
+                    return item
+            return None
+
+        return self._post_verified(
+            path=path,
+            request_file=DNS_PAGE,
+            payload={
+                "x.IPAddress": str(ip),
+                "x.DomainName": str(domain_name),
+            },
             verifier=verify,
         )
 
@@ -1690,6 +1731,173 @@ class HuaweiCapturedFeatureService:
             },
             verifier=verify,
         )
+
+    def delete_dns_host(
+        self,
+        instance_or_domain: str,
+    ) -> dict[str, Any]:
+        raw = str(instance_or_domain or "").strip()
+        root = "InternetGatewayDevice.X_HW_DNS.HOSTS"
+        prefix = root + "."
+        if raw.isdigit():
+            domain = prefix + raw
+        elif raw.startswith(prefix) and raw[len(prefix):].isdigit():
+            domain = raw
+        else:
+            raise ValueError(
+                "Instância DNS HOSTS Huawei inválida."
+            )
+
+        path = (
+            "/html/bbsp/dnsconfiguration/del.cgi"
+            f"?x={root}"
+            "&RequestFile=html/bbsp/dnsconfiguration/dnsconfigcommon.asp"
+        )
+
+        def verify():
+            actual = self.dns_status()
+            exists = any(
+                str(item.get("id") or "") == domain
+                for item in actual.get("hosts") or []
+            )
+            return None if exists else {"deleted": domain}
+
+        return self._post_verified(
+            path=path,
+            request_file=DNS_PAGE,
+            payload={domain: ""},
+            verifier=verify,
+        )
+
+    def set_dns(self, config: dict[str, Any]) -> dict[str, Any]:
+        values = dict(config or {})
+        current = self.dns_status()
+        rows = list(current.get("_search_rows") or [])
+        interface = str(
+            values.get("interface")
+            or next(
+                (
+                    item.get("Interface")
+                    for item in rows
+                    if item.get("Interface")
+                ),
+                "",
+            )
+            or ""
+        )
+        requested = {
+            "ipv4_1": str(values.get("ipv4_1", current.get("ipv4_1") or "") or ""),
+            "ipv4_2": str(values.get("ipv4_2", current.get("ipv4_2") or "") or ""),
+            "ipv6_1": str(values.get("ipv6_1", current.get("ipv6_1") or "") or ""),
+            "ipv6_2": str(values.get("ipv6_2", current.get("ipv6_2") or "") or ""),
+        }
+        if any(requested.values()) and not interface:
+            raise RuntimeError(
+                "A interface WAN vinculada ao DNS não foi identificada."
+            )
+        domain_name = str(
+            values.get("domain_name", current.get("domain_name") or "") or ""
+        )
+
+        ipv4_rows = [
+            item for item in rows
+            if ":" not in str(item.get("DNSServer") or "")
+        ]
+        ipv6_rows = [
+            item for item in rows
+            if ":" in str(item.get("DNSServer") or "")
+        ]
+        plans = [
+            ("ipv4_1", ipv4_rows, 0),
+            ("ipv4_2", ipv4_rows, 1),
+            ("ipv6_1", ipv6_rows, 0),
+            ("ipv6_2", ipv6_rows, 1),
+        ]
+        results = []
+        for key, group, index in plans:
+            dns_server = requested[key]
+            if not dns_server:
+                continue
+            existing = group[index] if len(group) > index else None
+            if (
+                existing
+                and str(existing.get("DNSServer") or "") == dns_server
+                and str(existing.get("DomainName") or "") == domain_name
+                and str(existing.get("Interface") or "") == interface
+            ):
+                continue
+            results.append(
+                self._write_dns_search(
+                    dns_server=dns_server,
+                    domain_name=domain_name,
+                    interface=interface,
+                    instance_or_domain=(
+                        _record_domain(existing)
+                        if existing
+                        else None
+                    ),
+                )
+            )
+
+        if "hosts" in values:
+            requested_hosts = list(values.get("hosts") or [])
+            actual_hosts = list(current.get("hosts") or [])
+            requested_ids = {
+                str(item.get("id") or "")
+                for item in requested_hosts
+                if isinstance(item, dict) and item.get("id")
+            }
+            for item in requested_hosts:
+                if not isinstance(item, dict):
+                    continue
+                host_id = item.get("id")
+                ip = str(item.get("ip") or item.get("IPAddress") or "")
+                name = str(
+                    item.get("nome")
+                    or item.get("name")
+                    or item.get("domain_name")
+                    or item.get("DomainName")
+                    or ""
+                )
+                if not ip or not name:
+                    continue
+                if host_id:
+                    results.append(
+                        self.update_dns_host(
+                            str(host_id),
+                            ip=ip,
+                            domain_name=name,
+                        )
+                    )
+                else:
+                    results.append(
+                        self.create_dns_host(
+                            ip=ip,
+                            domain_name=name,
+                        )
+                    )
+            for item in actual_hosts:
+                host_id = str(item.get("id") or "")
+                if host_id and host_id not in requested_ids:
+                    results.append(
+                        self.delete_dns_host(host_id)
+                    )
+
+        final = self.dns_status()
+        verified = all(
+            item.get("verified") is True
+            for item in results
+        ) if results else True
+        return {
+            "success": verified,
+            "verified": verified,
+            "uncertain": any(
+                item.get("uncertain") is True
+                for item in results
+            ),
+            "results": results,
+            "readback": final,
+        }
 
     # ----------------------------- DMZ
 
