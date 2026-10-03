@@ -570,6 +570,12 @@ class HuaweiMappedSurfaceService:
             for field in fields
             if field in values
         }
+        readback_feature = {
+            "speed_test_mode": "speed_test",
+            "diagnostics_prepare": "diagnostics_webui",
+            "diagnostics_port_check": "diagnostics_webui",
+            "diagnostics_run": "diagnostics_webui",
+        }.get(key, key)
         result = self.write_request(
             spec["path"],
             payload,
@@ -577,7 +583,7 @@ class HuaweiMappedSurfaceService:
             token_page=spec["token_page"],
             readback_path=(
                 HUAWEI_MAPPED_FEATURES.get(
-                    key.replace("_mode", ""),
+                    readback_feature,
                     {},
                 ).get("pages") or [None]
             )[0],
