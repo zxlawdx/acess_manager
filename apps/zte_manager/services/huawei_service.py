@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import ast
 import logging
+import re
+import time
 from copy import deepcopy
 from threading import RLock
 from uuid import uuid4
@@ -1877,6 +1880,352 @@ class HuaweiService:
                 after=dict(config or {}),
             )
             result["snapshot_resource"] = "firewall_level"
+            return result
+
+    _DIAGNOSTICS_PAGE = "/html/bbsp/maintenance/diagnosecommon.asp"
+    _PING_RESULT_PATH = "/html/bbsp/maintenance/GetPingResult.asp"
+    _TRACE_RESULT_PATH = "/html/bbsp/maintenance/GetRouteResult.asp"
+    _PING_ACTION = (
+        "/html/bbsp/maintenance/complex.cgi?"
+        "x=InternetGatewayDevice.IPPingDiagnostics&"
+        "RUNSTATE_FLAG=Ping&"
+        "RequestFile=html/bbsp/maintenance/diagnosecommon.asp"
+    )
+    _TRACE_ACTION = (
+        "/html/bbsp/maintenance/complex.cgi?"
+        "x=InternetGatewayDevice.TraceRouteDiagnostics&"
+        "RUNSTATE_FLAG=Traceroute&"
+        "RequestFile=html/bbsp/maintenance/diagnosecommon.asp"
+    )
+    _DIAGNOSTIC_SPLIT = "[@#@]"
+
+    @staticmethod
+    def _decode_diagnostic_result(source: object) -> tuple[str, str]:
+        text = str(source or "").lstrip("\ufeff").strip()
+        if not text:
+            return "", ""
+
+        # Huawei returns a JavaScript string expression from Get*Result.asp.
+        # literal_eval decodes quoted/escaped string literals without eval().
+        if text[:1] in {"'", '"'}:
+            try:
+                decoded = ast.literal_eval(text)
+            except (SyntaxError, ValueError):
+                decoded = text
+            if isinstance(decoded, str):
+                text = decoded
+
+        if HuaweiService._DIAGNOSTIC_SPLIT not in text:
+            return text.strip(), ""
+
+        output, state = text.split(
+            HuaweiService._DIAGNOSTIC_SPLIT,
+            1,
+        )
+        return output.strip(), state.strip()
+
+    @staticmethod
+    def _diagnostic_complete(state: str) -> bool:
+        return "complete" in str(state or "").casefold()
+
+    @staticmethod
+    def _diagnostic_terminal_failure(state: str) -> bool:
+        value = str(state or "").casefold()
+        if not value:
+            return False
+        if any(
+            marker in value
+            for marker in ("requested", "doing", "none", "start")
+        ):
+            return False
+        return not HuaweiService._diagnostic_complete(state)
+
+    def _poll_huawei_diagnostic(
+        self,
+        path: str,
+        *,
+        deadline_seconds: float,
+    ) -> tuple[str, str, bool]:
+        if self._client is None:
+            raise RuntimeError(
+                "Conecte-se a uma ONT Huawei antes de executar diagnóstico."
+            )
+
+        deadline = time.monotonic() + max(1.0, float(deadline_seconds))
+        last_output = ""
+        last_state = ""
+
+        while True:
+            source = self._client.post_read(
+                path,
+                {},
+                referer=self._DIAGNOSTICS_PAGE,
+            )
+            output, state = self._decode_diagnostic_result(source)
+            if output:
+                last_output = output
+            if state:
+                last_state = state
+
+            if self._diagnostic_complete(last_state):
+                return last_output, last_state, True
+            if self._diagnostic_terminal_failure(last_state):
+                return last_output, last_state, False
+            if time.monotonic() >= deadline:
+                return last_output, last_state or "Timeout", False
+
+            time.sleep(1.0)
+
+    @staticmethod
+    def _parse_ping_output(
+        output: str,
+        *,
+        requested_count: int,
+    ) -> dict:
+        text = str(output or "")
+        transmitted = None
+        received = None
+        loss = None
+        minimum = average = maximum = None
+
+        packets = re.search(
+            r"(\d+)\s+packets?\s+transmitted.*?"
+            r"(\d+)\s+(?:packets?\s+)?received",
+            text,
+            re.I | re.S,
+        )
+        if packets:
+            transmitted = int(packets.group(1))
+            received = int(packets.group(2))
+
+        loss_match = re.search(
+            r"(\d+(?:\.\d+)?)\s*%\s*packet\s+loss",
+            text,
+            re.I,
+        )
+        if loss_match:
+            loss = float(loss_match.group(1))
+            if loss.is_integer():
+                loss = int(loss)
+
+        rtt = re.search(
+            r"(?:round-trip|rtt)[^=]*=\s*"
+            r"(\d+(?:\.\d+)?)/(\d+(?:\.\d+)?)/"
+            r"(\d+(?:\.\d+)?)",
+            text,
+            re.I,
+        )
+        if rtt:
+            minimum = float(rtt.group(1))
+            average = float(rtt.group(2))
+            maximum = float(rtt.group(3))
+
+        success = received
+        failure = (
+            max(0, transmitted - received)
+            if transmitted is not None and received is not None
+            else None
+        )
+        if transmitted is None and received is not None:
+            transmitted = requested_count
+            failure = max(0, requested_count - received)
+
+        return {
+            "sucesso": success,
+            "falha": failure,
+            "perda_percentual": loss,
+            "minimo_ms": minimum,
+            "medio_ms": average,
+            "maximo_ms": maximum,
+        }
+
+    @staticmethod
+    def _parse_traceroute_hops(output: str) -> list[dict]:
+        hops = []
+        for raw_line in str(output or "").splitlines():
+            line = raw_line.strip()
+            match = re.match(r"^(\d+)\s+(.+)$", line)
+            if not match:
+                continue
+
+            number = int(match.group(1))
+            body = match.group(2).strip()
+            latencies = [
+                float(value)
+                for value in re.findall(
+                    r"(\d+(?:\.\d+)?)\s*ms",
+                    body,
+                    re.I,
+                )
+            ]
+            address_match = re.search(
+                r"(?:(?:\d{1,3}\.){3}\d{1,3}|"
+                r"(?:[0-9a-f]{0,4}:){2,}[0-9a-f:]+)",
+                body,
+                re.I,
+            )
+            hops.append({
+                "numero": number,
+                "ip": address_match.group(0) if address_match else "",
+                "latencias_ms": latencies,
+                "timeout": "*" in body and not latencies,
+                "linha": body,
+            })
+        return hops
+
+    @staticmethod
+    def _diagnostic_transport_failed(result: dict) -> bool:
+        status = result.get("http_status")
+        return (
+            status is not None
+            and not 200 <= int(status) < 400
+            and not result.get("uncertain")
+        )
+
+    def ping(self, config):
+        with self._lock:
+            values = dict(config or {})
+            host = str(values.get("host") or "").strip()
+            if not host:
+                raise ValueError("Informe o destino do ping.")
+
+            count = max(1, int(values.get("count") or 4))
+            data_size = max(32, int(values.get("data_size") or 56))
+            timeout_ms = max(1000, int(values.get("timeout") or 5000))
+            interface = str(values.get("interface") or "").strip()
+
+            payload = {
+                "x.Host": host,
+                "x.DiagnosticsState": "Requested",
+                "x.NumberOfRepetitions": str(count),
+                "x.DSCP": str(values.get("dscp") or 0),
+                "x.DataBlockSize": str(data_size),
+                "x.Timeout": str(timeout_ms),
+                "RUNSTATE_FLAG.value": "START",
+            }
+            if interface:
+                payload["x.Interface"] = interface
+
+            submitted = self._require_mapped().write_request(
+                self._PING_ACTION,
+                payload,
+                referer=self._DIAGNOSTICS_PAGE,
+                token_page=self._DIAGNOSTICS_PAGE,
+            )
+            if self._diagnostic_transport_failed(submitted):
+                raise RuntimeError(
+                    "A ONT Huawei recusou o início do ping."
+                )
+
+            output, state, complete = self._poll_huawei_diagnostic(
+                self._PING_RESULT_PATH,
+                deadline_seconds=min(
+                    60.0,
+                    max(
+                        12.0,
+                        (count * timeout_ms / 1000.0) + 5.0,
+                    ),
+                ),
+            )
+            result = {
+                "provider": "huawei",
+                "host": host,
+                "interface": interface,
+                "ip_version": str(values.get("ip_version") or "IPv4"),
+                "diagnostics_state": state,
+                "resultado": output or (
+                    f"Diagnóstico Huawei finalizado em estado {state or 'desconhecido'}."
+                ),
+                "verified": complete,
+                "success": complete,
+                "uncertain": not complete and not self._diagnostic_terminal_failure(state),
+                **self._parse_ping_output(
+                    output,
+                    requested_count=count,
+                ),
+            }
+            self._audit_captured(
+                operation="diagnostic_ping",
+                target=host,
+                result=result,
+                before=None,
+                after={
+                    "host": host,
+                    "interface": interface,
+                    "count": count,
+                    "data_size": data_size,
+                    "timeout": timeout_ms,
+                },
+            )
+            return result
+
+    def traceroute(self, config):
+        with self._lock:
+            values = dict(config or {})
+            host = str(values.get("host") or "").strip()
+            if not host:
+                raise ValueError("Informe o destino do traceroute.")
+
+            interface = str(values.get("interface") or "").strip()
+            data_size = max(
+                38,
+                int(values.get("data_size") or 38),
+            )
+            timeout_ms = max(2000, int(values.get("timeout") or 5000))
+
+            payload = {
+                "x.DiagnosticsState": "Requested",
+                "x.Host": host,
+                "x.DataBlockSize": str(data_size),
+                "RUNSTATE_FLAG.value": "START",
+            }
+            if interface:
+                payload["x.Interface"] = interface
+
+            submitted = self._require_mapped().write_request(
+                self._TRACE_ACTION,
+                payload,
+                referer=self._DIAGNOSTICS_PAGE,
+                token_page=self._DIAGNOSTICS_PAGE,
+            )
+            if self._diagnostic_transport_failed(submitted):
+                raise RuntimeError(
+                    "A ONT Huawei recusou o início do traceroute."
+                )
+
+            output, state, complete = self._poll_huawei_diagnostic(
+                self._TRACE_RESULT_PATH,
+                deadline_seconds=min(
+                    60.0,
+                    max(20.0, (timeout_ms / 1000.0) + 15.0),
+                ),
+            )
+            result = {
+                "provider": "huawei",
+                "host": host,
+                "interface": interface,
+                "ip_version": str(values.get("ip_version") or "IPv4"),
+                "protocol": str(values.get("protocol") or "AUTO"),
+                "diagnostics_state": state,
+                "hops": self._parse_traceroute_hops(output),
+                "resultado": output or (
+                    f"Diagnóstico Huawei finalizado em estado {state or 'desconhecido'}."
+                ),
+                "verified": complete,
+                "success": complete,
+                "uncertain": not complete and not self._diagnostic_terminal_failure(state),
+            }
+            self._audit_captured(
+                operation="diagnostic_traceroute",
+                target=host,
+                result=result,
+                before=None,
+                after={
+                    "host": host,
+                    "interface": interface,
+                    "data_size": data_size,
+                },
+            )
             return result
 
     def mapped_catalog(self):
