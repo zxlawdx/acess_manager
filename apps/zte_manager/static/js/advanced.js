@@ -1762,6 +1762,26 @@ async function loadDhcpOperations() {
             String(basic.ServerEnable) === "1"
         );
 
+        document.querySelectorAll(
+            ".huawei-dhcp-extra"
+        ).forEach(
+            element => element.classList.toggle(
+                "hidden",
+                currentVendor !== "huawei"
+            )
+        );
+        if (currentVendor === "huawei") {
+            document.getElementById(
+                "huaweiDhcpEnable"
+            ).checked = String(basic.DHCPEnable) === "1";
+            document.getElementById(
+                "huaweiDhcpL2Relay"
+            ).checked = String(basic.L2RelayEnable) === "1";
+            document.getElementById(
+                "huaweiDhcpOption125"
+            ).checked = String(basic.Option125Enable) === "1";
+        }
+
         document.getElementById(
             "dhcpMinAddress"
         ).value = basic.MinAddress || "";
@@ -1935,6 +1955,18 @@ async function saveDhcpBasic(event) {
             ).value
         )
     };
+
+    if (currentVendor === "huawei") {
+        payload.dhcp_enable = document.getElementById(
+            "huaweiDhcpEnable"
+        ).checked;
+        payload.l2_relay_enable = document.getElementById(
+            "huaweiDhcpL2Relay"
+        ).checked;
+        payload.option125_enable = document.getElementById(
+            "huaweiDhcpOption125"
+        ).checked;
+    }
 
     await operationRequest(
         "/network/dhcp/update",
