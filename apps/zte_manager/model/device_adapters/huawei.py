@@ -86,6 +86,45 @@ class HuaweiEG8041X7Profile(HuaweiProfile):
                 "internet_control": {
                     "read": True, "update": True, "verified": True,
                 },
+                "wifi_schedule": {"read": True, "write": False, "verified": True},
+                "wifi_cover": {"read": True, "write": False, "verified": True},
+                "easymesh_topology": {"read": True, "write": False, "verified": True},
+                "ethernet_info": {"read": True, "write": False, "verified": True},
+                "ont_auth": {"read": True, "write": False, "verified": True},
+                "port_isolation": {"read": True, "write": True, "verified": True},
+                "ipv6_filter": {"read": True, "write": True, "verified": True},
+                "ipv6_port_mapping": {"read": True, "write": True, "verified": True},
+                "ipv6_default_route": {"read": True, "write": True, "verified": True},
+                "ipv6_static_route": {"read": True, "write": True, "verified": True},
+                "upnp": {"read": True, "write": True, "verified": True},
+                "ddns": {"read": True, "write": True, "verified": True},
+                "routing": {"read": True, "write": True, "verified": True},
+                "port_mapping": {"read": True, "write": True, "verified": True},
+                "mac_filter": {"read": True, "write": True, "verified": True},
+                "parental_control": {"read": True, "write": True, "verified": True},
+                "port_acl": {"read": True, "write": True, "verified": True},
+                "lan_service": {"read": True, "write": True, "verified": True},
+                "arp_ping": {"read": True, "write": False, "verified": True},
+                "firewall_log": {"read": True, "write": False, "verified": True},
+                "wan_config": {"read": True, "update": True, "verified": True},
+                "user_devices": {"read": True, "update": True, "verified": True},
+                "vlan": {"read": True, "write": True, "verified": True},
+                "qos_smart": {"read": True, "write": True, "verified": True},
+                "dscp_to_pbit": {"read": True, "update": True, "verified": True},
+                "remote_packet_mirror": {"read": True, "write": True, "verified": True},
+                "sntp": {"read": True, "write": True, "verified": True},
+                "reboot": {"read": True, "write": True, "verified": True},
+                "firmware": {"read": True, "write": True, "verified": True},
+                "config_backup": {"read": True, "write": True, "verified": True},
+                "security_check": {"read": True, "write": True, "verified": True},
+                "led": {"read": True, "write": True, "verified": True},
+                "collect": {"read": True, "write": True, "verified": True},
+                "speed_test": {"read": True, "update": True, "verified": True},
+                "diagnostics_webui": {"read": True, "update": True, "verified": True},
+                "account": {"read": True, "write": True, "verified": True},
+                "logs": {"read": True, "write": False, "verified": True},
+                "mirror_port": {"read": True, "write": True, "verified": True},
+                "voip_interface": {"read": True, "write": True, "verified": True},
             },
         )
 
@@ -109,174 +148,7 @@ KNOWN_HUAWEI_PROFILES: tuple[HuaweiProfile, ...] = (
 # Features present in the captured WebUI/menu but not yet end-to-end
 # integrated. Their presence is evidence of observation, not permission to
 # invent a parser or mutation.
-HUAWEI_EG8041X7_OBSERVED_ONLY: dict[str, dict[str, object]] = {
-    "wifi_schedule": {
-        "label": "Wi-Fi Schedule",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/amp/wifische/WlanSchedule.asp"],
-    },
-    "wifi_cover": {
-        "label": "Wi-Fi Cover / Home Network",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": [
-            "/html/amp/wificovercfg/wifiCover.asp",
-            "/html/amp/wificoverinfo/wlancoverinfo.asp",
-        ],
-    },
-    "easymesh_topology": {
-        "label": "EasyMesh topology",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/amp/wlaninfo/easymeshTopo.asp"],
-    },
-    "port_isolation": {
-        "label": "Port Isolation",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/bbsp/portinfo/portisolate.asp"],
-        "note": "set.cgi was observed, but functional parameters were not proven.",
-    },
-    "ipv6_filter": {
-        "label": "IPv6 Filtering",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/bbsp/ipv6ipincoming/ipv6ipincoming.asp"],
-    },
-    "ipv6_port_mapping": {
-        "label": "IPv6 Port Mapping",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/bbsp/ipv6portmapping/ipv6portmapping.asp"],
-    },
-    "upnp": {
-        "label": "UPnP",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/bbsp/upnp/upnp.asp"],
-    },
-    "ddns": {
-        "label": "DDNS",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/bbsp/ddns/ddns.asp"],
-    },
-    "routing": {
-        "label": "Routing / Static Route / Service Route",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": [
-            "/html/bbsp/route/route.asp",
-            "/html/bbsp/routeinfo/routeinfo.asp",
-            "/html/bbsp/staticroute/staticroute.asp",
-            "/html/bbsp/serviceroute/serviceroute.asp",
-        ],
-    },
-    "port_mapping": {
-        "label": "Port Mapping / Trigger",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": [
-            "/html/bbsp/portmapping/portmapping.asp",
-            "/html/bbsp/porttrigger/porttrigger.asp",
-        ],
-    },
-    "mac_filter": {
-        "label": "MAC filtering",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": [
-            "/html/bbsp/macfilter/macfilter.asp",
-            "/html/bbsp/wlanmacfilter/wlanmacfilter.asp",
-        ],
-    },
-    "parental_control": {
-        "label": "Parental control",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": [
-            "/html/bbsp/parentalctrl/parentalctrlmac.asp",
-            "/html/bbsp/parentalctrl/parentalctrlstatus.asp",
-        ],
-    },
-    "port_acl": {
-        "label": "Port ACL",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/bbsp/portacl/newacl.asp"],
-    },
-    "sntp": {
-        "label": "SNTP",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/ssmp/sntp/sntp.asp"],
-    },
-    "reboot": {
-        "label": "Reboot",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/ssmp/reboot/reboot.asp"],
-    },
-    "firmware": {
-        "label": "Firmware upgrade",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/ssmp/fireware/firmware.asp"],
-    },
-    "config_backup": {
-        "label": "Configuration file",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/ssmp/cfgfile/cfgfile.asp"],
-    },
-    "security_check": {
-        "label": "Security Check",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/ssmp/securitycheck/securitycheck.asp"],
-    },
-    "led": {
-        "label": "LED configuration",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/ssmp/ledcfg/ledcfg.asp"],
-    },
-    "collect": {
-        "label": "Support collection",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/ssmp/collect/collectInfo.asp"],
-    },
-    "qos_smart": {
-        "label": "QoS Smart / statistics",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/bbsp/qossmart/qossmart.asp"],
-    },
-    "dscp_to_pbit": {
-        "label": "DSCP to P-bit",
-        "state": "OBSERVED_ONLY",
-        "write_state": "WRITE_CAPTURED",
-        "endpoints": ["/html/bbsp/dscptopbit/dscptopbit.asp"],
-        "note": "Mutation observed, but not in the physically reproduced 21-write suite.",
-    },
-    "speed_test": {
-        "label": "Section speed test",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": ["/html/ssmp/Sectionspeed/Sectionspeed.asp"],
-    },
-    "diagnostics_webui": {
-        "label": "WebUI diagnostics",
-        "state": "OBSERVED_ONLY",
-        "write_state": "NOT_YET_VALIDATED",
-        "endpoints": [
-            "/html/bbsp/maintenance/diagnosecommon.asp",
-            "/html/ssmp/maintain/smartdiagnose.asp",
-        ],
-    },
-}
+HUAWEI_EG8041X7_OBSERVED_ONLY: dict[str, dict[str, object]] = {}
 
 
 HUAWEI_EG8041X7_FULLY_INTEGRATED = frozenset({
@@ -295,6 +167,11 @@ HUAWEI_EG8041X7_FULLY_INTEGRATED = frozenset({
     "dos",
     "ipv6_firewall",
     "internet_control",
+    "layer3",
+    "lan_ipv4",
+    "ipv6_lan",
+    "dhcp_static",
+    "dns_host",
 })
 
 
