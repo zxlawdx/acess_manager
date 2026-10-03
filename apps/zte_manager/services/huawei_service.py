@@ -1613,14 +1613,43 @@ class HuaweiService:
                         or ""
                     ),
                 )
+            elif feature in HUAWEI_MAPPED_WRITES:
+                result = self.mapped_write_feature(
+                    feature,
+                    values,
+                )
+            elif feature == "diagnostics_webui":
+                operation = str(
+                    values.pop("operation", "diagnostics_run")
+                )
+                result = self.mapped_write_feature(
+                    operation,
+                    values,
+                )
             else:
                 try:
                     writer = writers[feature]
                 except KeyError as exc:
-                    raise ValueError(
-                        f"Escrita Huawei não disponível para a capability {feature}."
-                    ) from exc
-                result = writer(values)
+                    # No model/profile denial here. A captured raw request can
+                    # be supplied for any mapped page using _request.
+                    request = values.pop("_request", None)
+                    if isinstance(request, dict):
+                        result = self.mapped_write_request(
+                            request.get("path"),
+                            request.get("payload") or values,
+                            referer=request.get("referer") or "/index.asp",
+                            token_page=request.get("token_page"),
+                            readback_path=request.get("readback_path"),
+                            readback_method=request.get("readback_method") or "GET",
+                            readback_payload=request.get("readback_payload") or {},
+                        )
+                    else:
+                        raise ValueError(
+                            "Informe _request com o endpoint Huawei mapeado "
+                            f"para a capability {feature}."
+                        ) from exc
+                else:
+                    result = writer(values)
             readback = result.get("readback")
             if result.get("verified") and isinstance(readback, dict):
                 if feature == "dhcp_static":
@@ -2142,12 +2171,17 @@ class HuaweiService:
             "ipv6_firewall": self.ipv6_firewall_status,
             "internet_control": self.internet_control_status,
         }
-        try:
+        if feature in readers:
             return readers[feature]
-        except KeyError as exc:
-            raise ValueError(
-                f"Capability Huawei desconhecida: {feature}."
-            ) from exc
+        if feature in HUAWEI_MAPPED_FEATURES:
+            def mapped_reader(*, refresh: bool = False):
+                # Generic mapped pages are live reads; refresh is accepted to
+                # keep the capability reader signature uniform.
+                return self.mapped_read_feature(feature)
+            return mapped_reader
+        raise ValueError(
+            f"Capability Huawei desconhecida: {feature}."
+        )
 
     def capability_catalog(self) -> dict:
         with self._lock:
