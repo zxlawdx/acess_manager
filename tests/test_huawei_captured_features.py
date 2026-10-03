@@ -521,6 +521,7 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
             if item["banda"] == "5GHz"
         )
         self.assertEqual(five["bandwidth_code"], "4")
+        self.assertEqual(five["largura"], "Auto")
         self.assertEqual(five["standard_raw"], "11ax")
         self.assertEqual(five["frag_threshold"], "2346")
         self.assertTrue(five["band_steering"])
