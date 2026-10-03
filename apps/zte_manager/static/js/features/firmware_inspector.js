@@ -101,6 +101,8 @@
     collect:"Coleta de suporte",
     speed_test:"Teste de velocidade da ONT",
     diagnostics_webui:"Diagnóstico interno da ONT",
+    support_config:"Configuração de suporte e manutenção",
+    software_notice:"Avisos de software",
     account:"Conta administrativa",
     logs:"Registros do equipamento",
     mirror_port:"Espelhamento de porta",
