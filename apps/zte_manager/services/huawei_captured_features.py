@@ -1767,8 +1767,11 @@ class HuaweiCapturedFeatureService:
 
         def verify():
             actual = self.dns_status()
+            domain_seen = False
             for item in actual.get("_search_rows") or []:
                 item_domain = _record_domain(item)
+                if domain and item_domain == domain:
+                    domain_seen = True
                 if (
                     str(item.get("DNSServer") or "") == str(dns_server)
                     and str(item.get("DomainName") or "") == str(domain_name)
@@ -1781,6 +1784,15 @@ class HuaweiCapturedFeatureService:
                         "domain_name": item.get("DomainName") or "",
                         "interface": item.get("Interface") or "",
                     }
+
+            # Some EG8041X7 firmware revisions remove a SearList instance when
+            # its server is cleared instead of serializing an empty value.
+            if domain and not str(dns_server) and not domain_seen:
+                return {
+                    "id": domain,
+                    "dns_server": "",
+                    "cleared": True,
+                }
             return None
 
         return self._post_verified(
@@ -1926,10 +1938,18 @@ class HuaweiCapturedFeatureService:
             or ""
         )
         requested = {
-            "ipv4_1": str(values.get("ipv4_1", current.get("ipv4_1") or "") or ""),
-            "ipv4_2": str(values.get("ipv4_2", current.get("ipv4_2") or "") or ""),
-            "ipv6_1": str(values.get("ipv6_1", current.get("ipv6_1") or "") or ""),
-            "ipv6_2": str(values.get("ipv6_2", current.get("ipv6_2") or "") or ""),
+            "ipv4_1": str(
+                values.get("ipv4_1", current.get("ipv4_1") or "") or ""
+            ),
+            "ipv4_2": str(
+                values.get("ipv4_2", current.get("ipv4_2") or "") or ""
+            ),
+            "ipv6_1": str(
+                values.get("ipv6_1", current.get("ipv6_1") or "") or ""
+            ),
+            "ipv6_2": str(
+                values.get("ipv6_2", current.get("ipv6_2") or "") or ""
+            ),
         }
         if any(requested.values()) and not interface:
             raise RuntimeError(
@@ -1953,26 +1973,58 @@ class HuaweiCapturedFeatureService:
             ("ipv6_1", ipv6_rows, 0),
             ("ipv6_2", ipv6_rows, 1),
         ]
+        slot_domains: dict[str, str] = {}
         results = []
+
         for key, group, index in plans:
             dns_server = requested[key]
-            if not dns_server:
-                continue
             existing = group[index] if len(group) > index else None
+            existing_domain = _record_domain(existing or {})
+            slot_domains[key] = existing_domain
+            existing_server = str(
+                (existing or {}).get("DNSServer") or ""
+            )
+            existing_interface = str(
+                (existing or {}).get("Interface") or interface
+            )
+            effective_interface = interface or existing_interface
+
+            # Explicit empty values mean "clear this saved slot". Previously
+            # they were skipped, causing profiles to report success while the
+            # old server stayed active.
+            if not dns_server:
+                if existing is None or not existing_server:
+                    continue
+                results.append(
+                    self._write_dns_search(
+                        dns_server="",
+                        domain_name=domain_name,
+                        interface=effective_interface,
+                        instance_or_domain=existing_domain,
+                    )
+                )
+                continue
+
+            if not effective_interface:
+                raise RuntimeError(
+                    "A interface WAN vinculada ao DNS não foi identificada."
+                )
+
             if (
                 existing
-                and str(existing.get("DNSServer") or "") == dns_server
+                and existing_server == dns_server
                 and str(existing.get("DomainName") or "") == domain_name
-                and str(existing.get("Interface") or "") == interface
+                and existing_interface == effective_interface
             ):
                 continue
+
             results.append(
                 self._write_dns_search(
                     dns_server=dns_server,
                     domain_name=domain_name,
-                    interface=interface,
+                    interface=effective_interface,
                     instance_or_domain=(
-                        _record_domain(existing)
+                        existing_domain
                         if existing
                         else None
                     ),
@@ -2000,6 +2052,16 @@ class HuaweiCapturedFeatureService:
                 )
                 for item in requested_hosts
                 if isinstance(item, dict)
+                and (
+                    item.get("ip")
+                    or item.get("IPAddress")
+                )
+                and (
+                    item.get("nome")
+                    or item.get("name")
+                    or item.get("domain_name")
+                    or item.get("DomainName")
+                )
             }
             for item in requested_hosts:
                 if not isinstance(item, dict):
@@ -2023,13 +2085,20 @@ class HuaweiCapturedFeatureService:
                             domain_name=name,
                         )
                     )
-                else:
+                elif (ip, name) not in {
+                    (
+                        str(existing.get("ip") or ""),
+                        str(existing.get("nome") or ""),
+                    )
+                    for existing in actual_hosts
+                }:
                     results.append(
                         self.create_dns_host(
                             ip=ip,
                             domain_name=name,
                         )
                     )
+
             for item in actual_hosts:
                 host_id = str(item.get("id") or "")
                 identity = (
@@ -2046,10 +2115,73 @@ class HuaweiCapturedFeatureService:
                     )
 
         final = self.dns_status()
-        verified = all(
-            item.get("verified") is True
-            for item in results
-        ) if results else True
+        final_rows = list(final.get("_search_rows") or [])
+        final_by_domain = {
+            _record_domain(item): item
+            for item in final_rows
+            if _record_domain(item)
+        }
+
+        semantic_verified = True
+        for key, _group, _index in plans:
+            expected = requested[key]
+            original_domain = slot_domains.get(key) or ""
+            if original_domain:
+                row = final_by_domain.get(original_domain)
+                if not expected:
+                    if row is not None and str(row.get("DNSServer") or ""):
+                        semantic_verified = False
+                        break
+                    continue
+                if row is None:
+                    semantic_verified = False
+                    break
+                if str(row.get("DNSServer") or "") != expected:
+                    semantic_verified = False
+                    break
+                if str(row.get("DomainName") or "") != domain_name:
+                    semantic_verified = False
+                    break
+                if interface and str(row.get("Interface") or "") != interface:
+                    semantic_verified = False
+                    break
+            elif expected:
+                matching = [
+                    item
+                    for item in final_rows
+                    if str(item.get("DNSServer") or "") == expected
+                ]
+                if not matching:
+                    semantic_verified = False
+                    break
+                if not any(
+                    str(item.get("DomainName") or "") == domain_name
+                    and (
+                        not interface
+                        or str(item.get("Interface") or "") == interface
+                    )
+                    for item in matching
+                ):
+                    semantic_verified = False
+                    break
+
+        if semantic_verified and "hosts" in values:
+            final_hosts = {
+                (
+                    str(item.get("ip") or ""),
+                    str(item.get("nome") or ""),
+                )
+                for item in final.get("hosts") or []
+                if item.get("ip") and item.get("nome")
+            }
+            semantic_verified = final_hosts == requested_values
+
+        operation_verified = (
+            all(item.get("verified") is True for item in results)
+            if results
+            else True
+        )
+        verified = bool(operation_verified and semantic_verified)
         return {
             "success": verified,
             "verified": verified,
@@ -2057,6 +2189,7 @@ class HuaweiCapturedFeatureService:
                 item.get("uncertain") is True
                 for item in results
             ),
+            "semantic_verified": semantic_verified,
             "results": results,
             "readback": final,
         }
@@ -2782,42 +2915,50 @@ class HuaweiCapturedFeatureService:
                 + ", ".join(sorted(unsupported))
             )
 
-        # X_HW_HT20 is the actual field submitted by the Huawei page. Prefer
-        # an explicit raw code. For the two values physically captured by this
-        # EG8041X7-10, also accept the operator-facing labels.
+        # X_HW_HT20 is the actual field submitted by the Huawei page. The
+        # EG8041X7-10 capture confirms only the two automatic-width enums.
+        # Human-readable WebUI labels and the normalized "Auto" profile value
+        # are therefore mapped back to their exact raw code.
         raw_bw = str(current.get("_raw_ht20") or "")
         requested_bandwidth = config.get("bandwidth")
         bandwidth_code = config.get("bandwidth_code")
-        if bandwidth_code is None and requested_bandwidth is not None:
+        if bandwidth_code in ("", None) and requested_bandwidth is not None:
+            label = " ".join(
+                str(requested_bandwidth or "").strip().split()
+            ).casefold()
             known_bandwidth = {
-                ("2.4GHz", "Auto"): "0",
-                ("5GHz", "Auto"): "4",
+                ("2.4GHz", "auto"): "0",
+                ("2.4GHz", "auto 20/40 mhz"): "0",
+                ("5GHz", "auto"): "4",
+                ("5GHz", "auto 20/40/80/160 mhz"): "4",
             }
-            bandwidth_code = known_bandwidth.get(
-                (display, str(requested_bandwidth))
-            )
-            if bandwidth_code is None and str(requested_bandwidth) != str(
-                current.get("largura") or ""
+            bandwidth_code = known_bandwidth.get((display, label))
+            current_label = " ".join(
+                str(current.get("largura") or "").strip().split()
+            ).casefold()
+            if (
+                bandwidth_code is None
+                and label != current_label
             ):
                 raise ValueError(
                     "Para esta largura Huawei, informe bandwidth_code "
                     "observado no formulário do firmware."
                 )
-        if bandwidth_code is None:
+        if bandwidth_code in ("", None):
             bandwidth_code = raw_bw or ("4" if instance == "5" else "0")
 
         raw_standard = str(current.get("_raw_standard") or "11ax")
         requested_standard = config.get("standard")
         standard = raw_standard
         if requested_standard not in (None, ""):
-            value = str(requested_standard)
-            if value in {"b,g,n,ax", "a,n,ac,ax"}:
+            value = str(requested_standard).strip()
+            if value in {"11ax", "b,g,n,ax", "a,n,ac,ax"}:
                 standard = "11ax"
             elif value == str(current.get("padrao") or ""):
                 standard = raw_standard
             else:
-                # The Huawei form posts X_HW_Standard directly. Do not translate
-                # values that the operator explicitly supplied.
+                # Other values are accepted only as an explicit firmware enum;
+                # no cross-model translation is invented here.
                 standard = value
 
         # SGI is not a field in the captured wlanadv mutation. Preserve it
