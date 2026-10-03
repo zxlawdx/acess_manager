@@ -828,6 +828,39 @@ class HuaweiService:
         captured = self._require_captured()
         steps: list[dict] = []
         omitted: list[str] = []
+        unchanged: list[str] = []
+        before_config = self.current_configuration()
+
+        def equivalent(key: str, left, right) -> bool:
+            if key == "country":
+                def country(value):
+                    text = str(value or "").upper()
+                    return "BR" if text == "BRI" else text
+                return country(left) == country(right)
+            if key == "tx_power":
+                def power(value):
+                    return str(value or "").strip().rstrip("%")
+                return power(left) == power(right)
+            if key in {
+                "auto_channel", "sgi", "band_steering",
+                "airtime_fairness",
+            }:
+                return bool(left) == bool(right)
+            if key in {
+                "channel", "beacon_interval", "rts_cts",
+                "dtim", "frag_threshold",
+            }:
+                if left in (None, "") and right in (None, ""):
+                    return True
+                try:
+                    return int(left) == int(right)
+                except (TypeError, ValueError):
+                    pass
+            return str(left if left is not None else "") == str(
+                right if right is not None else ""
+            )
+
+        applied_after: dict[str, object] = {"wifi": {}}
 
         for band in ("2.4GHz", "5GHz"):
             config = dict(
@@ -837,8 +870,6 @@ class HuaweiService:
             if not config:
                 continue
 
-            # Ignore only vendor-specific fields that do not exist in the Huawei
-            # WLAN Advanced form. Every captured Huawei field stays writable.
             supported = {
                 "auto_channel",
                 "channel",
@@ -876,14 +907,36 @@ class HuaweiService:
                 ):
                     omitted.append(f"Wi-Fi {band}: {key}")
 
-            # Perfis históricos usam BRI; a WebUI Huawei capturada submeteu BR.
             if str(safe_config.get("country") or "").upper() == "BRI":
                 safe_config["country"] = "BR"
+
+            current = dict(
+                (before_config.get("wifi") or {}).get(band)
+                or {}
+            )
+            changed = {
+                key: value
+                for key, value in safe_config.items()
+                if not equivalent(key, current.get(key), value)
+            }
+
+            # When Auto Channel is already enabled, a stale stored channel does
+            # not represent a requested mutation.
+            if (
+                changed.get("auto_channel") is True
+                or bool(safe_config.get("auto_channel"))
+            ):
+                if safe_config.get("channel") in (None, "", 0, "0", "Auto"):
+                    changed.pop("channel", None)
+
+            if not changed:
+                unchanged.append(f"Wi-Fi {band}")
+                continue
 
             try:
                 result = captured.set_wifi_radio(
                     band,
-                    safe_config,
+                    changed,
                 )
                 verified = bool(result.get("verified"))
                 if verified and isinstance(result.get("readback"), dict):
@@ -892,12 +945,14 @@ class HuaweiService:
                         result["readback"],
                         identity_fields=("banda", "id"),
                     )
+                    applied_after["wifi"][band] = result["readback"]
                 steps.append({
                     "name": f"Wi-Fi {band}",
                     "success": verified,
                     "verified": verified,
+                    "changed_fields": sorted(changed),
                     "detail": (
-                        "Canal/RF confirmado por read-back."
+                        "Campos alterados e confirmados por read-back."
                         if verified
                         else "A alteração não foi confirmada pela releitura."
                     ),
@@ -907,6 +962,7 @@ class HuaweiService:
                     "name": f"Wi-Fi {band}",
                     "success": False,
                     "verified": False,
+                    "changed_fields": sorted(changed),
                     "detail": str(exc),
                 })
                 break
@@ -914,52 +970,73 @@ class HuaweiService:
         if all(step.get("success") for step in steps):
             dns = dict(profile.get("dns") or {})
             if dns:
-                try:
-                    result = captured.set_dns(dns)
-                    verified = bool(result.get("verified"))
-                    if verified and isinstance(result.get("readback"), dict):
-                        readback = dict(result["readback"])
-                        readback.pop("_search_rows", None)
-                        self._snapshot_store("dns", readback)
-                    steps.append({
-                        "name": "DNS / hosts",
-                        "success": verified,
-                        "verified": verified,
-                        "detail": (
-                            "DNS e hosts confirmados por read-back."
-                            if verified
-                            else "A alteração DNS não foi confirmada."
-                        ),
-                    })
-                except Exception as exc:
-                    steps.append({
-                        "name": "DNS / hosts",
-                        "success": False,
-                        "verified": False,
-                        "detail": str(exc),
-                    })
+                current_dns = dict(before_config.get("dns") or {})
+                comparable = {
+                    key: value
+                    for key, value in dns.items()
+                    if key in {
+                        "domain_name", "ipv4_1", "ipv4_2",
+                        "ipv6_1", "ipv6_2", "hosts",
+                    }
+                }
+                dns_changed = any(
+                    current_dns.get(key) != value
+                    for key, value in comparable.items()
+                )
+                if not dns_changed:
+                    unchanged.append("DNS / hosts")
+                else:
+                    try:
+                        result = captured.set_dns(dns)
+                        verified = bool(result.get("verified"))
+                        if verified and isinstance(result.get("readback"), dict):
+                            readback = dict(result["readback"])
+                            readback.pop("_search_rows", None)
+                            self._snapshot_store("dns", readback)
+                            applied_after["dns"] = readback
+                        steps.append({
+                            "name": "DNS / hosts",
+                            "success": verified,
+                            "verified": verified,
+                            "changed_fields": sorted(comparable),
+                            "detail": (
+                                "DNS e hosts confirmados por read-back."
+                                if verified
+                                else "A alteração DNS não foi confirmada."
+                            ),
+                        })
+                    except Exception as exc:
+                        steps.append({
+                            "name": "DNS / hosts",
+                            "success": False,
+                            "verified": False,
+                            "changed_fields": sorted(comparable),
+                            "detail": str(exc),
+                        })
 
-        success = bool(steps) and all(
+        success = all(
             bool(step.get("success"))
             for step in steps
         )
         result = {
             "success": success,
             "verified": success,
-            "audit_outcome": (
-                "verified"
-                if success
-                else "failed"
-            ),
+            "audit_outcome": "verified" if success else "failed",
             "steps": steps,
+            "unchanged": unchanged,
             "not_included": omitted,
         }
-        self._audit_captured(
-            operation=operation,
-            target=target,
-            result=result,
-            after=profile,
-        )
+
+        # A no-op profile application is successful but must not create a
+        # history entry pretending that something changed.
+        if steps:
+            self._audit_captured(
+                operation=operation,
+                target=target,
+                result=result,
+                before=before_config,
+                after=applied_after,
+            )
         return result
 
     def apply_profile(self, attendant=None):
