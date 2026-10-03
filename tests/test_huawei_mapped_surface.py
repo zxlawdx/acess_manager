@@ -201,7 +201,7 @@ class HuaweiMappedSurfaceTests(unittest.TestCase):
             referer="/html/test/page.asp",
             token_page="/html/test/page.asp",
             readback_path="/html/test/page.asp",
-            readback_expect={"Enable": "1"},
+            readback_expect={"Name": "ok"},
         )
 
         self.assertEqual(len(self.client.post_form_calls), 1)
