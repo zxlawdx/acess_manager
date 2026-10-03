@@ -2403,7 +2403,7 @@ class HuaweiService:
                 self.model,
                 profile=self._profile,
             ).features[feature]
-            return {
+            response = {
                 "feature": feature,
                 "label": spec.label,
                 "available": True,
@@ -2418,6 +2418,11 @@ class HuaweiService:
                 },
                 "capability": operations,
             }
+            if feature in HUAWEI_MAPPED_FEATURES:
+                response["mapped_write"] = (
+                    self._require_mapped().write_schema(feature)
+                )
+            return response
 
     def generate_attendance(self, diagnostic_id=None) -> dict:
         with self._lock:
