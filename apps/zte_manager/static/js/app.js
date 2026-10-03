@@ -2295,19 +2295,13 @@ async function renderWifiRadios(radios) {
                 );
 
                 if (currentVendor === "huawei") {
-                    for (const fieldName of [
-                        "bandwidth",
-                        "standard",
-                        "sgi"
-                    ]) {
-                        const field = form.querySelector(
-                            `[data-field="${fieldName}"]`
-                        );
-                        if (!field) continue;
-                        field.disabled = true;
-                        field.title = (
-                            "Valor exibido da Huawei; alteração ainda não " +
-                            "foi validada com um segundo valor físico."
+                    const sgi = form.querySelector(
+                        '[data-field="sgi"]'
+                    );
+                    if (sgi) {
+                        sgi.disabled = true;
+                        sgi.title = (
+                            "SGI não pertence ao POST WLAN Advanced capturado."
                         );
                     }
                 }
@@ -3273,27 +3267,21 @@ async function renderProfileForm(profile) {
         );
 
         if (currentVendor === "huawei") {
-            for (const fieldName of [
-                "bandwidth",
-                "standard",
-                "sgi"
-            ]) {
-                const field = container.querySelector(
-                    `[data-field="${fieldName}"]`
-                );
-                if (!field) continue;
-                field.disabled = true;
-                field.title = (
-                    "Este parâmetro permanece como está na Huawei; " +
-                    "a captura validou canal, região, potência e beacon."
+            const sgi = container.querySelector(
+                '[data-field="sgi"]'
+            );
+            if (sgi) {
+                sgi.disabled = true;
+                sgi.title = (
+                    "SGI não pertence ao POST WLAN Advanced capturado."
                 );
             }
 
             const note = document.createElement("p");
             note.className = "muted";
             note.textContent = (
-                "Huawei EG8041X7-10: o perfil aplica somente parâmetros " +
-                "com mutation capturada e releitura disponível."
+                "Huawei EG8041X7-10: canal, largura, modo, região, potência " +
+                "e parâmetros RF capturados são aplicados pelo provider Huawei."
             );
             container.appendChild(note);
         }
