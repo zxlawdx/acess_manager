@@ -1627,38 +1627,69 @@ class HuaweiService:
                 )
 
             if feature == "dhcp_static":
+                action = str(
+                    values.pop("action", None)
+                    or values.pop("_action", None)
+                    or "update"
+                ).strip().lower()
                 instance = (
                     values.pop("id", None)
                     or values.pop("instance_or_domain", None)
                 )
-                if not instance:
-                    raise ValueError(
-                        "Informe id/instance_or_domain da reserva DHCP Huawei."
+                if action in {"delete", "remove"}:
+                    if not instance:
+                        raise ValueError(
+                            "Informe id/instance_or_domain da reserva DHCP Huawei."
+                        )
+                    result = service.delete_dhcp_reservation(instance)
+                elif instance:
+                    result = service.update_dhcp_reservation(
+                        instance,
+                        ip=str(values.get("ip") or values.get("Yiaddr") or ""),
+                        mac=str(values.get("mac") or values.get("Chaddr") or ""),
                     )
-                result = service.update_dhcp_reservation(
-                    instance,
-                    ip=str(values.get("ip") or values.get("Yiaddr") or ""),
-                    mac=str(values.get("mac") or values.get("Chaddr") or ""),
-                )
+                else:
+                    result = service.create_dhcp_reservation(
+                        ip=str(values.get("ip") or values.get("Yiaddr") or ""),
+                        mac=str(values.get("mac") or values.get("Chaddr") or ""),
+                    )
             elif feature == "dns_host":
+                action = str(
+                    values.pop("action", None)
+                    or values.pop("_action", None)
+                    or "update"
+                ).strip().lower()
                 instance = (
                     values.pop("id", None)
                     or values.pop("instance_or_domain", None)
                 )
-                if not instance:
-                    raise ValueError(
-                        "Informe id/instance_or_domain do DNS Host Huawei."
+                if action in {"delete", "remove"}:
+                    if not instance:
+                        raise ValueError(
+                            "Informe id/instance_or_domain do DNS Host Huawei."
+                        )
+                    result = service.delete_dns_host(instance)
+                elif instance:
+                    result = service.update_dns_host(
+                        instance,
+                        ip=str(values.get("ip") or values.get("IPAddress") or ""),
+                        domain_name=str(
+                            values.get("domain_name")
+                            or values.get("DomainName")
+                            or values.get("name")
+                            or ""
+                        ),
                     )
-                result = service.update_dns_host(
-                    instance,
-                    ip=str(values.get("ip") or values.get("IPAddress") or ""),
-                    domain_name=str(
-                        values.get("domain_name")
-                        or values.get("DomainName")
-                        or values.get("name")
-                        or ""
-                    ),
-                )
+                else:
+                    result = service.create_dns_host(
+                        ip=str(values.get("ip") or values.get("IPAddress") or ""),
+                        domain_name=str(
+                            values.get("domain_name")
+                            or values.get("DomainName")
+                            or values.get("name")
+                            or ""
+                        ),
+                    )
             elif feature in HUAWEI_MAPPED_WRITES:
                 result = self.mapped_write_feature(
                     feature,
