@@ -2063,6 +2063,40 @@ class HuaweiCapturedFeatureService:
                         _record_value(records, "WPSEnable", default="1"),
                     )
                 ),
+                "wps_method": _record_value(
+                    records,
+                    "X_HW_ConfigMethod",
+                    default="PushButton",
+                ),
+                "authentication_mode": (
+                    record.get("X_HW_WPAand11iAuthenticationMode")
+                    or record.get("IEEE11iAuthenticationMode")
+                    or record.get("WPAAuthenticationMode")
+                    or _record_value(
+                        records,
+                        "X_HW_WPAand11iAuthenticationMode",
+                        "IEEE11iAuthenticationMode",
+                        "WPAAuthenticationMode",
+                        default="",
+                    )
+                ),
+                "encryption_mode": (
+                    record.get("X_HW_WPAand11iEncryptionModes")
+                    or record.get("IEEE11iEncryptionModes")
+                    or record.get("WPAEncryptionModes")
+                    or _record_value(
+                        records,
+                        "X_HW_WPAand11iEncryptionModes",
+                        "IEEE11iEncryptionModes",
+                        "WPAEncryptionModes",
+                        default="",
+                    )
+                ),
+                "group_rekey": _record_value(
+                    records,
+                    "X_HW_GroupRekey",
+                    default="3600",
+                ),
                 "password": "",
                 "password_hidden": True,
             })
@@ -2164,6 +2198,24 @@ class HuaweiCapturedFeatureService:
                 else "PSKAuthentication"
             )
         )
+        auth_mode = str(
+            config.get("authentication_mode")
+            or auth_default
+        )
+        encryption_mode = str(
+            config.get("encryption_mode")
+            or security_encryption
+        )
+        group_rekey = str(
+            config.get("group_rekey")
+            if config.get("group_rekey") is not None
+            else preserved("X_HW_GroupRekey", "3600")
+        )
+        wps_method = str(
+            config.get("wps_method")
+            or current.get("wps_method")
+            or preserved("X_HW_ConfigMethod", "PushButton")
+        )
 
         payload = {
             "y.Enable": _as01(enabled),
@@ -2188,7 +2240,7 @@ class HuaweiCapturedFeatureService:
                 else preserved("BasicEncryptionModes", "None")
             ),
             "y.WPAAuthenticationMode": (
-                "PSKAuthentication"
+                auth_mode
                 if beacon_type == "WPA"
                 else preserved(
                     "WPAAuthenticationMode",
@@ -2196,7 +2248,7 @@ class HuaweiCapturedFeatureService:
                 )
             ),
             "y.WPAEncryptionModes": (
-                security_encryption
+                encryption_mode
                 if beacon_type == "WPA"
                 else preserved(
                     "WPAEncryptionModes",
@@ -2204,7 +2256,7 @@ class HuaweiCapturedFeatureService:
                 )
             ),
             "y.IEEE11iAuthenticationMode": (
-                "PSKAuthentication"
+                auth_mode
                 if beacon_type == "11i"
                 else preserved(
                     "IEEE11iAuthenticationMode",
@@ -2212,7 +2264,7 @@ class HuaweiCapturedFeatureService:
                 )
             ),
             "y.IEEE11iEncryptionModes": (
-                security_encryption
+                encryption_mode
                 if beacon_type == "11i"
                 else preserved(
                     "IEEE11iEncryptionModes",
@@ -2220,7 +2272,7 @@ class HuaweiCapturedFeatureService:
                 )
             ),
             "y.X_HW_WPAand11iAuthenticationMode": (
-                auth_default
+                auth_mode
                 if beacon_type in {
                     "WPAand11i", "WPA3", "WPA2/WPA3"
                 }
@@ -2230,7 +2282,7 @@ class HuaweiCapturedFeatureService:
                 )
             ),
             "y.X_HW_WPAand11iEncryptionModes": (
-                security_encryption
+                encryption_mode
                 if beacon_type in {
                     "WPAand11i", "WPA3", "WPA2/WPA3"
                 }
@@ -2239,20 +2291,14 @@ class HuaweiCapturedFeatureService:
                     "AESEncryption",
                 )
             ),
-            "y.X_HW_GroupRekey": preserved(
-                "X_HW_GroupRekey",
-                "3600",
-            ),
+            "y.X_HW_GroupRekey": group_rekey,
             "z.Enable": _as01(
                 config.get(
                     "wps_enabled",
                     current.get("wps_enabled", True),
                 )
             ),
-            "z.X_HW_ConfigMethod": preserved(
-                "X_HW_ConfigMethod",
-                "PushButton",
-            ),
+            "z.X_HW_ConfigMethod": wps_method,
             "w.SsidInst": instance,
             "w.SSID": ssid,
             "w.Enable": _as01(enabled),
@@ -2321,6 +2367,19 @@ class HuaweiCapturedFeatureService:
             if bool(actual.get("broadcast")) != broadcast:
                 return None
             if str(actual.get("max_clientes") or "") != max_clients:
+                return None
+            if str(actual.get("seguranca") or "") != beacon_type:
+                return None
+            if (
+                "wps_enabled" in config
+                and bool(actual.get("wps_enabled"))
+                != bool(config.get("wps_enabled"))
+            ):
+                return None
+            if (
+                config.get("group_rekey") is not None
+                and str(actual.get("group_rekey") or "") != group_rekey
+            ):
                 return None
             return actual
 
