@@ -105,6 +105,44 @@ def _trace_http(
     print(message, flush=True)
 
 
+def _trace_response_exchange(response, *, fallback_url: str) -> None:
+    if not _trace_enabled():
+        return
+
+    chain = [
+        *list(getattr(response, "history", ()) or ()),
+        response,
+    ]
+    for index, item in enumerate(chain, start=1):
+        prepared = getattr(item, "request", None)
+        prepared_headers = getattr(prepared, "headers", {}) or {}
+        prepared_body = getattr(prepared, "body", None)
+        if _trace_raw() and prepared is not None:
+            _trace_http(
+                phase=f"wire-request[{index}/{len(chain)}]",
+                method=str(getattr(prepared, "method", "") or "POST"),
+                url=str(getattr(prepared, "url", "") or fallback_url),
+                headers=prepared_headers,
+                body=prepared_body,
+            )
+        elif prepared is not None:
+            _trace_http(
+                phase=f"wire-request[{index}/{len(chain)}]",
+                method=str(getattr(prepared, "method", "") or "POST"),
+                url=str(getattr(prepared, "url", "") or fallback_url),
+                headers=prepared_headers,
+            )
+
+        _trace_http(
+            phase=f"response[{index}/{len(chain)}]",
+            method=str(getattr(prepared, "method", "") or "POST"),
+            url=str(getattr(item, "url", "") or fallback_url),
+            status=getattr(item, "status_code", None),
+            headers=getattr(item, "headers", {}),
+            body=getattr(item, "text", ""),
+        )
+
+
 @dataclass(frozen=True)
 class HuaweiMutationTransport:
     http_status: int | None
@@ -394,13 +432,9 @@ class HuaweiWebClient:
             timeout=self.timeout,
             allow_redirects=True,
         )
-        _trace_http(
-            phase="response",
-            method="GET",
-            url=url,
-            status=response.status_code,
-            headers=getattr(response, "headers", {}),
-            body=getattr(response, "text", ""),
+        _trace_response_exchange(
+            response,
+            fallback_url=url,
         )
         return response
 
@@ -459,13 +493,9 @@ class HuaweiWebClient:
                 timeout=self.timeout,
                 allow_redirects=True,
             )
-            _trace_http(
-                phase="response",
-                method="POST",
-                url=str(getattr(response, "url", "") or url),
-                status=response.status_code,
-                headers=getattr(response, "headers", {}),
-                body=getattr(response, "text", ""),
+            _trace_response_exchange(
+                response,
+                fallback_url=url,
             )
             return response
 
@@ -524,13 +554,9 @@ class HuaweiWebClient:
                 timeout=(5, self.timeout),
                 allow_redirects=True,
             )
-            _trace_http(
-                phase="response",
-                method="POST",
-                url=str(getattr(response, "url", "") or url),
-                status=response.status_code,
-                headers=getattr(response, "headers", {}),
-                body=getattr(response, "text", ""),
+            _trace_response_exchange(
+                response,
+                fallback_url=url,
             )
 
             auth_lost = self.is_login_response(
