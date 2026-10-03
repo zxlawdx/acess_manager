@@ -6,6 +6,8 @@ import re
 import time
 from copy import deepcopy
 from threading import RLock
+
+from requests import exceptions as requests_exceptions
 from uuid import uuid4
 
 from apps.zte_manager.infrastructure.huawei import (
@@ -59,6 +61,9 @@ class HuaweiService:
         self._client_factory = client_factory
         self._detector = detector
         self._lock = RLock()
+        # Native diagnostics are serialized independently from the session
+        # state lock. Polling sleeps must never block unrelated Huawei reads.
+        self._diagnostic_lock = RLock()
         self._client: HuaweiWebClient | None = None
         self._ipv4_filter: HuaweiIPv4FilterService | None = None
         self._captured: HuaweiCapturedFeatureService | None = None
@@ -766,7 +771,11 @@ class HuaweiService:
                         if channel.isdigit()
                         else channel
                     ),
-                    "standard": radio.get("padrao") or "",
+                    "standard": (
+                        radio.get("standard_raw")
+                        or radio.get("padrao")
+                        or ""
+                    ),
                     "country": radio.get("pais") or "BR",
                     "bandwidth": radio.get("largura") or "Auto",
                     "bandwidth_code": radio.get("bandwidth_code") or "",
@@ -806,6 +815,37 @@ class HuaweiService:
                 },
             }
 
+    def profiles(self):
+        return profile_service.list_profiles(
+            provider=self.vendor,
+            model=self.model,
+        )
+
+    def get_profile(self, attendant=None):
+        owner = (
+            attendant
+            or self.current_attendant
+            or "default"
+        )
+        return profile_service.get_profile(
+            owner,
+            provider=self.vendor,
+            model=self.model,
+        )
+
+    def save_profile(self, attendant, profile):
+        owner = (
+            attendant
+            or self.current_attendant
+            or "default"
+        )
+        return profile_service.save_profile(
+            owner,
+            profile,
+            provider=self.vendor,
+            model=self.model,
+        )
+
     def capture_profile(self, attendant=None):
         with self._lock:
             owner = (
@@ -816,6 +856,8 @@ class HuaweiService:
             return profile_service.save_profile(
                 owner,
                 self.current_configuration(),
+                provider=self.vendor,
+                model=self.model,
             )
 
     def _apply_profile_payload(
@@ -841,6 +883,18 @@ class HuaweiService:
                 def power(value):
                     return str(value or "").strip().rstrip("%")
                 return power(left) == power(right)
+            if key == "bandwidth":
+                def bandwidth(value):
+                    text = " ".join(str(value or "").strip().split())
+                    return "Auto" if text.casefold().startswith("auto") else text
+                return bandwidth(left) == bandwidth(right)
+            if key == "standard":
+                def standard(value):
+                    text = str(value or "").strip()
+                    if text in {"11ax", "b,g,n,ax", "a,n,ac,ax"}:
+                        return "11ax"
+                    return text
+                return standard(left) == standard(right)
             if key in {
                 "auto_channel", "sgi", "band_steering",
                 "airtime_fairness",
@@ -1047,7 +1101,11 @@ class HuaweiService:
                 or "default"
             )
             return self._apply_profile_payload(
-                profile_service.get_profile(owner),
+                profile_service.get_profile(
+                    owner,
+                    provider=self.vendor,
+                    model=self.model,
+                ),
                 operation="huawei_profile_apply",
                 target=owner,
             )
@@ -2050,8 +2108,10 @@ class HuaweiService:
         path: str,
         *,
         deadline_seconds: float,
+        client: HuaweiWebClient | None = None,
     ) -> tuple[str, str, bool]:
-        if self._client is None:
+        active_client = client or self._client
+        if active_client is None:
             raise RuntimeError(
                 "Conecte-se a uma ONT Huawei antes de executar diagnóstico."
             )
@@ -2059,25 +2119,65 @@ class HuaweiService:
         deadline = time.monotonic() + max(1.0, float(deadline_seconds))
         last_output = ""
         last_state = ""
+        transient_failures = 0
+        empty_frames = 0
 
         while True:
-            source = self._client.post_read(
-                path,
-                {},
-                referer=self._DIAGNOSTICS_PAGE,
-            )
-            output, state = self._decode_diagnostic_result(source)
-            if output:
-                last_output = output
-            if state:
-                last_state = state
+            # A diagnostic started in one authenticated session must never
+            # continue against a replacement/disconnected client.
+            if self._client is not active_client:
+                raise RuntimeError(
+                    "A sessão Huawei mudou durante o diagnóstico."
+                )
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return last_output, last_state or "Timeout", False
+
+            try:
+                source = active_client.post_read(
+                    path,
+                    {},
+                    referer=self._DIAGNOSTICS_PAGE,
+                )
+            except (
+                TimeoutError,
+                requests_exceptions.Timeout,
+                requests_exceptions.ConnectionError,
+            ):
+                # Get*Result.asp may miss one or two frames while the ONT is
+                # still executing the native test. Reads are idempotent, so
+                # transient transport failures are safe to poll again.
+                transient_failures += 1
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return last_output, last_state or "Timeout", False
+                time.sleep(min(1.0, remaining))
+                continue
+
+            if not str(source or "").strip():
+                empty_frames += 1
+            else:
+                transient_failures = 0
+                empty_frames = 0
+                output, state = self._decode_diagnostic_result(source)
+                if output:
+                    last_output = output
+                if state:
+                    last_state = state
 
             if self._diagnostic_terminal(last_state):
                 return last_output, last_state, True
-            if time.monotonic() >= deadline:
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 return last_output, last_state or "Timeout", False
 
-            time.sleep(1.0)
+            # Counters intentionally do not abort before the deadline. They
+            # exist to make the tolerated transient/empty frames explicit and
+            # keep this loop deterministic when the firmware answers late.
+            _ = transient_failures, empty_frames
+            time.sleep(min(1.0, remaining))
 
     @staticmethod
     def _parse_ping_output(
@@ -2091,37 +2191,96 @@ class HuaweiService:
         loss = None
         minimum = average = maximum = None
 
-        packets = re.search(
-            r"(\d+)\s+packets?\s+transmitted.*?"
+        def number(value: str) -> float:
+            return float(str(value).replace(",", "."))
+
+        linux_packets = re.search(
+            r"(\d+)\s+packets?\s+transmitted\s*[,;]?\s*"
             r"(\d+)\s+(?:packets?\s+)?received",
             text,
             re.I | re.S,
         )
-        if packets:
-            transmitted = int(packets.group(1))
-            received = int(packets.group(2))
+        if linux_packets:
+            transmitted = int(linux_packets.group(1))
+            received = int(linux_packets.group(2))
+        else:
+            sent = re.search(
+                r"\b(?:sent|transmitted)\s*[:=]\s*(\d+)",
+                text,
+                re.I,
+            )
+            recv = re.search(
+                r"\breceived\s*[:=]\s*(\d+)",
+                text,
+                re.I,
+            )
+            if sent:
+                transmitted = int(sent.group(1))
+            if recv:
+                received = int(recv.group(1))
 
         loss_match = re.search(
-            r"(\d+(?:\.\d+)?)\s*%\s*packet\s+loss",
+            r"(\d+(?:[.,]\d+)?)\s*%\s*"
+            r"(?:packet\s+)?loss",
             text,
             re.I,
         )
+        if not loss_match:
+            loss_match = re.search(
+                r"\(\s*(\d+(?:[.,]\d+)?)\s*%\s*loss\s*\)",
+                text,
+                re.I,
+            )
         if loss_match:
-            loss = float(loss_match.group(1))
+            loss = number(loss_match.group(1))
             if loss.is_integer():
                 loss = int(loss)
 
         rtt = re.search(
-            r"(?:round-trip|rtt)[^=]*=\s*"
-            r"(\d+(?:\.\d+)?)/(\d+(?:\.\d+)?)/"
-            r"(\d+(?:\.\d+)?)",
+            r"(?:round-trip|rtt)[^=\n]*=\s*"
+            r"(\d+(?:[.,]\d+)?)\s*/\s*"
+            r"(\d+(?:[.,]\d+)?)\s*/\s*"
+            r"(\d+(?:[.,]\d+)?)",
             text,
             re.I,
         )
         if rtt:
-            minimum = float(rtt.group(1))
-            average = float(rtt.group(2))
-            maximum = float(rtt.group(3))
+            minimum = number(rtt.group(1))
+            average = number(rtt.group(2))
+            maximum = number(rtt.group(3))
+        else:
+            minimum_match = re.search(
+                r"\b(?:minimum|min)\s*[:=]\s*"
+                r"(\d+(?:[.,]\d+)?)\s*ms",
+                text,
+                re.I,
+            )
+            average_match = re.search(
+                r"\b(?:average|avg)\s*[:=]\s*"
+                r"(\d+(?:[.,]\d+)?)\s*ms",
+                text,
+                re.I,
+            )
+            maximum_match = re.search(
+                r"\b(?:maximum|max)\s*[:=]\s*"
+                r"(\d+(?:[.,]\d+)?)\s*ms",
+                text,
+                re.I,
+            )
+            if minimum_match:
+                minimum = number(minimum_match.group(1))
+            if average_match:
+                average = number(average_match.group(1))
+            if maximum_match:
+                maximum = number(maximum_match.group(1))
+
+        if transmitted is None and received is not None:
+            transmitted = requested_count
+        if received is None and transmitted is not None and loss is not None:
+            received = max(
+                0,
+                int(round(transmitted * (100.0 - float(loss)) / 100.0)),
+            )
 
         success = received
         failure = (
@@ -2129,9 +2288,20 @@ class HuaweiService:
             if transmitted is not None and received is not None
             else None
         )
-        if transmitted is None and received is not None:
-            transmitted = requested_count
-            failure = max(0, requested_count - received)
+        if (
+            loss is None
+            and transmitted not in (None, 0)
+            and received is not None
+        ):
+            calculated = (
+                max(0, transmitted - received)
+                * 100.0
+                / transmitted
+            )
+            loss = int(calculated) if calculated.is_integer() else round(
+                calculated,
+                2,
+            )
 
         return {
             "sucesso": success,
@@ -2187,40 +2357,76 @@ class HuaweiService:
             and not result.get("uncertain")
         )
 
-    def ping(self, config):
-        with self._lock:
-            values = dict(config or {})
-            host = str(values.get("host") or "").strip()
-            if not host:
-                raise ValueError("Informe o destino do ping.")
+    def _active_ppp_internet_interface(self) -> str:
+        rows = self.wan_status(refresh=True)
+        candidates: list[tuple[int, str]] = []
+        for item in rows or []:
+            domain = str(item.get("id") or "")
+            if "WANPPPConnection" not in domain:
+                continue
 
-            count = max(1, int(values.get("count") or 4))
-            data_size = max(32, int(values.get("data_size") or 56))
-            timeout_ms = max(1000, int(values.get("timeout") or 5000))
-            interface = str(values.get("interface") or "").strip()
+            status = str(item.get("status") or "").strip().casefold()
+            if status not in {"1", "up", "online", "connected", "linkup"}:
+                continue
 
-            payload = {
-                "x.Host": host,
-                "x.DiagnosticsState": "Requested",
-                "x.NumberOfRepetitions": str(count),
-                "x.DSCP": str(values.get("dscp") or 0),
-                "x.DataBlockSize": str(data_size),
-                "x.Timeout": str(timeout_ms),
-                "RUNSTATE_FLAG.value": "START",
-            }
-            if interface:
-                payload["x.Interface"] = interface
+            searchable = " ".join(
+                str(item.get(key) or "")
+                for key in ("nome", "services", "wan_type")
+            ).casefold()
+            score = 2 if "internet" in searchable else 0
+            if "tr069" in searchable:
+                score += 1
+            candidates.append((score, domain))
 
-            submitted = self._require_mapped().write_request(
-                self._PING_ACTION,
-                payload,
-                referer=self._DIAGNOSTICS_PAGE,
-                token_page=self._DIAGNOSTICS_PAGE,
+        if not candidates:
+            raise RuntimeError(
+                "Nenhuma WAN PPP de Internet ativa foi identificada para o traceroute."
             )
-            if self._diagnostic_transport_failed(submitted):
-                raise RuntimeError(
-                    "A ONT Huawei recusou o início do ping."
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        return candidates[0][1]
+
+    def ping(self, config):
+        # Serialize native active diagnostics, but hold the broad session lock
+        # only while building/submitting the request and while auditing.
+        with self._diagnostic_lock:
+            with self._lock:
+                values = dict(config or {})
+                host = str(values.get("host") or "").strip()
+                if not host:
+                    raise ValueError("Informe o destino do ping.")
+
+                count = max(1, int(values.get("count") or 4))
+                data_size = max(32, int(values.get("data_size") or 56))
+                timeout_ms = max(1000, int(values.get("timeout") or 5000))
+                interface = str(values.get("interface") or "").strip()
+                client = self._client
+                if client is None:
+                    raise RuntimeError(
+                        "Conecte-se a uma ONT Huawei antes de executar diagnóstico."
+                    )
+
+                payload = {
+                    "x.Host": host,
+                    "x.DiagnosticsState": "Requested",
+                    "x.NumberOfRepetitions": str(count),
+                    "x.DSCP": str(values.get("dscp") or 0),
+                    "x.DataBlockSize": str(data_size),
+                    "x.Timeout": str(timeout_ms),
+                    "RUNSTATE_FLAG.value": "START",
+                }
+                if interface:
+                    payload["x.Interface"] = interface
+
+                submitted = self._require_mapped().write_request(
+                    self._PING_ACTION,
+                    payload,
+                    referer=self._DIAGNOSTICS_PAGE,
+                    token_page=self._DIAGNOSTICS_PAGE,
                 )
+                if self._diagnostic_transport_failed(submitted):
+                    raise RuntimeError(
+                        "A ONT Huawei recusou o início do ping."
+                    )
 
             output, state, complete = self._poll_huawei_diagnostic(
                 self._PING_RESULT_PATH,
@@ -2231,6 +2437,7 @@ class HuaweiService:
                         (count * timeout_ms / 1000.0) + 5.0,
                     ),
                 ),
+                client=client,
             )
             ping_stats = self._parse_ping_output(
                 output,
@@ -2250,69 +2457,79 @@ class HuaweiService:
                 "resultado": output or (
                     f"Diagnóstico Huawei finalizado em estado {state or 'desconhecido'}."
                 ),
-                # verified means the ONT reached a terminal diagnostic state;
-                # connectivity success is reported separately below.
                 "verified": complete,
                 "success": connectivity_success,
                 "uncertain": not complete,
                 **ping_stats,
             }
-            self._audit_captured(
-                operation="diagnostic_ping",
-                target=host,
-                result=result,
-                before=None,
-                after={
-                    "host": host,
-                    "interface": interface,
-                    "count": count,
-                    "data_size": data_size,
-                    "timeout": timeout_ms,
-                },
-            )
+            with self._lock:
+                if self._client is not client:
+                    raise RuntimeError(
+                        "A sessão Huawei mudou durante o diagnóstico."
+                    )
+                self._audit_captured(
+                    operation="diagnostic_ping",
+                    target=host,
+                    result=result,
+                    before=None,
+                    after={
+                        "host": host,
+                        "interface": interface,
+                        "count": count,
+                        "data_size": data_size,
+                        "timeout": timeout_ms,
+                    },
+                )
             return result
 
     def traceroute(self, config):
-        with self._lock:
-            values = dict(config or {})
-            host = str(values.get("host") or "").strip()
-            if not host:
-                raise ValueError("Informe o destino do traceroute.")
+        with self._diagnostic_lock:
+            with self._lock:
+                values = dict(config or {})
+                host = str(values.get("host") or "").strip()
+                if not host:
+                    raise ValueError("Informe o destino do traceroute.")
 
-            interface = str(values.get("interface") or "").strip()
-            data_size = max(
-                38,
-                int(values.get("data_size") or 38),
-            )
-            timeout_ms = max(2000, int(values.get("timeout") or 5000))
+                interface = str(values.get("interface") or "").strip()
+                if not interface:
+                    interface = self._active_ppp_internet_interface()
 
-            protocol = str(values.get("protocol") or "AUTO").strip().upper()
-            protocol_code = values.get("protocol_code")
-            if protocol_code in (None, "") and protocol == "AUTO":
-                # Physically captured EG8041X7-10 WebUI payload.
+                data_size = max(
+                    38,
+                    int(values.get("data_size") or 38),
+                )
+                timeout_ms = max(2000, int(values.get("timeout") or 5000))
+                client = self._client
+                if client is None:
+                    raise RuntimeError(
+                        "Conecte-se a uma ONT Huawei antes de executar diagnóstico."
+                    )
+
+                # This is the only protocol value physically confirmed on the
+                # EG8041X7-10 WebUI capture. Generic UI values such as ICMP/UDP
+                # must not leak into the Huawei CGI contract.
+                protocol = "AUTO"
                 protocol_code = "0"
 
-            payload = {
-                "x.DiagnosticsState": "Requested",
-                "x.Host": host,
-                "x.DataBlockSize": str(data_size),
-                "RUNSTATE_FLAG.value": "START",
-            }
-            if interface:
-                payload["x.Interface"] = interface
-            if protocol_code not in (None, ""):
-                payload["x.X_HW_ProtocolType"] = str(protocol_code)
+                payload = {
+                    "x.Interface": interface,
+                    "x.X_HW_ProtocolType": protocol_code,
+                    "x.DiagnosticsState": "Requested",
+                    "x.Host": host,
+                    "x.DataBlockSize": str(data_size),
+                    "RUNSTATE_FLAG.value": "START",
+                }
 
-            submitted = self._require_mapped().write_request(
-                self._TRACE_ACTION,
-                payload,
-                referer=self._DIAGNOSTICS_PAGE,
-                token_page=self._DIAGNOSTICS_PAGE,
-            )
-            if self._diagnostic_transport_failed(submitted):
-                raise RuntimeError(
-                    "A ONT Huawei recusou o início do traceroute."
+                submitted = self._require_mapped().write_request(
+                    self._TRACE_ACTION,
+                    payload,
+                    referer=self._DIAGNOSTICS_PAGE,
+                    token_page=self._DIAGNOSTICS_PAGE,
                 )
+                if self._diagnostic_transport_failed(submitted):
+                    raise RuntimeError(
+                        "A ONT Huawei recusou o início do traceroute."
+                    )
 
             output, state, complete = self._poll_huawei_diagnostic(
                 self._TRACE_RESULT_PATH,
@@ -2320,6 +2537,7 @@ class HuaweiService:
                     60.0,
                     max(20.0, (timeout_ms / 1000.0) + 15.0),
                 ),
+                client=client,
             )
             diagnostic_success = bool(
                 complete
@@ -2331,11 +2549,7 @@ class HuaweiService:
                 "interface": interface,
                 "ip_version": str(values.get("ip_version") or "IPv4"),
                 "protocol": protocol,
-                "protocol_code": (
-                    str(protocol_code)
-                    if protocol_code not in (None, "")
-                    else ""
-                ),
+                "protocol_code": protocol_code,
                 "diagnostics_state": state,
                 "hops": self._parse_traceroute_hops(output),
                 "resultado": output or (
@@ -2345,23 +2559,24 @@ class HuaweiService:
                 "success": diagnostic_success,
                 "uncertain": not complete,
             }
-            self._audit_captured(
-                operation="diagnostic_traceroute",
-                target=host,
-                result=result,
-                before=None,
-                after={
-                    "host": host,
-                    "interface": interface,
-                    "data_size": data_size,
-                    "protocol": protocol,
-                    "protocol_code": (
-                        str(protocol_code)
-                        if protocol_code not in (None, "")
-                        else ""
-                    ),
-                },
-            )
+            with self._lock:
+                if self._client is not client:
+                    raise RuntimeError(
+                        "A sessão Huawei mudou durante o diagnóstico."
+                    )
+                self._audit_captured(
+                    operation="diagnostic_traceroute",
+                    target=host,
+                    result=result,
+                    before=None,
+                    after={
+                        "host": host,
+                        "interface": interface,
+                        "data_size": data_size,
+                        "protocol": protocol,
+                        "protocol_code": protocol_code,
+                    },
+                )
             return result
 
     def mapped_catalog(self):
