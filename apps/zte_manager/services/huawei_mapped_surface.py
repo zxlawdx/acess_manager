@@ -593,9 +593,14 @@ _WRITE_DEFAULTS = {
 }
 
 
-_SECRET_KEYS = frozenset({
+_SESSION_SECRET_KEYS = frozenset({
     "x_hw_token", "hwonttoken", "onttoken", "cookie", "cookiehttp",
-    "authorization", "password", "passwd", "passphrase", "secret",
+    "authorization",
+})
+
+_SECRET_KEYS = frozenset({
+    *_SESSION_SECRET_KEYS,
+    "password", "passwd", "passphrase", "secret",
     "credential", "presharedkey", "pre_shared_key", "psk",
     "keypassphrase", "acs_password", "pppoe_password",
 })
@@ -632,6 +637,17 @@ def _secret_key(key: object) -> bool:
         or compact.endswith("credential")
         or "presharedkey" in compact
         or compact.endswith("psk")
+        or compact == "authorization"
+    )
+
+
+def _session_secret_key(key: object) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(key).casefold()).strip("_")
+    compact = normalized.replace("_", "")
+    return (
+        normalized in _SESSION_SECRET_KEYS
+        or compact.endswith("token")
+        or compact.endswith("cookie")
         or compact == "authorization"
     )
 
@@ -768,7 +784,7 @@ class HuaweiMappedSurfaceService:
         clean_payload = {
             str(key): str(value)
             for key, value in dict(payload or {}).items()
-            if not _secret_key(key)
+            if not _session_secret_key(key)
         }
         if token_page:
             token_source = self.client.get_page(
@@ -858,7 +874,7 @@ class HuaweiMappedSurfaceService:
         form = {
             str(key): str(value)
             for key, value in dict(payload or {}).items()
-            if not _secret_key(key)
+            if not _session_secret_key(key)
         }
         form["x.X_HW_Token"] = token
 
