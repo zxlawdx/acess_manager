@@ -5,7 +5,10 @@ from copy import deepcopy
 from typing import Any
 from urllib.parse import urlsplit
 
-from apps.zte_manager.infrastructure.huawei import HuaweiWebClient
+from apps.zte_manager.infrastructure.huawei import (
+    HuaweiResponseParser,
+    HuaweiWebClient,
+)
 from apps.zte_manager.services.huawei_captured_features import (
     parse_huawei_js_records,
 )
@@ -434,6 +437,66 @@ HUAWEI_MAPPED_WRITES: dict[str, dict[str, Any]] = {
         "token_page": "/html/bbsp/dscptopbit/dscptopbit.asp",
         "fields": ("x.DscpToPbitMapping", "x.DefaultPbit"),
     },
+    "sntp_general": {
+        "path": (
+            "/html/ssmp/sntp/set.cgi?"
+            "x=InternetGatewayDevice.Time&"
+            "RequestFile=html/ssmp/sntp/sntp.asp"
+        ),
+        "referer": "/html/ssmp/sntp/sntp.asp",
+        "token_page": "/html/ssmp/sntp/sntp.asp",
+        "fields": ("x.Enable", "x.X_HW_SynInterval", "x.X_HW_WanName"),
+    },
+    "sntp_dst": {
+        "path": (
+            "/html/ssmp/sntp/set.cgi?"
+            "y=InternetGatewayDevice.Time&"
+            "RequestFile=html/ssmp/sntp/sntp.asp"
+        ),
+        "referer": "/html/ssmp/sntp/sntp.asp",
+        "token_page": "/html/ssmp/sntp/sntp.asp",
+        "fields": ("y.DaylightSavingsUsed",),
+    },
+    "upnp": {
+        "path": (
+            "/html/bbsp/upnp/set.cgi?"
+            "x=InternetGatewayDevice.X_HW_MainUPnP&"
+            "y=InternetGatewayDevice.X_HW_SlvUPnP&"
+            "RequestFile=html/bbsp/upnp/upnp.asp"
+        ),
+        "referer": "/html/bbsp/upnp/upnp.asp",
+        "token_page": "/html/bbsp/upnp/upnp.asp",
+        "fields": ("x.Enable", "y.Enable"),
+    },
+    "wlan_mac_filter": {
+        "path": (
+            "/html/bbsp/wlanmacfilter/set.cgi?"
+            "x=InternetGatewayDevice.X_HW_Security&"
+            "RequestFile=html/bbsp/wlanmacfilter/wlanmacfilter.asp"
+        ),
+        "referer": "/html/bbsp/wlanmacfilter/wlanmacfilter.asp",
+        "token_page": "/html/bbsp/wlanmacfilter/wlanmacfilter.asp",
+        "fields": ("x.WlanMacFilterRight", "x.WlanMacFilterPolicy"),
+    },
+    "lan_service": {
+        "path": (
+            "/html/bbsp/lanservicecfg/set.cgi?"
+            "x=InternetGatewayDevice.X_HW_APService.MultiSrvPortList&"
+            "RequestFile=html/bbsp/lanservicecfg/lanportcfg.asp"
+        ),
+        "referer": "/html/bbsp/lanservicecfg/lanportcfg.asp",
+        "token_page": "/html/bbsp/lanservicecfg/lanportcfg.asp",
+        "fields": ("x.PhyPortName",),
+    },
+    "parental_control_delete": {
+        "path": (
+            "/html/bbsp/parentalctrl/del.cgi?"
+            "RequestFile=html/bbsp/parentalctrl/parentalctrlmac.asp"
+        ),
+        "referer": "/html/bbsp/parentalctrl/parentalctrlmac.asp",
+        "token_page": "/html/bbsp/parentalctrl/parentalctrlmac.asp",
+        "fields": ("domain",),
+    },
     "speed_test": {
         "path": (
             "/html/ssmp/Sectionspeed/setajax.cgi?"
@@ -527,6 +590,11 @@ HUAWEI_MAPPED_WRITES: dict[str, dict[str, Any]] = {
 HUAWEI_FEATURE_WRITE_OPERATIONS: dict[str, tuple[str, ...]] = {
     "port_isolation": ("port_isolation",),
     "dscp_to_pbit": ("dscp_to_pbit",),
+    "sntp": ("sntp_general", "sntp_dst"),
+    "upnp": ("upnp",),
+    "mac_filter": ("wlan_mac_filter",),
+    "lan_service": ("lan_service",),
+    "parental_control": ("parental_control_delete",),
     "speed_test": ("speed_test", "speed_test_mode"),
     "diagnostics_webui": (
         "diagnostics_prepare",
@@ -541,6 +609,12 @@ HUAWEI_FEATURE_WRITE_OPERATIONS: dict[str, tuple[str, ...]] = {
 _WRITE_OPERATION_LABELS = {
     "port_isolation": "Aplicar isolamento de portas",
     "dscp_to_pbit": "Configurar DSCP para P-bit",
+    "sntp_general": "Configurar sincronização de horário",
+    "sntp_dst": "Configurar horário de verão",
+    "upnp": "Configurar UPnP",
+    "wlan_mac_filter": "Configurar política de MAC Wi-Fi",
+    "lan_service": "Configurar portas de serviço LAN",
+    "parental_control_delete": "Remover regra de controle parental",
     "speed_test": "Executar teste de velocidade",
     "speed_test_mode": "Selecionar modo do teste",
     "diagnostics_prepare": "Preparar diagnóstico",
@@ -554,6 +628,13 @@ _WRITE_OPERATION_LABELS = {
 _WRITE_FIELD_LABELS = {
     "x.DscpToPbitMapping": "Mapeamento DSCP → P-bit",
     "x.DefaultPbit": "P-bit padrão",
+    "x.X_HW_SynInterval": "Intervalo de sincronização",
+    "x.X_HW_WanName": "Interface WAN",
+    "y.DaylightSavingsUsed": "Horário de verão",
+    "x.WlanMacFilterRight": "Direção da política MAC",
+    "x.WlanMacFilterPolicy": "Política MAC",
+    "x.PhyPortName": "Portas físicas",
+    "domain": "Regra/instância",
     "x.DiagnosticsState": "Estado do teste",
     "x.ServerAddr": "Servidor de teste",
     "x.DestMac": "MAC de destino",
@@ -650,6 +731,43 @@ def _relative_path(path: object) -> str:
     if "\x00" in value or ".." in split.path.split("/"):
         raise ValueError("Endpoint Huawei inválido.")
     return value
+
+
+def _request_file_page(path: object) -> str | None:
+    """Return the real form page encoded in Huawei's RequestFile query."""
+    value = _relative_path(path)
+    match = re.search(r"(?:[?&])RequestFile=([^&#]+)", value, re.I)
+    if not match:
+        return None
+    request_file = re.sub(r"%2f", "/", match.group(1), flags=re.I)
+    if request_file.casefold() in {"nopage", "none", ""}:
+        return None
+    if not request_file.startswith("/"):
+        request_file = "/" + request_file
+    return _relative_path(request_file)
+
+
+def _readback_contains(value: Any, expected: dict[str, Any]) -> bool:
+    """Best-effort recursive comparison for explicitly requested read-back."""
+    if not expected:
+        return False
+    if isinstance(value, dict):
+        direct = all(
+            str(value.get(key, "")) == str(item)
+            for key, item in expected.items()
+            if key in value
+        )
+        present = [key for key in expected if key in value]
+        if present and direct and len(present) == len(expected):
+            return True
+        return any(
+            _readback_contains(item, expected)
+            for item in value.values()
+            if isinstance(item, (dict, list))
+        )
+    if isinstance(value, list):
+        return any(_readback_contains(item, expected) for item in value)
+    return False
 
 
 def _secret_key(key: object) -> bool:
@@ -893,12 +1011,15 @@ class HuaweiMappedSurfaceService:
         readback_path: str | None = None,
         readback_method: str = "GET",
         readback_payload: dict[str, Any] | None = None,
+        readback_expect: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         relative = _relative_path(path)
         referer_path = _relative_path(referer)
-        token_source = self.client.get_page(
-            _relative_path(token_page or referer_path)
+        request_page = _request_file_page(relative)
+        token_path = _relative_path(
+            token_page or request_page or referer_path
         )
+        token_source = self.client.get_page(token_path)
         token = self.client.extract_token(token_source)
 
         form = {
@@ -908,43 +1029,71 @@ class HuaweiMappedSurfaceService:
         }
         form["x.X_HW_Token"] = token
 
+        # The physical EG8041X7-10 flow uses the form page as Referer even
+        # when the captured navigation chain previously pointed at another CGI.
+        effective_referer = request_page or token_path or referer_path
         transport = self.client.post_form(
             relative,
             form,
-            referer=referer_path,
+            referer=effective_referer,
+        )
+        parsed = HuaweiResponseParser.parse(
+            http_status=transport.http_status,
+            body=transport.body,
+            content_type=transport.content_type,
         )
         result: dict[str, Any] = {
             "success": bool(
-                transport.http_status is not None
-                and 200 <= transport.http_status < 400
+                parsed.accepted
                 and not transport.connection_uncertain
             ),
+            "accepted": parsed.accepted,
             "submitted": True,
             "http_status": transport.http_status,
+            "response_type": parsed.response_type,
+            "error_code": parsed.error_code,
+            "error_message": parsed.error_message,
             "timed_out": transport.timed_out,
             "connection_uncertain": transport.connection_uncertain,
-            "verified": False,
+            "verified": parsed.confirmed,
             "uncertain": bool(
                 transport.timed_out
                 or transport.connection_uncertain
                 or transport.http_status is None
             ),
         }
+        if parsed.data is not None:
+            result["response_data"] = _safe_value(parsed.data)
 
-        if readback_path:
+        if readback_path and parsed.accepted:
             try:
                 readback = self.read_request(
                     readback_path,
                     method=readback_method,
                     payload=readback_payload,
-                    referer=referer_path,
+                    referer=effective_referer,
                 )
                 result["readback"] = readback["data"]
-                result["verified"] = True
-                result["success"] = True
-                result["uncertain"] = False
+                result["readback_observed"] = True
+                if readback_expect:
+                    matched = _readback_contains(
+                        readback["data"],
+                        dict(readback_expect),
+                    )
+                    result["verified"] = matched
+                    result["success"] = matched
+                    result["uncertain"] = not matched
+                elif parsed.confirmed:
+                    result["verified"] = True
+                    result["uncertain"] = False
             except Exception as exc:
                 result["readback_error"] = type(exc).__name__
+                result["uncertain"] = True
+
+        if not parsed.accepted:
+            result["success"] = False
+            result["verified"] = False
+            result["uncertain"] = False
 
         return result
 
@@ -966,6 +1115,22 @@ class HuaweiMappedSurfaceService:
             for field in fields
             if field in values
         }
+        if key == "parental_control_delete":
+            domain = str(values.get("domain") or "").strip()
+            prefix = (
+                "InternetGatewayDevice.X_HW_Security."
+                "ParentalCtrl.MAC."
+            )
+            if domain.isdigit():
+                domain = prefix + domain
+            if not (
+                domain.startswith(prefix)
+                and domain[len(prefix):].isdigit()
+            ):
+                raise ValueError(
+                    "Informe a instância/domínio da regra parental."
+                )
+            payload = {domain: ""}
         readback_feature = {
             "speed_test_mode": "speed_test",
             "diagnostics_prepare": "diagnostics_webui",
