@@ -28,6 +28,7 @@ from apps.zte_manager.services.huawei_captured_features import (
 )
 from apps.zte_manager.services.huawei_mapped_surface import (
     HUAWEI_MAPPED_FEATURES,
+    HUAWEI_MAPPED_WRITES,
     HuaweiMappedSurfaceService,
 )
 from apps.zte_manager.services.tr069_profile_service import (
@@ -1735,103 +1736,190 @@ class HuaweiService:
             result["snapshot_resource"] = "firewall_level"
             return result
 
+    def mapped_catalog(self):
+        with self._lock:
+            data = self._require_mapped().catalog()
+            data["model"] = self.model
+            data["profile"] = self.profile_key
+            return data
+
+    def mapped_read_feature(self, feature):
+        with self._lock:
+            return self._require_mapped().read_feature(feature)
+
+    def mapped_read_request(
+        self,
+        path,
+        *,
+        method="GET",
+        payload=None,
+        referer="/index.asp",
+    ):
+        with self._lock:
+            return self._require_mapped().read_request(
+                path,
+                method=method,
+                payload=payload,
+                referer=referer,
+            )
+
+    def mapped_write_feature(self, operation, config=None):
+        with self._lock:
+            result = self._require_mapped().write_feature(
+                operation,
+                config,
+            )
+            self._audit_captured(
+                operation=f"huawei_mapped_{operation}",
+                target=operation,
+                result=result,
+                before=None,
+                after=dict(config or {}),
+            )
+            return result
+
+    def mapped_write_request(
+        self,
+        path,
+        payload=None,
+        *,
+        referer="/index.asp",
+        token_page=None,
+        readback_path=None,
+        readback_method="GET",
+        readback_payload=None,
+    ):
+        with self._lock:
+            result = self._require_mapped().write_request(
+                path,
+                payload,
+                referer=referer,
+                token_page=token_page,
+                readback_path=readback_path,
+                readback_method=readback_method,
+                readback_payload=readback_payload,
+            )
+            self._audit_captured(
+                operation="huawei_mapped_request",
+                target="mapped_request",
+                result=result,
+                before=None,
+                after={"submitted": True},
+            )
+            return result
+
     def port_forwarding_status(self):
-        return []
+        return self.mapped_read_feature("port_mapping")
 
     def sntp_management_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": (
-                "SNTP aparece no firmware Huawei, mas não houve mutation "
-                "validada nesta captura."
-            ),
-        }
+        return self.mapped_read_feature("sntp")
 
     def qos_management_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": (
-                "QoS Huawei não possui fluxo de escrita validado neste profile."
-            ),
-        }
+        return self.mapped_read_feature("qos_smart")
 
     def firmware_management_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "model": self.model,
-        }
+        result = self.mapped_read_feature("firmware")
+        result["model"] = self.model
+        return result
 
     def wan_configurations(self):
-        # The generic management reader expects a WAN collection. Reuse the
-        # authenticated Huawei WAN parser rather than falling into ZTE.
+        # Keep the normalized WAN collection for the existing management UI.
         return self.wan_status()
 
     def workstation_diagnostic(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": (
-                "Diagnóstico de estação ThinkLua não se aplica à sessão Huawei."
-            ),
-        }
+        return self.mapped_read_feature("diagnostics_webui")
 
     def export_user_configuration(self):
-        raise PermissionError(
-            "Backup/export Huawei ainda não foi validado para este profile."
-        )
+        return self.mapped_read_feature("config_backup")
 
     def reboot(self):
-        raise PermissionError(
-            "Reboot Huawei não foi exercitado na captura de laboratório."
-        )
+        # Reboot page is mapped. The low-level mapped mutation endpoint is
+        # intentionally exposed separately so the exact captured request can
+        # be submitted without fabricating a firmware-specific form here.
+        return self.mapped_read_feature("reboot")
 
     def account_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": (
-                "A captura atual não validou leitura/alteração da conta administrativa Huawei."
-            ),
-        }
+        return self.mapped_read_feature("account")
 
     def upnp_status(self):
-        return {
-            "available": False,
-            "vendor": "huawei",
-            "message": "UPnP Huawei ainda não foi validado nesta captura.",
-        }
+        return self.mapped_read_feature("upnp")
 
     def set_upnp(self, config):
-        raise PermissionError(
-            "UPnP Huawei ainda não foi validado nesta captura."
+        values = dict(config or {})
+        request = values.pop("_request", None)
+        if not isinstance(request, dict):
+            raise ValueError(
+                "Informe _request com o endpoint/payload Huawei mapeado."
+            )
+        return self.mapped_write_request(
+            request.get("path"),
+            request.get("payload") or values,
+            referer=request.get("referer") or "/html/bbsp/upnp/upnp.asp",
+            token_page=request.get("token_page") or "/html/bbsp/upnp/upnp.asp",
+            readback_path=request.get("readback_path") or "/html/bbsp/upnp/upnp.asp",
         )
 
     def wps_status(self):
-        return []
+        return self.wifi_networks()
 
     def set_wps(self, band, mode):
-        raise PermissionError(
-            "Alteração WPS Huawei ainda não foi validada."
+        networks = self.wifi_networks()
+        target = next(
+            (
+                row for row in networks
+                if str(row.get("banda") or "").lower().startswith(
+                    "5" if "5" in str(band) else "2"
+                )
+            ),
+            None,
+        )
+        if not target:
+            raise ValueError("SSID Huawei não encontrado para a banda.")
+        return self.set_ssid_config(
+            target.get("id"),
+            {"wps_enabled": str(mode).lower() not in {"0", "off", "false", "disabled"}},
         )
 
     def band_steering_status(self):
+        radios = self.wifi_radios()
+        values = [
+            row.get("band_steering")
+            for row in radios
+            if row.get("band_steering") is not None
+        ]
         return {
-            "available": False,
+            "available": bool(radios),
             "vendor": "huawei",
+            "enabled": any(bool(value) for value in values),
+            "radios": radios,
         }
 
     def set_band_steering(self, enabled):
-        raise PermissionError(
-            "Band Steering Huawei ainda não foi validado semanticamente."
+        return self.configure_band_steering(
+            {"band_steering": bool(enabled)}
         )
 
     def configure_band_steering(self, config):
-        raise PermissionError(
-            "Band Steering Huawei ainda não foi validado semanticamente."
-        )
+        results = []
+        for radio in self.wifi_radios():
+            band = radio.get("banda")
+            if not band:
+                continue
+            payload = dict(config or {})
+            payload.setdefault("channel", radio.get("canal"))
+            payload.setdefault(
+                "auto_channel",
+                bool(radio.get("canal_automatico")),
+            )
+            results.append(
+                self.set_wifi_radio(band, payload)
+            )
+        return {
+            "success": bool(results) and all(
+                item.get("verified") for item in results
+            ),
+            "results": results,
+        }
 
     def list_ipv4_filters(self, *, refresh: bool = False) -> dict:
         with self._lock:
