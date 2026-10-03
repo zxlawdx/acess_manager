@@ -1847,6 +1847,20 @@ class HuaweiCapturedFeatureService:
                 for item in requested_hosts
                 if isinstance(item, dict) and item.get("id")
             }
+            requested_values = {
+                (
+                    str(item.get("ip") or item.get("IPAddress") or ""),
+                    str(
+                        item.get("nome")
+                        or item.get("name")
+                        or item.get("domain_name")
+                        or item.get("DomainName")
+                        or ""
+                    ),
+                )
+                for item in requested_hosts
+                if isinstance(item, dict)
+            }
             for item in requested_hosts:
                 if not isinstance(item, dict):
                     continue
@@ -1878,7 +1892,15 @@ class HuaweiCapturedFeatureService:
                     )
             for item in actual_hosts:
                 host_id = str(item.get("id") or "")
-                if host_id and host_id not in requested_ids:
+                identity = (
+                    str(item.get("ip") or ""),
+                    str(item.get("nome") or ""),
+                )
+                if (
+                    host_id
+                    and host_id not in requested_ids
+                    and identity not in requested_values
+                ):
                     results.append(
                         self.delete_dns_host(host_id)
                     )
