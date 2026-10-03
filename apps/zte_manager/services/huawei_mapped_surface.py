@@ -595,7 +595,9 @@ _WRITE_DEFAULTS = {
 
 _SECRET_KEYS = frozenset({
     "x_hw_token", "hwonttoken", "onttoken", "cookie", "cookiehttp",
-    "authorization",
+    "authorization", "password", "passwd", "passphrase", "secret",
+    "credential", "presharedkey", "pre_shared_key", "psk",
+    "keypassphrase", "acs_password", "pppoe_password",
 })
 
 
@@ -623,6 +625,13 @@ def _secret_key(key: object) -> bool:
     return (
         compact.endswith("token")
         or compact.endswith("cookie")
+        or compact.endswith("password")
+        or compact.endswith("passwd")
+        or compact.endswith("passphrase")
+        or compact.endswith("secret")
+        or compact.endswith("credential")
+        or "presharedkey" in compact
+        or compact.endswith("psk")
         or compact == "authorization"
     )
 
@@ -726,10 +735,18 @@ class HuaweiMappedSurfaceService:
         }
 
     def _normalize_page(self, path: str, source: str) -> dict[str, Any]:
-        records = [
-            _safe_value(record)
-            for record in parse_huawei_js_records(source)
-        ]
+        records = []
+        for parsed in parse_huawei_js_records(source):
+            # _args can repeat constructor values positionally and would
+            # bypass key-based secret filtering. Constructor names are an
+            # internal parser detail and are not useful to the operator.
+            public = {
+                str(key): value
+                for key, value in parsed.items()
+                if not str(key).startswith("_")
+                and not _secret_key(key)
+            }
+            records.append(_safe_value(public))
         return {
             "path": path,
             "records": records,
