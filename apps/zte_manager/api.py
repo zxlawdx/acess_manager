@@ -1718,9 +1718,9 @@ def current_configuration(context=None):
 
 @api.get("/profiles")
 def profiles(context=None):
-    return {
-        "profiles": zte_service.profiles()
-    }
+    return _safe_call(
+        lambda: {"profiles": device_service.profiles()}
+    )
 
 
 @api.post("/profiles/get")
@@ -1731,7 +1731,7 @@ def get_profile(context=None):
             context
         )
 
-        return zte_service.get_profile(
+        return device_service.get_profile(
             data.attendant
         )
 
@@ -1748,7 +1748,7 @@ def save_profile(context=None):
             context
         )
 
-        return zte_service.save_profile(
+        return device_service.save_profile(
             data.attendant,
             {
                 "wifi": data.wifi,
