@@ -858,6 +858,12 @@ class HuaweiMappedSurfaceService:
                 "mapped_writes": writes,
                 "page_count": len(spec.get("pages") or ()),
                 "read_request_count": len(spec.get("reads") or ()),
+                "partial": key == "parental_control",
+                "unconfirmed": (
+                    ["create"]
+                    if key == "parental_control"
+                    else []
+                ),
             })
         return {
             "vendor": "huawei",
@@ -1136,7 +1142,18 @@ class HuaweiMappedSurfaceService:
             "diagnostics_prepare": "diagnostics_webui",
             "diagnostics_port_check": "diagnostics_webui",
             "diagnostics_run": "diagnostics_webui",
+            "sntp_general": "sntp",
+            "sntp_dst": "sntp",
+            "upnp": "upnp",
+            "wlan_mac_filter": "mac_filter",
+            "lan_service": "lan_service",
+            "parental_control_delete": "parental_control",
         }.get(key, key)
+        readback_expect = {
+            str(field).split(".", 1)[-1]: str(value)
+            for field, value in payload.items()
+            if "." in str(field)
+        }
         result = self.write_request(
             spec["path"],
             payload,
@@ -1148,6 +1165,7 @@ class HuaweiMappedSurfaceService:
                     {},
                 ).get("pages") or [None]
             )[0],
+            readback_expect=readback_expect or None,
         )
         result["operation"] = key
         return result
