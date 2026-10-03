@@ -986,6 +986,11 @@ def huawei_mapped_read(context=None):
             method=str(data.get("method") or "GET"),
             payload=data.get("payload") or {},
             referer=str(data.get("referer") or "/index.asp"),
+            token_page=(
+                str(data.get("token_page"))
+                if data.get("token_page")
+                else None
+            ),
         )
 
     return _safe_call(action)
