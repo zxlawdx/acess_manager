@@ -116,6 +116,47 @@ class HuaweiMappedSurfaceTests(unittest.TestCase):
             "post-ok",
         )
 
+    def test_tokenized_post_read_gets_fresh_token_without_mutating(self):
+        service = self.make_service()
+        result = service.read_request(
+            "/html/test/read.cgi",
+            method="POST",
+            payload={"x.State": "Requested"},
+            referer="/html/test/page.asp",
+            token_page="/html/test/page.asp",
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(len(self.client.post_form_calls), 0)
+        self.assertEqual(len(self.client.post_read_calls), 1)
+        _path, payload, _referer = self.client.post_read_calls[0]
+        self.assertEqual(
+            payload["x.X_HW_Token"],
+            "fresh-token-123456",
+        )
+
+    def test_mapped_features_include_captured_post_reads(self):
+        service = self.make_service()
+        catalog = {
+            item["key"]: item
+            for item in service.catalog()["features"]
+        }
+        self.assertGreater(catalog["wan_config"]["read_request_count"], 0)
+        self.assertGreater(catalog["user_devices"]["read_request_count"], 0)
+        self.assertGreater(catalog["diagnostics_webui"]["read_request_count"], 0)
+        self.assertGreater(catalog["security_check"]["read_request_count"], 0)
+
+    def test_write_schema_exposes_only_captured_semantic_mutations(self):
+        speed = HuaweiMappedSurfaceService.write_schema("speed_test")
+        self.assertTrue(speed["available"])
+        operations = {item["key"] for item in speed["operations"]}
+        self.assertEqual(
+            operations,
+            {"speed_test", "speed_test_mode"},
+        )
+        upnp = HuaweiMappedSurfaceService.write_schema("upnp")
+        self.assertFalse(upnp["available"])
+
     def test_request_never_leaves_connected_huawei_host(self):
         service = self.make_service()
 
