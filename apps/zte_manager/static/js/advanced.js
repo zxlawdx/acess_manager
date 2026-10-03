@@ -1660,33 +1660,37 @@ function syncAdvancedNetworkForms() {
     for (const [key, selector] of controls) {
         const control = document.querySelector(selector);
         if (!control) continue;
-        const huaweiReservationUpdate = (
-            currentVendor === "huawei"
-            && selector.includes("dhcpReservationForm")
-            && advancedState.dhcp?.capabilities?.reservation_update === true
-            && Boolean(
-                document.getElementById("dhcpReservationId")?.value
+        const reservationForm = selector.includes(
+            "dhcpReservationForm"
+        );
+        const reservationId = document.getElementById(
+            "dhcpReservationId"
+        )?.value;
+        const reservationAllowed = (
+            !reservationForm
+            || currentVendor !== "huawei"
+            || (
+                reservationId
+                    ? advancedState.dhcp?.capabilities?.reservation_update === true
+                    : advancedState.dhcp?.capabilities?.reservation_create === true
             )
         );
         const unsupportedHuaweiWrite = (
             currentVendor === "huawei"
-            && (
-                selector.includes("portForwardForm")
-                || (
-                    selector.includes("dhcpReservationForm")
-                    && !huaweiReservationUpdate
-                )
-            )
+            && selector.includes("portForwardForm")
         );
         const ready = !unsupportedHuaweiWrite &&
+            reservationAllowed &&
             Boolean(ontConnected && routerWriteEnabled && loaded[key]) &&
             (key !== "dhcp" || advancedState.dhcp?.write_safe !== false);
         control.disabled = !ready;
         control.title = unsupportedHuaweiWrite
-            ? "Esta operação específica ainda não foi capturada/validada para Huawei."
-            : ready
-                ? ""
-                : "Carregue os dados atuais antes de configurar.";
+            ? "Use a operação Huawei mapeada desta funcionalidade."
+            : !reservationAllowed
+                ? "A operação de reserva não está disponível nesta sessão."
+                : ready
+                    ? ""
+                    : "Carregue os dados atuais antes de configurar.";
     }
 }
 
@@ -1816,13 +1820,13 @@ function renderDhcpReservations(items) {
         ).join("")
         : '<span class="muted">Nenhuma reserva cadastrada.</span>';
 
-    const huaweiReservationUpdate = (
-        currentVendor === "huawei"
-        && advancedState.dhcp?.capabilities?.reservation_update === true
-    );
-    const reservationCreateDelete = (
+    const reservationUpdate = (
         currentVendor !== "huawei"
-        && advancedState.dhcp?.capabilities?.reservation_write !== false
+        || advancedState.dhcp?.capabilities?.reservation_update === true
+    );
+    const reservationDelete = (
+        currentVendor !== "huawei"
+        || advancedState.dhcp?.capabilities?.reservation_delete === true
     );
 
     container
@@ -1830,10 +1834,7 @@ function renderDhcpReservations(items) {
             ".reservation-edit"
         )
         .forEach(button => {
-            const allowed = (
-                huaweiReservationUpdate
-                || reservationCreateDelete
-            );
+            const allowed = reservationUpdate;
             button.disabled = !allowed;
             button.title = allowed
                 ? ""
@@ -1851,11 +1852,11 @@ function renderDhcpReservations(items) {
             ".reservation-delete"
         )
         .forEach(button => {
-            const allowed = reservationCreateDelete;
+            const allowed = reservationDelete;
             button.disabled = !allowed;
             button.title = allowed
                 ? ""
-                : "DELETE de reserva DHCP Huawei ainda não foi capturado.";
+                : "Exclusão de reserva não disponível nesta sessão.";
             if (allowed) {
                 button.addEventListener(
                     "click",
