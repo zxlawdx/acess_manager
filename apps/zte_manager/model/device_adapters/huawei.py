@@ -133,6 +133,8 @@ class HuaweiEG8041X7Profile(HuaweiProfile):
                 "collect": {"read": True, "write": False, "verified": True},
                 "speed_test": {"read": True, "update": True, "verified": True},
                 "diagnostics_webui": {"read": True, "update": True, "verified": True},
+                "support_config": {"read": True, "write": False, "verified": True},
+                "software_notice": {"read": True, "write": False, "verified": True},
                 "account": {"read": True, "write": False, "verified": True},
                 "logs": {"read": True, "write": False, "verified": True},
                 "mirror_port": {"read": True, "write": False, "verified": True},
