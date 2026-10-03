@@ -3327,30 +3327,6 @@ async function renderProfileForm(profile) {
             : []
     );
 
-    if (currentVendor === "huawei") {
-        for (const id of [
-            "profileDns4_2",
-            "profileDns6_1",
-            "profileDns6_2",
-            "addProfileHostButton"
-        ]) {
-            const field = document.getElementById(id);
-            if (!field) continue;
-            field.disabled = true;
-            field.title = (
-                "Este campo não possui CREATE/UPDATE validado no profile Huawei atual."
-            );
-        }
-        document
-            .querySelectorAll("#profileHosts input, #profileHosts button")
-            .forEach(field => {
-                field.disabled = true;
-                field.title = (
-                    "DNS HOST pode ser lido/atualizado por instância, " +
-                    "mas o perfil em lote não cria nem remove entradas Huawei."
-                );
-            });
-    }
 }
 
 
