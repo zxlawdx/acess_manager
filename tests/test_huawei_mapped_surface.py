@@ -218,6 +218,30 @@ class HuaweiMappedSurfaceTests(unittest.TestCase):
         self.assertTrue(result["verified"])
         self.assertFalse(result["uncertain"])
 
+    def test_write_can_transmit_password_field_but_never_accept_session_token(self):
+        service = self.make_service()
+        service.write_request(
+            "/html/test/set.cgi?x=InternetGatewayDevice.Test",
+            {
+                "y.Username": "subscriber",
+                "y.Password": "pppoe-secret",
+                "x.X_HW_Token": "caller-token",
+                "CookieHttp": "caller-cookie",
+            },
+            referer="/html/test/page.asp",
+            token_page="/html/test/page.asp",
+        )
+
+        self.assertEqual(len(self.client.post_form_calls), 1)
+        payload = self.client.post_form_calls[0][1]
+        self.assertEqual(payload["y.Username"], "subscriber")
+        self.assertEqual(payload["y.Password"], "pppoe-secret")
+        self.assertEqual(
+            payload["x.X_HW_Token"],
+            "fresh-token-123456",
+        )
+        self.assertNotIn("CookieHttp", payload)
+
     def test_speed_test_writer_uses_captured_fields_only(self):
         service = self.make_service()
         result = service.write_feature(
