@@ -26,6 +26,10 @@ from apps.zte_manager.services.huawei_ipv4_filter_service import (
 from apps.zte_manager.services.huawei_captured_features import (
     HuaweiCapturedFeatureService,
 )
+from apps.zte_manager.services.huawei_mapped_surface import (
+    HUAWEI_MAPPED_FEATURES,
+    HuaweiMappedSurfaceService,
+)
 from apps.zte_manager.services.tr069_profile_service import (
     tr069_provider_profiles,
 )
@@ -54,6 +58,7 @@ class HuaweiService:
         self._client: HuaweiWebClient | None = None
         self._ipv4_filter: HuaweiIPv4FilterService | None = None
         self._captured: HuaweiCapturedFeatureService | None = None
+        self._mapped: HuaweiMappedSurfaceService | None = None
         self._profile: HuaweiProfile | None = None
         self._capabilities: dict[str, dict[str, bool]] = {}
         self._history_session_id: int | None = None
@@ -408,6 +413,10 @@ class HuaweiService:
                 client,
                 model=selected_model,
             )
+            mapped = HuaweiMappedSurfaceService(
+                client,
+                model=selected_model,
+            )
 
             feature_capabilities: dict[str, dict[str, bool]] = {
                 "ipv4_filter": operations,
@@ -420,6 +429,7 @@ class HuaweiService:
             self._client = client
             self._ipv4_filter = ipv4_filter
             self._captured = captured
+            self._mapped = mapped
             self._profile = profile
             self._capabilities = feature_capabilities
             self.current_host = ip
@@ -566,6 +576,7 @@ class HuaweiService:
             self._client = None
             self._ipv4_filter = None
             self._captured = None
+            self._mapped = None
             self._profile = None
             self._capabilities = {}
             self._history_session_id = None
@@ -586,15 +597,18 @@ class HuaweiService:
         return self._ipv4_filter
 
     def _require_captured(self) -> HuaweiCapturedFeatureService:
-        if self._captured is None or self._profile is None:
+        if self._captured is None:
             raise RuntimeError(
                 "Conecte-se a uma ONT Huawei antes de consultar este recurso."
             )
-        if self._profile.key != "huawei_eg8041x7_10":
-            raise PermissionError(
-                "Este recurso ainda não foi validado para o modelo Huawei conectado."
-            )
         return self._captured
+
+    def _require_mapped(self) -> HuaweiMappedSurfaceService:
+        if self._mapped is None:
+            raise RuntimeError(
+                "Conecte-se a uma ONT Huawei antes de consultar o mapeamento WebUI."
+            )
+        return self._mapped
 
     def _audit_captured(
         self,
