@@ -1274,11 +1274,6 @@ class HuaweiService:
         with self._lock:
             values = dict(config or {})
             instance_id = values.get("id")
-            if not instance_id:
-                raise PermissionError(
-                    "A captura validou UPDATE de reserva existente, "
-                    "não CREATE de reserva DHCP Huawei."
-                )
             cached = self._snapshot_cached("dhcp") or {}
             before = next(
                 (
@@ -1289,12 +1284,18 @@ class HuaweiService:
                     )
                 ),
                 None,
-            )
-            result = self._require_captured().update_dhcp_reservation(
-                instance_id,
-                ip=str(values.get("ip") or ""),
-                mac=str(values.get("mac") or ""),
-            )
+            ) if instance_id else None
+            if instance_id:
+                result = self._require_captured().update_dhcp_reservation(
+                    instance_id,
+                    ip=str(values.get("ip") or ""),
+                    mac=str(values.get("mac") or ""),
+                )
+            else:
+                result = self._require_captured().create_dhcp_reservation(
+                    ip=str(values.get("ip") or ""),
+                    mac=str(values.get("mac") or ""),
+                )
             readback = result.get("readback")
             if result.get("verified") and isinstance(readback, dict):
                 updated = deepcopy(cached)
@@ -1318,8 +1319,12 @@ class HuaweiService:
                 updated["reservations"] = rows
                 self._snapshot_store("dhcp", updated)
             self._audit_captured(
-                operation="huawei_dhcp_static_update",
-                target=str(instance_id),
+                operation=(
+                    "huawei_dhcp_static_update"
+                    if instance_id
+                    else "huawei_dhcp_static_create"
+                ),
+                target=str(instance_id or "new"),
                 result=result,
                 before=before,
                 after={
@@ -1331,9 +1336,47 @@ class HuaweiService:
             return result
 
     def delete_dhcp_reservation(self, instance_id):
-        raise PermissionError(
-            "DELETE de reserva DHCP Huawei ainda não foi capturado."
-        )
+        with self._lock:
+            cached = self._snapshot_cached("dhcp") or {}
+            before = next(
+                (
+                    row for row in cached.get("reservations") or []
+                    if str(row.get("_InstID") or "") == str(instance_id)
+                    or str(row.get("_InstID") or "").endswith(
+                        "." + str(instance_id)
+                    )
+                ),
+                None,
+            )
+            result = self._require_captured().delete_dhcp_reservation(
+                instance_id
+            )
+            if result.get("verified"):
+                deleted = str(
+                    (result.get("readback") or {}).get("deleted")
+                    or instance_id
+                )
+                updated = deepcopy(cached)
+                updated["reservations"] = [
+                    row
+                    for row in updated.get("reservations") or []
+                    if (
+                        str(row.get("_InstID") or "") != deleted
+                        and not str(row.get("_InstID") or "").endswith(
+                            "." + deleted.split(".")[-1]
+                        )
+                    )
+                ]
+                self._snapshot_store("dhcp", updated)
+            self._audit_captured(
+                operation="huawei_dhcp_static_delete",
+                target=str(instance_id),
+                result=result,
+                before=before,
+                after={"deleted": str(instance_id)},
+            )
+            result["snapshot_resource"] = "dhcp"
+            return result
 
     def dns_status(self, *, refresh: bool = False):
         with self._lock:
