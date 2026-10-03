@@ -617,7 +617,7 @@ def _relative_path(path: object) -> str:
         )
     if not value.startswith("/"):
         value = "/" + value
-    if "\\x00" in value or ".." in split.path.split("/"):
+    if "\x00" in value or ".." in split.path.split("/"):
         raise ValueError("Endpoint Huawei inválido.")
     return value
 
