@@ -2035,23 +2035,6 @@ function renderWifiNetworks(networks) {
                     applySsidForm
                 );
 
-                if (currentVendor === "huawei") {
-                    for (const fieldName of [
-                        "password",
-                        "encryption",
-                        "isolation"
-                    ]) {
-                        const field = form.querySelector(
-                            `[data-field="${fieldName}"]`
-                        );
-                        if (!field) continue;
-                        field.disabled = true;
-                        field.title = (
-                            "Este campo não teve mutation equivalente " +
-                            "capturada na EG8041X7-10."
-                        );
-                    }
-                }
             }
         );
 }
