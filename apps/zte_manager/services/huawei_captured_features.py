@@ -1406,6 +1406,44 @@ class HuaweiCapturedFeatureService:
         result["basic"] = verify() if result["verified"] else None
         return result
 
+    def create_dhcp_reservation(
+        self,
+        *,
+        ip: str,
+        mac: str,
+    ) -> dict[str, Any]:
+        root = (
+            "InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.DHCPStaticAddress"
+        )
+        path = (
+            "/html/bbsp/dhcpstatic/add.cgi"
+            f"?x={root}"
+            "&RequestFile=html/bbsp/dhcpstatic/dhcpstatic.asp"
+        )
+
+        def verify():
+            actual = self.dhcp_status()
+            for item in actual.get("reservations") or []:
+                if (
+                    str(item.get("IPAddr") or "") == str(ip)
+                    and str(item.get("MACAddr") or "").upper()
+                    == str(mac).upper()
+                ):
+                    return item
+            return None
+
+        return self._post_verified(
+            path=path,
+            request_file=DHCP_STATIC_PAGE,
+            payload={
+                "x.Yiaddr": str(ip),
+                "x.Chaddr": str(mac),
+                "x.Enable": "1",
+            },
+            verifier=verify,
+        )
+
     def update_dhcp_reservation(
         self,
         instance_or_domain: str,
@@ -1452,6 +1490,46 @@ class HuaweiCapturedFeatureService:
                 "x.Yiaddr": str(ip),
                 "x.Chaddr": str(mac),
             },
+            verifier=verify,
+        )
+
+    def delete_dhcp_reservation(
+        self,
+        instance_or_domain: str,
+    ) -> dict[str, Any]:
+        raw = str(instance_or_domain or "").strip()
+        root = (
+            "InternetGatewayDevice.LANDevice.1."
+            "LANHostConfigManagement.DHCPStaticAddress"
+        )
+        prefix = root + "."
+        if raw.isdigit():
+            domain = prefix + raw
+        elif raw.startswith(prefix) and raw[len(prefix):].isdigit():
+            domain = raw
+        else:
+            raise ValueError(
+                "Instância DHCP Static Huawei inválida."
+            )
+
+        path = (
+            "/html/bbsp/dhcpstatic/del.cgi"
+            f"?x={root}"
+            "&RequestFile=html/bbsp/dhcpstatic/dhcpstatic.asp"
+        )
+
+        def verify():
+            actual = self.dhcp_status()
+            exists = any(
+                str(item.get("_InstID") or "") == domain
+                for item in actual.get("reservations") or []
+            )
+            return None if exists else {"deleted": domain}
+
+        return self._post_verified(
+            path=path,
+            request_file=DHCP_STATIC_PAGE,
+            payload={domain: ""},
             verifier=verify,
         )
 
