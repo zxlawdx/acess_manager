@@ -274,6 +274,9 @@ class FakeHuaweiClient:
                 "z.MinAddress": "MinAddress",
                 "z.MaxAddress": "MaxAddress",
                 "z.DHCPLeaseTime": "DHCPLeaseTime",
+                "y.DHCPEnable": "DHCPEnable",
+                "z.X_HW_DHCPL2RelayEnable": "X_HW_DHCPL2RelayEnable",
+                "z.X_HW_Option125Enable": "X_HW_Option125Enable",
             }
             for source, target in mapping.items():
                 if source in payload:
@@ -356,6 +359,26 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
         self.assertEqual(payload["z.MinAddress"], "192.168.18.10")
         self.assertEqual(payload["z.X_HW_DNSList"], "1.1.1.1,8.8.8.8")
         self.assertEqual(payload["x.X_HW_Token"], TOKEN)
+
+    def test_dhcp_update_can_change_all_captured_toggles(self):
+        service = self.make_service()
+        result = service.set_dhcp_basic({
+            "enabled": True,
+            "dhcp_enable": True,
+            "l2_relay_enable": False,
+            "option125_enable": False,
+            "min_address": "192.168.18.2",
+            "max_address": "192.168.18.254",
+            "dns1": "177.221.56.3",
+            "dns2": "177.221.56.10",
+            "lease_time": 3600,
+        })
+
+        self.assertTrue(result["verified"])
+        payload = service.client.posts[0][1]
+        self.assertEqual(payload["y.DHCPEnable"], "1")
+        self.assertEqual(payload["z.X_HW_DHCPL2RelayEnable"], "0")
+        self.assertEqual(payload["z.X_HW_Option125Enable"], "0")
 
     def test_dns_update_preserves_captured_interface(self):
         service = self.make_service()
