@@ -384,6 +384,15 @@ HUAWEI_MAPPED_FEATURES: dict[str, dict[str, Any]] = {
 # mapped writes and provide a common executor for every captured relative
 # endpoint without inventing a different protocol.
 HUAWEI_MAPPED_WRITES: dict[str, dict[str, Any]] = {
+    "port_isolation": {
+        "path": (
+            "/html/bbsp/portinfo/set.cgi?"
+            "&RequestFile=html/bbsp/portinfo/portisolate.asp"
+        ),
+        "referer": "/html/bbsp/portinfo/portisolate.asp",
+        "token_page": "/html/bbsp/portinfo/portisolate.asp",
+        "fields": (),
+    },
     "dscp_to_pbit": {
         "path": (
             "/html/bbsp/dscptopbit/setajax.cgi?"
@@ -486,6 +495,7 @@ HUAWEI_MAPPED_WRITES: dict[str, dict[str, Any]] = {
 
 
 HUAWEI_FEATURE_WRITE_OPERATIONS: dict[str, tuple[str, ...]] = {
+    "port_isolation": ("port_isolation",),
     "dscp_to_pbit": ("dscp_to_pbit",),
     "speed_test": ("speed_test", "speed_test_mode"),
     "diagnostics_webui": (
@@ -499,6 +509,7 @@ HUAWEI_FEATURE_WRITE_OPERATIONS: dict[str, tuple[str, ...]] = {
 
 
 _WRITE_OPERATION_LABELS = {
+    "port_isolation": "Aplicar isolamento de portas",
     "dscp_to_pbit": "Configurar DSCP para P-bit",
     "speed_test": "Executar teste de velocidade",
     "speed_test_mode": "Selecionar modo do teste",
