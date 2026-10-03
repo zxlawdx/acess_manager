@@ -52,7 +52,7 @@ jobs:
 
       - name: Huawei backend regressions
         run: |
-          python -m unittest             tests.test_huawei_session_snapshot             tests.test_huawei_captured_features             tests.test_huawei_mapped_surface             tests.test_huawei_provider_architecture             tests.test_huawei_ipv4_filter             tests.test_multivendor_runtime_regressions
+          python -m unittest             tests.test_huawei_session_snapshot             tests.test_huawei_captured_features             tests.test_huawei_mapped_surface             tests.test_huawei_diagnostics             tests.test_huawei_provider_architecture             tests.test_huawei_ipv4_filter             tests.test_multivendor_runtime_regressions
 
       - name: Huawei UI snapshot regressions
         run: |
