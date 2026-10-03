@@ -1571,13 +1571,16 @@ class HuaweiService:
                 "firewall_level": service.set_management_firewall,
             }
 
-            capability = (
+            capability = dict(
                 self._capabilities.get(feature)
                 or {}
             )
-            if not capability.get("update"):
-                raise PermissionError(
-                    "Escrita não validada para esta capability Huawei."
+            if (
+                feature not in self._capabilities
+                and feature not in HUAWEI_MAPPED_FEATURES
+            ):
+                raise ValueError(
+                    f"Capability Huawei desconhecida: {feature}."
                 )
 
             if feature == "dhcp_static":
