@@ -19,6 +19,18 @@ class FakeDiagnosticClient:
         self.get_calls = []
         self.post_read_calls = []
         self.post_form_calls = []
+        self.ping_result = (
+            "PING 8.8.8.8\n"
+            "4 packets transmitted, 4 packets received, 0% packet loss\n"
+            "round-trip min/avg/max = 10.1/11.2/12.3 ms"
+            "[@#@]Complete"
+        )
+        self.route_result = (
+            "traceroute to 8.8.8.8\n"
+            "1  192.168.18.1  1.2 ms  1.1 ms  1.3 ms\n"
+            "2  8.8.8.8  10.0 ms  10.2 ms  10.1 ms"
+            "[@#@]Complete"
+        )
 
     @staticmethod
     def extract_token(source):
@@ -35,19 +47,9 @@ class FakeDiagnosticClient:
     def post_read(self, path, payload=None, *, referer="/index.asp"):
         self.post_read_calls.append((path, dict(payload or {}), referer))
         if path.endswith("/GetPingResult.asp"):
-            return repr(
-                "PING 8.8.8.8\n"
-                "4 packets transmitted, 4 packets received, 0% packet loss\n"
-                "round-trip min/avg/max = 10.1/11.2/12.3 ms"
-                "[@#@]Complete"
-            )
+            return repr(self.ping_result)
         if path.endswith("/GetRouteResult.asp"):
-            return repr(
-                "traceroute to 8.8.8.8\n"
-                "1  192.168.18.1  1.2 ms  1.1 ms  1.3 ms\n"
-                "2  8.8.8.8  10.0 ms  10.2 ms  10.1 ms"
-                "[@#@]Complete"
-            )
+            return repr(self.route_result)
         return ""
 
     def post_form(self, path, payload, *, referer):
@@ -113,6 +115,53 @@ class HuaweiNativeDiagnosticsTests(unittest.TestCase):
                 call[0].endswith("/GetPingResult.asp")
                 for call in self.client.post_read_calls
             )
+        )
+
+    def test_ping_complete_err_is_verified_but_connectivity_failed(self):
+        service = self.make_service()
+        self.client.ping_result = (
+            "PING 8.8.8.8\n"
+            "ping: sendto: Network unreachable\n"
+            "1 packets transmitted, 0 packets received, 100% packet loss"
+            "[@#@]Complete_Err"
+        )
+
+        result = service.ping({
+            "host": "8.8.8.8",
+            "count": 1,
+            "timeout": 1000,
+        })
+
+        self.assertTrue(result["verified"])
+        self.assertFalse(result["success"])
+        self.assertFalse(result["uncertain"])
+        self.assertEqual(result["diagnostics_state"], "Complete_Err")
+        self.assertEqual(result["sucesso"], 0)
+        self.assertEqual(result["falha"], 1)
+        self.assertEqual(result["perda_percentual"], 100)
+
+    def test_traceroute_max_hops_is_terminal_verified_failure(self):
+        service = self.make_service()
+        self.client.route_result = (
+            "None[@#@]Error_MaxHopCountExceeded"
+        )
+
+        result = service.traceroute({
+            "host": "8.8.8.8",
+            "interface": (
+                "InternetGatewayDevice.WANDevice.1."
+                "WANConnectionDevice.1.WANPPPConnection.1"
+            ),
+            "protocol": "AUTO",
+            "timeout": 2000,
+        })
+
+        self.assertTrue(result["verified"])
+        self.assertFalse(result["success"])
+        self.assertFalse(result["uncertain"])
+        self.assertEqual(
+            result["diagnostics_state"],
+            "Error_MaxHopCountExceeded",
         )
 
     def test_traceroute_uses_huawei_flow_and_parses_hops(self):
