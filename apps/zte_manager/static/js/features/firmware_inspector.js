@@ -1,6 +1,7 @@
 /* Operator-facing firmware inspection.
  * Runtime capability reads never become raw JSON, paths or driver structures.
- * Writing is delegated ONLY to existing validated forms and backend actions.
+ * Existing editors are reused; Huawei mapped writes receive generated forms
+ * from backend schemas without exposing endpoint names or protocol internals.
  */
 (() => {
   "use strict";
@@ -55,7 +56,55 @@
     tr069_status:"Gerenciamento remoto",
     upnp:"Abertura automática de portas",
     ping_history:"Histórico de conectividade",
-    traceroute_history:"Histórico de rotas"
+    traceroute_history:"Histórico de rotas",
+    ipv4_filter:"Filtragem IPv4",
+    optical:"Sinal óptico",
+    layer3:"Portas LAN em camada 3",
+    lan_ipv4:"Endereçamento IPv4 da LAN",
+    ipv6_lan:"Endereçamento IPv6 da LAN",
+    dhcp_static:"Reservas DHCP",
+    dns_host:"Hosts DNS locais",
+    wifi_basic:"Redes Wi-Fi",
+    wifi_radio:"Rádios Wi-Fi",
+    tr069_url:"Servidor de gerenciamento TR-069",
+    firewall_level:"Nível do firewall",
+    alg:"Gateways de aplicação (ALG)",
+    igmp:"Multicast / IGMP",
+    dos:"Proteção contra ataques",
+    ipv6_firewall:"Firewall IPv6",
+    internet_control:"Controle de acesso à Internet",
+    wifi_cover:"Cobertura Wi-Fi",
+    easymesh_topology:"Topologia EasyMesh",
+    ethernet_info:"Interfaces Ethernet",
+    ont_auth:"Autenticação da ONT",
+    port_isolation:"Isolamento de portas",
+    ipv6_filter:"Filtragem IPv6",
+    ipv6_port_mapping:"Redirecionamento de portas IPv6",
+    ipv6_default_route:"Rota padrão IPv6",
+    ipv6_static_route:"Rotas estáticas IPv6",
+    routing:"Rotas de rede",
+    port_mapping:"Redirecionamento e gatilho de portas",
+    lan_service:"Serviços da LAN",
+    arp_ping:"Diagnóstico ARP/Ping",
+    firewall_log:"Eventos do firewall",
+    wan_config:"Configuração da Internet",
+    user_devices:"Inventário de dispositivos",
+    vlan:"Configuração VLAN",
+    qos_smart:"Priorização inteligente de tráfego",
+    dscp_to_pbit:"Mapeamento DSCP para P-bit",
+    remote_packet_mirror:"Espelhamento remoto de pacotes",
+    reboot:"Reinicialização do equipamento",
+    firmware:"Atualização de firmware",
+    config_backup:"Arquivo de configuração",
+    security_check:"Verificação de segurança",
+    led:"Indicadores luminosos",
+    collect:"Coleta de suporte",
+    speed_test:"Teste de velocidade da ONT",
+    diagnostics_webui:"Diagnóstico interno da ONT",
+    account:"Conta administrativa",
+    logs:"Registros do equipamento",
+    mirror_port:"Espelhamento de porta",
+    voip_interface:"Interface de telefonia"
   });
   const DESCRIPTIONS=Object.freeze({
     tr069:"Consulte a ativação dos informes periódicos e o intervalo de comunicação. Endereços e credenciais permanecem ocultos.",
@@ -188,6 +237,97 @@
     if(field?.matches?.("button,input,select"))field.focus();
     return true;
   }
+  function mappedWriteEditor(feature,data,card,confirmed,writeActive){
+    const schema=data?.mapped_write;
+    const operations=Array.isArray(schema?.operations)?schema.operations:[];
+    if(!schema?.available||!operations.length)return false;
+    const section=el("section","am-inspector-actions am-mapped-write");
+    section.appendChild(el("h4","","Configuração"));
+    if(!writeActive){
+      section.appendChild(el("small","",
+        "A sessão está em modo somente leitura. As informações continuam disponíveis."));
+      card.appendChild(section);
+      return true;
+    }
+    const operationSelect=document.createElement("select");
+    operationSelect.className="am-mapped-write-operation";
+    operationSelect.setAttribute("aria-label","Operação de configuração");
+    for(const operation of operations){
+      const option=document.createElement("option");
+      option.value=operation.key;
+      option.textContent=operation.label||"Aplicar configuração";
+      operationSelect.appendChild(option);
+    }
+    if(operations.length>1){
+      const field=document.createElement("label");
+      field.className="field";
+      field.append(el("span","","OPERAÇÃO"),operationSelect);
+      section.appendChild(field);
+    }
+    const fieldsRoot=el("div","operations-form-grid with-top-space");
+    const renderFields=()=>{
+      fieldsRoot.replaceChildren();
+      const operation=operations.find(item=>item.key===operationSelect.value)||operations[0];
+      for(const spec of operation?.fields||[]){
+        const field=document.createElement("label");
+        field.className="field";
+        field.appendChild(el("span","",spec.label||"Valor"));
+        const input=document.createElement("input");
+        input.type=spec.secret?"password":"text";
+        input.autocomplete="off";
+        input.value=spec.default??"";
+        input.dataset.mappedField=spec.key;
+        field.appendChild(input);
+        fieldsRoot.appendChild(field);
+      }
+      if(!(operation?.fields||[]).length){
+        fieldsRoot.appendChild(el("p","am-inspector-quiet",
+          "Esta operação não exige parâmetros adicionais."));
+      }
+    };
+    operationSelect.addEventListener("change",renderFields);
+    renderFields();
+    section.appendChild(fieldsRoot);
+    const status=el("p","am-inspector-quiet","");
+    const apply=el("button","button primary","Aplicar");
+    apply.type="button";
+    apply.disabled=!confirmed;
+    apply.addEventListener("click",async()=>{
+      const operation=operations.find(item=>item.key===operationSelect.value)||operations[0];
+      const config={};
+      for(const input of fieldsRoot.querySelectorAll("[data-mapped-field]")){
+        config[input.dataset.mappedField]=input.value;
+      }
+      apply.disabled=true;
+      apply.setAttribute("aria-busy","true");
+      status.textContent="Aplicando configuração...";
+      try{
+        const result=await apiRequest("/huawei/mapped/write",{
+          method:"POST",
+          body:JSON.stringify({operation:operation.key,config}),
+          timeoutMs:70000
+        });
+        if(result?.error)throw new Error(result.error);
+        status.textContent=result?.verified?
+          "Alteração aplicada e relida na ONT.":
+          result?.uncertain?
+            "A ONT não confirmou o resultado. Consulte novamente antes de repetir.":
+            "Alteração enviada à ONT.";
+        if(typeof showToast==="function")showToast(status.textContent);
+      }catch(error){
+        status.textContent="Não foi possível aplicar: "+
+          (typeof normalizeApiErrorMessage==="function"?
+            normalizeApiErrorMessage(error):String(error?.message||error));
+      }finally{
+        apply.disabled=false;
+        apply.removeAttribute("aria-busy");
+      }
+    });
+    section.append(apply,status);
+    card.appendChild(section);
+    return true;
+  }
+
   function render(feature,data,root){
     if(!root)return;
     root.replaceChildren();
@@ -195,6 +335,7 @@
     const confirmed=data?.available===true;
     const writeActive=typeof routerWriteEnabled==="boolean"&&routerWriteEnabled===true;
     const editor=Object.prototype.hasOwnProperty.call(EDITORS,feature);
+    const mappedEditor=Boolean(data?.mapped_write?.available);
     const card=el("article","am-inspector-card");
     const header=el("div","am-inspector-header");
     const kicker=el("span","am-inspector-kicker","CONSULTA DO EQUIPAMENTO");
@@ -211,8 +352,9 @@
     mode.appendChild(el("strong","", "Modo de operação"));
     const modeLabel=(!confirmed)
       ?"Pendente de confirmação nesta sessão"
-      :editor&&writeActive?"Leitura confirmada • Formulário de configuração disponível"
-      :data?.writable?"Leitura confirmada • Edição ainda sem formulário validado"
+      :(editor||mappedEditor)&&writeActive
+        ?"Leitura confirmada • Formulário de configuração disponível"
+      :data?.writable?"Leitura confirmada • Configuração disponível no provider"
       :"Leitura confirmada • Consulta somente leitura";
     mode.appendChild(el("span","",modeLabel));
     card.appendChild(mode);
@@ -241,13 +383,15 @@
         button.addEventListener("click",()=>goToEditor(feature));
         actions.appendChild(button);
         actions.appendChild(el("small","",
-          "A edição é realizada no formulário existente. A permissão e a compatibilidade serão validadas ao aplicar."));
+          "A edição é realizada no formulário existente do Access Manager."));
       }else actions.appendChild(el("small","",
-        "O formulário existe, mas a sessão atual não autoriza modificações. As consultas continuam disponíveis."));
+        "O formulário existe, mas a sessão atual está em modo somente leitura."));
       card.appendChild(actions);
+    }else if(mappedEditor){
+      mappedWriteEditor(feature,data,card,confirmed,writeActive);
     }else if(data?.writable){
       card.appendChild(el("p","am-inspector-warning",
-        "A documentação indica possibilidade de edição, mas não há um formulário homologado para este recurso. Nenhuma gravação genérica será enviada."));
+        "A capability aceita escrita pelo provider Huawei. Use a ação específica da funcionalidade quando disponível."));
     }else if(data?.dangerous){
       card.appendChild(el("p","am-inspector-warning",
         "Recurso sensível: o equipamento permanece protegido contra gravações não homologadas."));
