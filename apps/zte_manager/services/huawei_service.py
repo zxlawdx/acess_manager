@@ -1732,27 +1732,45 @@ class HuaweiService:
                 if feature == "dhcp_static":
                     state = self._snapshot_cached("dhcp") or {}
                     rows = list(state.get("reservations") or [])
-                    replaced = False
-                    for index, row in enumerate(rows):
-                        if row.get("_InstID") == readback.get("_InstID"):
-                            rows[index] = readback
-                            replaced = True
-                            break
-                    if not replaced:
-                        rows.append(readback)
+                    deleted = str(readback.get("deleted") or "")
+                    if deleted:
+                        rows = [
+                            row for row in rows
+                            if str(row.get("_InstID") or "") != deleted
+                            and not str(row.get("_InstID") or "").endswith(
+                                "." + deleted.split(".")[-1]
+                            )
+                        ]
+                    else:
+                        replaced = False
+                        for index, row in enumerate(rows):
+                            if row.get("_InstID") == readback.get("_InstID"):
+                                rows[index] = readback
+                                replaced = True
+                                break
+                        if not replaced:
+                            rows.append(readback)
                     state["reservations"] = rows
                     self._snapshot_store("dhcp", state)
                 elif feature == "dns_host":
                     state = self._snapshot_cached("dns") or {}
                     rows = list(state.get("hosts") or [])
-                    replaced = False
-                    for index, row in enumerate(rows):
-                        if row.get("id") == readback.get("id"):
-                            rows[index] = readback
-                            replaced = True
-                            break
-                    if not replaced:
-                        rows.append(readback)
+                    deleted = str(readback.get("deleted") or "")
+                    if deleted:
+                        rows = [
+                            row
+                            for row in rows
+                            if str(row.get("id") or "") != deleted
+                        ]
+                    else:
+                        replaced = False
+                        for index, row in enumerate(rows):
+                            if row.get("id") == readback.get("id"):
+                                rows[index] = readback
+                                replaced = True
+                                break
+                        if not replaced:
+                            rows.append(readback)
                     state["hosts"] = rows
                     self._snapshot_store("dns", state)
                 elif feature == "firewall_level":
