@@ -30,9 +30,22 @@ const baseCollectRadioFormPayload = collectRadioFormPayload;
 
 renderRadioAdvancedFields = function (radio) {
     if (currentVendor === "huawei") {
+        const checked = value => value ? "checked" : "";
         return `
             <div class="advanced-radio-fields">
-                <span class="section-kicker">HUAWEI RF VALIDADO</span>
+                <span class="section-kicker">HUAWEI RF MAPEADO</span>
+                <div class="advanced-switch-grid with-top-space">
+                    <label class="advanced-switch">
+                        <span>Band steering</span>
+                        <input data-field="band_steering" type="checkbox"
+                            ${checked(radio.band_steering)}>
+                    </label>
+                    <label class="advanced-switch">
+                        <span>Airtime fairness</span>
+                        <input data-field="airtime_fairness" type="checkbox"
+                            ${checked(radio.airtime_fairness)}>
+                    </label>
+                </div>
                 <div class="form-grid two-fields with-top-space">
                     <div class="form-group">
                         <label>RTS/CTS</label>
@@ -40,14 +53,36 @@ renderRadioAdvancedFields = function (radio) {
                             value="${escapeHtml(radio.rts_cts ?? 2346)}">
                     </div>
                     <div class="form-group">
+                        <label>Fragmentação</label>
+                        <input data-field="frag_threshold" type="number" min="256" max="2346"
+                            value="${escapeHtml(radio.frag_threshold ?? 2346)}">
+                    </div>
+                    <div class="form-group">
                         <label>DTIM</label>
                         <input data-field="dtim" type="number" min="1" max="5"
                             value="${escapeHtml(radio.dtim ?? 1)}">
                     </div>
+                    <div class="form-group">
+                        <label>Código de largura do firmware</label>
+                        <input data-field="bandwidth_code" type="text"
+                            value="${escapeHtml(radio.bandwidth_code ?? "")}">
+                    </div>
+                    <div class="form-group">
+                        <label>Política de band steering</label>
+                        <input data-field="band_steering_policy" type="text"
+                            value="${escapeHtml(radio.band_steering_policy ?? "")}">
+                    </div>
+                    ${radio.banda === "5GHz" ? `
+                        <div class="form-group">
+                            <label>Escopo do canal automático</label>
+                            <input data-field="auto_channel_scope" type="text"
+                                value="${escapeHtml(radio.auto_channel_scope ?? "0")}">
+                        </div>
+                    ` : ""}
                 </div>
                 <p class="muted">
-                    Canal, potência, país, beacon, RTS e DTIM usam o formulário
-                    WLAN Advanced capturado na EG8041X7-10.
+                    Os campos acima correspondem diretamente ao formulário WLAN Advanced
+                    capturado da EG8041X7-10 e são gravados com releitura do rádio.
                 </p>
             </div>
         `;
@@ -150,7 +185,10 @@ collectRadioFormPayload = function (
     );
 
     const booleanFields = currentVendor === "huawei"
-        ? []
+        ? [
+            "band_steering",
+            "airtime_fairness"
+        ]
         : [
             "mu_mimo",
             "uplink_mu_mimo",
@@ -174,7 +212,8 @@ collectRadioFormPayload = function (
 
     const numericFields = [
         "rts_cts",
-        "dtim"
+        "dtim",
+        "frag_threshold"
     ];
 
     for (const name of numericFields) {
@@ -194,7 +233,11 @@ collectRadioFormPayload = function (
 
     for (const name of (
         currentVendor === "huawei"
-            ? []
+            ? [
+                "bandwidth_code",
+                "band_steering_policy",
+                "auto_channel_scope"
+            ]
             : [
                 "qos_type",
                 "work_mode",
