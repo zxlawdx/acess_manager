@@ -407,6 +407,28 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
         self.assertEqual(payload["x.DNSServer"], "9.9.9.9")
         self.assertEqual(payload["x.Interface"], "wan1.1.ppp1")
 
+    def test_dns_explicit_empty_server_clears_existing_search_slot(self):
+        service = self.make_service()
+
+        result = service.set_dns({
+            "ipv4_1": "",
+            "domain_name": "cloudflare.com",
+        })
+
+        self.assertTrue(result["verified"])
+        self.assertTrue(result["semantic_verified"])
+        self.assertEqual(len(service.client.posts), 1)
+        path, payload, _referer = service.client.posts[0]
+        self.assertIn(
+            "x=InternetGatewayDevice.X_HW_DNS.SearList.1",
+            path,
+        )
+        self.assertEqual(payload["x.DNSServer"], "")
+        self.assertEqual(
+            result["readback"]["ipv4_1"],
+            "",
+        )
+
     def test_dmz_update_uses_captured_domain_and_readback(self):
         service = self.make_service()
         result = service.set_dmz({
@@ -574,6 +596,23 @@ class HuaweiCapturedFeatureTests(unittest.TestCase):
         self.assertEqual(payload["v.X_HW_AirtimeFairness"], "1")
         self.assertEqual(payload["y.X_HW_AutoChannelScope"], "1")
         self.assertEqual(payload["x.X_HW_Token"], TOKEN)
+
+    def test_wifi_auto_bandwidth_label_maps_to_captured_raw_code(self):
+        service = self.make_service()
+
+        result = service.set_wifi_radio(
+            "2.4GHz",
+            {
+                "bandwidth": "Auto 20/40 MHz",
+                "standard": "11ax",
+            },
+        )
+
+        self.assertTrue(result["verified"])
+        path, payload, _referer = service.client.posts[-1]
+        self.assertIn("/html/amp/wlanadv/set.cgi", path)
+        self.assertEqual(payload["y.X_HW_HT20"], "0")
+        self.assertEqual(payload["y.X_HW_Standard"], "11ax")
 
     def test_wifi_radio_read_exposes_captured_advanced_state(self):
         service = self.make_service()
