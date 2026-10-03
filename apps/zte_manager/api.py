@@ -776,7 +776,8 @@ def set_dns(context=None):
 
         return device_service.set_dns(
             data.model_dump(
-                exclude_none=True
+                exclude_none=True,
+                exclude_unset=True,
             )
         )
 
