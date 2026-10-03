@@ -145,6 +145,7 @@ class HuaweiNativeDiagnosticsTests(unittest.TestCase):
         self.assertEqual(payload["x.Host"], "8.8.8.8")
         self.assertEqual(payload["x.DataBlockSize"], "38")
         self.assertEqual(payload["x.Interface"], "wan1.1.ppp1")
+        self.assertEqual(payload["x.X_HW_ProtocolType"], "0")
         self.assertEqual(payload["RUNSTATE_FLAG.value"], "START")
         self.assertTrue(
             any(
