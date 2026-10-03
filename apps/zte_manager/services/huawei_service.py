@@ -1183,24 +1183,37 @@ class HuaweiService:
             return result
 
     def wifi_schedule_status(self):
-        # O menu existe na captura, mas nenhuma mutation de agenda foi
-        # exercitada. Retornar indisponível evita que o frontend trate isso
-        # como ausência do provider Huawei.
-        return {
-            "available": False,
-            "enabled": False,
-            "schedule": {},
-            "vendor": "huawei",
-            "message": (
-                "Agendamento Wi-Fi Huawei ainda não possui mutation "
-                "validada para este profile."
-            ),
-        }
+        with self._lock:
+            return self._require_mapped().read_feature(
+                "wifi_schedule"
+            )
 
     def set_wifi_schedule(self, config):
-        raise PermissionError(
-            "Agendamento Wi-Fi Huawei ainda não foi validado."
-        )
+        with self._lock:
+            values = dict(config or {})
+            request = values.pop("_request", None)
+            if isinstance(request, dict):
+                return self.mapped_write_request(
+                    request.get("path"),
+                    request.get("payload") or values,
+                    referer=(
+                        request.get("referer")
+                        or "/html/amp/wifische/WlanSchedule.asp"
+                    ),
+                    token_page=(
+                        request.get("token_page")
+                        or "/html/amp/wifische/WlanSchedule.asp"
+                    ),
+                    readback_path=(
+                        request.get("readback_path")
+                        or "/html/amp/wifische/WlanSchedule.asp"
+                    ),
+                )
+            raise ValueError(
+                "O material mapeado não contém um payload semântico de "
+                "agenda Wi-Fi; use /huawei/mapped/write com a requisição "
+                "capturada exata."
+            )
 
     def layer3_status(self, *, refresh: bool = False):
         with self._lock:
