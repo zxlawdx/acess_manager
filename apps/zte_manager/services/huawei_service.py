@@ -1860,6 +1860,7 @@ class HuaweiService:
         method="GET",
         payload=None,
         referer="/index.asp",
+        token_page=None,
     ):
         with self._lock:
             return self._require_mapped().read_request(
@@ -1867,6 +1868,7 @@ class HuaweiService:
                 method=method,
                 payload=payload,
                 referer=referer,
+                token_page=token_page,
             )
 
     def mapped_write_feature(self, operation, config=None):
