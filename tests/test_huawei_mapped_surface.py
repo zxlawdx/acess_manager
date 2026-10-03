@@ -116,6 +116,24 @@ class HuaweiMappedSurfaceTests(unittest.TestCase):
             "post-ok",
         )
 
+    def test_mapped_normalizer_never_returns_constructor_secrets(self):
+        service = self.make_service()
+        source = (
+            "function stSecret(UserName,Password,URL){"
+            "this.UserName=UserName;this.Password=Password;this.URL=URL;}"
+            "new stSecret('subscriber','super-secret','http://acs.example/');"
+            "<input name='Password' value='form-secret'>"
+            "<input name='SafeValue' value='ok'>"
+        )
+        data = service._normalize_page("/html/test/page.asp", source)
+        record = data["records"][0]
+
+        self.assertNotIn("Password", record)
+        self.assertNotIn("_args", record)
+        self.assertNotIn("_constructor", record)
+        self.assertNotIn("Password", data["inputs"])
+        self.assertEqual(data["inputs"]["SafeValue"], "ok")
+
     def test_tokenized_post_read_gets_fresh_token_without_mutating(self):
         service = self.make_service()
         result = service.read_request(
