@@ -766,11 +766,29 @@ class HuaweiService:
                     "standard": radio.get("padrao") or "",
                     "country": radio.get("pais") or "BR",
                     "bandwidth": radio.get("largura") or "Auto",
+                    "bandwidth_code": radio.get("bandwidth_code") or "",
                     "sgi": bool(radio.get("sgi", False)),
                     "beacon_interval": int(
                         radio.get("beacon_interval") or 100
                     ),
                     "tx_power": radio.get("potencia") or "100%",
+                    "rts_cts": int(radio.get("rts_cts") or 2346),
+                    "dtim": int(radio.get("dtim") or 1),
+                    "frag_threshold": int(
+                        radio.get("frag_threshold") or 2346
+                    ),
+                    "band_steering": bool(
+                        radio.get("band_steering", False)
+                    ),
+                    "band_steering_policy": (
+                        radio.get("band_steering_policy") or ""
+                    ),
+                    "airtime_fairness": bool(
+                        radio.get("airtime_fairness", False)
+                    ),
+                    "auto_channel_scope": (
+                        radio.get("auto_channel_scope") or ""
+                    ),
                 }
 
             return {
@@ -779,11 +797,8 @@ class HuaweiService:
                     "domain_name": dns.get("domain_name") or "",
                     "ipv4_1": dns.get("ipv4_1") or "",
                     "ipv4_2": dns.get("ipv4_2") or "",
-                    "ipv6_1": "",
-                    "ipv6_2": "",
-                    # Host entries are readable, but profile application
-                    # does not mutate them because CREATE/DELETE was not
-                    # captured on this model.
+                    "ipv6_1": dns.get("ipv6_1") or "",
+                    "ipv6_2": dns.get("ipv6_2") or "",
                     "hosts": dns.get("hosts") or [],
                 },
             }
@@ -819,10 +834,8 @@ class HuaweiService:
             if not config:
                 continue
 
-            # Perfis antigos do Access Manager contêm parâmetros ZTE que não
-            # pertencem ao formulário Huawei capturado. Não transformar isso
-            # em falha da aplicação inteira: aplique somente os campos que a
-            # EG8041X7-10 realmente teve mutation exercitada.
+            # Ignore only vendor-specific fields that do not exist in the Huawei
+            # WLAN Advanced form. Every captured Huawei field stays writable.
             supported = {
                 "auto_channel",
                 "channel",
@@ -831,6 +844,15 @@ class HuaweiService:
                 "beacon_interval",
                 "rts_cts",
                 "dtim",
+                "frag_threshold",
+                "band_steering",
+                "band_steering_policy",
+                "airtime_fairness",
+                "auto_channel_scope",
+                "bandwidth_code",
+                "bandwidth",
+                "standard",
+                "sgi",
             }
             safe_config = {
                 key: value
@@ -882,46 +904,30 @@ class HuaweiService:
         if all(step.get("success") for step in steps):
             dns = dict(profile.get("dns") or {})
             if dns:
-                unsupported = []
-                if dns.get("ipv6_1") or dns.get("ipv6_2"):
-                    unsupported.append("DNS IPv6")
-                if dns.get("hosts"):
-                    unsupported.append("hosts estáticos")
-                if dns.get("ipv4_2"):
-                    # The physical capture proved one SearList mutation.
-                    # Preserve secondary DNS until a second row is captured.
-                    unsupported.append("DNS IPv4 secundário")
-                omitted.extend(unsupported)
-
-                safe_dns = {
-                    "domain_name": dns.get("domain_name"),
-                    "ipv4_1": dns.get("ipv4_1"),
-                }
-                if safe_dns.get("ipv4_1"):
-                    try:
-                        result = captured.set_dns(safe_dns)
-                        verified = bool(result.get("verified"))
-                        if verified and isinstance(result.get("readback"), dict):
-                            readback = dict(result["readback"])
-                            readback.pop("_search_rows", None)
-                            self._snapshot_store("dns", readback)
-                        steps.append({
-                            "name": "DNS IPv4 principal",
-                            "success": verified,
-                            "verified": verified,
-                            "detail": (
-                                "DNS confirmado por read-back."
-                                if verified
-                                else "A alteração DNS não foi confirmada."
-                            ),
-                        })
-                    except Exception as exc:
-                        steps.append({
-                            "name": "DNS IPv4 principal",
-                            "success": False,
-                            "verified": False,
-                            "detail": str(exc),
-                        })
+                try:
+                    result = captured.set_dns(dns)
+                    verified = bool(result.get("verified"))
+                    if verified and isinstance(result.get("readback"), dict):
+                        readback = dict(result["readback"])
+                        readback.pop("_search_rows", None)
+                        self._snapshot_store("dns", readback)
+                    steps.append({
+                        "name": "DNS / hosts",
+                        "success": verified,
+                        "verified": verified,
+                        "detail": (
+                            "DNS e hosts confirmados por read-back."
+                            if verified
+                            else "A alteração DNS não foi confirmada."
+                        ),
+                    })
+                except Exception as exc:
+                    steps.append({
+                        "name": "DNS / hosts",
+                        "success": False,
+                        "verified": False,
+                        "detail": str(exc),
+                    })
 
         success = bool(steps) and all(
             bool(step.get("success"))
