@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import logging
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -13,6 +15,94 @@ from requests.adapters import HTTPAdapter
 RAND_PATH = "/asp/GetRandCount.asp"
 LOGIN_PATH = "/login.cgi"
 MENU_PATH = "/asp/getMenuArray.asp"
+
+logger = logging.getLogger(__name__)
+
+_TRACE_SECRET_KEYS = {
+    "password",
+    "passwd",
+    "pass",
+    "psk",
+    "presharedkey",
+    "x.x_hw_token",
+    "x_hw_token",
+    "token",
+    "cookie",
+    "authorization",
+    "set-cookie",
+}
+
+
+def _trace_mode() -> str:
+    return str(os.getenv("HUAWEI_HTTP_TRACE") or "").strip().casefold()
+
+
+def _trace_enabled() -> bool:
+    return _trace_mode() in {"1", "true", "yes", "basic", "raw", "unsafe"}
+
+
+def _trace_raw() -> bool:
+    return _trace_mode() in {"raw", "unsafe"}
+
+
+def _safe_mapping(values) -> dict:
+    data = dict(values or {})
+    if _trace_raw():
+        return data
+
+    redacted = {}
+    for key, value in data.items():
+        normalized = str(key).strip().casefold()
+        if (
+            normalized in _TRACE_SECRET_KEYS
+            or "password" in normalized
+            or normalized.endswith("token")
+            or "presharedkey" in normalized
+        ):
+            redacted[key] = "<redacted>"
+        else:
+            redacted[key] = value
+    return redacted
+
+
+def _trace_http(
+    *,
+    phase: str,
+    method: str,
+    url: str,
+    payload=None,
+    status=None,
+    headers=None,
+    body=None,
+) -> None:
+    if not _trace_enabled():
+        return
+
+    safe_headers = _safe_mapping(headers)
+    safe_payload = _safe_mapping(payload)
+    raw_body = str(body or "")
+    if not _trace_raw() and len(raw_body) > 4000:
+        raw_body = raw_body[:4000] + "\n...[truncated; use HUAWEI_HTTP_TRACE=raw]"
+
+    lines = [
+        f"[HUAWEI HTTP] {phase} {method} {url}",
+    ]
+    if payload is not None:
+        lines.append(f"[HUAWEI HTTP] payload={safe_payload!r}")
+    if status is not None:
+        lines.append(f"[HUAWEI HTTP] status={status}")
+    if headers is not None:
+        lines.append(f"[HUAWEI HTTP] headers={safe_headers!r}")
+    if body is not None:
+        lines.append("[HUAWEI HTTP] body-begin")
+        lines.append(raw_body)
+        lines.append("[HUAWEI HTTP] body-end")
+
+    message = "\n".join(lines)
+    logger.info(message)
+    # Vela/desktop deployments do not always configure a logging handler.
+    # Print as well so a physical ONT run is visible in the launch terminal.
+    print(message, flush=True)
 
 
 @dataclass(frozen=True)
@@ -297,12 +387,22 @@ class HuaweiWebClient:
         )
 
     def _protected_get(self, path: str):
-        return self.session.get(
-            self.url(path),
+        url = self.url(path)
+        response = self.session.get(
+            url,
             headers={"Referer": self.url("/index.asp")},
             timeout=self.timeout,
             allow_redirects=True,
         )
+        _trace_http(
+            phase="response",
+            method="GET",
+            url=url,
+            status=response.status_code,
+            headers=getattr(response, "headers", {}),
+            body=getattr(response, "text", ""),
+        )
+        return response
 
     def get_page(self, path: str) -> str:
         response = self._protected_get(path)
@@ -338,18 +438,36 @@ class HuaweiWebClient:
         the request is read-only and idempotent.
         """
         def request():
-            return self.session.post(
-                self.url(path),
-                headers={
-                    "Accept": "*/*",
-                    "X-Requested-With": "XMLHttpRequest",
-                    "Origin": self.base_url,
-                    "Referer": self.url(referer),
-                },
+            url = self.url(path)
+            request_headers = {
+                "Accept": "*/*",
+                "X-Requested-With": "XMLHttpRequest",
+                "Origin": self.base_url,
+                "Referer": self.url(referer),
+            }
+            _trace_http(
+                phase="request",
+                method="POST",
+                url=url,
+                payload=payload or {},
+                headers=request_headers,
+            )
+            response = self.session.post(
+                url,
+                headers=request_headers,
                 data=payload or None,
                 timeout=self.timeout,
                 allow_redirects=True,
             )
+            _trace_http(
+                phase="response",
+                method="POST",
+                url=str(getattr(response, "url", "") or url),
+                status=response.status_code,
+                headers=getattr(response, "headers", {}),
+                body=getattr(response, "text", ""),
+            )
+            return response
 
         response = request()
         if self.is_login_response(response):
@@ -381,21 +499,38 @@ class HuaweiWebClient:
         mutation. The caller must decide success exclusively through read-back.
         """
         try:
+            url = self.url(path)
+            request_headers = {
+                "Accept": (
+                    "text/html,application/xhtml+xml,"
+                    "application/xml;q=0.9,*/*;q=0.8"
+                ),
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": self.base_url,
+                "Referer": self.url(referer),
+                "Upgrade-Insecure-Requests": "1",
+            }
+            _trace_http(
+                phase="request",
+                method="POST",
+                url=url,
+                payload=payload,
+                headers=request_headers,
+            )
             response = self.session.post(
-                self.url(path),
-                headers={
-                    "Accept": (
-                        "text/html,application/xhtml+xml,"
-                        "application/xml;q=0.9,*/*;q=0.8"
-                    ),
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Origin": self.base_url,
-                    "Referer": self.url(referer),
-                    "Upgrade-Insecure-Requests": "1",
-                },
+                url,
+                headers=request_headers,
                 data=payload,
                 timeout=(5, self.timeout),
                 allow_redirects=True,
+            )
+            _trace_http(
+                phase="response",
+                method="POST",
+                url=str(getattr(response, "url", "") or url),
+                status=response.status_code,
+                headers=getattr(response, "headers", {}),
+                body=getattr(response, "text", ""),
             )
 
             auth_lost = self.is_login_response(
@@ -420,12 +555,25 @@ class HuaweiWebClient:
                 ),
                 final_url=str(getattr(response, "url", "") or ""),
             )
-        except requests.exceptions.ReadTimeout:
+        except requests.exceptions.ReadTimeout as exc:
+            if _trace_enabled():
+                message = (
+                    f"[HUAWEI HTTP] timeout POST {self.url(path)}: {exc!r}"
+                )
+                logger.warning(message)
+                print(message, flush=True)
             return HuaweiMutationTransport(
                 http_status=None,
                 timed_out=True,
             )
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError as exc:
+            if _trace_enabled():
+                message = (
+                    f"[HUAWEI HTTP] connection-error POST {self.url(path)}: "
+                    f"{exc!r}"
+                )
+                logger.warning(message)
+                print(message, flush=True)
             return HuaweiMutationTransport(
                 http_status=None,
                 connection_uncertain=True,
