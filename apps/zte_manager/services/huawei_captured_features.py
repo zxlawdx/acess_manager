@@ -2473,12 +2473,17 @@ class HuaweiCapturedFeatureService:
             auto = _enabled(_record_value(relevant, "AutoChannelEnable", default="1"))
             raw_standard = _record_value(relevant, "X_HW_Standard", "Standard", default="11ax")
             raw_bw = str(_record_value(relevant, "X_HW_HT20", default=""))
-            # Only values observed in this physical capture are mapped.
+            # The physical EG8041X7-10 WebUI shows raw code 0 as
+            # "Auto 20/40 MHz" on 2.4 GHz and raw code 4 as
+            # "Auto 20/40/80/160 MHz" on 5 GHz. Keep the operator-facing
+            # representation generic ("Auto") and preserve the exact raw code
+            # separately in bandwidth_code.
             bandwidth = (
                 "Auto"
-                if display == "2.4GHz" and raw_bw == "0"
-                else "80MHz"
-                if display == "5GHz" and raw_bw == "4"
+                if (
+                    (display == "2.4GHz" and raw_bw == "0")
+                    or (display == "5GHz" and raw_bw == "4")
+                )
                 else "Auto"
             )
             basic = next(
@@ -2623,7 +2628,7 @@ class HuaweiCapturedFeatureService:
         if bandwidth_code is None and requested_bandwidth is not None:
             known_bandwidth = {
                 ("2.4GHz", "Auto"): "0",
-                ("5GHz", "80MHz"): "4",
+                ("5GHz", "Auto"): "4",
             }
             bandwidth_code = known_bandwidth.get(
                 (display, str(requested_bandwidth))
