@@ -72,7 +72,13 @@ class HuaweiResponseProtocolTests(unittest.TestCase):
             403,
             '<script>var ErrCode = "0x1";</script>',
         )
-        self.assertFalse(HuaweiWebClient.is_login_response(response))
+        self.assertTrue(HuaweiWebClient.is_login_response(response))
+        self.assertFalse(
+            HuaweiWebClient.is_login_response(
+                response,
+                forbidden_is_login=False,
+            )
+        )
 
     def test_normal_html_is_accepted_but_not_confirmed(self):
         parsed = HuaweiResponseParser.parse(
