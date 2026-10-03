@@ -1,5 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
+from pathlib import Path
+
 from apps.zte_manager.repositories.profile_repository import ProfileRepository
 from apps.zte_manager.runtime import data_dir
 
@@ -47,6 +49,55 @@ DEFAULT_PROFILE = {
         ],
     },
 }
+
+
+# O EG8041X7-10 não usa os mesmos enums de rádio do perfil ZTE.
+# Estes valores são os que foram exercitados fisicamente no WebUI:
+#   2.4 GHz: Auto 20/40 MHz  -> X_HW_HT20=0
+#   5 GHz:   Auto 20/40/80/160 MHz -> X_HW_HT20=4
+# X_HW_Standard é enviado como 11ax nas duas bandas.
+HUAWEI_EG8041X7_DEFAULT_PROFILE = {
+    "wifi": {
+        "2.4GHz": {
+            "auto_channel": True,
+            "channel": None,
+            "standard": "11ax",
+            "country": "BR",
+            "bandwidth": "Auto",
+            "bandwidth_code": "0",
+            "sgi": False,
+            "beacon_interval": 100,
+            "tx_power": "100%",
+        },
+        "5GHz": {
+            "auto_channel": True,
+            "channel": None,
+            "standard": "11ax",
+            "country": "BR",
+            "bandwidth": "Auto",
+            "bandwidth_code": "4",
+            "sgi": False,
+            "beacon_interval": 100,
+            "tx_power": "100%",
+        },
+    },
+    "dns": deepcopy(DEFAULT_PROFILE["dns"]),
+}
+
+
+def _profile_variant(
+    provider: str | None = None,
+    model: str | None = None,
+) -> tuple[str, dict]:
+    vendor = str(provider or "").strip().casefold()
+    compact_model = "".join(
+        character
+        for character in str(model or "").upper()
+        if character.isalnum()
+    )
+    if vendor == "huawei" and compact_model == "EG8041X710":
+        return "huawei_eg8041x7_10", HUAWEI_EG8041X7_DEFAULT_PROFILE
+    return "default", DEFAULT_PROFILE
 
 
 # =========================================================
@@ -209,39 +260,72 @@ class ApplyProfileCommand:
 
 
 class ProfileService:
-    def __init__(self):
+    def __init__(self, base_dir: str | Path | None = None):
+        self.base_dir = Path(base_dir) if base_dir is not None else data_dir()
         self.repository = ProfileRepository(
-            data_dir()
-            / "attendant_profiles.json"
+            self.base_dir / "attendant_profiles.json"
         )
+        self._provider_repositories = {
+            "huawei_eg8041x7_10": ProfileRepository(
+                self.base_dir
+                / "attendant_profiles_huawei_eg8041x7_10.json"
+            ),
+        }
 
-    def list_profiles(self):
-        return self.repository.list()
-
-    def get_profile(self, attendant):
-        perfil = self.repository.get(
-            attendant
+    def _repository(
+        self,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> tuple[ProfileRepository, dict]:
+        variant, defaults = _profile_variant(provider, model)
+        repository = (
+            self.repository
+            if variant == "default"
+            else self._provider_repositories[variant]
         )
+        return repository, defaults
+
+    def list_profiles(
+        self,
+        provider: str | None = None,
+        model: str | None = None,
+    ):
+        repository, _defaults = self._repository(provider, model)
+        return repository.list()
+
+    def get_profile(
+        self,
+        attendant,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+    ):
+        repository, defaults = self._repository(provider, model)
+        perfil = repository.get(attendant)
 
         if perfil is not None:
             return _normalize_profile(
-                perfil
+                perfil,
+                default_profile=defaults,
             )
 
-        return deepcopy(
-            DEFAULT_PROFILE
-        )
+        return deepcopy(defaults)
 
     def save_profile(
         self,
         attendant,
-        profile
+        profile,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
     ):
+        repository, defaults = self._repository(provider, model)
         perfil = _normalize_profile(
-            profile
+            profile,
+            default_profile=defaults,
         )
 
-        return self.repository.save(
+        return repository.save(
             attendant,
             perfil
         )
@@ -249,10 +333,15 @@ class ProfileService:
     def apply_profile(
         self,
         zte,
-        attendant
+        attendant,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
     ):
         profile = self.get_profile(
-            attendant
+            attendant,
+            provider=provider,
+            model=model,
         )
 
         command = ApplyProfileCommand(
@@ -263,10 +352,13 @@ class ProfileService:
             zte
         )
 
-
-def _normalize_profile(profile):
+def _normalize_profile(
+    profile,
+    *,
+    default_profile: dict | None = None,
+):
     resultado = deepcopy(
-        DEFAULT_PROFILE
+        default_profile or DEFAULT_PROFILE
     )
 
     wifi = profile.get(
