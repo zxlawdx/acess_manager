@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from apps.zte_manager.infrastructure.huawei import HuaweiMutationTransport
 from apps.zte_manager.model.device_adapters.huawei import HuaweiEG8041X7Profile
@@ -139,6 +140,91 @@ class HuaweiNativeDiagnosticsTests(unittest.TestCase):
         self.assertEqual(result["sucesso"], 0)
         self.assertEqual(result["falha"], 1)
         self.assertEqual(result["perda_percentual"], 100)
+
+    def test_poll_tolerates_timeout_and_empty_frames_until_complete(self):
+        service = self.make_service()
+        original_post_read = self.client.post_read
+        frames = iter([
+            TimeoutError("temporary timeout"),
+            "",
+            repr(self.client.ping_result),
+        ])
+
+        def flaky_post_read(path, payload=None, *, referer="/index.asp"):
+            if path.endswith("/GetPingResult.asp"):
+                value = next(frames)
+                if isinstance(value, BaseException):
+                    raise value
+                self.client.post_read_calls.append(
+                    (path, dict(payload or {}), referer)
+                )
+                return value
+            return original_post_read(
+                path,
+                payload,
+                referer=referer,
+            )
+
+        self.client.post_read = flaky_post_read
+
+        with patch(
+            "apps.zte_manager.services.huawei_service.time.sleep",
+            return_value=None,
+        ):
+            result = service.ping({
+                "host": "8.8.8.8",
+                "count": 4,
+                "timeout": 1000,
+            })
+
+        self.assertTrue(result["verified"])
+        self.assertTrue(result["success"])
+        self.assertEqual(result["sucesso"], 4)
+
+    def test_ping_parser_accepts_sent_received_and_labelled_rtt(self):
+        parsed = HuaweiService._parse_ping_output(
+            (
+                "Packets: Sent = 4, Received = 3, Lost = 1 (25% loss)\n"
+                "Minimum = 8ms, Maximum = 12ms, Average = 10ms"
+            ),
+            requested_count=4,
+        )
+
+        self.assertEqual(parsed["sucesso"], 3)
+        self.assertEqual(parsed["falha"], 1)
+        self.assertEqual(parsed["perda_percentual"], 25)
+        self.assertEqual(parsed["minimo_ms"], 8.0)
+        self.assertEqual(parsed["medio_ms"], 10.0)
+        self.assertEqual(parsed["maximo_ms"], 12.0)
+
+    def test_traceroute_empty_interface_selects_active_internet_ppp_and_forces_auto(self):
+        service = self.make_service()
+        active_domain = (
+            "InternetGatewayDevice.WANDevice.1."
+            "WANConnectionDevice.1.WANPPPConnection.1"
+        )
+        service.wan_status = lambda refresh=False: [{
+            "id": active_domain,
+            "status": "Connected",
+            "nome": "1_TR069_INTERNET_R_VID_2000",
+            "services": "TR069_INTERNET",
+            "wan_type": "PPPoE",
+        }]
+
+        result = service.traceroute({
+            "host": "8.8.8.8",
+            "interface": "",
+            "protocol": "ICMP",
+            "timeout": 2000,
+        })
+
+        self.assertTrue(result["verified"])
+        self.assertEqual(result["interface"], active_domain)
+        self.assertEqual(result["protocol"], "AUTO")
+        self.assertEqual(result["protocol_code"], "0")
+        payload = self.client.post_form_calls[0][1]
+        self.assertEqual(payload["x.Interface"], active_domain)
+        self.assertEqual(payload["x.X_HW_ProtocolType"], "0")
 
     def test_traceroute_max_hops_is_terminal_verified_failure(self):
         service = self.make_service()

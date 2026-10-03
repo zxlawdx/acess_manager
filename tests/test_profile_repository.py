@@ -3,7 +3,12 @@ import unittest
 from pathlib import Path
 
 from apps.zte_manager.repositories.profile_repository import ProfileRepository
-from apps.zte_manager.services.profile_service import DEFAULT_PROFILE, _normalize_profile
+from apps.zte_manager.services.profile_service import (
+    DEFAULT_PROFILE,
+    HUAWEI_EG8041X7_DEFAULT_PROFILE,
+    ProfileService,
+    _normalize_profile,
+)
 
 
 class ProfileRepositoryTest(unittest.TestCase):
@@ -30,6 +35,63 @@ class ProfileRepositoryTest(unittest.TestCase):
             self.assertEqual(
                 profile["wifi"]["2.4GHz"]["bandwidth"],
                 "20MHz"
+            )
+
+
+    def test_huawei_eg8041x7_uses_separate_physical_defaults_and_storage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            service = ProfileService(base_dir=tmp)
+
+            zte = service.get_profile("law")
+            huawei = service.get_profile(
+                "law",
+                provider="huawei",
+                model="EG8041X7-10",
+            )
+
+            self.assertEqual(
+                zte["wifi"]["2.4GHz"]["bandwidth"],
+                "20MHz",
+            )
+            self.assertEqual(
+                huawei,
+                HUAWEI_EG8041X7_DEFAULT_PROFILE,
+            )
+            self.assertEqual(
+                huawei["wifi"]["2.4GHz"]["bandwidth_code"],
+                "0",
+            )
+            self.assertEqual(
+                huawei["wifi"]["5GHz"]["bandwidth_code"],
+                "4",
+            )
+            self.assertEqual(
+                huawei["wifi"]["2.4GHz"]["standard"],
+                "11ax",
+            )
+            self.assertEqual(
+                huawei["wifi"]["5GHz"]["standard"],
+                "11ax",
+            )
+
+            service.save_profile(
+                "law",
+                {
+                    "wifi": {
+                        "2.4GHz": {
+                            "bandwidth": "40MHz",
+                        },
+                    },
+                },
+            )
+            untouched_huawei = service.get_profile(
+                "law",
+                provider="huawei",
+                model="EG8041X7-10",
+            )
+            self.assertEqual(
+                untouched_huawei["wifi"]["2.4GHz"]["bandwidth"],
+                "Auto",
             )
 
     def test_normalizacao_preserva_dns_do_atendente(self):
