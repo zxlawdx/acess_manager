@@ -101,6 +101,8 @@
     collect:"Coleta de suporte",
     speed_test:"Teste de velocidade da ONT",
     diagnostics_webui:"Diagnóstico interno da ONT",
+    support_config:"Configuração de suporte e manutenção",
+    software_notice:"Avisos de software",
     account:"Conta administrativa",
     logs:"Registros do equipamento",
     mirror_port:"Espelhamento de porta",
@@ -141,7 +143,9 @@
     qos_queue:["management","network","managementQosSave","queue"],
     qos_speed:["management","network","managementQosSave","policer"],
     qos_shaper:["management","network","managementQosSave","shaper"],
-    backup_config:["advanced","inspector","backupConfigurationButton"]
+    backup_config:["advanced","inspector","backupConfigurationButton"],
+    diagnostics_webui:["diagnostics","pingHost"],
+    arp_ping:["diagnostics","pingHost"]
   });
   const SAFE_FIELDS=Object.freeze({
     enable:"Ativo",enabled:"Ativo",serverenable:"Servidor ativo",
