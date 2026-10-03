@@ -3607,6 +3607,19 @@ function collectProfileForm() {
             ),
             tx_power: card.querySelector('[data-field="tx_power"]').value
         };
+
+        if (
+            currentVendor === "huawei"
+            && wifi[band].bandwidth === "Auto"
+        ) {
+            // Persist the exact captured enum so a saved/captured profile
+            // survives round-trips without falling back to ZTE 20/80 MHz.
+            wifi[band].bandwidth_code = (
+                band === "5GHz"
+                    ? "4"
+                    : "0"
+            );
+        }
     }
 
     return {
@@ -4228,9 +4241,13 @@ function bandwidthSelect(
     value,
     field
 ) {
-    const options = band === "5GHz"
-        ? ["Auto", "20MHz", "40MHz", "80MHz", "160MHz"]
-        : ["Auto", "20MHz", "40MHz"];
+    // The EG8041X7-10 capture only confirms the automatic width enums
+    // (2.4G raw 0 and 5G raw 4). Do not offer unverified Huawei writes.
+    const options = currentVendor === "huawei"
+        ? ["Auto"]
+        : band === "5GHz"
+            ? ["Auto", "20MHz", "40MHz", "80MHz", "160MHz"]
+            : ["Auto", "20MHz", "40MHz"];
 
     return selectHtml(
         options,
@@ -4245,9 +4262,11 @@ function standardSelect(
     value,
     field
 ) {
-    const options = band === "5GHz"
-        ? ["a", "n", "a,n", "ac", "a,n,ac", "a,n,ac,ax"]
-        : ["b", "g", "n", "b,g", "g,n", "b,g,n", "b,g,n,ax"];
+    const options = currentVendor === "huawei"
+        ? ["11ax"]
+        : band === "5GHz"
+            ? ["a", "n", "a,n", "ac", "a,n,ac", "a,n,ac,ax"]
+            : ["b", "g", "n", "b,g", "g,n", "b,g,n", "b,g,n,ax"];
 
     return selectHtml(
         options,
@@ -4292,6 +4311,9 @@ function selectHtml(
 
 
 function defaultBandwidth(band) {
+    if (currentVendor === "huawei") {
+        return "Auto";
+    }
     return band === "5GHz"
         ? "80MHz"
         : "20MHz";
@@ -4299,6 +4321,9 @@ function defaultBandwidth(band) {
 
 
 function defaultStandard(band) {
+    if (currentVendor === "huawei") {
+        return "11ax";
+    }
     return band === "5GHz"
         ? "a,n,ac"
         : "b,g,n";
