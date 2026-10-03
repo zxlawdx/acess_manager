@@ -2047,7 +2047,22 @@ class HuaweiCapturedFeatureService:
                         _record_value(records, "SSIDAdvertisementEnabled", default="1"),
                     )
                 ),
-                "isolamento": False,
+                "isolamento": _enabled(
+                    record.get(
+                        "IsolationEnable",
+                        _record_value(records, "IsolationEnable", default="0"),
+                    )
+                ),
+                "wps_enabled": _enabled(
+                    next(
+                        (
+                            item.get("Enable")
+                            for item in records
+                            if _record_domain(item) == f"{domain}.WPS"
+                        ),
+                        _record_value(records, "WPSEnable", default="1"),
+                    )
+                ),
                 "password": "",
                 "password_hidden": True,
             })
@@ -2071,21 +2086,6 @@ class HuaweiCapturedFeatureService:
         if current is None:
             raise RuntimeError("A configuração Wi-Fi Huawei não pôde ser relida.")
 
-        if config.get("password"):
-            raise ValueError(
-                "A alteração de senha Wi-Fi não foi capturada no formulário Huawei; nenhuma alteração foi enviada."
-            )
-        if config.get("isolation") not in (None, False):
-            raise ValueError(
-                "Isolamento SSID Huawei ainda não foi validado neste profile."
-            )
-
-        encryption = config.get("encryption")
-        if encryption not in (None, "", current.get("seguranca")):
-            raise ValueError(
-                "Alteração do modo de segurança Wi-Fi ainda não foi validada para esta captura."
-            )
-
         ssid = str(config.get("ssid", current.get("ssid") or ""))
         enabled = bool(config.get("enabled", current.get("ativo", True)))
         broadcast = bool(config.get("broadcast", current.get("broadcast", True)))
@@ -2101,21 +2101,53 @@ class HuaweiCapturedFeatureService:
             "&RequestFile=html/amp/wlanbasic/WlanBasic.asp"
         )
         record, records = self._wifi_basic_record(band)
-        beacon_type = str(
+        current_beacon = str(
             record.get("BeaconType")
             or _record_value(records, "BeaconType", default="")
             or current.get("seguranca")
             or ""
         )
+        requested_security = str(
+            config.get("encryption")
+            or current_beacon
+            or ""
+        )
+        security_profiles = {
+            "WPA2-PSK-AES": ("11i", "AESEncryption"),
+            "WPA2/WPA3-SAE": ("WPA2/WPA3", "AESEncryption"),
+            "WPA2-PSK-AES/WPA3-SAE-AES": (
+                "WPA2/WPA3", "AESEncryption"
+            ),
+            "WPA3-SAE": ("WPA3", "AESEncryption"),
+            "WPA/WPA2-PSK-AES": (
+                "WPAand11i", "AESEncryption"
+            ),
+            "WPA/WPA2-PSK-TKIP/AES": (
+                "WPAand11i", "TKIPandAESEncryption"
+            ),
+            "WPA-PSK-AES": ("WPA", "AESEncryption"),
+            "No Security": ("Basic", "None"),
+            "WPA2/WPA3": ("WPA2/WPA3", "AESEncryption"),
+            "WPA3": ("WPA3", "AESEncryption"),
+            "WPAand11i": ("WPAand11i", "AESEncryption"),
+            "WPA/WPA2": ("WPAand11i", "AESEncryption"),
+            "11i": ("11i", "AESEncryption"),
+            "WPA2": ("11i", "AESEncryption"),
+            "WPA": ("WPA", "AESEncryption"),
+            "Basic": ("Basic", "None"),
+            "None": ("Basic", "None"),
+        }
+        beacon_type, security_encryption = security_profiles.get(
+            requested_security,
+            (requested_security or current_beacon, "AESEncryption"),
+        )
         if not beacon_type:
             raise RuntimeError(
-                "O modo de segurança Wi-Fi atual não foi identificado; "
-                "nenhum POST foi enviado."
+                "O modo de segurança Wi-Fi não foi identificado."
             )
 
-        # WlanBasic.asp submits a complete form. Preserve every captured
-        # non-secret field instead of sending a partial POST that could reset
-        # security/WPS defaults. The capture contained no PSK field.
+        # WlanBasic.asp submits a complete form. Preserve the captured form
+        # and overwrite only the fields selected by the operator.
         def preserved(name: str, default: str) -> str:
             value = (
                 record.get(name)
@@ -2126,36 +2158,97 @@ class HuaweiCapturedFeatureService:
         auth_default = (
             "PSKandSAEAuthentication"
             if beacon_type == "WPA2/WPA3"
-            else ""
-        )
-        if beacon_type != "WPA2/WPA3" and not preserved(
-            "X_HW_WPAand11iAuthenticationMode",
-            "",
-        ):
-            raise RuntimeError(
-                "O formulário Huawei não expôs os campos necessários para "
-                "preservar a segurança atual do SSID."
+            else (
+                "SAEAuthentication"
+                if beacon_type == "WPA3"
+                else "PSKAuthentication"
             )
+        )
 
         payload = {
             "y.Enable": _as01(enabled),
             "y.SSIDAdvertisementEnabled": _as01(broadcast),
             "y.SSID": ssid,
             "y.X_HW_AssociateNum": max_clients,
-            "y.BeaconType": beacon_type,
-            "y.X_HW_WPAand11iAuthenticationMode": preserved(
-                "X_HW_WPAand11iAuthenticationMode",
-                auth_default,
+            "y.IsolationEnable": _as01(
+                config.get(
+                    "isolation",
+                    current.get("isolamento", False),
+                )
             ),
-            "y.X_HW_WPAand11iEncryptionModes": preserved(
-                "X_HW_WPAand11iEncryptionModes",
-                "AESEncryption",
+            "y.BeaconType": beacon_type,
+            "y.BasicAuthenticationMode": (
+                "None"
+                if beacon_type == "Basic"
+                else preserved("BasicAuthenticationMode", "None")
+            ),
+            "y.BasicEncryptionModes": (
+                "None"
+                if beacon_type == "Basic"
+                else preserved("BasicEncryptionModes", "None")
+            ),
+            "y.WPAAuthenticationMode": (
+                "PSKAuthentication"
+                if beacon_type == "WPA"
+                else preserved(
+                    "WPAAuthenticationMode",
+                    "PSKAuthentication",
+                )
+            ),
+            "y.WPAEncryptionModes": (
+                security_encryption
+                if beacon_type == "WPA"
+                else preserved(
+                    "WPAEncryptionModes",
+                    "AESEncryption",
+                )
+            ),
+            "y.IEEE11iAuthenticationMode": (
+                "PSKAuthentication"
+                if beacon_type == "11i"
+                else preserved(
+                    "IEEE11iAuthenticationMode",
+                    "PSKAuthentication",
+                )
+            ),
+            "y.IEEE11iEncryptionModes": (
+                security_encryption
+                if beacon_type == "11i"
+                else preserved(
+                    "IEEE11iEncryptionModes",
+                    "AESEncryption",
+                )
+            ),
+            "y.X_HW_WPAand11iAuthenticationMode": (
+                auth_default
+                if beacon_type in {
+                    "WPAand11i", "WPA3", "WPA2/WPA3"
+                }
+                else preserved(
+                    "X_HW_WPAand11iAuthenticationMode",
+                    "PSKAuthentication",
+                )
+            ),
+            "y.X_HW_WPAand11iEncryptionModes": (
+                security_encryption
+                if beacon_type in {
+                    "WPAand11i", "WPA3", "WPA2/WPA3"
+                }
+                else preserved(
+                    "X_HW_WPAand11iEncryptionModes",
+                    "AESEncryption",
+                )
             ),
             "y.X_HW_GroupRekey": preserved(
                 "X_HW_GroupRekey",
                 "3600",
             ),
-            "z.Enable": preserved("WPSEnable", "1"),
+            "z.Enable": _as01(
+                config.get(
+                    "wps_enabled",
+                    current.get("wps_enabled", True),
+                )
+            ),
             "z.X_HW_ConfigMethod": preserved(
                 "X_HW_ConfigMethod",
                 "PushButton",
@@ -2209,6 +2302,10 @@ class HuaweiCapturedFeatureService:
             "c2.ActionType": "1",
             "c2.SSIDList": instance,
         }
+
+        password = str(config.get("password") or "")
+        if password:
+            payload["k.PreSharedKey"] = password
 
         def verify():
             actual = next(
