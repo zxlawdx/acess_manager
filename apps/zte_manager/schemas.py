@@ -327,6 +327,9 @@ class AttendanceReportRequest(BaseModel):
 
 class DhcpBasicRequest(BaseModel):
     enabled: bool | None = None
+    dhcp_enable: bool | None = None
+    l2_relay_enable: bool | None = None
+    option125_enable: bool | None = None
     min_address: str | None = None
     max_address: str | None = None
     dns_source: str | None = None
