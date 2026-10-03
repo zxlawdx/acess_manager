@@ -2401,6 +2401,33 @@ class HuaweiCapturedFeatureService:
                 "beacon_interval": _record_value(relevant, "BeaconPeriod", default=100),
                 "rts_cts": _record_value(relevant, "RTSThreshold", default=2346),
                 "dtim": _record_value(relevant, "DtimPeriod", default=1),
+                "frag_threshold": _record_value(
+                    relevant, "FragThreshold", default=2346
+                ),
+                "band_steering": _enabled(
+                    _record_value(
+                        relevant,
+                        "BandSteeringPolicy",
+                        default="1",
+                    )
+                ),
+                "band_steering_policy": _record_value(
+                    relevant, "BandSteeringPolicy", default="1"
+                ),
+                "airtime_fairness": _enabled(
+                    _record_value(
+                        relevant,
+                        "X_HW_AirtimeFairness",
+                        default="0",
+                    )
+                ),
+                "auto_channel_scope": _record_value(
+                    relevant,
+                    "X_HW_AutoChannelScope",
+                    default="0",
+                ),
+                "bandwidth_code": raw_bw,
+                "standard_raw": str(raw_standard),
                 "sgi": False,
                 "mu_mimo": False,
                 "downlink_ofdma": False,
@@ -2466,7 +2493,12 @@ class HuaweiCapturedFeatureService:
             "beacon_interval",
             "rts_cts",
             "dtim",
-            # Read-only-in-UI values are accepted only when unchanged.
+            "frag_threshold",
+            "band_steering",
+            "band_steering_policy",
+            "airtime_fairness",
+            "auto_channel_scope",
+            "bandwidth_code",
             "bandwidth",
             "standard",
             "sgi",
@@ -2479,21 +2511,58 @@ class HuaweiCapturedFeatureService:
         ]
         if unsupported:
             raise ValueError(
-                "Campos de rádio Huawei ainda não validados: "
+                "Campos de rádio Huawei não pertencem ao formulário capturado: "
                 + ", ".join(sorted(unsupported))
             )
 
-        for key, label in (
-            ("bandwidth", "largura de canal"),
-            ("standard", "padrão Wi-Fi"),
-            ("sgi", "SGI"),
-        ):
-            if key in config and config[key] not in (None, current.get(
-                {"bandwidth": "largura", "standard": "padrao", "sgi": "sgi"}[key]
-            )):
+        # X_HW_HT20 is the actual field submitted by the Huawei page. Prefer
+        # an explicit raw code. For the two values physically captured by this
+        # EG8041X7-10, also accept the operator-facing labels.
+        raw_bw = str(current.get("_raw_ht20") or "")
+        requested_bandwidth = config.get("bandwidth")
+        bandwidth_code = config.get("bandwidth_code")
+        if bandwidth_code is None and requested_bandwidth is not None:
+            known_bandwidth = {
+                ("2.4GHz", "Auto"): "0",
+                ("5GHz", "80MHz"): "4",
+            }
+            bandwidth_code = known_bandwidth.get(
+                (display, str(requested_bandwidth))
+            )
+            if bandwidth_code is None and str(requested_bandwidth) != str(
+                current.get("largura") or ""
+            ):
                 raise ValueError(
-                    f"Alteração de {label} Huawei ainda não foi validada nesta captura."
+                    "Para esta largura Huawei, informe bandwidth_code "
+                    "observado no formulário do firmware."
                 )
+        if bandwidth_code is None:
+            bandwidth_code = raw_bw or ("4" if instance == "5" else "0")
+
+        raw_standard = str(current.get("_raw_standard") or "11ax")
+        requested_standard = config.get("standard")
+        standard = raw_standard
+        if requested_standard not in (None, ""):
+            value = str(requested_standard)
+            if value in {"b,g,n,ax", "a,n,ac,ax"}:
+                standard = "11ax"
+            elif value == str(current.get("padrao") or ""):
+                standard = raw_standard
+            else:
+                # The Huawei form posts X_HW_Standard directly. Do not translate
+                # values that the operator explicitly supplied.
+                standard = value
+
+        # SGI is not a field in the captured wlanadv mutation. Preserve it
+        # rather than silently pretending that another parameter controls it.
+        if (
+            "sgi" in config
+            and config.get("sgi") is not None
+            and bool(config.get("sgi")) != bool(current.get("sgi"))
+        ):
+            raise ValueError(
+                "SGI não faz parte do POST wlanadv capturado."
+            )
 
         auto = bool(config.get("auto_channel", current.get("canal_automatico", True)))
         channel = "0" if auto else str(config.get("channel") or current.get("canal") or "0")
@@ -2502,6 +2571,38 @@ class HuaweiCapturedFeatureService:
         beacon = str(config.get("beacon_interval", current.get("beacon_interval") or 100))
         rts = str(config.get("rts_cts", current.get("rts_cts") or 2346))
         dtim = str(config.get("dtim", current.get("dtim") or 1))
+        frag = str(
+            config.get(
+                "frag_threshold",
+                current.get("frag_threshold")
+                or current.get("_raw_frag")
+                or 2346,
+            )
+        )
+        steering = str(
+            config.get(
+                "band_steering_policy",
+                _as01(config.get("band_steering"))
+                if config.get("band_steering") is not None
+                else current.get("band_steering_policy")
+                or current.get("_raw_band_steering")
+                or "1",
+            )
+        )
+        airtime = _as01(
+            config.get(
+                "airtime_fairness",
+                current.get("airtime_fairness", False),
+            )
+        )
+        auto_scope = str(
+            config.get(
+                "auto_channel_scope",
+                current.get("auto_channel_scope")
+                or current.get("_raw_auto_scope")
+                or "0",
+            )
+        )
 
         y = f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{instance}"
         radio = "1" if instance == "1" else "2"
@@ -2521,38 +2622,20 @@ class HuaweiCapturedFeatureService:
             "y.AutoChannelEnable": _as01(auto),
             "y.RegulatoryDomain": country,
             "y.TransmitPower": power,
-            "y.X_HW_HT20": str(
-                current.get("_raw_ht20")
-                or ("4" if instance == "5" else "0")
-            ),
-            "y.X_HW_Standard": str(
-                current.get("_raw_standard")
-                or "11ax"
-            ),
+            "y.X_HW_HT20": str(bandwidth_code),
+            "y.X_HW_Standard": str(standard),
             "x.DtimPeriod": dtim,
             "x.BeaconPeriod": beacon,
             "x.RTSThreshold": rts,
-            "x.FragThreshold": str(
-                current.get("_raw_frag")
-                or "2346"
-            ),
-            "z.BandSteeringPolicy": str(
-                current.get("_raw_band_steering")
-                or "1"
-            ),
-            "v.X_HW_AirtimeFairness": str(
-                current.get("_raw_airtime")
-                or "0"
-            ),
+            "x.FragThreshold": frag,
+            "z.BandSteeringPolicy": steering,
+            "v.X_HW_AirtimeFairness": airtime,
             "c1.ActionType": "0",
             "c2.ActionType": "1",
             "c2.SSIDList": instance,
         }
         if instance == "5":
-            payload["y.X_HW_AutoChannelScope"] = str(
-                current.get("_raw_auto_scope")
-                or "0"
-            )
+            payload["y.X_HW_AutoChannelScope"] = auto_scope
 
         def verify():
             actual = next(
@@ -2574,6 +2657,21 @@ class HuaweiCapturedFeatureService:
             if str(actual.get("rts_cts") or "") != rts:
                 return None
             if str(actual.get("dtim") or "") != dtim:
+                return None
+            if str(actual.get("frag_threshold") or "") != frag:
+                return None
+            if str(actual.get("bandwidth_code") or "") != str(bandwidth_code):
+                return None
+            if str(actual.get("standard_raw") or "") != str(standard):
+                return None
+            if str(actual.get("band_steering_policy") or "") != steering:
+                return None
+            if bool(actual.get("airtime_fairness")) != _enabled(airtime):
+                return None
+            if (
+                instance == "5"
+                and str(actual.get("auto_channel_scope") or "") != auto_scope
+            ):
                 return None
             return actual
 
