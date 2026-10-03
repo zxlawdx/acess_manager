@@ -315,6 +315,103 @@ HUAWEI_MAPPED_WRITES: dict[str, dict[str, Any]] = {
 }
 
 
+HUAWEI_FEATURE_WRITE_OPERATIONS: dict[str, tuple[str, ...]] = {
+    "dscp_to_pbit": ("dscp_to_pbit",),
+    "speed_test": ("speed_test", "speed_test_mode"),
+    "diagnostics_webui": (
+        "diagnostics_prepare",
+        "diagnostics_port_check",
+        "diagnostics_run",
+    ),
+    "user_devices": ("user_devices",),
+    "wan_config": ("wan_config",),
+}
+
+
+_WRITE_OPERATION_LABELS = {
+    "dscp_to_pbit": "Configurar DSCP para P-bit",
+    "speed_test": "Executar teste de velocidade",
+    "speed_test_mode": "Selecionar modo do teste",
+    "diagnostics_prepare": "Preparar diagnóstico",
+    "diagnostics_port_check": "Testar porta",
+    "diagnostics_run": "Executar/encerrar diagnóstico",
+    "user_devices": "Atualizar inventário de dispositivos",
+    "wan_config": "Atualizar conexão WAN",
+}
+
+
+_WRITE_FIELD_LABELS = {
+    "x.DscpToPbitMapping": "Mapeamento DSCP → P-bit",
+    "x.DefaultPbit": "P-bit padrão",
+    "x.DiagnosticsState": "Estado do teste",
+    "x.ServerAddr": "Servidor de teste",
+    "x.DestMac": "MAC de destino",
+    "x.Bandwidth": "Largura de banda",
+    "x.TestMode": "Direção do teste",
+    "x.Port": "Porta",
+    "x.ProtocolType": "Protocolo",
+    "x.MaxTime": "Tempo máximo (s)",
+    "x.Parallel": "Fluxos paralelos",
+    "Speedscenes": "Cenário de velocidade",
+    "Sectionstatus": "Estado da seção",
+    "x.portid": "Identificador da porta",
+    "RUNSTATE_FLAG.value": "Ação do diagnóstico",
+    "x.State": "Estado do inventário",
+    "y.X_HW_IPv4Enable": "IPv4 habilitado",
+    "y.X_HW_IPv6Enable": "IPv6 habilitado",
+    "y.X_HW_IPv6MultiCastVLAN": "VLAN multicast IPv6",
+    "y.X_HW_SERVICELIST": "Serviços",
+    "y.X_HW_ExServiceList": "Serviços adicionais",
+    "y.X_HW_VLAN": "VLAN",
+    "y.X_HW_PRI": "Prioridade 802.1p",
+    "y.X_HW_PriPolicy": "Política de prioridade",
+    "y.X_HW_DefaultPri": "Prioridade padrão",
+    "y.X_HW_MultiCastVLAN": "VLAN multicast IPv4",
+    "y.NATEnabled": "NAT habilitado",
+    "y.X_HW_NatType": "Tipo de NAT",
+    "y.X_HW_BridgeEnable": "Bridge habilitado",
+    "y.X_HW_LcpEchoReqCheck": "Verificação LCP Echo",
+    "y.DNSEnabled": "DNS habilitado",
+    "y.MaxMRUSize": "MRU máximo",
+    "y.X_HW_BindPhyPortInfo": "Vínculo de portas físicas",
+    "y.X_HW_NPTv6Enable": "NPTv6 habilitado",
+    "m.Alias": "Alias IPv6",
+    "m.Origin": "Origem do endereço IPv6",
+    "m.IPAddress": "Endereço IPv6",
+    "m.ChildPrefixBits": "Bits de prefixo filho",
+    "m.AddrMaskLen": "Tamanho da máscara IPv6",
+    "m.DefaultGateway": "Gateway IPv6",
+    "n.Alias": "Alias do prefixo",
+    "n.Origin": "Origem do prefixo",
+    "n.Prefix": "Prefixo IPv6",
+    "X_HW_OverrideAllowed": "Permitir sobrescrita",
+    "y.Enable": "Conexão habilitada",
+    "y.ConnectionType": "Tipo de conexão",
+    "y.Username": "Usuário PPPoE",
+    "y.Password": "Senha PPPoE",
+}
+
+
+_WRITE_DEFAULTS = {
+    "x.DscpToPbitMapping": "",
+    "x.DefaultPbit": "0",
+    "x.DiagnosticsState": "requested",
+    "x.ServerAddr": "",
+    "x.DestMac": "",
+    "x.Bandwidth": "0",
+    "x.TestMode": "UPLOAD",
+    "x.Port": "5201",
+    "x.ProtocolType": "TCP",
+    "x.MaxTime": "10",
+    "x.Parallel": "1",
+    "Speedscenes": "1",
+    "Sectionstatus": "0",
+    "x.portid": "",
+    "RUNSTATE_FLAG.value": "START",
+    "x.State": "Creating",
+}
+
+
 _SECRET_KEYS = frozenset({
     "x_hw_token", "hwonttoken", "onttoken", "cookie", "cookiehttp",
     "authorization",
@@ -396,11 +493,9 @@ class HuaweiMappedSurfaceService:
     def catalog() -> dict[str, Any]:
         features = []
         for key, spec in HUAWEI_MAPPED_FEATURES.items():
-            writes = [
-                operation
-                for operation, mutation in HUAWEI_MAPPED_WRITES.items()
-                if operation == key
-            ]
+            writes = list(
+                HUAWEI_FEATURE_WRITE_OPERATIONS.get(key, ())
+            )
             features.append({
                 "key": key,
                 "label": spec["label"],
@@ -416,6 +511,36 @@ class HuaweiMappedSurfaceService:
                 "read": True,
                 "write": True,
             },
+        }
+
+    @staticmethod
+    def write_schema(feature: str) -> dict[str, Any]:
+        key = str(feature or "").strip()
+        operations = []
+        for operation in HUAWEI_FEATURE_WRITE_OPERATIONS.get(key, ()):
+            spec = HUAWEI_MAPPED_WRITES[operation]
+            fields = []
+            for field in spec.get("fields") or ():
+                fields.append({
+                    "key": field,
+                    "label": _WRITE_FIELD_LABELS.get(
+                        field,
+                        re.sub(r"^[a-z]\\.", "", field).replace("_", " "),
+                    ),
+                    "default": _WRITE_DEFAULTS.get(field, ""),
+                    "secret": "password" in field.casefold(),
+                })
+            operations.append({
+                "key": operation,
+                "label": _WRITE_OPERATION_LABELS.get(
+                    operation,
+                    operation.replace("_", " ").title(),
+                ),
+                "fields": fields,
+            })
+        return {
+            "available": bool(operations),
+            "operations": operations,
         }
 
     def _normalize_page(self, path: str, source: str) -> dict[str, Any]:
