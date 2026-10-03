@@ -1033,6 +1033,7 @@ def huawei_mapped_write(context=None):
                 data.get("readback_method") or "GET"
             ),
             readback_payload=data.get("readback_payload") or {},
+            readback_expect=data.get("readback_expect") or None,
         )
 
     return _safe_call(action)
