@@ -667,14 +667,14 @@ def _safe_value(value):
 def _input_values(source: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for match in re.finditer(
-        r"<input\\b[^>]*\\b(?:name|id)=[\"']([^\"']+)[\"'][^>]*>",
+        r"<input\b[^>]*\b(?:name|id)=[\"']([^\"']+)[\"'][^>]*>",
         source or "",
         re.I | re.S,
     ):
         tag = match.group(0)
         key = match.group(1)
         value_match = re.search(
-            r"\\bvalue=[\"']([^\"']*)[\"']",
+            r"\bvalue=[\"']([^\"']*)[\"']",
             tag,
             re.I | re.S,
         )
@@ -732,7 +732,7 @@ class HuaweiMappedSurfaceService:
                     "key": field,
                     "label": _WRITE_FIELD_LABELS.get(
                         field,
-                        re.sub(r"^[a-z]\\.", "", field).replace("_", " "),
+                        re.sub(r"^[a-z]\.", "", field).replace("_", " "),
                     ),
                     "default": _WRITE_DEFAULTS.get(field, ""),
                     "secret": "password" in field.casefold(),
