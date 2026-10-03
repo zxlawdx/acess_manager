@@ -1267,6 +1267,13 @@ class HuaweiCapturedFeatureService:
                 or "InternetGatewayDevice.LANDevice.1.LANHostConfigManagement"
             ),
             "ServerEnable": _as01(server_enable) if server_enable != "" else "",
+            "DHCPEnable": _record_value(records, "DHCPEnable", default=""),
+            "L2RelayEnable": _record_value(
+                records, "X_HW_DHCPL2RelayEnable", default=""
+            ),
+            "Option125Enable": _record_value(
+                records, "X_HW_Option125Enable", default=""
+            ),
             "MinAddress": _record_value(records, "MinAddress", default=""),
             "MaxAddress": _record_value(records, "MaxAddress", default=""),
             "LeaseTime": _record_value(records, "DHCPLeaseTime", "LeaseTime", default=""),
@@ -1329,7 +1336,19 @@ class HuaweiCapturedFeatureService:
 
     def set_dhcp_basic(self, config: dict[str, Any]) -> dict[str, Any]:
         allowed = {
-            "enabled", "min_address", "max_address", "dns1", "dns2", "lease_time"
+            "enabled",
+            "dhcp_enable",
+            "l2_relay_enable",
+            "option125_enable",
+            "min_address",
+            "max_address",
+            "dns1",
+            "dns2",
+            "lease_time",
+            # Generic ZTE form fields are accepted but ignored by Huawei when
+            # they do not correspond to this captured DHCP page.
+            "dns_source",
+            "ipv4_dns_origin",
         }
         unsupported = [
             key
@@ -1366,9 +1385,23 @@ class HuaweiCapturedFeatureService:
         }
         preservation = {
             "y.DHCPEnable": _record_value(records, "DHCPEnable", default=None),
-            "z.X_HW_DHCPL2RelayEnable": _record_value(records, "X_HW_DHCPL2RelayEnable", default=None),
-            "z.X_HW_Option125Enable": _record_value(records, "X_HW_Option125Enable", default=None),
+            "z.X_HW_DHCPL2RelayEnable": _record_value(
+                records, "X_HW_DHCPL2RelayEnable", default=None
+            ),
+            "z.X_HW_Option125Enable": _record_value(
+                records, "X_HW_Option125Enable", default=None
+            ),
         }
+        if config.get("dhcp_enable") is not None:
+            preservation["y.DHCPEnable"] = _as01(config["dhcp_enable"])
+        if config.get("l2_relay_enable") is not None:
+            preservation["z.X_HW_DHCPL2RelayEnable"] = _as01(
+                config["l2_relay_enable"]
+            )
+        if config.get("option125_enable") is not None:
+            preservation["z.X_HW_Option125Enable"] = _as01(
+                config["option125_enable"]
+            )
         payload.update({
             key: str(value)
             for key, value in preservation.items()
@@ -1387,6 +1420,13 @@ class HuaweiCapturedFeatureService:
             actual = self.dhcp_status()["basic"]
             expected = {
                 "ServerEnable": _as01(enabled),
+                "DHCPEnable": str(payload.get("y.DHCPEnable") or ""),
+                "L2RelayEnable": str(
+                    payload.get("z.X_HW_DHCPL2RelayEnable") or ""
+                ),
+                "Option125Enable": str(
+                    payload.get("z.X_HW_Option125Enable") or ""
+                ),
                 "MinAddress": min_address,
                 "MaxAddress": max_address,
                 "LeaseTime": lease,
