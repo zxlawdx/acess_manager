@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import html as html_module
+import logging
+import os
 import re
 import time
 from typing import Any, Callable, Iterable
@@ -54,6 +56,16 @@ WLAN_STA_BOOST_PAGE = "/html/amp/wlaninfo/getassociatedstaboost.asp"
 WLAN_ADV_COMMON_PAGE = "/html/amp/wlanadv/wlanadvance_com_api.asp"
 WLAN_ADV_API_PAGE = "/html/amp/wlanadv/wlanadvance_api.asp"
 WLAN_CHANNEL_PAGE = "/html/amp/common/WlanChannel.asp?1=1"
+
+logger = logging.getLogger(__name__)
+
+
+def _terminal_debug(message: str) -> None:
+    logger.info(message)
+    mode = str(os.getenv("HUAWEI_HTTP_TRACE") or "").strip().casefold()
+    if mode in {"1", "true", "yes", "basic", "raw", "unsafe"}:
+        print(message, flush=True)
+
 
 WAN_DMZ_DOMAIN = (
     "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1."
@@ -404,6 +416,12 @@ class HuaweiCapturedFeatureService:
         page = self._page(request_file)
         token = self.client.extract_token(page)
         body = {**payload, "x.X_HW_Token": token}
+
+        _terminal_debug(
+            "[HUAWEI VERIFY] submit "
+            f"path={path!r} request_file={request_file!r} "
+            f"payload_keys={sorted(body)}"
+        )
         transport: HuaweiMutationTransport = self.client.post_form(
             path,
             body,
@@ -414,17 +432,53 @@ class HuaweiCapturedFeatureService:
             body=transport.body,
             content_type=transport.content_type,
         )
+        _terminal_debug(
+            "[HUAWEI VERIFY] mutation-result "
+            f"status={transport.http_status!r} "
+            f"type={parsed.response_type!r} "
+            f"accepted={parsed.accepted!r} "
+            f"confirmed={parsed.confirmed!r} "
+            f"error_code={parsed.error_code!r} "
+            f"timed_out={transport.timed_out!r} "
+            f"connection_uncertain={transport.connection_uncertain!r}"
+        )
 
         verified = None
         if verifier is not None and parsed.accepted:
-            for delay in (0.35, 0.55, 0.8, 1.0, 1.4, 1.8)[: self.readback_tries]:
+            for attempt, delay in enumerate(
+                (0.35, 0.55, 0.8, 1.0, 1.4, 1.8)[: self.readback_tries],
+                start=1,
+            ):
                 self.sleep(delay)
                 try:
                     verified = verifier()
-                except Exception:
+                    _terminal_debug(
+                        "[HUAWEI VERIFY] readback "
+                        f"attempt={attempt}/{self.readback_tries} "
+                        f"verified={bool(verified)!r} "
+                        f"value={verified!r}"
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "Huawei read-back failed after mutation: "
+                        "path=%s request_file=%s attempt=%s",
+                        path,
+                        request_file,
+                        attempt,
+                    )
+                    _terminal_debug(
+                        "[HUAWEI VERIFY] readback-exception "
+                        f"attempt={attempt}/{self.readback_tries} "
+                        f"type={type(exc).__name__} error={exc}"
+                    )
                     verified = None
                 if verified:
                     break
+        elif verifier is not None:
+            _terminal_debug(
+                "[HUAWEI VERIFY] readback-skipped because mutation "
+                f"was not accepted; parser_type={parsed.response_type!r}"
+            )
 
         success = (
             bool(verified)
@@ -438,6 +492,12 @@ class HuaweiCapturedFeatureService:
                 or transport.connection_uncertain
                 or (parsed.accepted and verifier is not None)
             )
+        )
+        _terminal_debug(
+            "[HUAWEI VERIFY] final "
+            f"path={path!r} success={success!r} "
+            f"accepted={parsed.accepted!r} verified={bool(verified)!r} "
+            f"uncertain={uncertain!r}"
         )
         return {
             "success": success,
