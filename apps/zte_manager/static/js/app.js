@@ -2125,6 +2125,42 @@ function renderSsidEditor(network) {
                             value="${escapeHtml(network.max_clientes ?? 32)}"
                         >
                     </div>
+
+                    ${currentVendor === "huawei" ? `
+                        <div class="form-group">
+                            <label>Autenticação</label>
+                            <input
+                                data-field="authentication_mode"
+                                type="text"
+                                value="${escapeHtml(network.authentication_mode ?? "")}"
+                            >
+                        </div>
+                        <div class="form-group">
+                            <label>Criptografia</label>
+                            <input
+                                data-field="encryption_mode"
+                                type="text"
+                                value="${escapeHtml(network.encryption_mode ?? "")}"
+                            >
+                        </div>
+                        <div class="form-group">
+                            <label>Group rekey (s)</label>
+                            <input
+                                data-field="group_rekey"
+                                type="number"
+                                min="0"
+                                value="${escapeHtml(network.group_rekey ?? 3600)}"
+                            >
+                        </div>
+                        <div class="form-group">
+                            <label>Método WPS</label>
+                            <input
+                                data-field="wps_method"
+                                type="text"
+                                value="${escapeHtml(network.wps_method ?? "PushButton")}"
+                            >
+                        </div>
+                    ` : ""}
                 </div>
 
                 <div class="switch-row">
@@ -2145,6 +2181,12 @@ function renderSsidEditor(network) {
                         "isolation",
                         network.isolamento
                     )}
+
+                    ${currentVendor === "huawei" ? switchField(
+                        "WPS",
+                        "wps_enabled",
+                        network.wps_enabled !== false
+                    ) : ""}
                 </div>
 
                 <div class="form-footer">
@@ -2187,6 +2229,33 @@ async function applySsidForm(event) {
         ),
         encryption: form.querySelector('[data-field="encryption"]').value
     };
+
+    if (currentVendor === "huawei") {
+        const auth = form.querySelector(
+            '[data-field="authentication_mode"]'
+        );
+        const encryptionMode = form.querySelector(
+            '[data-field="encryption_mode"]'
+        );
+        const groupRekey = form.querySelector(
+            '[data-field="group_rekey"]'
+        );
+        const wpsMethod = form.querySelector(
+            '[data-field="wps_method"]'
+        );
+        const wpsEnabled = form.querySelector(
+            '[data-field="wps_enabled"]'
+        );
+        if (auth?.value) payload.authentication_mode = auth.value.trim();
+        if (encryptionMode?.value) {
+            payload.encryption_mode = encryptionMode.value.trim();
+        }
+        if (groupRekey?.value !== "") {
+            payload.group_rekey = Number(groupRekey.value);
+        }
+        if (wpsMethod?.value) payload.wps_method = wpsMethod.value.trim();
+        if (wpsEnabled) payload.wps_enabled = wpsEnabled.checked;
+    }
 
     // Senha mascarada nunca é reenviada como se fosse senha real. Quando a
     // senha está oculta, input vazio = manter a atual. Quando está revelada,
