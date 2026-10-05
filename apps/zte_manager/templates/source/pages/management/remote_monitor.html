@@ -1,0 +1,107 @@
+                <div class="management-pane" data-management-pane="remote" role="tabpanel" id="management-panel-remote" aria-labelledby="management-tab-remote" hidden>
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">ACESSO REMOTO</span><h3>Linux / SSH / VPN</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>NOME</span><input id="managementAgentName" type="text" placeholder="POP-PVH-01"></label>
+                                <label class="field"><span>HOST</span><input id="managementAgentHost" type="text" placeholder="172.30.0.201"></label>
+                                <label class="field"><span>USUÁRIO SSH</span><input id="managementAgentUser" type="text" value="law"></label>
+                                <label class="field"><span>PORTA SSH</span><input id="managementAgentPort" type="number" value="22"></label>
+                                <label class="field"><span>CHAVE SSH</span><input id="managementAgentKey" type="text" placeholder="~/.ssh/id_ed25519"></label>
+                                <label class="field">
+                                    <span>OVERLAY</span>
+                                    <select id="managementAgentVpn">
+                                        <option value="none">Rede direta</option>
+                                        <option value="zerotier">ZeroTier</option>
+                                        <option value="wireguard">WireGuard</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <button id="managementAgentSave" class="button primary" type="button">Salvar Agent</button>
+                            <div id="managementAgentList" class="management-list"></div>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">SESSÃO REMOTA</span><h3>Acesso temporário à ONT</h3></div></div>
+                            <p class="muted">Usa o Agent associado à ONT selecionada. O túnel é local e expira automaticamente.</p>
+                            <div class="management-form-grid">
+                                <label class="field"><span>TTL (MIN)</span><input id="managementRemoteTtl" type="number" value="30" min="5" max="240"></label>
+                                <label class="field"><span>PORTA DA ONT</span><input id="managementRemotePort" type="number" value="80" min="1" max="65535"></label>
+                            </div>
+                            <div class="management-action-row">
+                                <button id="managementRemoteOpen" class="button primary" type="button">Abrir gerenciamento remoto</button>
+                                <button id="managementRemoteRefresh" class="button ghost" type="button">Sessões</button>
+                            </div>
+                            <pre id="managementRemoteOutput" class="management-code-output">Selecione uma ONT no inventário.</pre>
+                        </article>
+                    </div>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">GATEWAY TERMINAL</span><h3>Diagnóstico remoto seguro</h3></div></div>
+                        <div class="management-form-grid">
+                            <label class="field"><span>AGENT</span><select id="managementTerminalAgent"></select></label>
+                            <label class="field">
+                                <span>COMANDO</span>
+                                <select id="managementTerminalCommand">
+                                    <option value="ping">Ping</option>
+                                    <option value="traceroute">Traceroute</option>
+                                    <option value="route">ip route</option>
+                                    <option value="address">ip -br address</option>
+                                    <option value="arp">ARP / ND</option>
+                                    <option value="dns">DNS Lookup</option>
+                                    <option value="iperf3">iperf3</option>
+                                    <option value="capture">Captura curta tcpdump</option>
+                                    <option value="zerotier_status">ZeroTier status</option>
+                                    <option value="wireguard_status">WireGuard status</option>
+                                </select>
+                            </label>
+                            <label class="field"><span>HOST</span><input id="managementTerminalHost" type="text" value="1.1.1.1"></label>
+                            <label class="field"><span>INTERFACE / IPERF</span><input id="managementTerminalExtra" type="text" placeholder="eth0 ou servidor iperf"></label>
+                        </div>
+                        <div class="management-action-row">
+                            <button id="managementTerminalRun" class="button primary" type="button">Executar</button>
+                            <button id="managementBufferbloatRun" class="button ghost" type="button">Teste de bufferbloat</button>
+                        </div>
+                        <pre id="managementTerminalOutput" class="management-terminal">Aguardando comando.</pre>
+                    </article>
+                </div>
+
+                <div class="management-pane" data-management-pane="monitor" role="tabpanel" id="management-panel-monitor" aria-labelledby="management-tab-monitor" hidden>
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">INTERMITÊNCIA</span><h3>Monitor temporal</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>DURAÇÃO (S)</span><input id="managementMonitorDuration" type="number" value="300" min="30" max="900"></label>
+                                <label class="field"><span>INTERVALO (S)</span><input id="managementMonitorInterval" type="number" value="10" min="5" max="60"></label>
+                                <label class="field"><span>PING</span><input id="managementMonitorPing" type="text" value="1.1.1.1"></label>
+                            </div>
+                            <div class="management-action-row">
+                                <button id="managementMonitorStart" class="button primary" type="button">Monitorar</button>
+                                <button id="managementMonitorRefresh" class="button ghost" type="button">Atualizar resultado</button>
+                                <button id="managementMonitorStop" class="button danger" type="button">Parar</button>
+                            </div>
+                            <pre id="managementMonitorOutput" class="management-code-output">Nenhum monitor em execução.</pre>
+                            <div id="managementMonitorChart" class="management-monitor-chart">
+                                <div class="support-empty">A curva óptica aparecerá após as primeiras amostras.</div>
+                            </div>
+                            <div id="managementMonitorEvents" class="management-list"></div>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">OCORRÊNCIAS</span><h3>POP / OLT / CTO</h3></div></div>
+                            <div class="management-action-row">
+                                <button id="managementIncidentCorrelate" class="button primary" type="button">Correlacionar agora</button>
+                                <button id="managementIncidentRefresh" class="button ghost" type="button">Atualizar</button>
+                            </div>
+                            <div id="managementIncidentList" class="management-list"></div>
+                        </article>
+                    </div>
+
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div><span class="section-kicker">TOPOLOGIA</span><h3>Cliente → ONT → CTO → OLT → POP → Internet</h3></div>
+                            <button id="managementTopologyLoad" class="button ghost compact" type="button">Carregar selecionado</button>
+                        </div>
+                        <div id="managementTopology" class="management-topology"></div>
+                    </article>
+                </div>

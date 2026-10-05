@@ -1,0 +1,148 @@
+<section id="page-management" class="page">
+                <div class="section-intro am-section-intro management-intro">
+                    <div><span class="am-page-emblem material-symbols-outlined" aria-hidden="true">hub</span>
+                        <span class="section-kicker">GERENCIAMENTO DE REDE</span>
+                        <h2>Gerenciamento de frota e rede</h2>
+                        <p>
+                            Inventário, configuração em lote, acesso remoto, monitoramento,
+                            controle de rede, ciclo de firmware e provisionamento ACS/USP.
+                        </p>
+                    </div>
+                    <button id="managementRefreshButton" class="button ghost" type="button">
+                        <span class="material-symbols-outlined">refresh</span>
+                        Atualizar
+                    </button>
+                </div>
+
+                <div class="management-tabs" role="tablist">
+                    <button class="management-tab active" data-management-tab="fleet" type="button" role="tab" id="management-tab-fleet" aria-controls="management-panel-fleet" aria-selected="true" tabindex="0">Frota</button>
+                    <button class="management-tab" data-management-tab="remote" type="button" role="tab" id="management-tab-remote" aria-controls="management-panel-remote" aria-selected="false" tabindex="-1">Remoto / VPN</button>
+                    <button class="management-tab" data-management-tab="monitor" type="button" role="tab" id="management-tab-monitor" aria-controls="management-panel-monitor" aria-selected="false" tabindex="-1">Monitoramento</button>
+                    <button class="management-tab" data-management-tab="network" type="button" role="tab" id="management-tab-network" aria-controls="management-panel-network" aria-selected="false" tabindex="-1">Rede</button>
+                    <button class="management-tab" data-management-tab="mesh" type="button" role="tab" id="management-tab-mesh" aria-controls="management-panel-mesh" aria-selected="false" tabindex="-1">Mesh</button>
+                    <button class="management-tab" data-management-tab="lifecycle" type="button" role="tab" id="management-tab-lifecycle" aria-controls="management-panel-lifecycle" aria-selected="false" tabindex="-1">Backup / Firmware</button>
+                    <button class="management-tab" data-management-tab="provisioning" type="button" role="tab" id="management-tab-provisioning" aria-controls="management-panel-provisioning" aria-selected="false" tabindex="-1">ACS / Zero-touch</button>
+                </div>
+
+                <div id="managementStatusStrip" class="management-status-strip">
+                    <div><span>FROTA</span><strong id="managementDeviceCount">0</strong></div>
+                    <div><span>ONLINE</span><strong id="managementOnlineCount">0</strong></div>
+                    <div><span>INCIDENTES</span><strong id="managementIncidentCount">0</strong></div>
+                    <div><span>AGENTS</span><strong id="managementAgentCount">0</strong></div>
+                </div>
+
+                <div class="management-pane active" data-management-pane="fleet" role="tabpanel" id="management-panel-fleet" aria-labelledby="management-tab-fleet">
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <span class="section-kicker">INVENTÁRIO</span>
+                                    <h3>ONT conectada</h3>
+                                </div>
+                                <button id="managementInventorySync" class="button primary compact" type="button">Sincronizar</button>
+                            </div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>CLIENTE</span><input id="managementCustomer" type="text" placeholder="Nome / contrato"></label>
+                                <label class="field"><span>POP</span><input id="managementPop" type="text" placeholder="POP Porto Velho"></label>
+                                <label class="field"><span>OLT</span><input id="managementOlt" type="text" placeholder="OLT-01"></label>
+                                <label class="field"><span>CTO</span><input id="managementCto" type="text" placeholder="CTO-123"></label>
+                                <label class="field"><span>AGENT ID</span><input id="managementAgentId" type="number" min="1" placeholder="Opcional"></label>
+                                <label class="field"><span>TAGS</span><input id="managementTags" type="text" placeholder="residencial, premium"></label>
+                            </div>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <span class="section-kicker">CONFIG DRIFT</span>
+                                    <h3>Perfil corporativo</h3>
+                                </div>
+                                <span id="managementDriftBadge" class="badge">Não verificado</span>
+                            </div>
+                            <div class="management-form-grid">
+                                <label class="field">
+                                    <span>PERFIL</span>
+                                    <select id="managementDriftProfile"></select>
+                                </label>
+                            </div>
+                            <div class="management-action-row">
+                                <button id="managementDriftCheck" class="button ghost" type="button">Comparar configuração</button>
+                                <button id="managementDriftFix" class="button primary" type="button">Corrigir divergências</button>
+                            </div>
+                            <pre id="managementDriftOutput" class="management-code-output">Nenhuma comparação executada.</pre>
+                        </article>
+                    </div>
+
+                    <article class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <span class="section-kicker">INVENTÁRIO</span>
+                                <h3>Equipamentos conhecidos</h3>
+                            </div>
+                            <input id="managementInventorySearch" class="management-search" type="search" placeholder="cliente, serial, MAC, OLT, CTO...">
+                        </div>
+                        <div class="management-table-wrap">
+                            <table class="management-table">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>Equipamento</th>
+                                        <th>Cliente</th>
+                                        <th>Host</th>
+                                        <th>RX</th>
+                                        <th>POP / OLT / CTO</th>
+                                        <th>Status</th>
+                                        <th>Última leitura</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="managementInventoryBody"></tbody>
+                            </table>
+                        </div>
+                    </article>
+
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">PROFILE BUILDER</span><h3>Salvar perfil corporativo</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>NOME</span><input id="managementProfileName" type="text" value="Brasil Digital padrão"></label>
+                                <label class="check-row"><input id="managementProfileDefault" type="checkbox"><span>Perfil padrão</span></label>
+                            </div>
+                            <label class="field am-source-json">
+                                <span>CONFIGURAÇÃO JSON</span>
+                                <textarea id="managementProfileJson" class="management-json-editor" spellcheck="false">{
+  "wifi": {
+    "2.4GHz": {"auto_channel": true},
+    "5GHz": {"auto_channel": true}
+  },
+  "dns": {},
+  "band_steering": {"enabled": true}
+}</textarea>
+                            </label>
+                            <button id="managementProfileSave" class="button primary" type="button">Salvar perfil</button>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">BATCH JOB</span><h3>Gerenciamento em lote</h3></div></div>
+                            <label class="field">
+                                <span>OPERAÇÃO</span>
+                                <select id="managementBatchOperation">
+                                    <option value="profile_remediate">Corrigir perfil na ONT atual</option>
+                                    <option value="profile_acs">Aplicar perfil via ACS/USP</option>
+                                    <option value="acs_parameters">Parâmetros avulsos via ACS/USP</option>
+                                    <option value="acs_reboot">Reiniciar via ACS/USP</option>
+                                    <option value="gateway_command">Comando diagnóstico via Agent</option>
+                                    <option value="sync_inventory">Sincronizar inventário local</option>
+                                </select>
+                            </label>
+                            <label class="field am-source-json">
+                                <span>PAYLOAD JSON</span>
+                                <textarea id="managementBatchPayload" class="management-json-editor" spellcheck="false">{}</textarea>
+                            </label>
+                            <div class="management-action-row">
+                                <button id="managementBatchRun" class="button primary" type="button">Executar nos selecionados</button>
+                                <button id="managementBatchRefresh" class="button ghost" type="button">Ver jobs</button>
+                            </div>
+                            <pre id="managementBatchOutput" class="management-code-output">Selecione ONTs na tabela.</pre>
+                        </article>
+                    </div>
+                </div>

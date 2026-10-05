@@ -1,0 +1,34 @@
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-inspector" aria-labelledby="advanced-tab-inspector" data-am-panel="inspector" hidden>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">manage_search</span><h3>Funcionalidades e permissões</h3></div>
+                    <span>Selecione uma funcionalidade para ver o estado de leitura e abrir seu formulário de configuração, quando existente.</span>
+                </div>
+
+                <article class="panel">
+                    <div id="featureInspectorButtons" class="feature-inspector-actions am-inspector-selector">
+                        <label class="field" for="firmwareFeatureSelect">
+                            <span>FUNCIONALIDADE DO EQUIPAMENTO</span>
+                            <select id="firmwareFeatureSelect" aria-label="Funcionalidade para inspeção" disabled>
+                                <option value="">Identifique o equipamento para listar os recursos</option>
+                            </select>
+                        </label>
+                        <button id="firmwareInspectButton" class="button primary" type="button" disabled>
+                            <span class="material-symbols-outlined" aria-hidden="true">manage_search</span> Consultar
+                        </button>
+                        <p id="firmwareInspectorNotice" class="muted">
+                            A lista reflete as funcionalidades declaradas pelo equipamento. A leitura é separada da configuração.
+                        </p>
+                    </div>
+                    <div id="featureInspectorOutput" class="am-inspector-result" role="region" aria-live="polite">Escolha uma funcionalidade na lista e clique em Consultar.</div>
+                    <div id="backupResult" class="operations-output"></div>
+                </article>
+                    </section>
+                </div>
+            </section>
+
+
+            <!-- ==================================================
+                 DEVICE
+            =================================================== -->
+            

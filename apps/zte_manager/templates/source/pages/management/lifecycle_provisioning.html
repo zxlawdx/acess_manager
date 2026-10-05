@@ -1,0 +1,61 @@
+                <div class="management-pane" data-management-pane="lifecycle" role="tabpanel" id="management-panel-lifecycle" aria-labelledby="management-tab-lifecycle" hidden>
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">CÓPIA DE SEGURANÇA</span><h3>Backup / restore</h3></div></div>
+                            <label class="field"><span>MOTIVO</span><input id="managementBackupReason" type="text" value="manual"></label>
+                            <div class="management-action-row">
+                                <button id="managementBackupCreate" class="button primary" type="button">Criar backup</button>
+                                <button id="managementBackupRefresh" class="button ghost" type="button">Atualizar lista</button>
+                            </div>
+                            <div class="management-form-grid with-top-space">
+                                <label class="field"><span>BACKUP A</span><input id="managementBackupLeft" type="number" min="1" placeholder="ID"></label>
+                                <label class="field"><span>BACKUP B</span><input id="managementBackupRight" type="number" min="1" placeholder="ID"></label>
+                            </div>
+                            <button id="managementBackupCompare" class="button ghost" type="button">Comparar backups</button>
+                            <pre id="managementBackupCompareOutput" class="management-code-output">Selecione dois IDs para comparar.</pre>
+                            <div id="managementBackupList" class="management-list"></div>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">ATUALIZAÇÃO DO EQUIPAMENTO</span><h3>Catálogo aprovado</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>MODELO</span><input id="managementFirmwareModel" type="text" placeholder="F670L"></label>
+                                <label class="field"><span>VERSÃO</span><input id="managementFirmwareVersion" type="text" placeholder="V9.x"></label>
+                            </div>
+                            <label class="field"><span>ARQUIVO LOCAL</span><input id="managementFirmwarePath" type="text" placeholder="C:\firmware\F670L.bin"></label>
+                            <label class="check-row"><input id="managementFirmwareApproved" type="checkbox"><span>Firmware homologado/aprovado</span></label>
+                            <button id="managementFirmwareRegister" class="button primary" type="button">Cadastrar firmware</button>
+                            <div id="managementFirmwareList" class="management-list"></div>
+                        </article>
+                    </div>
+                </div>
+
+                <div class="management-pane" data-management-pane="provisioning" role="tabpanel" id="management-panel-provisioning" aria-labelledby="management-tab-provisioning" hidden>
+                    <div class="management-grid two">
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">TR-069 / TR-369</span><h3>ACS / USP Controller</h3></div></div>
+                            <div class="management-form-grid">
+                                <label class="field"><span>PROVIDER</span><select id="managementAcsProvider"><option value="genieacs">GenieACS</option><option value="usp_bridge">USP/TR-369 Bridge</option></select></label>
+                                <label class="field"><span>BASE URL</span><input id="managementAcsUrl" type="url" placeholder="http://acs.local:7557"></label>
+                            </div>
+                            <p class="muted">Credenciais ficam em variáveis de ambiente e não são gravadas no SQLite.</p>
+                            <div class="management-action-row">
+                                <button id="managementAcsSave" class="button primary" type="button">Salvar integração</button>
+                                <button id="managementAcsDiscover" class="button ghost" type="button">Localizar ONT selecionada</button>
+                            </div>
+                            <pre id="managementAcsOutput" class="management-code-output">ACS não consultado.</pre>
+                        </article>
+
+                        <article class="panel">
+                            <div class="panel-header"><div><span class="section-kicker">ZERO TOUCH</span><h3>Provisionar ONT atual</h3></div></div>
+                            <label class="field"><span>PERFIL</span><select id="managementZeroTouchProfile"></select></label>
+                            <p class="muted">
+                                Fluxo: inventário → backup → corrigir drift → SNTP → TR-069 →
+                                WAN opcional → parâmetros ACS → validação.
+                            </p>
+                            <button id="managementZeroTouchRun" class="button danger" type="button">Executar zero-touch</button>
+                            <pre id="managementZeroTouchOutput" class="management-code-output">Aguardando provisionamento.</pre>
+                        </article>
+                    </div>
+                </div>
+            </section>

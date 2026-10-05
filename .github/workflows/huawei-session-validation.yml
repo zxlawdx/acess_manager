@@ -17,6 +17,9 @@ on:
       - "apps/zte_manager/presentation/api/**"
       - "apps/zte_manager/schemas.py"
       - "apps/zte_manager/presentation/schemas/**"
+      - "apps/zte_manager/templates/source/**"
+      - "apps/zte_manager/templates/index.html"
+      - "tools/build_frontend_template.py"
       - "apps/zte_manager/static/js/app.js"
       - "apps/zte_manager/static/js/frontend_bootstrap.js"
       - "apps/zte_manager/static/js/core/**"
@@ -33,6 +36,7 @@ on:
       - "apps/zte_manager/static/css/tangerine_workflows.css"
       - "tests/test_api_modularization.py"
       - "tests/test_schema_modularization.py"
+      - "tests/test_template_modularization.py"
       - "tests/test_design_tokens.cjs"
       - "tests/test_frontend_core.mjs"
       - "tests/test_frontend_capability_policy.mjs"
@@ -79,7 +83,13 @@ jobs:
             apps/zte_manager/presentation/api/*.py \
             apps/zte_manager/presentation/schemas/*.py \
             apps/zte_manager/schemas.py \
-            apps/zte_manager/api.py
+            apps/zte_manager/api.py \
+            tools/build_frontend_template.py
+
+      - name: Template composition regressions
+        run: |
+          python tools/build_frontend_template.py --check
+          python -m unittest tests.test_template_modularization
 
       - name: JavaScript syntax
         run: |
