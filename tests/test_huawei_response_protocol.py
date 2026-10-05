@@ -91,6 +91,54 @@ class HuaweiResponseProtocolTests(unittest.TestCase):
         self.assertFalse(parsed.confirmed)
         self.assertEqual(parsed.response_type, "html")
 
+    def test_huawei_errcode_zero_is_semantic_success(self):
+        parsed = HuaweiResponseParser.parse(
+            http_status=200,
+            body='<script>var ErrCode = "0";</script>',
+            content_type="text/html",
+        )
+        self.assertTrue(parsed.ok)
+        self.assertTrue(parsed.accepted)
+        self.assertTrue(parsed.confirmed)
+        self.assertEqual(parsed.response_type, "success_code")
+
+    def test_empty_http_200_is_accepted_for_readback_confirmation(self):
+        parsed = HuaweiResponseParser.parse(
+            http_status=200,
+            body="",
+            content_type="text/html",
+        )
+        self.assertTrue(parsed.ok)
+        self.assertTrue(parsed.accepted)
+        self.assertFalse(parsed.confirmed)
+        self.assertEqual(parsed.response_type, "empty")
+
+    def test_script_redirect_http_200_is_accepted_for_readback(self):
+        parsed = HuaweiResponseParser.parse(
+            http_status=200,
+            body=(
+                '<script>'
+                'window.location.href="/html/amp/wlanadv/WlanAdvance.asp";'
+                '</script>'
+            ),
+            content_type="text/html",
+        )
+        self.assertTrue(parsed.ok)
+        self.assertTrue(parsed.accepted)
+        self.assertFalse(parsed.confirmed)
+        self.assertEqual(parsed.response_type, "script_redirect")
+
+    def test_plain_result_zero_is_semantic_success(self):
+        parsed = HuaweiResponseParser.parse(
+            http_status=200,
+            body="<script>var result = 0;</script>",
+            content_type="text/html",
+        )
+        self.assertTrue(parsed.ok)
+        self.assertTrue(parsed.accepted)
+        self.assertTrue(parsed.confirmed)
+        self.assertEqual(parsed.response_type, "result_code")
+
     def test_huawei_error_page_is_failure_even_with_http_200(self):
         parsed = HuaweiResponseParser.parse(
             http_status=200,
