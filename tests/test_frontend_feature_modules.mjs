@@ -8,6 +8,7 @@ const dataUrl = value => "data:text/javascript;base64," + Buffer.from(value).toS
 
 const managementSource = source("apps/zte_manager/static/js/services/management_api.js");
 const advancedWifiSource = source("apps/zte_manager/static/js/advanced/wifi_radio_fields.js");
+const bootstrapSource = source("apps/zte_manager/static/js/frontend_bootstrap.js");
 const {createManagementApi} = await import(dataUrl(managementSource));
 const {installAdvancedWifiFields} = await import(dataUrl(advancedWifiSource));
 
@@ -51,6 +52,23 @@ test("ManagementApi overview keeps collection fan-out in the service", async () 
         "/management/firmware",
         "/management/acs",
     ]);
+});
+
+test("frontend composition owns management compatibility without a bridge module", () => {
+    assert.match(bootstrapSource, /createManagementApi/);
+    assert.doesNotMatch(bootstrapSource, /legacy_bridge/);
+    assert.match(
+        bootstrapSource,
+        /globalThis\.managementRequest\s*=\s*\(path, options = \{\}\) =>\s*managementApi\.request/s,
+    );
+    assert.doesNotMatch(bootstrapSource, /AccessManagerManagement/);
+    assert.equal(
+        fs.existsSync(new URL(
+            "apps/zte_manager/static/js/management/legacy_bridge.js",
+            root,
+        )),
+        false,
+    );
 });
 
 function fakeForm(fields) {
