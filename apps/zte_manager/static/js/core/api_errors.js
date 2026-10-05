@@ -30,7 +30,7 @@
     validation:"INVALID_INPUT", internal:"INTERNAL_ERROR", state:"OPERATION_STATE"
   });
   const PRIVATE_CONTENT = /(?:https?:\/\/|\/api\/|\b(?:password|passwd|secret|token|cookie|senha)\b|[{}<>]|\b(?:GET|POST|PUT|PATCH|DELETE)\s+\/|traceback|typeerror|attributeerror)/i;
-  const SAFE_LABEL = /^[\p{L}\p{N}.,():;_\-!? \n]{1,150}$/u;
+  const SAFE_LABEL = /^[\p{L}\p{N}.,():;_\-!?\/ \n]{1,220}$/u;
   function safeText(value) {
     return typeof value === "string" && SAFE_LABEL.test(value) &&
       !PRIVATE_CONTENT.test(value) ? value.trim() : "";
@@ -48,11 +48,19 @@
     constructor(code, options={}) {
       const known = Object.hasOwn(RULES, code) ? code : "OPERATION_STATE";
       const [kind, defaultMessage, retryable] = RULES[known];
-      const backendMessage = (
+      const canUseBackendMessage = (
         kind === "validation"
         || kind === "state"
         || known === "PROVIDER_FEATURE_UNAVAILABLE"
-      ) ? safeText(options.error) : "";
+      );
+      const reason = canUseBackendMessage ? safeText(options.reason) : "";
+      const step = canUseBackendMessage ? safeText(options.step) : "";
+      const structuredMessage = step && reason
+        ? `Falha em ${step}: ${reason}`
+        : reason;
+      const backendMessage = canUseBackendMessage
+        ? (safeText(options.error) || structuredMessage)
+        : "";
       let message = backendMessage || defaultMessage;
       if (known === "INTERNAL_ERROR" && /^[0-9a-f]{32}$/i.test(options.error_id || "")) {
         message += " Código: " + options.error_id + ".";
@@ -73,13 +81,17 @@
   function fromPayload(body, {status=0}={}) {
     const payload=body && typeof body==="object" && !Array.isArray(body)
       ? body : {};
-    // Never interpret a raw 404 as a firmware feature missing. Only the
-    // backend's explicitly verified FEATURE_ABSENT code may say that.
+    // HTTP 2xx + success:false is an application/semantic failure, not an
+    // invalid transport response. This matters for verified Huawei writes:
+    // the backend may correctly report a read-back/preflight failure in JSON.
+    const semanticFailure = payload.success === false && status >= 200 && status < 400;
     const claimed=typeof payload.code==="string" ? payload.code : "";
     const legacyType=typeof payload.type==="string" ? payload.type : "";
     let code = Object.hasOwn(RULES,claimed) ? claimed :
       (Object.hasOwn(CODE_BY_TYPE,legacyType) ? CODE_BY_TYPE[legacyType] :
-        mapStatus(status,true));
+        (semanticFailure ? "OPERATION_STATE" : mapStatus(status,true)));
+    // Never interpret a raw 404 as a firmware feature missing. Only the
+    // backend's explicitly verified FEATURE_ABSENT code may say that.
     if (code==="FEATURE_ABSENT" && claimed!=="FEATURE_ABSENT")
       code="CAPABILITY_UNCONFIRMED";
     if ((status===404 || status===405) && code==="FEATURE_ABSENT" &&

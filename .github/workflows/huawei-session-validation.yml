@@ -5,6 +5,7 @@ on:
     branches:
       - fix/huawei-session-state-audit
       - feat/huawei-eg8041x7-response-readback
+      - fix/huawei-profile-deterministic-readback
   pull_request:
     paths:
       - "apps/zte_manager/infrastructure/huawei/**"
@@ -14,12 +15,14 @@ on:
       - "apps/zte_manager/services/profile_service.py"
       - "apps/zte_manager/api.py"
       - "apps/zte_manager/static/js/app.js"
+      - "apps/zte_manager/static/js/core/**"
       - "apps/zte_manager/static/js/advanced.js"
       - "apps/zte_manager/static/js/features/firmware_inspector.js"
       - "apps/zte_manager/static/js/features/device_topology.js"
       - "apps/zte_manager/static/js/tr069_profiles.js"
+      - "apps/zte_manager/static/css/tangerine_forms.css"
       - "tests/test_huawei*"
-      - "tests/test_profile_repository.py"
+      - "tests/test_profile*"
       - "tests/test_multivendor_runtime_regressions.py"
 
 jobs:
@@ -61,6 +64,7 @@ jobs:
       - name: JavaScript syntax
         run: |
           node --check apps/zte_manager/static/js/app.js
+          node --check apps/zte_manager/static/js/core/api_errors.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
           node --check apps/zte_manager/static/js/features/device_topology.js
@@ -75,11 +79,14 @@ jobs:
             tests.test_huawei_mapped_surface \
             tests.test_huawei_response_protocol \
             tests.test_huawei_eg8041x7_runtime \
+            tests.test_huawei_dns_physical_state \
             tests.test_huawei_diagnostics \
             tests.test_huawei_provider_architecture \
             tests.test_huawei_ipv4_filter \
             tests.test_multivendor_runtime_regressions
 
-      - name: Huawei UI snapshot regressions
+      - name: Huawei UI regressions
         run: |
-          node --test tests/test_huawei_navigation_snapshot.cjs
+          node --test \
+            tests/test_huawei_navigation_snapshot.cjs \
+            tests/test_profile_error_contract.cjs

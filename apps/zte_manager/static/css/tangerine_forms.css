@@ -43,6 +43,33 @@ html[data-theme] .am-form-editor-feedback{font:600 11px var(--font-sans);
  color:var(--am-danger);min-height:0;}
 html[data-theme] .am-editor-field input:focus-visible,
 html[data-theme] .am-dynamic-field input:focus-visible{outline:2px solid var(--am-primary-deep);outline-offset:2px;}
+
+/* Profiles are rendered dynamically inside .radio-card. Normal radio cards
+   wrap their controls with .radio-form (which supplies the inner padding),
+   while profile cards mount the fields in .profile-fields. Without the
+   equivalent inset the form touches the clipping edge of .radio-card and the
+   Huawei note/checkbox appear visually cut off in the desktop WebView. */
+html[data-theme] #page-profiles #profileRadios{
+ margin-top:14px;
+ align-items:start;
+}
+html[data-theme] #page-profiles .profile-radio-card{
+ align-self:start;
+ min-width:0;
+}
+html[data-theme] #page-profiles .profile-radio-card .profile-fields{
+ padding:15px 16px 16px;
+ min-width:0;
+}
+html[data-theme] #page-profiles .profile-radio-card .profile-fields>.muted{
+ margin-top:10px;
+ line-height:1.55;
+ overflow-wrap:anywhere;
+}
+html[data-theme] #page-profiles .profile-radio-card .checkbox-container{
+ margin-top:10px;
+}
+
 @media(max-width:650px){
  html[data-theme] .am-dynamic-field{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
 }
