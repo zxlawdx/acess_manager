@@ -1,3 +1,5 @@
+import "../core/bootstrap.js";
+
 /**
  * CPE inventory view: DOM-only rendering and persistent selection.
  *
