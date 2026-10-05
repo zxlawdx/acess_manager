@@ -4,6 +4,7 @@ import {createApiClient} from "./api_client.js";
 import {requestState} from "./request_state.js";
 import {sessionState} from "./session_state.js";
 import {deviceState} from "./device_state.js";
+import {createCapabilityPolicy} from "./capability_policy.js";
 import {createLoadingFeedback} from "../components/loading_feedback.js";
 import {createDeviceApi} from "../services/device_api.js";
 
@@ -13,8 +14,12 @@ const apiClient = createApiClient({
     requestState,
 });
 const deviceApi = createDeviceApi(apiClient.apiRequest);
+const capabilityPolicy = createCapabilityPolicy(deviceState);
 const loadingFeedback = createLoadingFeedback({requestState});
 const connectionStatusEpoch = new Map();
+const legacyVendorSupportsPage = typeof globalThis.vendorSupportsPage === "function"
+    ? globalThis.vendorSupportsPage
+    : null;
 
 apiClient.events.on("request:start", detail => {
     if (detail.endpoint === "/connection/status") {
@@ -86,12 +91,23 @@ async function disconnectDevice() {
     }
 }
 
+function capabilityAwarePageSupport(pageName) {
+    const decision = capabilityPolicy.page(pageName);
+    if (decision !== null) return decision;
+    // Providers that do not yet publish a capability catalog keep the legacy
+    // navigation contract. Once capabilities exist, they are authoritative.
+    return legacyVendorSupportsPage
+        ? Boolean(legacyVendorSupportsPage(pageName))
+        : false;
+}
+
 // Compatibility bridge while app.js consumers are migrated feature-by-feature.
 // These globals keep the existing Vela screen operational, but their runtime
 // implementation now belongs to explicit core/services modules.
 globalThis.apiRequest = apiClient.apiRequest;
 globalThis.connectONT = connectDevice;
 globalThis.disconnectONT = disconnectDevice;
+globalThis.vendorSupportsPage = capabilityAwarePageSupport;
 globalThis.setBusy = loadingFeedback.setBusy;
 globalThis.renderBusyOverlay = loadingFeedback.renderOverlay;
 globalThis.startActionFeedback = loadingFeedback.startActionFeedback;
@@ -106,6 +122,7 @@ globalThis.AccessManagerCore = Object.freeze({
     requestState,
     sessionState,
     deviceState,
+    capabilityPolicy,
     loadingFeedback,
     bridge: "classic-app-runtime",
 });

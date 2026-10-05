@@ -25,6 +25,7 @@ on:
       - "apps/zte_manager/static/js/tr069_profiles.js"
       - "apps/zte_manager/static/css/tangerine_forms.css"
       - "tests/test_frontend_core.mjs"
+      - "tests/test_frontend_capability_policy.mjs"
       - "tests/test_huawei*"
       - "tests/test_profile*"
       - "tests/test_multivendor_runtime_regressions.py"
@@ -74,6 +75,7 @@ jobs:
           node --input-type=module --check < apps/zte_manager/static/js/core/bootstrap.js
           node --input-type=module --check < apps/zte_manager/static/js/core/session_state.js
           node --input-type=module --check < apps/zte_manager/static/js/core/device_state.js
+          node --input-type=module --check < apps/zte_manager/static/js/core/capability_policy.js
           node --input-type=module --check < apps/zte_manager/static/js/components/loading_feedback.js
           node --input-type=module --check < apps/zte_manager/static/js/services/device_api.js
           node --input-type=module --check < apps/zte_manager/static/js/management/inventory_view.js
@@ -99,7 +101,9 @@ jobs:
 
       - name: Frontend core regressions
         run: |
-          node --test tests/test_frontend_core.mjs
+          node --test \
+            tests/test_frontend_core.mjs \
+            tests/test_frontend_capability_policy.mjs
 
       - name: Huawei UI regressions
         run: |
