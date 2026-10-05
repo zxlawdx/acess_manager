@@ -6,3 +6,4 @@ while controllers and tests migrate incrementally.
 """
 
 from apps.zte_manager.presentation.schemas import *  # noqa: F401,F403
+from apps.zte_manager.presentation.schemas import __all__ as __all__
