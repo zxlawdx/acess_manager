@@ -1,0 +1,97 @@
+/* Tangerine design tokens and legacy-variable compatibility map.
+ * This file is imported by tangerine_workflows.css so existing templates do
+ * not need another stylesheet tag while the legacy tangerine.css block is
+ * retired incrementally.
+ */
+:root,
+html[data-theme="light"] {
+  color-scheme: light;
+  --am-bg:#FFFDF8;
+  --am-surface:#FFFFFF;
+  --am-sidebar:#FFF3E8;
+  --am-primary:#FF6C37;
+  --am-primary-deep:#B94619;
+  --am-primary-wash:#FFF0EA;
+  --am-selected:#FFE2D1;
+  --am-text:#29221E;
+  --am-text-2:#756A62;
+  --am-border:#EDE5DE;
+  --am-success:#27845B;
+  --am-success-wash:#EDFBF4;
+  --am-warning:#945700;
+  --am-warning-wash:#FFFBEB;
+  --am-danger:#A62A31;
+  --am-danger-wash:#FEF2F2;
+  --am-primary-ink:#29221E;
+  --am-shadow:0 4px 24px rgba(100,53,24,.045);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --am-bg:#211C19;
+  --am-surface:#302722;
+  --am-sidebar:#28211D;
+  --am-primary:#FF8654;
+  --am-primary-deep:#FFAC88;
+  --am-primary-wash:#3D2418;
+  --am-selected:#523325;
+  --am-text:#FFF8F1;
+  --am-text-2:#C5B5A8;
+  --am-border:#493C34;
+  --am-success:#6BDD9F;
+  --am-success-wash:#0D2E1F;
+  --am-warning:#FBBF24;
+  --am-warning-wash:#2A1F0A;
+  --am-danger:#FF9D9D;
+  --am-danger-wash:#2A0F0F;
+  --am-primary-ink:#211C19;
+  --am-shadow:0 4px 24px rgba(0,0,0,.10);
+}
+
+/* Components still using the pre-Tangerine names resolve through one map. */
+html[data-theme] {
+  --ui-bg:var(--am-bg);
+  --ui-sidebar:var(--am-sidebar);
+  --ui-surface:var(--am-surface);
+  --ui-elevated:var(--am-primary-wash);
+  --ui-field:var(--am-surface);
+  --ui-border:var(--am-border);
+  --ui-border-muted:var(--am-border);
+  --ui-text:var(--am-text);
+  --ui-text-secondary:var(--am-text-2);
+  --ui-muted:var(--am-text-2);
+  --ui-accent:var(--am-primary);
+  --ui-accent-contrast:var(--am-primary-ink);
+  --ui-accent-wash:var(--am-primary-wash);
+  --ui-success:var(--am-success);
+  --ui-success-wash:var(--am-success-wash);
+  --ui-warning:var(--am-warning);
+  --ui-warning-wash:var(--am-warning-wash);
+  --ui-danger:var(--am-danger);
+  --ui-danger-wash:var(--am-danger-wash);
+  --ui-shadow:var(--am-shadow);
+  --ui-radius:12px;
+  --bg:var(--am-bg);
+  --bg-deep:var(--am-bg);
+  --surface:var(--am-surface);
+  --surface-low:var(--am-sidebar);
+  --surface-high:var(--am-primary-wash);
+  --surface-highest:var(--am-primary-wash);
+  --border:var(--am-border);
+  --border-soft:var(--am-border);
+  --text:var(--am-text);
+  --text-soft:var(--am-text-2);
+  --muted:var(--am-text-2);
+  --primary:var(--am-primary);
+  --primary-strong:var(--am-primary-deep);
+  --primary-soft:var(--am-primary-wash);
+  --success:var(--am-success);
+  --success-soft:var(--am-success-wash);
+  --warning:var(--am-warning);
+  --warning-soft:var(--am-warning-wash);
+  --danger:var(--am-danger);
+  --danger-soft:var(--am-danger-wash);
+  --sidebar-width:244px;
+  --font-sans:"Plus Jakarta Sans","Segoe UI Variable","Segoe UI",Arial,sans-serif;
+  --font-mono:"JetBrains Mono","Cascadia Mono",Consolas,monospace;
+}

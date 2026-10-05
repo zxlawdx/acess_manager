@@ -1,3 +1,5 @@
+@import url("./foundation/tangerine_tokens.css");
+
 /* Tangerine workflow layouts: intentionally replace the old NOC grid, not its handlers. */
 /* The support workbench uses available container width, never a skinny sticky
    column beside a huge empty panel. Result cards follow the form. */

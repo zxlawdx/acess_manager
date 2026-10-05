@@ -28,9 +28,12 @@ on:
       - "apps/zte_manager/static/js/features/firmware_inspector.js"
       - "apps/zte_manager/static/js/features/device_topology.js"
       - "apps/zte_manager/static/js/tr069_profiles.js"
+      - "apps/zte_manager/static/css/foundation/**"
       - "apps/zte_manager/static/css/tangerine_forms.css"
+      - "apps/zte_manager/static/css/tangerine_workflows.css"
       - "tests/test_api_modularization.py"
       - "tests/test_schema_modularization.py"
+      - "tests/test_design_tokens.cjs"
       - "tests/test_frontend_core.mjs"
       - "tests/test_frontend_capability_policy.mjs"
       - "tests/test_frontend_feature_modules.mjs"
@@ -122,6 +125,7 @@ jobs:
       - name: Frontend core regressions
         run: |
           node --test \
+            tests/test_design_tokens.cjs \
             tests/test_frontend_core.mjs \
             tests/test_frontend_capability_policy.mjs \
             tests/test_frontend_feature_modules.mjs \
