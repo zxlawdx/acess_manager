@@ -55,6 +55,10 @@ DEFAULT_PROFILE = {
 # O perfil continua separado do ZTE: os enums de rádio são exclusivos Huawei,
 # enquanto estes quatro registros SearList são exatamente os que a ONT devolveu
 # no read-back físico atual. DomainName vem vazio nas quatro instâncias.
+#
+# Wi-Fi mantém a representação já usada pelo fluxo Huawei para não quebrar
+# read-back/aplicação de perfil. Os campos abaixo completam o preset com os
+# valores expostos pela WebUI que o backend já sabe ler/escrever.
 HUAWEI_EG8041X7_DEFAULT_PROFILE = {
     "wifi": {
         "2.4GHz": {
@@ -67,6 +71,9 @@ HUAWEI_EG8041X7_DEFAULT_PROFILE = {
             "sgi": False,
             "beacon_interval": 100,
             "tx_power": "100%",
+            "rts_cts": 2346,
+            "dtim": 1,
+            "airtime_fairness": False,
         },
         "5GHz": {
             "auto_channel": True,
@@ -78,6 +85,10 @@ HUAWEI_EG8041X7_DEFAULT_PROFILE = {
             "sgi": False,
             "beacon_interval": 100,
             "tx_power": "100%",
+            "rts_cts": 2346,
+            "dtim": 1,
+            "airtime_fairness": False,
+            "band_steering": False,
         },
     },
     "dns": {
