@@ -8,6 +8,9 @@ from typing import Any
 from apps.zte_manager.infrastructure.huawei import HuaweiWebClient
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
 from apps.zte_manager.services.huawei_service import HuaweiService
+from apps.zte_manager.services.huawei_eg8041x7_runtime import (
+    HuaweiEG8041X7RuntimeService,
+)
 from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
 
@@ -55,7 +58,7 @@ class DeviceService:
         self,
         *,
         zte_provider: ZTEService | None = None,
-        huawei_factory=HuaweiService,
+        huawei_factory=HuaweiEG8041X7RuntimeService,
         huawei_client_type=HuaweiWebClient,
     ) -> None:
         self._zte_service = zte_provider or zte_service
@@ -192,11 +195,17 @@ class DeviceService:
             service = self._huawei_factory()
 
         result = service.connect(**kwargs)
+        provider_name = (
+            "HuaweiService"
+            if isinstance(service, HuaweiService)
+            else type(service).__name__
+        )
+        result["provider"] = provider_name
         self._session = DeviceSession(
             vendor="huawei",
             model=result.get("model"),
             profile=result.get("profile"),
-            provider=type(service).__name__,
+            provider=provider_name,
             service=service,
             capabilities=result.get("capabilities") or {},
             model_verified=bool(
@@ -208,7 +217,7 @@ class DeviceService:
         )
         logger.info(
             "device_provider_selected vendor=huawei provider=%s profile=%s",
-            type(service).__name__,
+            provider_name,
             result.get("profile") or "huawei_unknown",
         )
         return result

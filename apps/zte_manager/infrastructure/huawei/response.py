@@ -58,6 +58,24 @@ def _warn_unaccepted(
     )
 
 
+def _looks_like_login_page(text: str) -> bool:
+    """Recognize the authenticated WebUI falling back to its login document."""
+    lower = str(text or "").casefold()
+    if "login.cgi" not in lower:
+        return False
+    markers = (
+        "getrandcount.asp",
+        'name="username"',
+        "name='username'",
+        'id="username"',
+        "id='username'",
+        'name="password"',
+        "name='password'",
+        "password",
+    )
+    return any(marker in lower for marker in markers)
+
+
 def decode_huawei_hex_payload(value: object) -> str:
     """Decode literal Huawei \\xNN response escapes without eval()."""
     text = str(value or "").lstrip("\ufeff")
@@ -92,13 +110,11 @@ class HuaweiResponse:
 
 
 class HuaweiResponseParser:
-    """Normalize EG8041X7-10 WebUI responses.
+    """Classify the direct response of one Huawei mutation.
 
-    HTTP success and configuration success are deliberately separate:
-    - set.cgi/complex.cgi commonly return a full HTML page;
-    - ajax CGI may return JSON encoded as literal \\xNN bytes;
-    - Huawei error pages can carry var ErrCode = "...";
-    - diagnostics use the [@#@] state delimiter.
+    This parser does *not* validate feature state. A 2xx HTML page, opaque text,
+    JavaScript redirect or empty body means only that the mutation transport was
+    accepted. Feature-specific read-back is the source of truth for confirmation.
     """
 
     @staticmethod
@@ -111,8 +127,29 @@ class HuaweiResponseParser:
         text = decode_huawei_hex_payload(body).strip()
         status_ok = (
             http_status is not None
-            and 200 <= int(http_status) < 400
+            and 200 <= int(http_status) < 300
         )
+        lower = text.casefold()
+        full_html = any(marker in lower for marker in _HTML_MARKERS)
+
+        if _looks_like_login_page(text):
+            _warn_unaccepted(
+                http_status=http_status,
+                response_type="login_page",
+                body=text,
+                reason="authenticated mutation returned login page",
+            )
+            return HuaweiResponse(
+                ok=False,
+                accepted=False,
+                confirmed=False,
+                http_status=http_status,
+                response_type="login_page",
+                error_code="session_expired",
+                error_message=(
+                    "A sessão Huawei expirou durante a operação."
+                ),
+            )
 
         err = _ERR_CODE.search(text)
         if err:
@@ -161,6 +198,25 @@ class HuaweiResponseParser:
                 error_message=f"HTTP {http_status} retornado pela ONT Huawei.",
             )
 
+        if http_status is not None and 300 <= int(http_status) < 400:
+            _warn_unaccepted(
+                http_status=http_status,
+                response_type="http_redirect",
+                body=text,
+                reason=f"unexpected terminal redirect {http_status}",
+            )
+            return HuaweiResponse(
+                ok=False,
+                accepted=False,
+                confirmed=False,
+                http_status=http_status,
+                response_type="http_redirect",
+                error_message=(
+                    "A ONT Huawei terminou a operação em um redirecionamento "
+                    "HTTP inesperado."
+                ),
+            )
+
         if not text:
             return HuaweiResponse(
                 ok=status_ok,
@@ -205,6 +261,16 @@ class HuaweiResponseParser:
                             str(parsed.get("error") or "").strip()
                             or None
                         )
+                        if not success:
+                            _warn_unaccepted(
+                                http_status=http_status,
+                                response_type="ajax_json",
+                                body=text,
+                                reason=(
+                                    f"result={parsed.get('result')!r} "
+                                    f"error={error_code!r}"
+                                ),
+                            )
                         return HuaweiResponse(
                             ok=bool(status_ok and success),
                             accepted=bool(status_ok and success),
@@ -235,11 +301,8 @@ class HuaweiResponseParser:
                         data=parsed,
                     )
 
-        lower = text.casefold()
-
-        # Some EG8041X7-10 mutations answer with a tiny JavaScript redirect
-        # instead of a full page. HTTP success means the POST was accepted;
-        # read-back still decides whether the configuration actually changed.
+        # Tiny script redirects are valid mutation responses. Requests follows
+        # HTTP redirects already; this handles firmware-side JavaScript ones.
         if _SCRIPT_REDIRECT.search(text):
             return HuaweiResponse(
                 ok=status_ok,
@@ -250,42 +313,45 @@ class HuaweiResponseParser:
                 data={"redirect": _snippet(text, 400)},
             )
 
-        # Accept explicit Huawei/CGI return codes even when they are not JSON.
-        # A zero/OK code is confirmation; non-zero codes remain failures.
-        result_code = _JS_RESULT_CODE.search(text)
-        if result_code:
-            code = result_code.group(1).strip()
-            if code.casefold() in _SUCCESS_CODES:
-                return HuaweiResponse(
-                    ok=status_ok,
-                    accepted=status_ok,
-                    confirmed=status_ok,
+        # Do not search a full configuration document for arbitrary variables
+        # named "result". Huawei pages contain large JS libraries where such a
+        # match is unrelated to the mutation. Explicit result codes are only
+        # semantic when the response is a compact CGI/script response.
+        if not full_html:
+            result_code = _JS_RESULT_CODE.search(text)
+            if result_code:
+                code = result_code.group(1).strip()
+                if code.casefold() in _SUCCESS_CODES:
+                    return HuaweiResponse(
+                        ok=status_ok,
+                        accepted=status_ok,
+                        confirmed=status_ok,
+                        http_status=http_status,
+                        response_type="result_code",
+                        data={"code": code},
+                    )
+                _warn_unaccepted(
                     http_status=http_status,
                     response_type="result_code",
-                    data={"code": code},
+                    body=text,
+                    reason=f"result code={code}",
                 )
-            _warn_unaccepted(
-                http_status=http_status,
-                response_type="result_code",
-                body=text,
-                reason=f"result code={code}",
-            )
-            return HuaweiResponse(
-                ok=False,
-                accepted=False,
-                confirmed=False,
-                http_status=http_status,
-                response_type="result_code",
-                error_code=code,
-                error_message=(
-                    "A ONT Huawei retornou código de falha "
-                    f"{code}."
-                ),
-            )
+                return HuaweiResponse(
+                    ok=False,
+                    accepted=False,
+                    confirmed=False,
+                    http_status=http_status,
+                    response_type="result_code",
+                    error_code=code,
+                    error_message=(
+                        "A ONT Huawei retornou código de falha "
+                        f"{code}."
+                    ),
+                )
 
         if (
             "text/html" in str(content_type or "").casefold()
-            or any(marker in lower for marker in _HTML_MARKERS)
+            or full_html
         ):
             return HuaweiResponse(
                 ok=status_ok,
@@ -295,9 +361,9 @@ class HuaweiResponseParser:
                 response_type="html",
             )
 
-        # Unknown 2xx text is deliberately accepted, not confirmed. Huawei
-        # firmware revisions frequently return opaque CGI text after a valid
-        # mutation; semantic read-back remains the source of truth.
+        # Unknown 2xx text is accepted, never confirmed. Firmware revisions may
+        # return opaque CGI text while the feature-specific read-back proves the
+        # state transition.
         if not status_ok:
             _warn_unaccepted(
                 http_status=http_status,
