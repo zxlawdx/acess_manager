@@ -45,14 +45,35 @@ def build_template() -> str:
     return "".join((SOURCE / filename).read_text(encoding="utf-8") for filename in PARTS)
 
 
+def mismatch_message(committed: str, generated: str) -> str:
+    limit = min(len(committed), len(generated))
+    index = next(
+        (offset for offset in range(limit) if committed[offset] != generated[offset]),
+        limit,
+    )
+    line = generated.count("\n", 0, index) + 1
+    start = max(0, index - 45)
+    end = index + 45
+    return (
+        "index.html is stale; run python tools/build_frontend_template.py\n"
+        f"first mismatch: char={index} line={line} "
+        f"committed_len={len(committed)} generated_len={len(generated)}\n"
+        f"committed={committed[start:end]!r}\n"
+        f"generated={generated[start:end]!r}"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build the modular Vela HTML.")
     parser.add_argument("--check", action="store_true", help="Verify committed index.html is current")
     args = parser.parse_args()
     generated = build_template()
     if args.check:
-        if not TARGET.exists() or TARGET.read_text(encoding="utf-8") != generated:
-            raise SystemExit("index.html is stale; run python tools/build_frontend_template.py")
+        if not TARGET.exists():
+            raise SystemExit("index.html is missing; run python tools/build_frontend_template.py")
+        committed = TARGET.read_text(encoding="utf-8")
+        if committed != generated:
+            raise SystemExit(mismatch_message(committed, generated))
         print(f"Modular template current: {len(PARTS)} sections")
         return
     TARGET.write_text(generated, encoding="utf-8")
