@@ -1,0 +1,84 @@
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-dhcp" aria-labelledby="advanced-tab-dhcp" data-am-panel="dhcp" hidden>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">lan</span><h3>DHCP / LAN</h3></div>
+                    <span>Pool, DNS, leases e reservas por MAC.</span>
+                </div>
+
+                <div class="advanced-grid">
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">DHCP SERVER</span><h3>Pool IPv4</h3></div></div>
+                        <form id="dhcpBasicForm" class="operations-form">
+                            <label class="check-row">
+                                <input id="advancedDhcpEnabled" type="checkbox">
+                                <span>Servidor DHCP ativo</span>
+                            </label>
+                            <div class="operations-form-grid with-top-space">
+                                <label class="field"><span>INÍCIO</span><input id="dhcpMinAddress" type="text"></label>
+                                <label class="field"><span>FIM</span><input id="dhcpMaxAddress" type="text"></label>
+                                <label class="field"><span>DNS 1</span><input id="advancedDhcpDns1" type="text"></label>
+                                <label class="field"><span>DNS 2</span><input id="advancedDhcpDns2" type="text"></label>
+                                <label class="field"><span>LEASE (s)</span><input id="dhcpLeaseTime" type="number" min="60"></label>
+                            </div>
+                            <button class="button primary with-top-space" type="submit">Aplicar DHCP</button>
+                        </form>
+                        <div id="dhcpLeaseList" class="operations-output with-top-space"></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">STATIC LEASE</span><h3>Reserva DHCP</h3></div></div>
+                        <form id="dhcpReservationForm" class="operations-form">
+                            <input id="dhcpReservationId" type="hidden">
+                            <div class="operations-form-grid">
+                                <label class="field"><span>NOME</span><input id="dhcpReservationName" type="text" required></label>
+                                <label class="field"><span>IP</span><input id="dhcpReservationIp" type="text" required></label>
+                                <label class="field"><span>MAC</span><input id="dhcpReservationMac" type="text" required></label>
+                            </div>
+                            <button class="button primary with-top-space" type="submit">Salvar reserva</button>
+                        </form>
+                        <div id="dhcpReservationList" class="operations-output with-top-space"></div>
+                    </article>
+                </div>
+                    </section>
+
+                    <section class="am-toolpanel" role="tabpanel" id="advanced-panel-nat" aria-labelledby="advanced-tab-nat" data-am-panel="nat" hidden>
+
+                <div class="subsection-title with-top-space">
+                    <div><span class="material-symbols-outlined">hub</span><h3>NAT e exposição</h3></div>
+                    <span>Port forwarding e DMZ exigem confirmação explícita.</span>
+                </div>
+
+                <div class="advanced-grid">
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">NAT RULES</span><h3>Port Forwarding</h3></div></div>
+                        <form id="portForwardForm" class="operations-form">
+                            <input id="portForwardId" type="hidden">
+                            <div class="operations-form-grid">
+                                <label class="field"><span>NOME</span><input id="portForwardName" type="text"></label>
+                                <label class="field"><span>PROTOCOLO</span>
+                                    <select id="portForwardProtocol"><option>TCP</option><option>UDP</option><option>TCP/UDP</option></select>
+                                </label>
+                                <label class="field"><span>PORTA EXTERNA</span><input id="portForwardExternal" type="number" min="1" max="65535" required></label>
+                                <label class="field"><span>IP INTERNO</span><input id="portForwardClient" type="text" required></label>
+                                <label class="field"><span>PORTA INTERNA</span><input id="portForwardInternal" type="number" min="1" max="65535" required></label>
+                            </div>
+                            <label class="check-row with-top-space"><input id="portForwardConfirm" type="checkbox"><span>Confirmo a alteração de NAT</span></label>
+                            <button class="button primary with-top-space" type="submit">Salvar regra</button>
+                        </form>
+                        <div id="portForwardList" class="operations-output with-top-space"></div>
+                    </article>
+
+                    <article class="panel">
+                        <div class="panel-header"><div><span class="section-kicker">DMZ HOST</span><h3>DMZ</h3></div></div>
+                        <form id="dmzForm" class="operations-form">
+                            <input id="dmzId" type="hidden">
+                            <label class="check-row"><input id="dmzEnabled" type="checkbox"><span>Ativar DMZ</span></label>
+                            <label class="field with-top-space"><span>IP INTERNO</span><input id="dmzClient" type="text"></label>
+                            <label class="field with-top-space"><span>WAN / VIEW NAME</span><input id="dmzWan" type="text"></label>
+                            <label class="check-row with-top-space"><input id="dmzConfirm" type="checkbox"><span>Confirmo a alteração da DMZ</span></label>
+                            <button class="button danger with-top-space" type="submit">Aplicar DMZ</button>
+                        </form>
+                        <div id="dmzStatus" class="operations-output with-top-space"></div>
+                    </article>
+                </div>
+                    </section>
