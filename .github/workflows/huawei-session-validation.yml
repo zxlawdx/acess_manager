@@ -106,7 +106,6 @@ jobs:
           node --input-type=module --check < apps/zte_manager/static/js/services/device_api.js
           node --input-type=module --check < apps/zte_manager/static/js/services/management_api.js
           node --input-type=module --check < apps/zte_manager/static/js/services/wifi_api.js
-          node --input-type=module --check < apps/zte_manager/static/js/management/legacy_bridge.js
           node --input-type=module --check < apps/zte_manager/static/js/management/inventory_view.js
           node --input-type=module --check < apps/zte_manager/static/js/advanced/wifi_radio_fields.js
           node --input-type=module --check < apps/zte_manager/static/js/advanced/wifi_schedule.js
