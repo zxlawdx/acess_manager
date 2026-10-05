@@ -16,11 +16,14 @@ on:
       - "apps/zte_manager/api.py"
       - "apps/zte_manager/static/js/app.js"
       - "apps/zte_manager/static/js/core/**"
+      - "apps/zte_manager/static/js/components/**"
+      - "apps/zte_manager/static/js/management/**"
       - "apps/zte_manager/static/js/advanced.js"
       - "apps/zte_manager/static/js/features/firmware_inspector.js"
       - "apps/zte_manager/static/js/features/device_topology.js"
       - "apps/zte_manager/static/js/tr069_profiles.js"
       - "apps/zte_manager/static/css/tangerine_forms.css"
+      - "tests/test_frontend_core.mjs"
       - "tests/test_huawei*"
       - "tests/test_profile*"
       - "tests/test_multivendor_runtime_regressions.py"
@@ -65,6 +68,11 @@ jobs:
         run: |
           node --check apps/zte_manager/static/js/app.js
           node --check apps/zte_manager/static/js/core/api_errors.js
+          node --input-type=module --check < apps/zte_manager/static/js/core/request_state.js
+          node --input-type=module --check < apps/zte_manager/static/js/core/api_client.js
+          node --input-type=module --check < apps/zte_manager/static/js/core/bootstrap.js
+          node --input-type=module --check < apps/zte_manager/static/js/components/loading_feedback.js
+          node --input-type=module --check < apps/zte_manager/static/js/management/inventory_view.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
           node --check apps/zte_manager/static/js/features/device_topology.js
@@ -84,6 +92,10 @@ jobs:
             tests.test_huawei_provider_architecture \
             tests.test_huawei_ipv4_filter \
             tests.test_multivendor_runtime_regressions
+
+      - name: Frontend core regressions
+        run: |
+          node --test tests/test_frontend_core.mjs
 
       - name: Huawei UI regressions
         run: |
