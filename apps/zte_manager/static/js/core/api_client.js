@@ -170,7 +170,11 @@ export function createApiClient({
             }
 
             if (stateId !== null) requestState.finish(stateId);
-            events.emit("request:success", {...detail, status: response.status});
+            events.emit("request:success", {
+                ...detail,
+                status: response.status,
+                data,
+            });
             return data;
         } catch (error) {
             let friendly = error;
