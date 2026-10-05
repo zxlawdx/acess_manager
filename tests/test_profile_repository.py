@@ -73,17 +73,11 @@ class ProfileRepositoryTest(unittest.TestCase):
                 huawei["wifi"]["5GHz"]["standard"],
                 "11ax",
             )
-            self.assertEqual(
-                huawei["dns"]["domain_name"],
-                "cloudflare.com",
-            )
-            self.assertEqual(
-                huawei["dns"]["ipv4_1"],
-                "177.221.56.3",
-            )
-            self.assertEqual(huawei["dns"]["ipv4_2"], "")
-            self.assertEqual(huawei["dns"]["ipv6_1"], "")
-            self.assertEqual(huawei["dns"]["ipv6_2"], "")
+            self.assertEqual(huawei["dns"]["domain_name"], "")
+            self.assertEqual(huawei["dns"]["ipv4_1"], "177.221.56.3")
+            self.assertEqual(huawei["dns"]["ipv4_2"], "177.221.56.10")
+            self.assertEqual(huawei["dns"]["ipv6_1"], "2804:1128::3")
+            self.assertEqual(huawei["dns"]["ipv6_2"], "2804:1128::10")
             self.assertEqual(
                 {
                     (item["nome"], item["ip"])
@@ -115,7 +109,7 @@ class ProfileRepositoryTest(unittest.TestCase):
                 "Auto",
             )
 
-    def test_huawei_legacy_zte_dns_default_is_migrated_narrowly(self):
+    def test_huawei_legacy_zte_dns_default_remains_physical_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             service = ProfileService(base_dir=tmp)
             repository, _defaults = service._repository(
@@ -124,6 +118,38 @@ class ProfileRepositoryTest(unittest.TestCase):
             )
             legacy = deepcopy(HUAWEI_EG8041X7_DEFAULT_PROFILE)
             legacy["dns"] = deepcopy(DEFAULT_PROFILE["dns"])
+            repository.save("law", legacy)
+
+            loaded = service.get_profile(
+                "law",
+                provider="huawei",
+                model="EG8041X7-10",
+            )
+
+            self.assertEqual(
+                loaded["dns"],
+                HUAWEI_EG8041X7_DEFAULT_PROFILE["dns"],
+            )
+
+    def test_huawei_one_search_legacy_default_is_migrated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            service = ProfileService(base_dir=tmp)
+            repository, _defaults = service._repository(
+                "huawei",
+                "EG8041X7-10",
+            )
+            legacy = deepcopy(HUAWEI_EG8041X7_DEFAULT_PROFILE)
+            legacy["dns"] = {
+                "domain_name": "cloudflare.com",
+                "ipv4_1": "177.221.56.3",
+                "ipv4_2": "",
+                "ipv6_1": "",
+                "ipv6_2": "",
+                "hosts": [
+                    {"nome": "cloudflare", "ip": "1.1.1.1"},
+                    {"nome": "google", "ip": "8.8.8.8"},
+                ],
+            }
             repository.save("law", legacy)
 
             migrated = service.get_profile(
