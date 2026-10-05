@@ -11,6 +11,7 @@ CI:  python tools/build_frontend_template.py --check
 from __future__ import annotations
 
 import argparse
+import difflib
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -54,12 +55,35 @@ def mismatch_message(committed: str, generated: str) -> str:
     line = generated.count("\n", 0, index) + 1
     start = max(0, index - 45)
     end = index + 45
+
+    committed_lines = committed.splitlines(keepends=True)
+    generated_lines = generated.splitlines(keepends=True)
+    matcher = difflib.SequenceMatcher(
+        a=committed_lines,
+        b=generated_lines,
+        autojunk=False,
+    )
+    blocks = []
+    for tag, a1, a2, b1, b2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        old = "".join(committed_lines[a1:a2])
+        new = "".join(generated_lines[b1:b2])
+        blocks.append(
+            f"{tag}: committed L{a1 + 1}-{a2} -> generated L{b1 + 1}-{b2}\n"
+            f"  committed={old[:260]!r}\n"
+            f"  generated={new[:260]!r}"
+        )
+        if len(blocks) >= 12:
+            break
+
     return (
         "index.html is stale; run python tools/build_frontend_template.py\n"
         f"first mismatch: char={index} line={line} "
         f"committed_len={len(committed)} generated_len={len(generated)}\n"
         f"committed={committed[start:end]!r}\n"
-        f"generated={generated[start:end]!r}"
+        f"generated={generated[start:end]!r}\n"
+        + "\n".join(blocks)
     )
 
 
