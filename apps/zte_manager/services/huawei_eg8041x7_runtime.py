@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from copy import deepcopy
 from typing import Any, Callable
 
@@ -11,7 +12,6 @@ from apps.zte_manager.infrastructure.huawei import (
 )
 from apps.zte_manager.model.device_adapters.huawei import canonical_huawei_model
 from apps.zte_manager.services.huawei_captured_features import (
-    DNS_PAGE,
     HuaweiCapturedFeatureService,
     _record_domain,
 )
@@ -29,6 +29,14 @@ _SECRET_FRAGMENTS = (
     "token",
     "cookie",
     "authorization",
+)
+_SEARCH_ROOT = "InternetGatewayDevice.X_HW_DNS.SearList"
+_HOST_ROOT = "InternetGatewayDevice.X_HW_DNS.HOSTS"
+_SEARCH_INSTANCE = re.compile(
+    r"^InternetGatewayDevice\.X_HW_DNS\.SearList\.\d+$"
+)
+_HOST_INSTANCE = re.compile(
+    r"^InternetGatewayDevice\.X_HW_DNS\.HOSTS\.\d+$"
 )
 
 
@@ -68,11 +76,15 @@ def _profile_trace(event: str, **fields: Any) -> None:
 def _friendly_failure(text: object, fallback: str) -> str:
     value = " ".join(str(text or "").split()).strip()
     if not value:
-        value = fallback
-    # Keep the API/frontend error concise and prevent raw firmware HTML/URLs
-    # from leaking into the operator-facing response.
-    if len(value) > 180 or "<html" in value.casefold() or "http://" in value.casefold():
-        value = fallback
+        return fallback
+    lower = value.casefold()
+    if (
+        len(value) > 220
+        or "<html" in lower
+        or "http://" in lower
+        or "https://" in lower
+    ):
+        return fallback
     return value
 
 
@@ -119,11 +131,15 @@ def _dns_preflight_failure(
 
 
 class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
-    """EG8041X7-10 mutation semantics proven by physical WebUI captures.
+    """Physical EG8041X7-10 semantics on top of the generic Huawei reader.
 
-    The base parser remains responsible for Huawei JS records. This subclass
-    narrows mutation confirmation and DNS behavior to the physical contract of
-    this firmware without changing other Huawei models.
+    The generic parser intentionally understands JavaScript constructor calls,
+    because Huawei pages encode records that way. The EG8041X7 DNS page also
+    contains constructor calls inside *functions* such as
+    ``new DnsHostsItemClass(CurrentDomain, getValue(...))``. Those are code,
+    not live configuration records. This specialization accepts only instance
+    domains that the firmware actually materialized (``...SearList.N`` and
+    ``...HOSTS.N``), preventing executable page source from becoming state.
     """
 
     def _post_verified(
@@ -159,7 +175,7 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
                 try:
                     verified = verifier()
                     last_readback_error = None
-                except Exception as exc:  # surfaced below; never silently pass
+                except Exception as exc:
                     last_readback_error = exc
                     verified = None
                     logger.exception(
@@ -223,6 +239,49 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
                 else None
             ),
             "readback": verified if verified else None,
+        }
+
+    def dns_status(self) -> dict[str, Any]:
+        raw = super().dns_status()
+
+        search_rows = [
+            row
+            for row in list(raw.get("_search_rows") or [])
+            if _SEARCH_INSTANCE.fullmatch(_record_domain(row))
+        ]
+        hosts = [
+            row
+            for row in list(raw.get("hosts") or [])
+            if _HOST_INSTANCE.fullmatch(str(row.get("id") or ""))
+        ]
+
+        ipv4 = [
+            str(row.get("DNSServer") or "")
+            for row in search_rows
+            if row.get("DNSServer")
+            and ":" not in str(row.get("DNSServer") or "")
+        ]
+        ipv6 = [
+            str(row.get("DNSServer") or "")
+            for row in search_rows
+            if row.get("DNSServer")
+            and ":" in str(row.get("DNSServer") or "")
+        ]
+
+        domain_name = ""
+        if search_rows:
+            domain_name = str(search_rows[0].get("DomainName") or "")
+        elif hosts:
+            domain_name = str(hosts[0].get("nome") or "")
+
+        return {
+            "domain_name": domain_name,
+            "ipv4_1": ipv4[0] if ipv4 else "",
+            "ipv4_2": ipv4[1] if len(ipv4) > 1 else "",
+            "ipv6_1": ipv6[0] if ipv6 else "",
+            "ipv6_2": ipv6[1] if len(ipv6) > 1 else "",
+            "hosts": hosts,
+            "_search_rows": search_rows,
         }
 
     def _write_dns_search(
@@ -295,8 +354,12 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
             existing_server = str((existing or {}).get("DNSServer") or "")
             existing_domain_name = str((existing or {}).get("DomainName") or "")
             existing_interface = str((existing or {}).get("Interface") or "")
-            effective_interface = default_interface or existing_interface
-            effective_domain_name = requested_domain_name or existing_domain_name
+            effective_interface = existing_interface or default_interface
+            effective_domain_name = (
+                requested_domain_name
+                if requested_domain_name
+                else existing_domain_name
+            )
 
             expectations[key] = {
                 "server": expected_server,
@@ -310,6 +373,18 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
                     preflight_errors.append(
                         _unsupported_dns_search_delete(existing_domain)
                     )
+                continue
+
+            # Critical ordering: if the physical row already matches, this is
+            # a no-op and must not be rejected just because this firmware keeps
+            # DomainName empty in its existing SearList records. Validation of
+            # required form fields belongs only to a mutation we will send.
+            if (
+                existing is not None
+                and existing_server == expected_server
+                and existing_domain_name == effective_domain_name
+                and existing_interface == effective_interface
+            ):
                 continue
 
             if not effective_interface:
@@ -327,19 +402,11 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
                 preflight_errors.append(
                     _dns_preflight_failure(
                         "dns_domain_required",
-                        "O firmware exige DomainName para DNS Search List; nenhum POST inválido foi enviado.",
+                        "O firmware exige DomainName para alterar DNS Search List; nenhum POST inválido foi enviado.",
                         operation="update" if existing else "create",
                         target=existing_domain or key,
                     )
                 )
-                continue
-
-            if (
-                existing is not None
-                and existing_server == expected_server
-                and existing_domain_name == effective_domain_name
-                and existing_interface == effective_interface
-            ):
                 continue
 
             search_plan.append({
@@ -351,10 +418,8 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
                 "domain": existing_domain,
             })
 
-        # DNS Search List deletion is deliberately not guessed. The physical
-        # firmware source supplied for this model exposes HOSTS del.cgi but no
-        # confirmed SearList deletion action. Abort before *any* DNS mutation so
-        # a profile cannot leave a half-applied DNS state.
+        # We still do not invent a SearList delete CGI. If the requested profile
+        # truly asks to remove an existing slot, abort before any DNS mutation.
         if preflight_errors:
             first = preflight_errors[0]
             return {
@@ -382,12 +447,13 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
                 instance_or_domain=item["domain"] or None,
             )
             result["slot"] = item["slot"]
-            result["target"] = item["domain"] or "InternetGatewayDevice.X_HW_DNS.SearList"
+            result["target"] = item["domain"] or _SEARCH_ROOT
             results.append(result)
             if result.get("verified") is not True:
                 break
 
         search_ok = all(item.get("verified") is True for item in results)
+        requested_values: set[tuple[str, str]] = set()
         if search_ok and "hosts" in values:
             requested_hosts = [
                 item for item in list(values.get("hosts") or [])
@@ -492,12 +558,10 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
         final_rows = list(final.get("_search_rows") or [])
         semantic_verified = True
 
-        for key, expected in expectations.items():
+        for _key, expected in expectations.items():
             expected_server = expected["server"]
             existing_domain = expected["domain"]
             if not expected_server:
-                # The only supported empty case is one where the slot did not
-                # exist before. Existing entries would have failed preflight.
                 if existing_domain:
                     semantic_verified = False
                     break
@@ -542,10 +606,11 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
             }
             semantic_verified = final_hosts == expected_hosts
 
-        operation_verified = all(
-            item.get("verified") is True
-            for item in results
-        ) if results else True
+        operation_verified = (
+            all(item.get("verified") is True for item in results)
+            if results
+            else True
+        )
         verified = bool(operation_verified and semantic_verified)
 
         first_failure = next(
@@ -567,14 +632,16 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
 
         return {
             "success": verified,
-            "accepted": all(
-                item.get("accepted") is not False
-                for item in results
-            ) if results else True,
-            "confirmed_by_response": all(
-                item.get("confirmed_by_response") is True
-                for item in results
-            ) if results else False,
+            "accepted": (
+                all(item.get("accepted") is not False for item in results)
+                if results
+                else True
+            ),
+            "confirmed_by_response": (
+                all(item.get("confirmed_by_response") is True for item in results)
+                if results
+                else False
+            ),
             "verified": verified,
             "verified_by_readback": semantic_verified,
             "readback_attempts": sum(
@@ -604,8 +671,6 @@ class HuaweiEG8041X7RuntimeService(HuaweiService):
                 self._client,
                 model=self.model,
             )
-        # Keep the public provider contract stable even though the runtime has
-        # a model-specific specialization behind HuaweiService.
         result["provider"] = "HuaweiService"
         return result
 
@@ -637,6 +702,12 @@ class HuaweiEG8041X7RuntimeService(HuaweiService):
                 )
                 for item in list(value or [])
                 if isinstance(item, dict)
+                and (item.get("ip") or item.get("IPAddress"))
+                and (
+                    item.get("nome")
+                    or item.get("name")
+                    or item.get("DomainName")
+                )
             }
 
         return host_set(current.get("hosts")) == host_set(requested.get("hosts"))
@@ -662,6 +733,63 @@ class HuaweiEG8041X7RuntimeService(HuaweiService):
             )
         return f"{name}: a alteração não foi confirmada."
 
+    @staticmethod
+    def _equivalent_radio_field(key: str, left: Any, right: Any) -> bool:
+        if key == "country":
+            def normalize_country(value: Any) -> str:
+                text = str(value or "").upper()
+                return "BR" if text == "BRI" else text
+            return normalize_country(left) == normalize_country(right)
+
+        if key == "tx_power":
+            return (
+                str(left or "").strip().rstrip("%")
+                == str(right or "").strip().rstrip("%")
+            )
+
+        if key == "bandwidth":
+            def normalize_bandwidth(value: Any) -> str:
+                text = " ".join(str(value or "").strip().split()).casefold()
+                return "auto" if text.startswith("auto") else text
+            return normalize_bandwidth(left) == normalize_bandwidth(right)
+
+        if key == "bandwidth_code":
+            return str(left or "").strip() == str(right or "").strip()
+
+        if key == "standard":
+            def normalize_standard(value: Any) -> str:
+                text = str(value or "").strip()
+                if text in {"11ax", "b,g,n,ax", "a,n,ac,ax"}:
+                    return "11ax"
+                return text
+            return normalize_standard(left) == normalize_standard(right)
+
+        if key in {
+            "auto_channel",
+            "sgi",
+            "band_steering",
+            "airtime_fairness",
+        }:
+            return bool(left) == bool(right)
+
+        if key in {
+            "channel",
+            "beacon_interval",
+            "rts_cts",
+            "dtim",
+            "frag_threshold",
+        }:
+            if left in (None, "") and right in (None, ""):
+                return True
+            try:
+                return int(left) == int(right)
+            except (TypeError, ValueError):
+                return False
+
+        return str(left if left is not None else "") == str(
+            right if right is not None else ""
+        )
+
     def _apply_profile_payload(
         self,
         profile: dict,
@@ -684,54 +812,6 @@ class HuaweiEG8041X7RuntimeService(HuaweiService):
 
         _profile_trace("current", current=before_config)
         _profile_trace("requested", requested=profile)
-
-        def equivalent(key: str, left: Any, right: Any) -> bool:
-            if key == "country":
-                normalize = lambda value: (
-                    "BR" if str(value or "").upper() == "BRI"
-                    else str(value or "").upper()
-                )
-                return normalize(left) == normalize(right)
-            if key == "tx_power":
-                normalize = lambda value: str(value or "").strip().rstrip("%")
-                return normalize(left) == normalize(right)
-            if key == "bandwidth":
-                def normalize(value: Any) -> str:
-                    text = " ".join(str(value or "").strip().split()).casefold()
-                    return "auto" if text.startswith("auto") else text
-                return normalize(left) == normalize(right)
-            if key == "bandwidth_code":
-                return str(left or "").strip() == str(right or "").strip()
-            if key == "standard":
-                def normalize(value: Any) -> str:
-                    text = str(value or "").strip()
-                    if text in {"11ax", "b,g,n,ax", "a,n,ac,ax"}:
-                        return "11ax"
-                    return text
-                return normalize(left) == normalize(right)
-            if key in {
-                "auto_channel",
-                "sgi",
-                "band_steering",
-                "airtime_fairness",
-            }:
-                return bool(left) == bool(right)
-            if key in {
-                "channel",
-                "beacon_interval",
-                "rts_cts",
-                "dtim",
-                "frag_threshold",
-            }:
-                if left in (None, "") and right in (None, ""):
-                    return True
-                try:
-                    return int(left) == int(right)
-                except (TypeError, ValueError):
-                    return False
-            return str(left if left is not None else "") == str(
-                right if right is not None else ""
-            )
 
         applied_after: dict[str, Any] = {"wifi": {}}
 
@@ -779,7 +859,11 @@ class HuaweiEG8041X7RuntimeService(HuaweiService):
             changed = {
                 key: value
                 for key, value in safe_config.items()
-                if not equivalent(key, current.get(key), value)
+                if not self._equivalent_radio_field(
+                    key,
+                    current.get(key),
+                    value,
+                )
             }
 
             if bool(safe_config.get("auto_channel")) and safe_config.get("channel") in (
@@ -952,7 +1036,11 @@ class HuaweiEG8041X7RuntimeService(HuaweiService):
 
         failed = next((step for step in steps if not step.get("success")), None)
         if failed:
-            reason = str(failed.get("reason") or failed.get("detail") or "Falha não confirmada.")
+            reason = str(
+                failed.get("reason")
+                or failed.get("detail")
+                or "Falha não confirmada."
+            )
             error = _friendly_failure(
                 f"Falha ao aplicar {failed.get('name')}: {reason}",
                 f"Falha ao aplicar {failed.get('name')}: a alteração não foi confirmada.",
