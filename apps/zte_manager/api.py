@@ -6,6 +6,11 @@ historical ``apps.zte_manager.api.<handler>`` import surface while controllers
 live under ``presentation/api``.
 """
 
+from __future__ import annotations
+
+import functools
+import sys
+
 from apps.zte_manager.presentation.api.common import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.system import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.devices import *  # noqa: F401,F403
@@ -19,3 +24,34 @@ from apps.zte_manager.presentation.api.profiles import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.management_core import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.management_network import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.management_artifacts import *  # noqa: F401,F403
+
+
+def _legacy_reexport(handler):
+    """Preserve tests/internal callers that inject services on this module.
+
+    Vela already registered the original domain handler. This wrapper affects
+    only direct calls through ``apps.zte_manager.api`` and can be removed once
+    consumers patch/inject the presentation facade rather than this old module.
+    """
+    @functools.wraps(handler)
+    def wrapped(*args, **kwargs):
+        owner = sys.modules.get(handler.__module__)
+        if owner is not None:
+            if hasattr(owner, "device_service"):
+                owner.device_service = globals()["device_service"]
+            if hasattr(owner, "zte_service"):
+                owner.zte_service = globals()["zte_service"]
+        return handler(*args, **kwargs)
+    return wrapped
+
+
+for _name, _value in list(globals().items()):
+    _module = getattr(_value, "__module__", "")
+    if (
+        callable(_value)
+        and _module.startswith("apps.zte_manager.presentation.api.")
+        and not _module.endswith(".common")
+    ):
+        globals()[_name] = _legacy_reexport(_value)
+
+del _name, _value, _module
