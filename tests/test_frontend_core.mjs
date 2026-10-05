@@ -12,10 +12,16 @@ const requestStateUrl = dataUrl(requestStateSource);
 const apiClientSource = source("apps/zte_manager/static/js/core/api_client.js")
     .replace("./request_state.js", requestStateUrl);
 const loadingSource = source("apps/zte_manager/static/js/components/loading_feedback.js");
+const sessionSource = source("apps/zte_manager/static/js/core/session_state.js");
+const deviceSource = source("apps/zte_manager/static/js/core/device_state.js");
+const deviceApiSource = source("apps/zte_manager/static/js/services/device_api.js");
 
 const {RequestState} = await import(requestStateUrl);
 const {createApiClient} = await import(dataUrl(apiClientSource));
 const {createLoadingFeedback} = await import(dataUrl(loadingSource));
+const {SessionState} = await import(dataUrl(sessionSource));
+const {DeviceState} = await import(dataUrl(deviceSource));
+const {createDeviceApi} = await import(dataUrl(deviceApiSource));
 
 function errorFacade() {
     const context = {window: {}};
@@ -53,11 +59,13 @@ function harness(fetchImpl) {
     return {state, events, request: client.apiRequest};
 }
 
-test("ApiClient handles success and 204 without leaking transport details", async () => {
+test("ApiClient handles success and exposes normalized data to technical events", async () => {
     const ok = harness(async () => response(200, {model: "F6600P"}));
     assert.deepEqual(await ok.request("/device/status", {expected: "object"}), {model: "F6600P"});
     assert.equal(ok.state.snapshot().pending, 0);
     assert.equal(ok.events[0][0], "request:start");
+    const success = ok.events.find(([name]) => name === "request:success");
+    assert.deepEqual(success[1].data, {model: "F6600P"});
     assert.equal(ok.events.at(-1)[0], "request:finish");
 
     const empty = harness(async () => response(204, null, ""));
@@ -164,6 +172,102 @@ test("RequestState keeps request, busy and last operation as independent state",
     state.setBusy(false);
     assert.equal(state.snapshot().busy, false);
     assert.ok(snapshots.length >= 5);
+});
+
+test("SessionState rejects stale restore responses after a newer login transition", () => {
+    const state = new SessionState();
+    const restoreEpoch = state.beginTransition("restore");
+    const loginEpoch = state.beginTransition("connect");
+    assert.equal(state.apply({
+        connected: true,
+        attendant: "old",
+        session_revision: "old-revision",
+    }, {epoch: restoreEpoch}), false);
+    assert.equal(state.snapshot().authenticated, false);
+    assert.equal(state.apply({
+        success: true,
+        attendant: "law",
+        session_revision: "new-revision",
+    }, {epoch: loginEpoch}), true);
+    assert.equal(state.snapshot().authenticated, true);
+    assert.equal(state.snapshot().attendant, "law");
+    assert.equal(state.snapshot().sessionRevision, "new-revision");
+});
+
+test("SessionState logout invalidates earlier asynchronous work", () => {
+    const state = new SessionState();
+    const loginEpoch = state.beginTransition("connect");
+    state.apply({success: true, attendant: "law"}, {epoch: loginEpoch});
+    const staleEpoch = state.captureEpoch();
+    const logoutEpoch = state.beginTransition("disconnect");
+    assert.equal(state.clear({epoch: logoutEpoch}), true);
+    assert.equal(state.snapshot().authenticated, false);
+    assert.equal(state.apply({connected: true, attendant: "stale"}, {epoch: staleEpoch}), false);
+    assert.equal(state.snapshot().authenticated, false);
+});
+
+test("DeviceState exposes capabilities with conservative unknown fallback", () => {
+    const state = new DeviceState();
+    state.apply({
+        connected: true,
+        vendor: "huawei",
+        model: "EG8041X7-10",
+        host: "192.168.100.1",
+        writes_enabled: false,
+        model_verified: true,
+        capabilities: {
+            wifi: {read: true, write: true},
+            ipv4_filter: {read: false, create: false},
+            diagnostics: true,
+        },
+    });
+    assert.equal(state.supports("wifi", "read"), true);
+    assert.equal(state.supports("wifi", "write"), true);
+    assert.equal(state.supports("ipv4_filter", "read"), false);
+    assert.equal(state.supports("diagnostics"), true);
+    assert.equal(state.supports("mesh"), null);
+    assert.equal(state.snapshot().writesEnabled, false);
+    const external = state.snapshot().capabilities;
+    external.wifi.read = false;
+    assert.equal(state.supports("wifi", "read"), true);
+    state.reset();
+    assert.equal(state.snapshot().connected, false);
+    assert.equal(state.supports("wifi", "read"), null);
+});
+
+test("DeviceApi owns connection endpoints and request payload construction", async () => {
+    const calls = [];
+    const api = createDeviceApi(async (endpoint, options = {}) => {
+        calls.push({endpoint, options});
+        return endpoint === "/connection/status"
+            ? {connected: true}
+            : {success: true};
+    });
+    await api.connect({
+        ip: "192.168.100.1",
+        username: "telecomadmin",
+        password: "secret",
+        https: false,
+        attendant: "law",
+        modelHint: "EG8041X7-10",
+    });
+    assert.equal(calls[0].endpoint, "/connect");
+    const payload = JSON.parse(calls[0].options.body);
+    assert.deepEqual(payload, {
+        ip: "192.168.100.1",
+        username: "telecomadmin",
+        password: "secret",
+        https: false,
+        attendant: "law",
+        model_hint: "EG8041X7-10",
+    });
+    assert.equal(calls[0].options.expected, "object");
+    await api.status({silent: true});
+    assert.equal(calls[1].endpoint, "/connection/status");
+    assert.equal(calls[1].options.silent, true);
+    await api.disconnect();
+    assert.equal(calls[2].endpoint, "/disconnect");
+    assert.equal(calls[2].options.method, "POST");
 });
 
 function fakeElement() {
