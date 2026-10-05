@@ -1,8 +1,9 @@
 """Assemble the Access Manager Vela template from editable page modules.
 
-Edit apps/zte_manager/templates/source/pages/*.html, NOT the generated index.html.
-The generated artifact stays committed because Vela renders a static template and
-legacy integration checks expect the public DOM IDs inside index.html.
+Edit apps/zte_manager/templates/source/pages/**/*.html, NOT the generated
+index.html. The generated artifact stays committed because Vela renders a
+static template and legacy integration checks expect the public DOM IDs inside
+index.html.
 
 Run: python tools/build_frontend_template.py
 CI:  python tools/build_frontend_template.py --check
@@ -27,10 +28,16 @@ PARTS = (
     "pages/diagnostics.html",
     "pages/profiles.html",
     "pages/tr069.html",
-    "pages/advanced.html",
+    "pages/advanced/workbench_discovery.html",
+    "pages/advanced/network.html",
+    "pages/advanced/huawei_security.html",
+    "pages/advanced/inspector_close.html",
     "pages/device.html",
-    "pages/management.html",
-    "shell_end.html"
+    "pages/management/fleet.html",
+    "pages/management/remote_monitor.html",
+    "pages/management/network_mesh.html",
+    "pages/management/lifecycle_provisioning.html",
+    "shell_end.html",
 )
 
 
