@@ -15,10 +15,12 @@ on:
       - "apps/zte_manager/services/profile_service.py"
       - "apps/zte_manager/api.py"
       - "apps/zte_manager/static/js/app.js"
+      - "apps/zte_manager/static/js/frontend_bootstrap.js"
       - "apps/zte_manager/static/js/core/**"
       - "apps/zte_manager/static/js/components/**"
       - "apps/zte_manager/static/js/services/**"
       - "apps/zte_manager/static/js/management/**"
+      - "apps/zte_manager/static/js/advanced/**"
       - "apps/zte_manager/static/js/advanced.js"
       - "apps/zte_manager/static/js/features/firmware_inspector.js"
       - "apps/zte_manager/static/js/features/device_topology.js"
@@ -26,6 +28,7 @@ on:
       - "apps/zte_manager/static/css/tangerine_forms.css"
       - "tests/test_frontend_core.mjs"
       - "tests/test_frontend_capability_policy.mjs"
+      - "tests/test_frontend_feature_modules.mjs"
       - "tests/test_huawei*"
       - "tests/test_profile*"
       - "tests/test_multivendor_runtime_regressions.py"
@@ -70,6 +73,7 @@ jobs:
         run: |
           node --check apps/zte_manager/static/js/app.js
           node --check apps/zte_manager/static/js/core/api_errors.js
+          node --input-type=module --check < apps/zte_manager/static/js/frontend_bootstrap.js
           node --input-type=module --check < apps/zte_manager/static/js/core/request_state.js
           node --input-type=module --check < apps/zte_manager/static/js/core/api_client.js
           node --input-type=module --check < apps/zte_manager/static/js/core/bootstrap.js
@@ -78,7 +82,10 @@ jobs:
           node --input-type=module --check < apps/zte_manager/static/js/core/capability_policy.js
           node --input-type=module --check < apps/zte_manager/static/js/components/loading_feedback.js
           node --input-type=module --check < apps/zte_manager/static/js/services/device_api.js
+          node --input-type=module --check < apps/zte_manager/static/js/services/management_api.js
+          node --input-type=module --check < apps/zte_manager/static/js/management/legacy_bridge.js
           node --input-type=module --check < apps/zte_manager/static/js/management/inventory_view.js
+          node --input-type=module --check < apps/zte_manager/static/js/advanced/wifi_radio_fields.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
           node --check apps/zte_manager/static/js/features/device_topology.js
@@ -103,7 +110,8 @@ jobs:
         run: |
           node --test \
             tests/test_frontend_core.mjs \
-            tests/test_frontend_capability_policy.mjs
+            tests/test_frontend_capability_policy.mjs \
+            tests/test_frontend_feature_modules.mjs
 
       - name: Huawei UI regressions
         run: |
