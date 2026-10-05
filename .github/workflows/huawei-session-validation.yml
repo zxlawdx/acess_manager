@@ -29,6 +29,7 @@ on:
       - "tests/test_frontend_core.mjs"
       - "tests/test_frontend_capability_policy.mjs"
       - "tests/test_frontend_feature_modules.mjs"
+      - "tests/test_wifi_schedule_module.mjs"
       - "tests/test_huawei*"
       - "tests/test_profile*"
       - "tests/test_multivendor_runtime_regressions.py"
@@ -83,9 +84,11 @@ jobs:
           node --input-type=module --check < apps/zte_manager/static/js/components/loading_feedback.js
           node --input-type=module --check < apps/zte_manager/static/js/services/device_api.js
           node --input-type=module --check < apps/zte_manager/static/js/services/management_api.js
+          node --input-type=module --check < apps/zte_manager/static/js/services/wifi_api.js
           node --input-type=module --check < apps/zte_manager/static/js/management/legacy_bridge.js
           node --input-type=module --check < apps/zte_manager/static/js/management/inventory_view.js
           node --input-type=module --check < apps/zte_manager/static/js/advanced/wifi_radio_fields.js
+          node --input-type=module --check < apps/zte_manager/static/js/advanced/wifi_schedule.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
           node --check apps/zte_manager/static/js/features/device_topology.js
@@ -111,7 +114,8 @@ jobs:
           node --test \
             tests/test_frontend_core.mjs \
             tests/test_frontend_capability_policy.mjs \
-            tests/test_frontend_feature_modules.mjs
+            tests/test_frontend_feature_modules.mjs \
+            tests/test_wifi_schedule_module.mjs
 
       - name: Huawei UI regressions
         run: |
