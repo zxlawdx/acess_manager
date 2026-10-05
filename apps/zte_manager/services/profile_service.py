@@ -51,11 +51,16 @@ DEFAULT_PROFILE = {
 }
 
 
-# O EG8041X7-10 não usa os mesmos enums de rádio do perfil ZTE.
-# Estes valores são os que foram exercitados fisicamente no WebUI:
-#   2.4 GHz: Auto 20/40 MHz  -> X_HW_HT20=0
-#   5 GHz:   Auto 20/40/80/160 MHz -> X_HW_HT20=4
-# X_HW_Standard é enviado como 11ax nas duas bandas.
+# O EG8041X7-10 não usa os mesmos enums de rádio/DNS do perfil ZTE.
+# Valores fisicamente observados na WebUI do equipamento de referência:
+#   2.4 GHz: Auto 20/40 MHz  -> X_HW_HT20=0, X_HW_Standard=11ax
+#   5 GHz:   Auto 20/40/80/160 MHz -> X_HW_HT20=4, X_HW_Standard=11ax
+#   DNS Search List: cloudflare.com -> 177.221.56.3
+#   DNS HOSTS: cloudflare -> 1.1.1.1, google -> 8.8.8.8
+#
+# Não carregamos os DNS secundários/IPv6 do preset ZTE porque ainda não há
+# evidência física de uma SearList equivalente no EG8041X7-10; fazê-lo forçava
+# CREATE/DELETE não confirmados no firmware.
 HUAWEI_EG8041X7_DEFAULT_PROFILE = {
     "wifi": {
         "2.4GHz": {
@@ -81,7 +86,23 @@ HUAWEI_EG8041X7_DEFAULT_PROFILE = {
             "tx_power": "100%",
         },
     },
-    "dns": deepcopy(DEFAULT_PROFILE["dns"]),
+    "dns": {
+        "domain_name": "cloudflare.com",
+        "ipv4_1": "177.221.56.3",
+        "ipv4_2": "",
+        "ipv6_1": "",
+        "ipv6_2": "",
+        "hosts": [
+            {
+                "nome": "cloudflare",
+                "ip": "1.1.1.1",
+            },
+            {
+                "nome": "google",
+                "ip": "8.8.8.8",
+            },
+        ],
+    },
 }
 
 
@@ -98,6 +119,21 @@ def _profile_variant(
     if vendor == "huawei" and compact_model == "EG8041X710":
         return "huawei_eg8041x7_10", HUAWEI_EG8041X7_DEFAULT_PROFILE
     return "default", DEFAULT_PROFILE
+
+
+def _migrate_legacy_huawei_profile(profile: dict) -> tuple[dict, bool]:
+    """Migrate only the exact Huawei default accidentally inherited from ZTE.
+
+    User-edited DNS is preserved. The migration is intentionally narrow: the
+    old Huawei file used ``deepcopy(DEFAULT_PROFILE['dns'])`` verbatim, so only
+    that exact payload is replaced by the physically confirmed Huawei default.
+    """
+    value = deepcopy(profile or {})
+    if value.get("dns") != DEFAULT_PROFILE["dns"]:
+        return value, False
+
+    value["dns"] = deepcopy(HUAWEI_EG8041X7_DEFAULT_PROFILE["dns"])
+    return value, True
 
 
 # =========================================================
@@ -304,6 +340,11 @@ class ProfileService:
         perfil = repository.get(attendant)
 
         if perfil is not None:
+            variant, _variant_defaults = _profile_variant(provider, model)
+            if variant == "huawei_eg8041x7_10":
+                perfil, migrated = _migrate_legacy_huawei_profile(perfil)
+                if migrated:
+                    repository.save(attendant, perfil)
             return _normalize_profile(
                 perfil,
                 default_profile=defaults,
