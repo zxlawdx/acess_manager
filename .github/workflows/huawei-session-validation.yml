@@ -17,6 +17,7 @@ on:
       - "apps/zte_manager/static/js/app.js"
       - "apps/zte_manager/static/js/core/**"
       - "apps/zte_manager/static/js/components/**"
+      - "apps/zte_manager/static/js/services/**"
       - "apps/zte_manager/static/js/management/**"
       - "apps/zte_manager/static/js/advanced.js"
       - "apps/zte_manager/static/js/features/firmware_inspector.js"
@@ -71,7 +72,10 @@ jobs:
           node --input-type=module --check < apps/zte_manager/static/js/core/request_state.js
           node --input-type=module --check < apps/zte_manager/static/js/core/api_client.js
           node --input-type=module --check < apps/zte_manager/static/js/core/bootstrap.js
+          node --input-type=module --check < apps/zte_manager/static/js/core/session_state.js
+          node --input-type=module --check < apps/zte_manager/static/js/core/device_state.js
           node --input-type=module --check < apps/zte_manager/static/js/components/loading_feedback.js
+          node --input-type=module --check < apps/zte_manager/static/js/services/device_api.js
           node --input-type=module --check < apps/zte_manager/static/js/management/inventory_view.js
           node --check apps/zte_manager/static/js/advanced.js
           node --check apps/zte_manager/static/js/features/firmware_inspector.js
