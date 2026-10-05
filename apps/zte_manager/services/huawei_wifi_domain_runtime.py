@@ -31,6 +31,12 @@ class HuaweiWifiDomainRuntimeService(HuaweiEG8041X7RuntimeService):
     static supported values.
     """
 
+    @property
+    def capabilities(self) -> dict[str, dict]:
+        capabilities = super().capabilities
+        capabilities["wifi"] = eg8041x7_wifi_capabilities().as_dict()
+        return capabilities
+
     @staticmethod
     def _raw_value(records: list[dict[str, Any]], *keys: str) -> Any | None:
         wanted = {key.casefold() for key in keys}
