@@ -35,6 +35,14 @@ def _legacy_reexport(handler):
     """
     @functools.wraps(handler)
     def wrapped(*args, **kwargs):
+        # Helpers such as _call_device/_call_device_read live in common.py and
+        # resolve their globals there, not in each controller module. Keep the
+        # legacy injection surface coherent across both layers.
+        common = sys.modules.get("apps.zte_manager.presentation.api.common")
+        if common is not None:
+            common.device_service = globals()["device_service"]
+            common.zte_service = globals()["zte_service"]
+
         owner = sys.modules.get(handler.__module__)
         if owner is not None:
             if hasattr(owner, "device_service"):
