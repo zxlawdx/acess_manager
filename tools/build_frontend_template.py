@@ -41,9 +41,27 @@ PARTS = (
     "shell_end.html",
 )
 
+# The original monolithic pages used one visual blank line at these semantic
+# boundaries. Preserve those bytes in composition instead of encoding a blank
+# separator as ownership of either adjacent feature module.
+PRESERVED_BLANK_BOUNDARIES = frozenset({
+    "pages/advanced/workbench_discovery.html",
+    "pages/advanced/network.html",
+    "pages/advanced/huawei_security.html",
+    "pages/management/fleet.html",
+    "pages/management/remote_monitor.html",
+    "pages/management/network_mesh.html",
+    "pages/management/lifecycle_provisioning.html",
+})
+
 
 def build_template() -> str:
-    return "".join((SOURCE / filename).read_text(encoding="utf-8") for filename in PARTS)
+    chunks = []
+    for filename in PARTS:
+        chunks.append((SOURCE / filename).read_text(encoding="utf-8"))
+        if filename in PRESERVED_BLANK_BOUNDARIES:
+            chunks.append("\n")
+    return "".join(chunks)
 
 
 def mismatch_message(committed: str, generated: str) -> str:
