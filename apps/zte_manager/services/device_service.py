@@ -8,8 +8,8 @@ from typing import Any
 from apps.zte_manager.infrastructure.huawei import HuaweiWebClient
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
 from apps.zte_manager.services.huawei_service import HuaweiService
-from apps.zte_manager.services.huawei_eg8041x7_runtime import (
-    HuaweiEG8041X7RuntimeService,
+from apps.zte_manager.services.huawei_wifi_domain_runtime import (
+    HuaweiWifiDomainRuntimeService,
 )
 from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
@@ -58,7 +58,7 @@ class DeviceService:
         self,
         *,
         zte_provider: ZTEService | None = None,
-        huawei_factory=HuaweiEG8041X7RuntimeService,
+        huawei_factory=HuaweiWifiDomainRuntimeService,
         huawei_client_type=HuaweiWebClient,
     ) -> None:
         self._zte_service = zte_provider or zte_service
