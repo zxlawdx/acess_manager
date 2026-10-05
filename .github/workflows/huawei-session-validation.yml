@@ -14,6 +14,7 @@ on:
       - "apps/zte_manager/services/huawei_*.py"
       - "apps/zte_manager/services/profile_service.py"
       - "apps/zte_manager/api.py"
+      - "apps/zte_manager/presentation/api/**"
       - "apps/zte_manager/static/js/app.js"
       - "apps/zte_manager/static/js/frontend_bootstrap.js"
       - "apps/zte_manager/static/js/core/**"
@@ -26,6 +27,7 @@ on:
       - "apps/zte_manager/static/js/features/device_topology.js"
       - "apps/zte_manager/static/js/tr069_profiles.js"
       - "apps/zte_manager/static/css/tangerine_forms.css"
+      - "tests/test_api_modularization.py"
       - "tests/test_frontend_core.mjs"
       - "tests/test_frontend_capability_policy.mjs"
       - "tests/test_frontend_feature_modules.mjs"
@@ -68,6 +70,7 @@ jobs:
             apps/zte_manager/services/profile_service.py \
             apps/zte_manager/services/device_service.py \
             apps/zte_manager/model/device_adapters/huawei.py \
+            apps/zte_manager/presentation/api/*.py \
             apps/zte_manager/api.py
 
       - name: JavaScript syntax
@@ -97,6 +100,7 @@ jobs:
       - name: Huawei backend regressions
         run: |
           python -m unittest \
+            tests.test_api_modularization \
             tests.test_profile_repository \
             tests.test_huawei_session_snapshot \
             tests.test_huawei_captured_features \
