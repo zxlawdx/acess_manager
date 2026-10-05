@@ -1,4 +1,4 @@
-import "../core/bootstrap.js";
+import "../frontend_bootstrap.js";
 
 /**
  * CPE inventory view: DOM-only rendering and persistent selection.
