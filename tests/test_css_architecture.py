@@ -34,7 +34,17 @@ EXPECTED_STYLESHEET_ORDER = [
     "components/provider_diagnostics.css",
 ]
 
+EXPECTED_WORKFLOW_IMPORTS = [
+    "./foundation/tangerine_tokens.css",
+    "./pages/support_workbench.css",
+    "./pages/diagnostics_workbench.css",
+    "./pages/profile_workbench.css",
+    "./pages/workbench_responsive.css",
+    "./components/operator_results.css",
+]
+
 STYLE_REF = re.compile(r"static\(['\"]zte_manager/css/([^'\"]+)['\"]\)")
+CSS_IMPORT = re.compile(r"@import\s+url\(['\"]([^'\"]+)['\"]\)\s*;")
 CANONICAL_DEFINITION = re.compile(
     r"(--am-(?:"
     r"color-[a-z0-9-]+|"
@@ -50,10 +60,8 @@ CANONICAL_DEFINITION = re.compile(
 )
 INLINE_STYLE = re.compile(r"\sstyle\s*=\s*['\"]", re.I)
 
-# First measured after the template/bootstrap cleanup. These are ceilings, not
-# goals: dedicated cleanup PRs must lower them rather than silently growing the
-# specificity/inline-style debt again.
-IMPORTANT_BASELINE = 1538
+# Measured ceilings. Cleanup slices must lower them rather than growing debt.
+IMPORTANT_BASELINE = 1537
 INLINE_STYLE_BASELINE = 2
 
 
@@ -77,6 +85,19 @@ class CssArchitectureTests(unittest.TestCase):
     def test_generated_index_keeps_the_same_stylesheet_sequence(self):
         refs = stylesheet_refs(INDEX.read_text(encoding="utf-8"))
         self.assertEqual(refs, EXPECTED_STYLESHEET_ORDER)
+
+    def test_workflow_entrypoint_preserves_layer_order_and_real_assets(self):
+        workflow = (CSS_ROOT / "tangerine_workflows.css").read_text(encoding="utf-8")
+        imports = CSS_IMPORT.findall(workflow)
+        self.assertEqual(imports, EXPECTED_WORKFLOW_IMPORTS)
+        for relative in imports:
+            target = (CSS_ROOT / relative).resolve()
+            with self.subTest(relative=relative):
+                self.assertTrue(target.is_file(), f"missing workflow import: {relative}")
+
+        without_comments = re.sub(r"/\*.*?\*/", "", workflow, flags=re.S)
+        without_imports = CSS_IMPORT.sub("", without_comments).strip()
+        self.assertEqual(without_imports, "", "workflow entrypoint must not regain page/component rules")
 
     def test_canonical_token_definitions_have_one_source_of_truth(self):
         definitions: dict[str, set[str]] = {}
