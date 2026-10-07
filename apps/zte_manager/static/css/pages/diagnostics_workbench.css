@@ -1,0 +1,25 @@
+/* Diagnostics workbench page structure. */
+html[data-theme] .am-diagnostic-workspace{
+ display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;
+ align-items:start;gap:16px!important;
+}
+html[data-theme] .am-diagnostic-workspace .diagnostic-card{
+ padding:0!important;overflow:hidden;background:var(--am-color-surface)!important;
+ border:1px solid var(--am-color-border)!important;border-radius:15px!important;box-shadow:none!important;
+}
+html[data-theme] .am-diagnostic-workspace .diagnostic-card .panel-header{
+ padding:18px 21px!important;margin:0!important;
+ border:0!important;border-bottom:1px solid var(--am-color-border)!important;
+ background:var(--am-color-primary-wash)!important;
+}
+html[data-theme] .am-diagnostic-workspace .diagnostic-card .panel-icon{
+ color:var(--am-color-primary-strong)!important;background:var(--am-color-surface)!important;
+ padding:7px;border-radius:11px;font-size:24px!important;
+}
+html[data-theme] .am-diagnostic-workspace .diagnostic-card .form-stack{
+ padding:22px!important;display:grid;gap:13px!important;
+}
+html[data-theme] .am-diagnostic-workspace .diagnostic-card .terminal-output{
+ margin:0!important;border:0!important;border-top:1px solid var(--am-color-border)!important;
+ border-radius:0!important;max-height:350px;overflow:auto;
+}
