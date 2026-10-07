@@ -32,11 +32,14 @@ on:
       - "apps/zte_manager/static/js/features/device_topology.js"
       - "apps/zte_manager/static/js/tr069_profiles.js"
       - "apps/zte_manager/static/css/foundation/**"
+      - "apps/zte_manager/static/css/components/**"
       - "apps/zte_manager/static/css/tangerine_forms.css"
+      - "apps/zte_manager/static/css/tangerine_cards.css"
       - "apps/zte_manager/static/css/tangerine_workflows.css"
       - "tests/test_api_modularization.py"
       - "tests/test_schema_modularization.py"
       - "tests/test_template_modularization.py"
+      - "tests/test_css_architecture.py"
       - "tests/test_design_tokens.cjs"
       - "tests/test_frontend_core.mjs"
       - "tests/test_frontend_capability_policy.mjs"
@@ -86,10 +89,12 @@ jobs:
             apps/zte_manager/api.py \
             tools/build_frontend_template.py
 
-      - name: Template composition regressions
+      - name: Template and CSS architecture regressions
         run: |
           python tools/build_frontend_template.py --check
-          python -m unittest tests.test_template_modularization
+          python -m unittest \
+            tests.test_template_modularization \
+            tests.test_css_architecture
 
       - name: JavaScript syntax
         run: |
