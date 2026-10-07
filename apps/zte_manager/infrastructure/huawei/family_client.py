@@ -156,16 +156,19 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             "x.X_HW_Token": challenge,
         }
 
-    def _submit_login(self, challenge: str):
+    def _submit_login(self, challenge: str, *, legacy_cookie: bool):
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Origin": self.base_url,
+            "Referer": self.base_url + "/",
+            "Upgrade-Insecure-Requests": "1",
+        }
+        if legacy_cookie:
+            # Preserves the physically validated EG8041X7 RandCount flow.
+            headers["Cookie"] = "Cookie=body:Language:english:id=-1"
         return self.session.post(
             self.url(LOGIN_PATH),
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Cookie": "Cookie=body:Language:english:id=-1",
-                "Origin": self.base_url,
-                "Referer": self.base_url + "/",
-                "Upgrade-Insecure-Requests": "1",
-            },
+            headers=headers,
             data=self._login_payload(challenge),
             timeout=self.timeout,
             allow_redirects=True,
@@ -177,7 +180,7 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
         if not plausible_huawei_token(challenge):
             raise RuntimeError("Huawei RandCount challenge was not returned")
 
-        login_response = self._submit_login(challenge)
+        login_response = self._submit_login(challenge, legacy_cookie=True)
         if self.is_login_response(login_response):
             return False
 
@@ -232,7 +235,9 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
         if not plausible_huawei_token(challenge):
             raise RuntimeError("Huawei RandString challenge was not returned")
 
-        login_response = self._submit_login(challenge)
+        # The EG8021V5 reference flow does not send the EG8041X7 legacy Cookie
+        # header. Keep the two auth strategies behaviorally distinct.
+        login_response = self._submit_login(challenge, legacy_cookie=False)
         if self.is_login_response(login_response):
             return False
 
