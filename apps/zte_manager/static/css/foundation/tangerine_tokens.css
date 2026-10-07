@@ -25,6 +25,14 @@ html[data-theme="light"] {
   --am-color-danger:#A62A31;
   --am-color-danger-wash:#FEF2F2;
   --am-color-primary-ink:#29221E;
+
+  /* Remaining values consumed only by legacy light-mode compatibility rules. */
+  --am-color-neutral:#405548;
+  --am-color-neutral-wash:#EAF0EA;
+  --am-color-native-surface:#FFFFFF;
+  --am-color-native-text:#111827;
+  --am-color-native-border:#D1D5DB;
+
   --am-shadow-surface:0 4px 24px rgba(100,53,24,.045);
 }
 
@@ -48,6 +56,11 @@ html[data-theme="dark"] {
   --am-color-danger:#FF9D9D;
   --am-color-danger-wash:#2A0F0F;
   --am-color-primary-ink:#211C19;
+  --am-color-neutral:var(--am-color-text-muted);
+  --am-color-neutral-wash:var(--am-color-primary-wash);
+  --am-color-native-surface:var(--am-color-surface);
+  --am-color-native-text:var(--am-color-text);
+  --am-color-native-border:var(--am-color-border);
   --am-shadow-surface:0 4px 24px rgba(0,0,0,.10);
 }
 
@@ -117,6 +130,13 @@ html[data-theme] {
   --ui-warning-wash:var(--am-color-warning-wash);
   --ui-danger:var(--am-color-danger);
   --ui-danger-wash:var(--am-color-danger-wash);
+  --ui-neutral:var(--am-color-neutral);
+  --ui-neutral-wash:var(--am-color-neutral-wash);
+  --ui-surface-light:var(--am-color-native-surface);
+  --ui-text-light:var(--am-color-native-text);
+  --ui-border-light:var(--am-color-native-border);
+  --select-option-bg:var(--am-color-native-surface);
+  --select-option-fg:var(--am-color-native-text);
   --ui-shadow:var(--am-shadow-surface);
   --ui-radius:var(--am-radius-md);
 
