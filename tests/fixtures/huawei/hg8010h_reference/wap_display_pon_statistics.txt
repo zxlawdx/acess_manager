@@ -1,0 +1,28 @@
+WAP>display pon statistics
+GPON statistic as follow:
+Rx unicast packets    : 15450712
+Tx unicast packets    : 4902623
+Rx broadcast packets  : 0
+Tx broadcast packets  : 135
+Rx multicast packets  : 488687744
+Tx multicast packets  : 0
+Dropped packets       : 0
+Tx ploam              : 88605
+Tx omci               : 20499
+Tx gem                : 19992371
+Bip err               : 0
+Rx ploam right        : 233109
+Rx ploam wrong        : 0
+Rx ploam drop         : 0
+Rx omci               : 20236
+Rx gem                : 504158692
+Rx mc gem             : 488687744
+Rx omci overflow      : 0
+Tx octets             : 2222947148
+Tx packets            : 4902758
+Rx oversize           : 5757080
+Rx octets             : 2079797555
+Rx packets            : 504138456
+Rx undersize          : 0
+success!
+WAP>
