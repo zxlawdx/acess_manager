@@ -5,6 +5,7 @@
   const id = name => document.getElementById(name);
   const state = {name: PRIMARY, owner: null, pending: false, generation: 0};
   globalThis.activeNamedPreset = PRIMARY;
+  const isHuawei = () => currentVendor === "huawei";
   function hint(message, error = false) {
     const element = id("namedPresetHint");
     if (!element) return;
@@ -23,13 +24,41 @@
         button.title = "";
       }
     }
-    id("namedPresetDelete").disabled = !named;
+    const remove = id("namedPresetDelete");
+    if (remove) remove.disabled = !named;
+  }
+  function huaweiPrimaryControls() {
+    state.name = PRIMARY;
+    globalThis.activeNamedPreset = PRIMARY;
+    const select = id("namedPresetSelect");
+    if (select) {
+      select.replaceChildren(new Option(PRIMARY, PRIMARY));
+      select.value = PRIMARY;
+    }
+    const create = id("namedPresetCreate");
+    const remove = id("namedPresetDelete");
+    if (create) {
+      create.disabled = true;
+      create.title = "Variantes nomeadas ainda são específicas do provider ZTE.";
+    }
+    if (remove) remove.disabled = true;
+    const apply = id("namedPresetApply");
+    if (apply) {
+      apply.disabled = !routerWriteEnabled;
+      apply.title = routerWriteEnabled ? "" :
+        "A sessão atual não confirmou gravações para este perfil.";
+    }
+    legacyControls(false);
   }
   const post = (url, payload) => apiRequest(url, {
     method:"POST", body:JSON.stringify(payload)
   });
   async function refreshNames(desired = state.name) {
     if (!currentAttendant) return;
+    if (isHuawei()) {
+      huaweiPrimaryControls();
+      return;
+    }
     const owner = currentAttendant;
     const response = await post("/profiles/named/list", {attendant: owner});
     if (currentAttendant !== owner) return;
@@ -42,6 +71,14 @@
   }
   async function selectPreset(name) {
     if (!currentAttendant) return;
+    if (isHuawei()) {
+      huaweiPrimaryControls();
+      profileLoadedFor = null;
+      currentProfile = null;
+      await ensureAttendantProfile();
+      hint("Configuração principal Huawei ativa; aplicação usa releitura por etapa.");
+      return;
+    }
     const generation = ++state.generation;
     const owner = currentAttendant;
     const named = name !== PRIMARY;
@@ -78,7 +115,7 @@
   }
   async function saveSelected() {
     if (!currentAttendant) throw Error("Conecte-se e informe o atendente.");
-    if (state.name === PRIMARY) {
+    if (isHuawei() || state.name === PRIMARY) {
       await saveProfile();
       return;
     }
@@ -91,21 +128,51 @@
     currentProfile = saved;
     hint("Configuração " + state.name + " salva para " + owner + ".");
   }
+  function verifiedProfileSummary(result) {
+    const steps = Array.isArray(result?.steps) ? result.steps : [];
+    const changed = steps.filter(step =>
+      Array.isArray(step?.changed_fields) && step.changed_fields.length > 0
+    );
+    const failed = steps.filter(step => step?.verified !== true && step?.success !== true);
+    if (result?.success === false || failed.length) {
+      return {
+        message: "Perfil não foi totalmente confirmado. Confira as etapas abaixo antes de repetir.",
+        error: true
+      };
+    }
+    if (changed.length && changed.every(step => step?.verified === true)) {
+      return {
+        message: `${changed.length} etapa(s) aplicada(s) e confirmada(s) pela releitura da ONT.`,
+        error: false
+      };
+    }
+    const unchanged = Array.isArray(result?.unchanged) ? result.unchanged : [];
+    if (result?.success === true && !changed.length && (unchanged.length || steps.length)) {
+      return {
+        message: "A ONT já correspondia ao perfil; nenhuma alteração pendente foi encontrada.",
+        error: false
+      };
+    }
+    if (result?.verified === true) {
+      return {message:"Configuração aplicada e confirmada por leitura.", error:false};
+    }
+    return {
+      message:"Configuração processada; confira abaixo quais etapas tiveram releitura confirmada.",
+      error:false
+    };
+  }
   async function applyPrimaryGeneric() {
     if (!currentAttendant) throw Error("Informe um atendente conectado.");
     if (!routerWriteEnabled) {
       throw Error("A sessão atual não confirmou gravações para o perfil solicitado.");
     }
     const owner = currentAttendant;
-    // Persist exactly what is visible before asking the active provider to
-    // calculate requirements/capabilities and apply. The backend owns the
-    // no-partial-apply preflight and each provider owns write/readback safety.
     await saveProfile(true);
     if (owner !== currentAttendant) return;
     if (!window.confirm(
       "Aplicar a configuração principal à ONT atual? O backend validará as capacidades antes de gravar."
     )) return;
-    setBusy(true, "Validando capacidades e aplicando o perfil...");
+    setBusy(true, "Validando capacidades, aplicando diferenças e relendo a ONT...");
     try {
       const result = await post("/profiles/apply", {attendant: owner});
       if (owner !== currentAttendant) return;
@@ -118,9 +185,8 @@
         );
         return;
       }
-      hint(result?.verified === true
-        ? "Configuração aplicada e confirmada por leitura."
-        : "Configuração processada pelo provedor ativo; confira o relatório de verificação.");
+      const summary = verifiedProfileSummary(result);
+      hint(summary.message, summary.error);
       await loadWifi();
       await loadDns();
     } finally {
@@ -129,6 +195,11 @@
   }
   async function applySelected() {
     if (!currentAttendant) throw Error("Informe um atendente conectado.");
+    if (isHuawei()) {
+      huaweiPrimaryControls();
+      await applyPrimaryGeneric();
+      return;
+    }
     if (state.name === PRIMARY) {
       await applyPrimaryGeneric();
       return;
@@ -136,8 +207,6 @@
     if (!routerWriteEnabled) {
       throw Error("Esta ONT exige um fluxo capturado específico; não aplicar um batch genérico.");
     }
-    // Named presets are still provider-specific on the server. Save the visible
-    // editor before applying, never an older database value.
     await saveSelected();
     if (!window.confirm(
       "Aplicar " + state.name + " à ONT atual? O Wi-Fi pode reiniciar."
@@ -148,9 +217,8 @@
         attendant:currentAttendant,name:state.name
       });
       if (id("profileApplyResult")) renderProfileApplyResult(result);
-      hint(result?.verified === true
-        ? "Configuração aplicada e confirmada por leitura."
-        : "Configuração enviada; confira o relatório e valide na ONT.");
+      const summary = verifiedProfileSummary(result);
+      hint(summary.message, summary.error);
       await loadWifi();
       await loadDns();
     } finally {
@@ -165,13 +233,20 @@
     finally { state.pending = false; }
   }
   function init() {
-    // app.js still carries the historical F6201B compatibility function. The
-    // visible primary Profile button is provider-neutral; intercept it in the
-    // capture phase so the legacy button listener cannot route Huawei through
-    // `/f6201b/profile/apply-saved`.
+    // app.js still contains the historical captured F6201B button handler.
+    // Huawei must never reach that route. Capture both visible apply controls
+    // before legacy listeners and force the provider-neutral API.
     document.addEventListener("click", event => {
-      const button = event.target.closest("#applyProfileButton");
-      if (!button || state.name !== PRIMARY) return;
+      const button = event.target.closest("#applyProfileButton, #namedPresetApply");
+      if (!button) return;
+      if (isHuawei()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        huaweiPrimaryControls();
+        void execute(applyPrimaryGeneric);
+        return;
+      }
+      if (button.id !== "applyProfileButton" || state.name !== PRIMARY) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       void execute(applyPrimaryGeneric);
@@ -179,6 +254,7 @@
     id("namedPresetSelect")?.addEventListener("change", event =>
       void execute(() => selectPreset(event.target.value)));
     id("namedPresetCreate")?.addEventListener("click", () => execute(async () => {
+      if (isHuawei()) throw Error("Variantes nomeadas ainda são específicas do provider ZTE.");
       const name = id("namedPresetName").value.trim();
       if (!name || name === PRIMARY) throw Error("Informe um nome diferente para a variante.");
       if (!currentAttendant) throw Error("Conecte-se e informe o atendente.");
@@ -195,6 +271,7 @@
     id("namedPresetApply")?.addEventListener("click", () =>
       void execute(applySelected));
     id("namedPresetDelete")?.addEventListener("click", () => execute(async () => {
+      if (isHuawei()) throw Error("A configuração principal Huawei não pode ser excluída.");
       if (state.name === PRIMARY) throw Error("A configuração principal não pode ser excluída.");
       if (!window.confirm("Excluir a variante " + state.name + "?")) return;
       await post("/profiles/named/delete", {
@@ -213,17 +290,13 @@
     });
     document.addEventListener("device:page-open", event => {
       if (event.detail?.pageName !== "profiles" || !currentAttendant) return;
-      // Named presets remain ZTE-specific. The primary profile is already
-      // provider-neutral and is kept enabled for Huawei sessions.
-      if (event.detail?.vendor === "huawei") {
-        state.name = PRIMARY;
-        globalThis.activeNamedPreset = PRIMARY;
-        legacyControls(false);
+      if (event.detail?.vendor === "huawei" || isHuawei()) {
+        huaweiPrimaryControls();
+        hint("Configuração principal Huawei ativa; alterações só contam como aplicadas após releitura.");
         return;
       }
       void execute(async () => {
         await refreshNames();
-        // Primary editor is loaded by app.js; alternate editor is ours.
         if (state.name !== PRIMARY) await selectPreset(state.name);
         else legacyControls(false);
       });

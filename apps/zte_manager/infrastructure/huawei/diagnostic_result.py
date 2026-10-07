@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 import ast
+import re
 
 
 DIAGNOSTIC_SPLIT = "[@#@]"
+
+
+_RETURN_FUNCTION = re.compile(
+    r"^function(?:\s+[A-Za-z_$][\w$]*)?\s*\(\s*\)\s*\{\s*"
+    r"return\s+(?P<expression>.*?)\s*;\s*\}\s*;?$",
+    re.S,
+)
 
 
 def _decode_string_expression_node(node: ast.AST) -> str:
@@ -25,14 +33,32 @@ def _decode_string_expression_node(node: ast.AST) -> str:
     raise ValueError("unsupported Huawei diagnostic string expression")
 
 
+def _diagnostic_string_expression(source: str) -> str:
+    """Return the inert string expression contained in a Huawei poll frame.
+
+    EG8041X6-10 physically returns both bare concatenated strings and an
+    anonymous JavaScript function whose only statement is ``return <strings>``.
+    We unwrap only that exact no-argument function grammar. The resulting
+    expression is still parsed by the restrictive AST decoder below, so router
+    JavaScript is never executed.
+    """
+
+    text = source.strip()
+    wrapper = _RETURN_FUNCTION.fullmatch(text)
+    if wrapper is not None:
+        return wrapper.group("expression").strip()
+    return text[:-1].rstrip() if text.endswith(";") else text
+
+
 def decode_huawei_diagnostic_result(source: object) -> tuple[str, str]:
     """Decode a Huawei Get*Result.asp frame without evaluating router code.
 
     Supported inputs:
     - already-decoded plain text containing ``[@#@]``;
     - one quoted Python/JavaScript-compatible string literal;
-    - a concatenation of quoted string literals using ``+`` and an optional
-      trailing semicolon, as physically observed on EG8041X6-10.
+    - a concatenation of quoted string literals using ``+``;
+    - the same expression wrapped by ``function() { return ...; }``, as
+      physically observed on EG8041X6-10 ping responses.
 
     Unknown syntax is preserved as text so callers keep the previous safe
     fallback behavior; executable expressions are never evaluated.
@@ -42,7 +68,7 @@ def decode_huawei_diagnostic_result(source: object) -> tuple[str, str]:
     if not text:
         return "", ""
 
-    expression = text[:-1].rstrip() if text.endswith(";") else text
+    expression = _diagnostic_string_expression(text)
     decoded: str | None = None
 
     if expression[:1] in {"'", '"'}:

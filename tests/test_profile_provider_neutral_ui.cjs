@@ -15,8 +15,12 @@ assert.ok(
   "Primary Profile apply must use the generic provider-dispatched endpoint"
 );
 assert.ok(
-  body.includes('event.target.closest("#applyProfileButton")'),
-  "The visible primary Apply button must be intercepted from the legacy F6201B listener"
+  body.includes('event.target.closest("#applyProfileButton, #namedPresetApply")'),
+  "Both visible Huawei Apply controls must be intercepted from legacy/model-specific listeners"
+);
+assert.ok(
+  body.includes("if (isHuawei())") && body.includes("huaweiPrimaryControls()"),
+  "Huawei profile UI must be forced to the provider-neutral primary profile"
 );
 assert.ok(
   body.includes("event.stopImmediatePropagation()"),
@@ -25,6 +29,14 @@ assert.ok(
 assert.ok(
   body.includes("result.unsupported.join"),
   "Capability-preflight failures must be visible instead of silently partially applying"
+);
+assert.ok(
+  body.includes("changed.every(step => step?.verified === true)"),
+  "Huawei profile confirmation must be derived from per-stage readback verification"
+);
+assert.ok(
+  body.includes("aplicada(s) e confirmada(s) pela releitura da ONT"),
+  "Successful Huawei application must show an explicit readback confirmation"
 );
 assert.ok(
   api.includes("device_service.apply_profile(data.attendant)"),

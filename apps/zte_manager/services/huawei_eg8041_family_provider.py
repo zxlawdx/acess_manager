@@ -1,13 +1,66 @@
 from __future__ import annotations
 
+from threading import Lock
 from typing import Any
 
 from apps.zte_manager.infrastructure.huawei.diagnostic_result import (
     decode_huawei_diagnostic_result,
 )
+from apps.zte_manager.services.automatic_diagnostic_service import (
+    AutomaticDiagnosticService,
+    DiagnosticThresholds,
+)
+from apps.zte_manager.services.huawei_captured_features import _record_domain
 from apps.zte_manager.services.huawei_eg8041_family_runtime import (
     HuaweiEG8041FamilyRuntimeService,
 )
+from apps.zte_manager.services.support_diagnostic_service import (
+    SupportDiagnosticOptions,
+    SupportDiagnosticService,
+)
+
+
+class _HuaweiDiagnosticCapabilityFacade:
+    """Expose only read-only firmware-health readers used by the generic engine."""
+
+    def __init__(self, provider: "HuaweiEG8041FamilyProvider") -> None:
+        self.provider = provider
+
+    def read(self, feature: str):
+        if feature == "tr069":
+            return self.provider.tr069_management_status()
+        if feature == "sntp":
+            return {
+                "available": False,
+                "reason": "Huawei SNTP ainda não foi caracterizado neste runtime.",
+            }
+        raise ValueError(f"Capability de diagnóstico Huawei desconhecida: {feature}")
+
+
+class _HuaweiDiagnosticTarget:
+    """Provider view used by the generic diagnostic engine.
+
+    The dashboard explicitly asks for ``run_ping=false``. This proxy prevents
+    the generic collector from starting an active ONT ping in that mode while
+    delegating all passive readers to the authenticated Huawei provider.
+    """
+
+    def __init__(
+        self,
+        provider: "HuaweiEG8041FamilyProvider",
+        *,
+        active_ping: bool,
+    ) -> None:
+        self.provider = provider
+        self.active_ping = active_ping
+
+    def __getattr__(self, name: str):
+        return getattr(self.provider, name)
+
+    def ping(self, config):
+        if not self.active_ping:
+            raise RuntimeError("active_ping_disabled")
+        return self.provider.ping(config)
 
 
 class HuaweiEG8041FamilyProvider(HuaweiEG8041FamilyRuntimeService):
@@ -55,18 +108,276 @@ class HuaweiEG8041FamilyProvider(HuaweiEG8041FamilyRuntimeService):
         "speed_test": "Speed-test WebUI surface",
     }
 
+    _WIFI_SECRET_FIELDS = (
+        "PreSharedKey",
+        "KeyPassphrase",
+        "WPAKey",
+        "WPA2Key",
+        "WPA3Key",
+        "PSK",
+        "Key",
+    )
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        # Kept separate from the Huawei session RLock so the UI can poll local
+        # progress while the sequential WebUI collectors are running.
+        self._support_progress_lock = Lock()
+        self._support_progress_state = {
+            "running": False,
+            "stage": "idle",
+            "completed": 0,
+            "total": 0,
+        }
+
     @staticmethod
     def _decode_diagnostic_result(source: object) -> tuple[str, str]:
-        """Decode the physically observed EG8041 polling response grammar.
-
-        The X6 firmware emits GetPing/GetRoute frames as concatenated quoted
-        JavaScript strings. The base Huawei transport historically understood
-        only one quoted literal, so a real ``Complete`` frame was kept polling
-        until timeout. Keep the characterization at the EG8041 family boundary
-        while the generic Huawei parser remains conservative for other families.
-        """
-
+        """Decode the physically observed EG8041 polling response grammar."""
         return decode_huawei_diagnostic_result(source)
+
+    # ------------------------------------------------------------------
+    # Generic diagnostic compatibility aliases
+
+    def channel_status(self):
+        return self.wifi_radios()
+
+    def available_channels(
+        self,
+        band: str | None = None,
+        bandwidth: str | None = None,
+        country: str = "BRI",
+    ):
+        return self.wifi_channels(
+            band=band,
+            bandwidth=bandwidth,
+            country=country,
+        )
+
+    @staticmethod
+    def wifi_neighbor_scan(band: str) -> dict[str, Any]:
+        # No Huawei neighbor scan has been characterized locally yet. Returning
+        # an explicit unavailable reading lets the generic analyzer stay honest
+        # without failing the complete diagnostic.
+        return {
+            "band": band,
+            "available": False,
+            "networks": [],
+        }
+
+    @staticmethod
+    def nslookup(_hostname: str):
+        raise RuntimeError("Huawei native NsLookup ainda não foi caracterizado.")
+
+    @staticmethod
+    def native_speedtest(server_url: str | None = None):
+        # SpeedTestService will use the explicitly allowed workstation fallback.
+        raise RuntimeError("Huawei native speed test ainda não foi caracterizado.")
+
+    @staticmethod
+    def _diagnostic_thresholds(config: dict) -> DiagnosticThresholds:
+        return DiagnosticThresholds(
+            optical_rx_min=config.get("optical_rx_min", -27.0),
+            optical_rx_max=config.get("optical_rx_max", -8.0),
+            wifi_rssi_warning=config.get("wifi_rssi_warning", -70),
+            wifi_rssi_bad=config.get("wifi_rssi_bad", -80),
+            expected_lan_mbps=config.get("expected_lan_mbps", 1000),
+            ping_warning_ms=config.get("ping_warning_ms", 80.0),
+        )
+
+    @staticmethod
+    def _support_options(config: dict) -> SupportDiagnosticOptions:
+        return SupportDiagnosticOptions(
+            mode=config.get("mode", "general"),
+            affected_mac=config.get("affected_mac"),
+            affected_ip=config.get("affected_ip"),
+            ping_host=config.get("ping_host", "1.1.1.1"),
+            dns_host=config.get("dns_host", "cloudflare.com"),
+            include_traceroute=bool(config.get("include_traceroute", False)),
+            include_speedtest=bool(config.get("include_speedtest", True)),
+            allow_speedtest_fallback=bool(
+                config.get("allow_speedtest_fallback", True)
+            ),
+            speedtest_provider=config.get("speedtest_provider", "native_auto"),
+            speedtest_base_url=config.get("speedtest_base_url"),
+            expected_download_mbps=config.get("expected_download_mbps"),
+            expected_upload_mbps=config.get("expected_upload_mbps"),
+        )
+
+    def automatic_diagnostic(self, config: dict) -> dict:
+        target = _HuaweiDiagnosticTarget(
+            self,
+            active_ping=bool(config.get("run_ping", True)),
+        )
+        report = AutomaticDiagnosticService(target).run(
+            ping_host=config.get("ping_host", "8.8.8.8"),
+            include_traceroute=bool(config.get("include_traceroute", False)),
+            thresholds=self._diagnostic_thresholds(config),
+        )
+        report.update({
+            "provider": "huawei",
+            "model": self.model,
+            "family": self.family_descriptor,
+        })
+        return report
+
+    def _set_support_progress(
+        self,
+        stage: str,
+        completed: int,
+        total: int,
+        *,
+        running: bool = True,
+    ) -> None:
+        with self._support_progress_lock:
+            self._support_progress_state = {
+                "running": running,
+                "stage": stage,
+                "completed": int(completed),
+                "total": int(total),
+            }
+
+    def support_progress(self) -> dict:
+        with self._support_progress_lock:
+            return dict(self._support_progress_state)
+
+    def support_diagnostic(self, config: dict) -> dict:
+        with self._support_progress_lock:
+            if self._support_progress_state.get("running"):
+                raise RuntimeError("Já existe um diagnóstico Huawei em execução.")
+            self._support_progress_state = {
+                "running": True,
+                "stage": "preparing",
+                "completed": 0,
+                "total": 1,
+            }
+
+        failed = True
+        try:
+            target = _HuaweiDiagnosticTarget(
+                self,
+                active_ping=bool(config.get("run_ping", True)),
+            )
+            engine = SupportDiagnosticService(
+                target,
+                _HuaweiDiagnosticCapabilityFacade(self),
+            )
+            report = engine.run(
+                self._support_options(config),
+                self._diagnostic_thresholds(config),
+                progress=lambda stage, completed, total: self._set_support_progress(
+                    stage,
+                    completed,
+                    total,
+                ),
+            )
+            report.update({
+                "provider": "huawei",
+                "model": self.model,
+                "family": self.family_descriptor,
+                "automatic_mutation_performed": False,
+            })
+            if config.get("auto_optimize_wifi"):
+                report.setdefault("notes", []).append(
+                    "O diagnóstico Huawei é somente leitura: nenhuma otimização "
+                    "automática foi aplicada sem uma recomendação caracterizada."
+                )
+            failed = False
+            return report
+        finally:
+            state = self.support_progress()
+            self._set_support_progress(
+                "failed" if failed else "completed",
+                state.get("total", 1),
+                state.get("total", 1),
+                running=False,
+            )
+
+    # ------------------------------------------------------------------
+    # Explicit Wi-Fi password reveal
+
+    @staticmethod
+    def _valid_wifi_secret(value: object) -> str:
+        text = str(value or "").strip()
+        if not text or text.startswith("InternetGatewayDevice."):
+            return ""
+        if set(text) <= {"*", "•", "·"}:
+            return ""
+        if 8 <= len(text) <= 63:
+            return text
+        if len(text) == 64 and all(char in "0123456789abcdefABCDEF" for char in text):
+            return text
+        return ""
+
+    def _wifi_password_for_band(self, band: str) -> str:
+        captured = self._require_captured()
+        _display, instance, _page, _adv = captured._wifi_pages(band)
+        record, records = captured._wifi_basic_record(band)
+        base_domain = (
+            "InternetGatewayDevice.LANDevice.1."
+            f"WLANConfiguration.{instance}"
+        )
+        psk_domain = f"{base_domain}.PreSharedKey.1"
+
+        candidates = [record, *records]
+        # Prefer the dedicated PreSharedKey object, then the WLAN record itself.
+        candidates.sort(
+            key=lambda row: 0
+            if _record_domain(row) == psk_domain
+            else 1
+            if _record_domain(row) == base_domain
+            else 2
+        )
+        for row in candidates:
+            domain = _record_domain(row)
+            relevant = (
+                domain in {"", base_domain, psk_domain}
+                or domain.startswith(base_domain + ".PreSharedKey.")
+            )
+            if not relevant:
+                continue
+            for key in self._WIFI_SECRET_FIELDS:
+                secret = self._valid_wifi_secret(row.get(key))
+                if secret:
+                    return secret
+            constructor = str(row.get("_constructor") or "").casefold()
+            if "preshared" in constructor or "psk" in constructor:
+                for value in reversed(row.get("_args") or []):
+                    secret = self._valid_wifi_secret(value)
+                    if secret:
+                        return secret
+        return ""
+
+    def wifi_networks(
+        self,
+        reveal_password: bool = False,
+        *,
+        refresh: bool = False,
+    ) -> list[dict]:
+        if not reveal_password:
+            return super().wifi_networks(
+                reveal_password=False,
+                refresh=refresh,
+            )
+
+        # Never store cleartext Wi-Fi keys in the normalized session snapshot.
+        networks = self._require_captured().wifi_networks(reveal_password=False)
+        revealed = 0
+        result: list[dict] = []
+        for network in networks:
+            row = dict(network)
+            password = self._wifi_password_for_band(str(row.get("banda") or ""))
+            row["password"] = password
+            row["password_hidden"] = not bool(password)
+            if password:
+                revealed += 1
+            result.append(row)
+        if result and not revealed:
+            raise RuntimeError(
+                "Este firmware/login não expôs a senha Wi-Fi atual para leitura."
+            )
+        return result
+
+    # ------------------------------------------------------------------
 
     def _family_feature_reader(self, feature: str):
         readers = {
