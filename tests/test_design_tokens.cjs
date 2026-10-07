@@ -24,6 +24,17 @@ const nativeControlsLight = css("components/native_controls_light.css");
 const supportWorkbench = css("pages/support_workbench.css");
 const diagnosticsWorkbench = css("pages/diagnostics_workbench.css");
 const profileWorkbench = css("pages/profile_workbench.css");
+const tangerineBaseCompat = css("themes/tangerine_base_compat.css");
+const tangerineTerminalCompat = css("themes/tangerine_terminal_compat.css");
+const editorialWorkspace = css("layout/editorial_workspace.css");
+const dashboardTangerine = css("pages/dashboard_tangerine.css");
+const advancedTangerine = css("pages/advanced_tangerine.css");
+const historyTimeline = css("components/history_timeline.css");
+const connectionInventory = css("pages/connection_inventory.css");
+const clientsTangerine = css("pages/clients_tangerine.css");
+const deviceTangerine = css("pages/device_tangerine.css");
+const tr069Tangerine = css("pages/tr069_tangerine.css");
+const diagnosticsTangerine = css("pages/diagnostics_tangerine.css");
 
 const migratedConsumers = [
     ["structured forms", structuredForms],
@@ -36,6 +47,17 @@ const migratedConsumers = [
     ["diagnostics workbench", diagnosticsWorkbench],
     ["profile workbench", profileWorkbench],
     ["native light controls", nativeControlsLight],
+    ["Tangerine base compatibility", tangerineBaseCompat],
+    ["Tangerine terminal compatibility", tangerineTerminalCompat],
+    ["editorial workspace", editorialWorkspace],
+    ["dashboard Tangerine", dashboardTangerine],
+    ["advanced Tangerine", advancedTangerine],
+    ["history timeline", historyTimeline],
+    ["connection inventory", connectionInventory],
+    ["clients Tangerine", clientsTangerine],
+    ["device Tangerine", deviceTangerine],
+    ["TR-069 Tangerine", tr069Tangerine],
+    ["diagnostics Tangerine", diagnosticsTangerine],
 ];
 
 const legacyTangerineReference = /var\(--am-(?:bg|surface|sidebar|primary|primary-deep|primary-wash|selected|text|text-2|border|success|success-wash|warning|warning-wash|danger|danger-wash|primary-ink|shadow)\)/i;
@@ -44,6 +66,13 @@ test("Tangerine workflow stylesheet loads foundation then real page/component la
     assert.match(
         workflowsSource,
         /^@import url\("\.\/foundation\/tangerine_tokens\.css"\);\s*@import url\("\.\/pages\/support_workbench\.css"\);\s*@import url\("\.\/pages\/diagnostics_workbench\.css"\);\s*@import url\("\.\/pages\/profile_workbench\.css"\);\s*@import url\("\.\/pages\/workbench_responsive\.css"\);\s*@import url\("\.\/components\/operator_results\.css"\);/s,
+    );
+});
+
+test("Tangerine theme entrypoint delegates to functional owners", () => {
+    assert.match(
+        legacySource,
+        /^@import url\("\.\/foundation\/tangerine_tokens\.css"\);\s*@import url\("\.\/themes\/tangerine_base_compat\.css"\);\s*@import url\("\.\/pages\/dashboard_tangerine\.css"\);\s*@import url\("\.\/themes\/tangerine_terminal_compat\.css"\);\s*@import url\("\.\/layout\/editorial_workspace\.css"\);\s*@import url\("\.\/pages\/advanced_tangerine\.css"\);\s*@import url\("\.\/components\/history_timeline\.css"\);\s*@import url\("\.\/pages\/connection_inventory\.css"\);\s*@import url\("\.\/pages\/clients_tangerine\.css"\);\s*@import url\("\.\/pages\/device_tangerine\.css"\);\s*@import url\("\.\/pages\/tr069_tangerine\.css"\);\s*@import url\("\.\/pages\/diagnostics_tangerine\.css"\);/s,
     );
 });
 
@@ -85,9 +114,14 @@ test("canonical tokens own theme values and legacy names are aliases", () => {
     assert.match(tokensSource, /--am-transition-standard:180ms ease;/);
 });
 
-test("legacy Tangerine stylesheet does not define the canonical namespace", () => {
-    assert.doesNotMatch(legacySource, /--am-color-[a-z0-9-]+\s*:/i);
-    assert.doesNotMatch(legacySource, /--am-space-[a-z0-9-]+\s*:/i);
+test("Tangerine entrypoint and compat layers are not token sources", () => {
+    for (const [name, source] of [
+        ["Tangerine entrypoint", legacySource],
+        ["Tangerine base compatibility", tangerineBaseCompat],
+        ["Tangerine terminal compatibility", tangerineTerminalCompat],
+    ]) {
+        assert.doesNotMatch(source, /--[a-z0-9-]+\s*:/i, `${name} must consume foundation tokens`);
+    }
 });
 
 test("component entrypoints delegate instead of owning component rules", () => {
@@ -102,7 +136,7 @@ test("component entrypoints delegate instead of owning component rules", () => {
 
 test("migrated CSS consumers use canonical tokens directly", () => {
     for (const [name, source] of migratedConsumers) {
-        assert.match(source, /var\(--am-color-/i, `${name} should use canonical color tokens`);
+        assert.match(source, /var\(--am-(?:color|font|shadow)-/i, `${name} should use canonical design tokens`);
         assert.doesNotMatch(source, legacyTangerineReference, `${name} must not regress to Tangerine aliases`);
     }
 
