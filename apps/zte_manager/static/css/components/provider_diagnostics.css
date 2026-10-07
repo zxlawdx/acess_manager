@@ -84,7 +84,7 @@ html[data-theme] #page-supportDiagnostic .am-workstation-metric dd {
     overflow-wrap:break-word;
 }
 html[data-theme] #page-supportDiagnostic .am-workstation-caution {
-    margin:11px 0 0!important;color:var(--am-color-text-muted);
+    margin:11px 0 0;color:var(--am-color-text-muted);
     font:450 10.5px/1.6 var(--am-font-sans);
 }
 html[data-theme] #page-supportDiagnostic .am-remediation-list {
