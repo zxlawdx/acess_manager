@@ -1,0 +1,328 @@
+/* Legacy light-mode base corrections.
+ * Palette ownership lives in foundation/tangerine_tokens.css; this file only
+ * neutralizes dark-only structure that still exists in early stylesheets.
+ */
+html[data-theme="light"] {
+  color-scheme:light;
+  scrollbar-color:#b2c4b5 #edf2ed;
+}
+html[data-theme="light"] body,
+html[data-theme="light"] #vela-page,
+html[data-theme="light"] .app-shell,
+html[data-theme="light"] .workspace,
+html[data-theme="light"] .main-content,
+html[data-theme="light"] .page {
+  background:var(--ui-bg)!important;
+  background-image:none!important;
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] ::selection {
+  background:#cce9d5!important;
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .sidebar {
+  background:var(--ui-sidebar)!important;
+  background-image:none!important;
+  border-right:1px solid var(--ui-border)!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .console-ribbon {
+  color:var(--ui-muted)!important;
+  background:#e2e9e3!important;
+  border-color:var(--ui-border)!important;
+}
+html[data-theme="light"] .console-signature,
+html[data-theme="light"] .console-ribbon-right,
+html[data-theme="light"] #consoleHostText,
+html[data-theme="light"] .nav-caption,
+html[data-theme="light"] .brand-copy span,
+html[data-theme="light"] .target-head,
+html[data-theme="light"] .connection-state small {
+  color:var(--ui-muted)!important;
+}
+html[data-theme="light"] .brand-copy strong,
+html[data-theme="light"] .target-card strong,
+html[data-theme="light"] .connection-state strong {
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .brand-mark,
+html[data-theme="light"] .brand-mark svg {
+  background:var(--ui-accent)!important;
+  border-radius:5px!important;
+}
+html[data-theme="light"] .brand-mark svg rect:first-child {
+  fill:var(--ui-accent)!important;
+}
+html[data-theme="light"] .brand-mark svg path {
+  stroke:white!important;
+}
+html[data-theme="light"] .brand-mark svg rect:nth-child(2) {
+  stroke:#d6e9da!important;
+}
+html[data-theme="light"] .target-card,
+html[data-theme="light"] .connection-state {
+  background:var(--ui-surface)!important;
+  border:1px solid var(--ui-border)!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .menu-item,
+html[data-theme="light"] .sidebar-action {
+  background:transparent!important;
+  color:var(--ui-text-secondary)!important;
+  border-color:transparent!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .menu-item:not(.locked):hover,
+html[data-theme="light"] .sidebar-action:hover {
+  color:var(--ui-text)!important;
+  background:#dde9df!important;
+  border-color:var(--ui-border)!important;
+}
+html[data-theme="light"] .menu-item.active {
+  color:#1a5838!important;
+  background:var(--ui-surface)!important;
+  border:1px solid #b1c6b7!important;
+  box-shadow:inset 3px 0 var(--ui-accent)!important;
+}
+html[data-theme="light"] .menu-item .material-symbols-outlined,
+html[data-theme="light"] .console-action .material-symbols-outlined,
+html[data-theme="light"] .topbar .material-symbols-outlined {
+  color:var(--ui-muted)!important;
+}
+html[data-theme="light"] .menu-item.active .material-symbols-outlined {
+  color:var(--ui-accent)!important;
+}
+html[data-theme="light"] .topbar {
+  background:var(--ui-surface)!important;
+  border-bottom:1px solid var(--ui-border)!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .topbar-title h1,
+html[data-theme="light"] .section-intro h2,
+html[data-theme="light"] .login-hero h2 {
+  color:var(--ui-text)!important;
+  -webkit-text-fill-color:var(--ui-text)!important;
+  background:none!important;
+  text-shadow:none!important;
+}
+html[data-theme="light"] .topbar-title p,
+html[data-theme="light"] .section-intro p,
+html[data-theme="light"] .operations-copy,
+html[data-theme="light"] .panel p,
+html[data-theme="light"] .profile-banner p,
+html[data-theme="light"] .login-hero p {
+  color:var(--ui-text-secondary)!important;
+}
+html[data-theme="light"] .device-chip,
+html[data-theme="light"] .console-action,
+html[data-theme="light"] .icon-button,
+html[data-theme="light"] .zoom-control,
+html[data-theme="light"] .zoom-button,
+html[data-theme="light"] #themeToggle {
+  background:var(--ui-elevated)!important;
+  border:1px solid var(--ui-border)!important;
+  color:var(--ui-text-secondary)!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .panel,
+html[data-theme="light"] .kpi-card,
+html[data-theme="light"] .ssid-card,
+html[data-theme="light"] .radio-card,
+html[data-theme="light"] .wan-card,
+html[data-theme="light"] .client-card,
+html[data-theme="light"] .feature-card,
+html[data-theme="light"] .feature-control-card,
+html[data-theme="light"] .profile-card,
+html[data-theme="light"] .diagnostic-card,
+html[data-theme="light"] .credential-card,
+html[data-theme="light"] .support-result-card,
+html[data-theme="light"] .support-control-panel,
+html[data-theme="light"] .dashboard-health-panel,
+html[data-theme="light"] .management-status-strip > div,
+html[data-theme="light"] .management-list-item,
+html[data-theme="light"] .danger-zone {
+  background:var(--ui-surface)!important;
+  background-image:none!important;
+  border:1px solid var(--ui-border)!important;
+  box-shadow:var(--ui-shadow)!important;
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .panel h2,
+html[data-theme="light"] .panel h3,
+html[data-theme="light"] .profile-radio-card h3,
+html[data-theme="light"] .kpi-value,
+html[data-theme="light"] .wan-card h3,
+html[data-theme="light"] .ssid-card h3,
+html[data-theme="light"] .management-list-item strong {
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .panel-header,
+html[data-theme="light"] .subsection-title {
+  border-color:var(--ui-border-muted)!important;
+}
+html[data-theme="light"] .operations-strip,
+html[data-theme="light"] .ssid-card-head,
+html[data-theme="light"] .radio-card-hero,
+html[data-theme="light"] .wan-card-head,
+html[data-theme="light"] .wan-address,
+html[data-theme="light"] .network-overview-item,
+html[data-theme="light"] .profile-banner,
+html[data-theme="light"] .support-summary,
+html[data-theme="light"] .support-summary-metrics > div,
+html[data-theme="light"] .support-metric,
+html[data-theme="light"] .management-status-strip,
+html[data-theme="light"] .secret-line {
+  background:var(--ui-elevated)!important;
+  background-image:none!important;
+  color:var(--ui-text)!important;
+  border-color:var(--ui-border-muted)!important;
+}
+html[data-theme="light"] .kpi-head,
+html[data-theme="light"] .kpi-card small,
+html[data-theme="light"] .dual-metric small,
+html[data-theme="light"] .operations-strip .muted,
+html[data-theme="light"] .section-kicker,
+html[data-theme="light"] .eyebrow,
+html[data-theme="light"] .field > span,
+html[data-theme="light"] .form-group label,
+html[data-theme="light"] .management-list-item span,
+html[data-theme="light"] .management-list-item small {
+  color:var(--ui-muted)!important;
+}
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="light"] select,
+html[data-theme="light"] textarea,
+html[data-theme="light"] .management-search,
+html[data-theme="light"] .adaptive-search {
+  background:var(--ui-field)!important;
+  background-image:none!important;
+  color:var(--ui-text)!important;
+  border:1px solid #abbcaf!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder {
+  color:#64786b!important;
+  opacity:1;
+}
+html[data-theme="light"] input:focus,
+html[data-theme="light"] select:focus,
+html[data-theme="light"] textarea:focus {
+  border-color:var(--ui-accent)!important;
+  outline:2px solid #b8dcc1!important;
+  outline-offset:0!important;
+}
+html[data-theme="light"] input:disabled,
+html[data-theme="light"] select:disabled,
+html[data-theme="light"] button:disabled {
+  opacity:.59!important;
+  cursor:not-allowed;
+}
+html[data-theme="light"] input[type="checkbox"],
+html[data-theme="light"] input[type="radio"] {
+  accent-color:var(--ui-accent);
+}
+html[data-theme="light"] .button,
+html[data-theme="light"] button.button,
+html[data-theme="light"] .button.ghost,
+html[data-theme="light"] .sidebar-action {
+  background:var(--ui-surface)!important;
+  background-image:none!important;
+  color:var(--ui-text-secondary)!important;
+  border:1px solid var(--ui-border)!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .button:hover:not(:disabled),
+html[data-theme="light"] .console-action:hover,
+html[data-theme="light"] .icon-button:hover {
+  background:var(--ui-accent-wash)!important;
+  color:var(--ui-accent)!important;
+  border-color:#98bba1!important;
+}
+html[data-theme="light"] .button.primary,
+html[data-theme="light"] #connectButton,
+html[data-theme="light"] #applyProfileButton,
+html[data-theme="light"] #supportRunButton,
+html[data-theme="light"] .console-action.primary {
+  color:#ffffff!important;
+  background:var(--ui-accent)!important;
+  border:1px solid var(--ui-accent)!important;
+}
+html[data-theme="light"] .button.primary:hover:not(:disabled),
+html[data-theme="light"] #applyProfileButton:hover:not(:disabled) {
+  color:white!important;
+  background:#1f5237!important;
+}
+html[data-theme="light"] .button.danger,
+html[data-theme="light"] .sidebar-action.danger {
+  color:var(--ui-danger)!important;
+  background:var(--ui-danger-wash)!important;
+  border-color:#d8afa8!important;
+}
+html[data-theme="light"] .badge,
+html[data-theme="light"] .status-badge,
+html[data-theme="light"] .capability-pill,
+html[data-theme="light"] .hero-badge {
+  color:var(--ui-text-secondary)!important;
+  background:var(--ui-neutral-wash)!important;
+  border:1px solid var(--ui-border)!important;
+}
+html[data-theme="light"] .badge.ok,
+html[data-theme="light"] .badge.success,
+html[data-theme="light"] .badge-success,
+html[data-theme="light"] .capability-pill.enabled,
+html[data-theme="light"] .status-badge.online {
+  color:var(--ui-success)!important;
+  background:var(--ui-success-wash)!important;
+  border-color:#aacfb3!important;
+}
+html[data-theme="light"] .badge.warning,
+html[data-theme="light"] .status-badge.warning {
+  color:var(--ui-warning)!important;
+  background:var(--ui-warning-wash)!important;
+}
+html[data-theme="light"] .connection-error,
+html[data-theme="light"] .request-status-indicator.is-error,
+html[data-theme="light"] .error-list {
+  color:var(--ui-danger)!important;
+  background:var(--ui-danger-wash)!important;
+  border-color:#e9b2aa!important;
+}
+html[data-theme="light"] .connection-success,
+html[data-theme="light"] .request-status-indicator,
+html[data-theme="light"] .support-empty {
+  color:var(--ui-text-secondary)!important;
+  background:var(--ui-elevated)!important;
+  border-color:var(--ui-border)!important;
+}
+html[data-theme="light"] th,
+html[data-theme="light"] .management-table th {
+  background:#eaf0e9!important;
+  color:var(--ui-text-secondary)!important;
+  border-color:var(--ui-border)!important;
+}
+html[data-theme="light"] td,
+html[data-theme="light"] .management-table td {
+  color:var(--ui-text)!important;
+  border-color:var(--ui-border-muted)!important;
+}
+html[data-theme="light"] tr:nth-child(even) td {
+  background:#f7f9f6!important;
+}
+html[data-theme="light"] tr:hover td,
+html[data-theme="light"] .management-table tbody tr.selected {
+  background:#e3f0e6!important;
+}
+html[data-theme="light"] .status-led:not(.on),
+html[data-theme="light"] .capability-pill i {
+  background:#819588!important;
+}
+html[data-theme="light"] .switch-slider {
+  background:#b7c7b9!important;
+}
+html[data-theme="light"] .switch input:checked + .switch-slider {
+  background:#75b48c!important;
+}
+html[data-theme="light"] .switch-slider::after {
+  background:white!important;
+}
