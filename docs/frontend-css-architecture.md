@@ -24,7 +24,7 @@ Current direct stylesheet order:
 10. `f6201b_workbench.css` — F6201B workbench.
 11. `light_mode_refine.css` — ordered light-compatibility entrypoint.
 12. `dhcp_module.css` — DHCP feature.
-13. `tangerine.css` — current global Tangerine compatibility layer.
+13. `tangerine.css` — ordered Tangerine compatibility/feature entrypoint.
 14. `tangerine_forms.css` — compatibility entrypoint for structured forms.
 15. `tangerine_cards.css` — compatibility entrypoint for configuration cards.
 16. `tangerine_workflows.css` — compatibility entrypoint for workflow layers.
@@ -51,6 +51,28 @@ The old green `--ui-*` palette is no longer defined in the light layer. Its
 remaining neutral/native values were promoted to canonical `--am-color-*`
 tokens first, and `--ui-*` remains only an alias namespace in the foundation.
 The corrective rules themselves keep their former order and specificity.
+
+### `tangerine.css` internal order
+
+The former global Tangerine stylesheet is now an import-only entrypoint that
+preserves the previous effective rule order:
+
+1. `foundation/tangerine_tokens.css`
+2. `themes/tangerine_base_compat.css`
+3. `pages/dashboard_tangerine.css`
+4. `themes/tangerine_terminal_compat.css`
+5. `layout/editorial_workspace.css`
+6. `pages/advanced_tangerine.css`
+7. `components/history_timeline.css`
+8. `pages/connection_inventory.css`
+9. `pages/clients_tangerine.css`
+10. `pages/device_tangerine.css`
+11. `pages/tr069_tangerine.css`
+12. `pages/diagnostics_tangerine.css`
+
+`tangerine.css` owns no selectors and no token values. CI enforces the exact
+import order, a small entrypoint line budget, real owner existence, critical
+selector ownership and the absence of nested imports in those owners.
 
 ### `tangerine_workflows.css` internal order
 
@@ -102,6 +124,7 @@ Current extracted components include:
 - `configuration_cards.css`
 - `operator_results.css`
 - `native_controls_light.css`
+- `history_timeline.css`
 - `topology.css`
 - `firmware_inspector.css`
 - `shell_layout.css`
@@ -111,36 +134,57 @@ Current extracted components include:
 entrypoints so the existing shell asset order remains stable while real rules
 live in the component layer.
 
+### Layout
+
+`static/css/layout/` owns cross-page layout structures that are broader than one
+feature but are not token/theme definitions.
+
+- `editorial_workspace.css` — session bar, workspace header, onboarding shell,
+  shared section headings, management tab/status layout and responsive rules.
+
 ### Pages and features
 
 Page/workflow-specific rules belong in `static/css/pages/` once a real boundary
-has been identified. Current extracted page layers are:
+has been identified. Current extracted page layers include:
 
 - `support_workbench.css`
 - `diagnostics_workbench.css`
 - `profile_workbench.css`
 - `workbench_responsive.css`
+- `dashboard_tangerine.css`
+- `advanced_tangerine.css`
+- `connection_inventory.css`
+- `clients_tangerine.css`
+- `device_tangerine.css`
+- `tr069_tangerine.css`
+- `diagnostics_tangerine.css`
 
 Files such as `advanced.css`, `management.css`, `support_diagnostics.css`,
 `dhcp_module.css` and firmware-specific styles still predate this layering and
-should be reduced incrementally. Shared controls and visual primitives should
-move to components only when a real reuse boundary exists.
+should be reduced only when a concrete owner migration is justified. Shared
+controls and visual primitives should move to components only when a real reuse
+boundary exists.
 
 ### Themes / compatibility
 
-`static/css/themes/` contains corrective theme-specific rules that still exist
-because older stylesheets paint dark-only surfaces. These are compatibility
-layers, not a second design-token system:
+`static/css/themes/` contains corrective compatibility rules that still exist
+because older stylesheets paint conflicting surfaces. These files consume
+foundation tokens; they are not token sources.
 
-- `light_base_compat.css` — shell, controls and shared primitives;
+- `light_base_compat.css` — shell, controls and shared primitives in light mode;
 - `light_feature_compat.css` — adaptive firmware, management, support, F6201B
-  and profile-specific legacy corrections;
-- `light_console_compat.css` — high-specificity telecom-console corrections.
+  and profile-specific light corrections;
+- `light_console_compat.css` — high-specificity telecom-console light fixes;
+- `tangerine_base_compat.css` — base Vela DOM paint and shared primitives still
+  needed to supersede older NOC styling;
+- `tangerine_terminal_compat.css` — terminal/console compatibility, including
+  the intentionally dark diagnostic terminal surface.
 
-As components migrate to canonical tokens, these files should shrink. New
-component paint must not be added here merely to win the cascade.
+Compatibility layers must not define custom properties. As legacy components
+migrate to canonical tokens, these files should shrink instead of accumulating
+new unrelated feature paint.
 
-## Legacy corrective layers
+## Remaining legacy corrective layers
 
 ### `style.css`
 
@@ -151,26 +195,22 @@ New palette decisions must not be added there.
 ### `light_mode_refine.css`
 
 No longer owns theme values or component rules. It is an ordered compatibility
-entrypoint only. The actual remaining debt is visible in the three `themes/`
+entrypoint only. The remaining debt is visible in the three light `themes/`
 compatibility files and can now be reduced by real owner rather than by editing
 one global patch.
 
 ### `tangerine.css`
 
-Still acts as the largest global compatibility layer and repeats the old
-`--am-*` token values. The canonical token stylesheet loads later and therefore
-owns the final values. New reusable component rules must not be added to
-`tangerine.css`; move them to `components/` instead.
-
-The duplicated legacy token block remains the next major CSS cleanup candidate,
-but broad removal still requires visual validation because `tangerine.css`
-contains hundreds of high-specificity compatibility rules beyond that block.
+No longer owns design tokens, page rules or reusable components. It is an
+ordered compatibility/feature entrypoint only. New Tangerine work belongs in
+the appropriate `foundation/`, `themes/`, `layout/`, `components/` or `pages/`
+owner; adding selectors directly to `tangerine.css` is a regression.
 
 ### `tangerine_workflows.css`
 
-No longer owns page/component rules. It is now an ordered compatibility
-entrypoint only. New Support/Diagnostics/Profile layout work belongs in the
-corresponding `pages/` file; shared human-readable results belong in
+No longer owns page/component rules. It is an ordered compatibility entrypoint
+only. New Support/Diagnostics/Profile layout work belongs in the corresponding
+`pages/` file; shared human-readable results belong in
 `components/operator_results.css`.
 
 ## Specificity debt baseline
@@ -181,24 +221,16 @@ The first CI inventory after the template/bootstrap cleanup measured:
 - template inline `style="..."`: **2** occurrences, both in
   `pages/advanced/workbench_discovery.html`.
 
-The first proven-safe specificity cleanup removed one redundant declaration from
-`components/provider_diagnostics.css`, lowering the enforced ceiling to
-**1537**. The light-mode decomposition moves existing declarations to real
-owners but intentionally does not pretend that moving a declaration removes the
-specificity debt. Inline styles remain capped at **2**.
+One proven-safe cleanup removed a redundant declaration from
+`components/provider_diagnostics.css`. The subsequent #82 green CI measured the
+actual `main` baseline at **1536** `!important` declarations, with
+`tangerine.css` itself owning **545** of them. The Tangerine decomposition moves
+those same 545 declarations to explicit owners; it does not claim a specificity
+reduction. Inline styles remain capped at **2**.
 
-Largest original `!important` owners were:
-
-- `tangerine.css`: 545;
-- `light_mode_refine.css`: 234;
-- `brmodelo_workbench.css`: 197;
-- `tangerine_workflows.css`: 146;
-- `components/shell_layout.css`: 133;
-- `neutral_console.css`: 113.
-
-The workflow and light-mode declarations now live with explicit owners; they
-were moved, not silently deleted. `tangerine.css` remains the largest global
-corrective layer.
+The current Tangerine-split regression therefore requires the global
+`!important` total to remain exactly **1536**. A later cleanup may lower that
+value only together with evidence and an updated regression.
 
 ## `!important` policy
 
@@ -208,8 +240,9 @@ several compatibility layers. Remove an `!important` only when its owner and
 load order are known and there is evidence no competing important rule is
 required.
 
-CI prints the per-file inventory and enforces the current total as a maximum.
-Visual validation remains required before broad specificity cleanup.
+CI prints the per-file inventory and enforces the characterized total for the
+current Tangerine split. Visual validation remains required before broad
+specificity cleanup.
 
 ## State naming
 
@@ -232,9 +265,10 @@ a CSS-only PR.
 
 For each block:
 
-1. identify the real owner (foundation, component, page or feature);
+1. identify the real owner (foundation, theme compatibility, layout, component,
+   page or feature);
 2. preserve computed values and selector behavior;
-3. move the rules without creating a parallel copy;
+3. move rules without creating a parallel copy;
 4. keep a compatibility entrypoint only when runtime asset order requires it;
-5. extend structural tests;
+5. extend structural/token regressions;
 6. perform light/dark visual validation before removing corrective overrides.
