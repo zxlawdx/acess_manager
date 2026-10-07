@@ -93,7 +93,8 @@ HUAWEI_MODEL_REGISTRY: tuple[HuaweiModelProfile, ...] = (
         observed_auth_strategies=("rand_count", "rand_cookie_hash"),
         known_endpoint_signatures=(
             "/html/status/opticinfo.asp:stOpticInfo/6",
-            "/html/amp/opticinfo/opticinfo.asp:stOpticInfo/15",
+            "/html/amp/opticinfo/opticinfo.asp:stOpticInfo/8",
+            "/html/amp/opticinfo/opticinfo.asp:stOpticInfo/16",
             "/asp/GetRandCount.asp",
         ),
         known_cli_surfaces=(
@@ -107,6 +108,8 @@ HUAWEI_MODEL_REGISTRY: tuple[HuaweiModelProfile, ...] = (
             "loiklo/huawei-onu-to-graphite",
             "DictumMortuum/servus-extapi",
             "PayungsakCNR/ais-fibre-huawei-hg8010h-hacking",
+            "lilmayofuksu/huawei-gpon-thing",
+            "TheIcelandicguy/huawei_ont",
             "Marco d'Itri:Exploring the Huawei HG8010H GPON ONT",
             "CAPS:Acces ONT HG8010H et EG8010H",
             "hack-gpon.org:ont-huawei-hg8010h",
