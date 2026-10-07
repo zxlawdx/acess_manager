@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Iterable
@@ -22,6 +23,7 @@ class HuaweiAuthFlow(StrEnum):
 
     RAND_COUNT = "rand_count"
     RAND_STRING_SESSION_TOKEN = "rand_string_session_token"
+    RAND_COOKIE_HASH = "rand_cookie_hash"
     UNKNOWN = "unknown"
 
 
@@ -45,6 +47,22 @@ def clean_huawei_token(value: object) -> str:
     return str(value or "").lstrip("\ufeff").strip()
 
 
+def extract_huawei_challenge(value: object) -> str:
+    """Extract a challenge while preserving observed Huawei token variance.
+
+    Some RandCount responses are the token itself. Others include a prefix and
+    consumers independently observe the final 32 hexadecimal characters as the
+    challenge. Only that exact trailing-hex signature is sliced; arbitrary long
+    tokens remain untouched.
+    """
+
+    token = clean_huawei_token(value)
+    match = re.search(r"([0-9A-Fa-f]{32})$", token)
+    if match and len(token) > 32:
+        return match.group(1)
+    return token
+
+
 def plausible_huawei_token(value: object) -> bool:
     token = clean_huawei_token(value)
     lower = token.casefold()
@@ -62,6 +80,21 @@ def auth_flow_from_login_page(source: object) -> HuaweiAuthFlow:
     text = str(source or "").casefold()
     if "getrandstring.asp" in text:
         return HuaweiAuthFlow.RAND_STRING_SESSION_TOKEN
+
+    # Older HG8010H-family pages compute an authentication cookie from the
+    # random challenge instead of submitting UserName/PassWord in the ordinary
+    # RandCount form. Keep this distinct so Access Manager never sends the
+    # wrong credential-bearing request merely because GetRandCount is present.
+    legacy_cookie_markers = (
+        "rndsecurityformat",
+        "cookie=username:",
+        "cookie=rid=",
+    )
+    if "getrandcount.asp" in text and any(
+        marker in text for marker in legacy_cookie_markers
+    ):
+        return HuaweiAuthFlow.RAND_COOKIE_HASH
+
     if "getrandcount.asp" in text:
         return HuaweiAuthFlow.RAND_COUNT
     return HuaweiAuthFlow.UNKNOWN
@@ -98,7 +131,7 @@ def protocol_family_from_observations(
     amp_paths = tuple(
         path
         for path in normalized_paths
-        if path.casefold().startswith(("/html/amp/", "/html/bbsp/", "/html/ssmp/"))
+        if path.casefold().startswith(("/html/amp/", "/html/bbsp/", "/html/ssmp/", "/html/status/"))
     )
     if amp_paths:
         return HuaweiProtocolFamily.AMP_BBSP, tuple(dict.fromkeys(amp_paths))
@@ -107,7 +140,10 @@ def protocol_family_from_observations(
     # public login pages but never promote ASP_CONFIG without an observed ASP
     # configuration endpoint.
     joined = "\n".join(str(source or "") for source in sources).casefold()
-    if any(marker in joined for marker in ("/html/amp/", "/html/bbsp/", "/html/ssmp/")):
+    if any(
+        marker in joined
+        for marker in ("/html/amp/", "/html/bbsp/", "/html/ssmp/", "/html/status/")
+    ):
         return HuaweiProtocolFamily.AMP_BBSP, ("html-family-marker",)
 
     return HuaweiProtocolFamily.UNKNOWN, ()
