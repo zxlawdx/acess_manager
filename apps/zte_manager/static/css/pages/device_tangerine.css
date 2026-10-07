@@ -1,0 +1,86 @@
+/* Device page: authenticated identity, telemetry and opt-in maintenance. */
+html[data-theme] .am-device-summary {
+  display:flex;align-items:center;justify-content:space-between;
+  gap:18px;flex-wrap:wrap;padding:23px 27px;margin-bottom:14px;
+  border:1px solid var(--am-color-border);border-radius:17px;
+  background:var(--am-color-surface)!important;
+}
+html[data-theme] .am-device-identity {display:flex;align-items:center;gap:16px;min-width:0;}
+html[data-theme] .am-device-emblem {
+  display:grid;place-items:center;flex:none;width:65px;height:65px;
+  border-radius:17px;border:1px solid var(--am-color-selected);
+  background:var(--am-color-primary-wash);color:var(--am-color-primary-strong);font-size:32px!important;
+}
+html[data-theme] .am-device-state {
+  display:inline-flex;align-items:center;gap:7px;padding:3px 10px;
+  border-radius:20px;background:var(--am-color-success-wash);color:var(--am-color-success);
+  font:700 11px var(--am-font-sans);
+}
+html[data-theme] .am-device-state::before {content:"";height:6px;width:6px;background:currentColor;border-radius:50%;}
+html[data-theme] .am-device-identity h3 {
+  margin:6px 0 2px;color:var(--am-color-text)!important;
+  font:800 clamp(19px,2vw,27px)/1.25 var(--am-font-sans)!important;
+  letter-spacing:-.045em;
+}
+html[data-theme] .am-device-identity .mono {
+  color:var(--am-color-text-muted)!important;font:500 12px var(--am-font-mono)!important;
+  overflow-wrap:anywhere;
+}
+html[data-theme] .am-device-tools {display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+html[data-theme] .am-device-tools .button {
+  display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:9px 13px!important;
+}
+html[data-theme] .am-device-stats {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start;
+}
+html[data-theme] .am-device-stats .panel {
+  margin:0!important;min-width:0;box-shadow:none!important;border-radius:14px!important;
+}
+html[data-theme] .am-device-stats .panel-header {
+  border-bottom:1px solid var(--am-color-border);padding-bottom:15px;
+}
+html[data-theme] .am-device-maintenance {
+  display:block;margin-top:14px;background:var(--am-color-surface);
+  border:1px solid var(--am-color-border);border-radius:14px;min-width:0;overflow:hidden;
+}
+html[data-theme] .am-device-maintenance>summary {
+  display:flex;align-items:center;gap:13px;cursor:pointer;padding:17px 22px;list-style:none;
+}
+html[data-theme] .am-device-maintenance>summary::-webkit-details-marker {display:none;}
+html[data-theme] .am-device-maintenance>summary>.material-symbols-outlined:first-child {
+  display:grid;place-items:center;height:38px;width:38px;
+  border-radius:11px;background:var(--am-color-primary-wash);color:var(--am-color-primary-strong);
+}
+html[data-theme] .am-device-maintenance>summary span:nth-child(2) {
+  display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;
+}
+html[data-theme] .am-device-maintenance>summary strong {
+  font:750 13px var(--am-font-sans);color:var(--am-color-text);
+}
+html[data-theme] .am-device-maintenance>summary small {
+  font:450 11px/1.4 var(--am-font-sans);color:var(--am-color-text-muted);
+}
+html[data-theme] .am-device-chevron {
+  color:var(--am-color-text-muted);transition:transform .15s ease;
+}
+html[data-theme] .am-device-maintenance[open] .am-device-chevron {transform:rotate(180deg);}
+html[data-theme] .am-device-maintenance[open]>summary {
+  border-bottom:1px solid var(--am-color-border);background:var(--am-color-primary-wash);
+}
+html[data-theme] .am-device-maintenance-body {
+  margin:0!important;padding:17px!important;
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px!important;
+}
+html[data-theme] .am-device-maintenance-body>.panel {
+  margin:0!important;min-width:0;box-shadow:none!important;border-radius:11px!important;
+}
+@media(max-width:920px){
+  html[data-theme] .am-device-stats,
+  html[data-theme] .am-device-maintenance-body {
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  html[data-theme] .am-device-summary{padding:18px!important;}
+}
+@media(prefers-reduced-motion:reduce) {
+  html[data-theme] .am-device-chevron {transition:none!important;}
+}
