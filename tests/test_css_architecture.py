@@ -34,6 +34,14 @@ EXPECTED_STYLESHEET_ORDER = [
     "components/provider_diagnostics.css",
 ]
 
+EXPECTED_LIGHT_IMPORTS = [
+    "./foundation/tangerine_tokens.css",
+    "./themes/light_base_compat.css",
+    "./themes/light_feature_compat.css",
+    "./themes/light_console_compat.css",
+    "./components/native_controls_light.css",
+]
+
 EXPECTED_WORKFLOW_IMPORTS = [
     "./foundation/tangerine_tokens.css",
     "./pages/support_workbench.css",
@@ -73,6 +81,20 @@ def css_files() -> list[Path]:
     return sorted(CSS_ROOT.rglob("*.css"))
 
 
+def assert_import_entrypoint(test_case: unittest.TestCase, relative: str, expected: list[str]) -> None:
+    source = (CSS_ROOT / relative).read_text(encoding="utf-8")
+    imports = CSS_IMPORT.findall(source)
+    test_case.assertEqual(imports, expected)
+    for imported in imports:
+        target = (CSS_ROOT / imported).resolve()
+        with test_case.subTest(entrypoint=relative, imported=imported):
+            test_case.assertTrue(target.is_file(), f"missing import from {relative}: {imported}")
+
+    without_comments = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
+    without_imports = CSS_IMPORT.sub("", without_comments).strip()
+    test_case.assertEqual(without_imports, "", f"{relative} must remain an import-only entrypoint")
+
+
 class CssArchitectureTests(unittest.TestCase):
     def test_shell_stylesheet_order_is_explicit_unique_and_existing(self):
         refs = stylesheet_refs(SHELL.read_text(encoding="utf-8"))
@@ -86,18 +108,13 @@ class CssArchitectureTests(unittest.TestCase):
         refs = stylesheet_refs(INDEX.read_text(encoding="utf-8"))
         self.assertEqual(refs, EXPECTED_STYLESHEET_ORDER)
 
-    def test_workflow_entrypoint_preserves_layer_order_and_real_assets(self):
-        workflow = (CSS_ROOT / "tangerine_workflows.css").read_text(encoding="utf-8")
-        imports = CSS_IMPORT.findall(workflow)
-        self.assertEqual(imports, EXPECTED_WORKFLOW_IMPORTS)
-        for relative in imports:
-            target = (CSS_ROOT / relative).resolve()
-            with self.subTest(relative=relative):
-                self.assertTrue(target.is_file(), f"missing workflow import: {relative}")
+    def test_light_compatibility_entrypoint_preserves_layer_order(self):
+        assert_import_entrypoint(self, "light_mode_refine.css", EXPECTED_LIGHT_IMPORTS)
+        source = (CSS_ROOT / "light_mode_refine.css").read_text(encoding="utf-8")
+        self.assertNotRegex(source, r"--ui-[a-z0-9-]+\s*:")
 
-        without_comments = re.sub(r"/\*.*?\*/", "", workflow, flags=re.S)
-        without_imports = CSS_IMPORT.sub("", without_comments).strip()
-        self.assertEqual(without_imports, "", "workflow entrypoint must not regain page/component rules")
+    def test_workflow_entrypoint_preserves_layer_order_and_real_assets(self):
+        assert_import_entrypoint(self, "tangerine_workflows.css", EXPECTED_WORKFLOW_IMPORTS)
 
     def test_canonical_token_definitions_have_one_source_of_truth(self):
         definitions: dict[str, set[str]] = {}
@@ -106,7 +123,7 @@ class CssArchitectureTests(unittest.TestCase):
             for name in CANONICAL_DEFINITION.findall(source):
                 definitions.setdefault(name, set()).add(path.relative_to(CSS_ROOT).as_posix())
 
-        self.assertGreaterEqual(len(definitions), 25, "expected the canonical token vocabulary")
+        self.assertGreaterEqual(len(definitions), 30, "expected the canonical token vocabulary")
         for name, owners in sorted(definitions.items()):
             with self.subTest(token=name):
                 self.assertEqual(
