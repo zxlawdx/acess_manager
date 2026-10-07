@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any, Iterable
 
 from apps.zte_manager.model.wifi import (
@@ -44,12 +43,42 @@ def _int(value: Any | None) -> int | None:
         return None
 
 
-class HuaweiWifiMapper:
-    """Translate only mappings confirmed for the EG8041X7-10.
+def _bounded(name: str, value: int | None, minimum: int, maximum: int) -> int | None:
+    if value is None:
+        return None
+    if not minimum <= int(value) <= maximum:
+        raise HuaweiWifiMappingError(
+            f"{name} fora do intervalo caracterizado ({minimum}..{maximum})."
+        )
+    return int(value)
 
-    Unknown Huawei firmware enums are intentionally left unmapped instead of
-    guessing a protocol value. The legacy writer remains the fallback for
-    still-unvalidated mutations during the migration.
+
+def _channels_or_fallback(
+    observed: Iterable[str] | None,
+    fallback: tuple[str, ...],
+) -> tuple[str, ...]:
+    if observed is None:
+        return fallback
+    values = []
+    for item in observed:
+        value = str(item or "").strip()
+        if not value:
+            continue
+        normalized = "auto" if value.casefold() in {"auto", "automatic", "0"} else value
+        if normalized not in values:
+            values.append(normalized)
+    if "auto" not in values:
+        values.insert(0, "auto")
+    return tuple(values)
+
+
+class HuaweiWifiMapper:
+    """Translate mappings characterized for the EG8041 AMP/BBSP family.
+
+    The mappings originate from physically observed EG8041X7-10 behavior and
+    matching EG8041X6-10 WebUI/object signatures. Unknown firmware enums are
+    left unmapped instead of being guessed. Runtime family proof is responsible
+    for deciding whether this mapper may be used on another model.
     """
 
     @staticmethod
@@ -136,6 +165,7 @@ class HuaweiWifiMapper:
             dtim_period=_int(_value(rows, "DtimPeriod")),
             beacon_period=_int(_value(rows, "BeaconPeriod")),
             rts_threshold=_int(_value(rows, "RTSThreshold")),
+            fragmentation_threshold=_int(_value(rows, "FragThreshold")),
         )
 
     @staticmethod
@@ -145,7 +175,7 @@ class HuaweiWifiMapper:
     ) -> dict[str, Any]:
         """Compatibility mapper for the existing Huawei writer.
 
-        Only firmware mappings physically confirmed by the current integration
+        Only firmware mappings physically characterized by the EG8041 family
         are emitted. Unknown mutations fail closed instead of inventing codes.
         """
         legacy: dict[str, Any] = {}
@@ -186,23 +216,33 @@ class HuaweiWifiMapper:
                 )
             legacy["standard"] = raw_mode
 
-        mapping = {
-            "tx_power": "tx_power",
-            "regulatory_domain": "country",
-            "airtime_fairness": "airtime_fairness",
-            "band_steering": "band_steering",
-            "dtim_period": "dtim",
-            "beacon_period": "beacon_interval",
-            "rts_threshold": "rts_cts",
-        }
-        for source, target in mapping.items():
-            value = getattr(config, source)
-            if value is not None:
-                legacy[target] = value
+        if config.tx_power is not None:
+            legacy["tx_power"] = int(config.tx_power)
+        if config.regulatory_domain is not None:
+            legacy["country"] = config.regulatory_domain
+        if config.airtime_fairness is not None:
+            legacy["airtime_fairness"] = config.airtime_fairness
+        if config.band_steering is not None:
+            legacy["band_steering"] = config.band_steering
+        if config.dtim_period is not None:
+            legacy["dtim"] = _bounded("DTIM", config.dtim_period, 1, 255)
+        if config.beacon_period is not None:
+            legacy["beacon_interval"] = _bounded(
+                "Beacon period", config.beacon_period, 20, 1000
+            )
+        if config.rts_threshold is not None:
+            legacy["rts_cts"] = _bounded("RTS threshold", config.rts_threshold, 1, 2346)
+        if config.fragmentation_threshold is not None:
+            legacy["frag_threshold"] = _bounded(
+                "Fragmentation threshold",
+                config.fragmentation_threshold,
+                256,
+                2346,
+            )
         return legacy
 
 
-def eg8041x7_wifi_defaults() -> WifiConfiguration:
+def eg8041_family_wifi_defaults() -> WifiConfiguration:
     return WifiConfiguration(
         radio_2g=WifiRadioConfiguration(
             channel="auto",
@@ -214,6 +254,7 @@ def eg8041x7_wifi_defaults() -> WifiConfiguration:
             dtim_period=1,
             beacon_period=100,
             rts_threshold=2346,
+            fragmentation_threshold=2346,
         ),
         radio_5g=WifiRadioConfiguration(
             channel="auto",
@@ -226,18 +267,31 @@ def eg8041x7_wifi_defaults() -> WifiConfiguration:
             dtim_period=1,
             beacon_period=100,
             rts_threshold=2346,
+            fragmentation_threshold=2346,
         ),
     )
 
 
-def eg8041x7_wifi_capabilities() -> WifiCapabilities:
+def eg8041_family_wifi_capabilities(
+    *,
+    channels_2g: Iterable[str] | None = None,
+    channels_5g: Iterable[str] | None = None,
+    write: bool = True,
+) -> WifiCapabilities:
+    fallback_2g = ("auto", *(str(i) for i in range(1, 14)))
+    fallback_5g = (
+        "auto", "36", "40", "44", "48", "52", "56", "60", "64",
+        "100", "104", "108", "112", "116", "120", "124", "128",
+        "132", "136", "140", "144", "149", "153", "157", "161",
+        "auto_without_dfs",
+    )
     return WifiCapabilities(
         radio_2g=WifiRadioCapabilities(
             supported=True,
             read=True,
-            write=True,
+            write=write,
             channel=SupportedValueSet(
-                supported=("auto", *(str(i) for i in range(1, 14))),
+                supported=_channels_or_fallback(channels_2g, fallback_2g),
                 default="auto",
             ),
             channel_width=SupportedValueSet(
@@ -254,18 +308,14 @@ def eg8041x7_wifi_capabilities() -> WifiCapabilities:
             dtim_period=True,
             beacon_period=True,
             rts_threshold=True,
+            fragmentation_threshold=True,
         ),
         radio_5g=WifiRadioCapabilities(
             supported=True,
             read=True,
-            write=True,
+            write=write,
             channel=SupportedValueSet(
-                supported=(
-                    "auto", "36", "40", "44", "48", "52", "56", "60", "64",
-                    "100", "104", "108", "112", "116", "120", "124", "128",
-                    "132", "136", "140", "144", "149", "153", "157", "161",
-                    "auto_without_dfs",
-                ),
+                supported=_channels_or_fallback(channels_5g, fallback_5g),
                 default="auto",
             ),
             channel_width=SupportedValueSet(
@@ -286,5 +336,16 @@ def eg8041x7_wifi_capabilities() -> WifiCapabilities:
             dtim_period=True,
             beacon_period=True,
             rts_threshold=True,
+            fragmentation_threshold=True,
         ),
     )
+
+
+# Compatibility aliases. The implementation is now owned by the proven
+# EG8041 AMP/BBSP family, while existing imports remain stable.
+def eg8041x7_wifi_defaults() -> WifiConfiguration:
+    return eg8041_family_wifi_defaults()
+
+
+def eg8041x7_wifi_capabilities() -> WifiCapabilities:
+    return eg8041_family_wifi_capabilities()
