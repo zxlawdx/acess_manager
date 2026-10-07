@@ -75,29 +75,37 @@ def plausible_huawei_token(value: object) -> bool:
 
 
 def auth_flow_from_login_page(source: object) -> HuaweiAuthFlow:
-    """Resolve only explicit login-page evidence; never guess by model."""
+    """Resolve only explicit login-page evidence; never guess by model.
+
+    ``RndSecurityFormat.js`` is shared by Huawei WebUIs that still use the
+    ordinary RandCount form. Loading that script therefore says nothing about
+    whether credentials move through a derived authentication cookie. The
+    legacy flow is selected only when the page exposes an explicit derived
+    cookie format.
+    """
 
     text = str(source or "").casefold()
     if "getrandstring.asp" in text:
         return HuaweiAuthFlow.RAND_STRING_SESSION_TOKEN
 
+    if "getrandcount.asp" not in text:
+        return HuaweiAuthFlow.UNKNOWN
+
     # Older HG8010H-family pages compute an authentication cookie from the
     # random challenge instead of submitting UserName/PassWord in the ordinary
-    # RandCount form. Keep this distinct so Access Manager never sends the
-    # wrong credential-bearing request merely because GetRandCount is present.
+    # RandCount form. Only explicit cookie semantics are strong enough evidence
+    # for this variant. RndSecurityFormat.js alone is intentionally ignored.
     legacy_cookie_markers = (
-        "rndsecurityformat",
         "cookie=username:",
         "cookie=rid=",
     )
-    if "getrandcount.asp" in text and any(
-        marker in text for marker in legacy_cookie_markers
-    ):
+    if any(marker in text for marker in legacy_cookie_markers):
         return HuaweiAuthFlow.RAND_COOKIE_HASH
 
-    if "getrandcount.asp" in text:
-        return HuaweiAuthFlow.RAND_COUNT
-    return HuaweiAuthFlow.UNKNOWN
+    # Standard Huawei login pages may contain UserName, PassWord,
+    # x.X_HW_Token, /login.cgi and RndSecurityFormat.js together. In the
+    # absence of an explicit derived-cookie marker they remain RAND_COUNT.
+    return HuaweiAuthFlow.RAND_COUNT
 
 
 def protocol_family_from_observations(

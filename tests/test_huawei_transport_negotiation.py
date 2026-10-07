@@ -17,7 +17,10 @@ from apps.zte_manager.infrastructure.huawei.negotiating_client import (
     HuaweiTransportFailure,
     _trace_exchange,
 )
-from apps.zte_manager.infrastructure.huawei.protocol import HuaweiAuthFlow
+from apps.zte_manager.infrastructure.huawei.protocol import (
+    HuaweiAuthFlow,
+    auth_flow_from_login_page,
+)
 
 
 FIXTURES = Path("tests/fixtures/huawei/eg8041x6_10_local")
@@ -85,11 +88,65 @@ class SequencedSession:
 class HuaweiTransportNegotiationTests(unittest.TestCase):
     def _auth_frames(self):
         return [
-            ("GET", "/", FakeResponse(fixture("auth_root_login.html"))),
+            (
+                "GET",
+                "/",
+                FakeResponse(fixture("auth_root_login_rndsecurityformat.html")),
+            ),
             ("POST", "/asp/GetRandCount.asp", FakeResponse(fixture("auth_rand_count.txt"))),
             ("POST", "/login.cgi", FakeResponse(fixture("auth_login_success.html"))),
             ("POST", "/asp/getMenuArray.asp", FakeResponse(fixture("auth_menu_proof.asp"))),
         ]
+
+    def test_auth_flow_security_script_with_standard_randcount_form_stays_randcount(self):
+        source = fixture("auth_root_login_rndsecurityformat.html")
+        self.assertIn("RndSecurityFormat.js", source)
+        self.assertIn("UserName", source)
+        self.assertIn("PassWord", source)
+        self.assertIn("x.X_HW_Token", source)
+        self.assertNotIn("Cookie=rid=", source)
+        self.assertNotIn("Cookie=username:", source)
+        self.assertEqual(
+            auth_flow_from_login_page(source),
+            HuaweiAuthFlow.RAND_COUNT,
+        )
+
+    def test_auth_flow_explicit_derived_rid_cookie_is_legacy_hash(self):
+        source = """
+        <script src='/asp/GetRandCount.asp'></script>
+        <script src='/js/RndSecurityFormat.js'></script>
+        <script>var cookie = 'Cookie=rid=<derived>:Language:english:id=-1';</script>
+        """
+        self.assertEqual(
+            auth_flow_from_login_page(source),
+            HuaweiAuthFlow.RAND_COOKIE_HASH,
+        )
+
+    def test_auth_flow_explicit_username_cookie_is_legacy_hash(self):
+        source = """
+        <script src='/asp/GetRandCount.asp'></script>
+        <script>var cookie = 'Cookie=username:<derived>'; </script>
+        """
+        self.assertEqual(
+            auth_flow_from_login_page(source),
+            HuaweiAuthFlow.RAND_COOKIE_HASH,
+        )
+
+    def test_auth_flow_randstring_remains_session_token_flow(self):
+        self.assertEqual(
+            auth_flow_from_login_page(
+                '<script src="/html/ssmp/common/getRandString.asp"></script>'
+            ),
+            HuaweiAuthFlow.RAND_STRING_SESSION_TOKEN,
+        )
+
+    def test_auth_flow_plain_randcount_remains_randcount(self):
+        self.assertEqual(
+            auth_flow_from_login_page(
+                '<script src="/asp/GetRandCount.asp"></script>'
+            ),
+            HuaweiAuthFlow.RAND_COUNT,
+        )
 
     def test_untrusted_embedded_certificate_policy_is_centralized(self):
         client = HuaweiNegotiatingWebClient(
@@ -149,7 +206,7 @@ class HuaweiTransportNegotiationTests(unittest.TestCase):
         self.assertIs(raised.exception, tls_error)
         self.assertEqual(raised.exception.code, HuaweiTransportFailure.TLS_ERROR)
 
-    def test_explicit_https_80_uses_familyaware_randcount_without_http_probe(self):
+    def test_explicit_https_80_eg8041_security_script_uses_randcount_and_logs_in(self):
         initial = SequencedSession([], verify=False)
         authenticated = SequencedSession(self._auth_frames(), verify=False)
         with patch.object(
@@ -219,7 +276,7 @@ class HuaweiTransportNegotiationTests(unittest.TestCase):
         self.assertTrue(all(urlsplit(item["url"]).port == 80 for item in authenticated.calls))
 
     def test_real_session_factory_keeps_verify_false_after_familyaware_recreation(self):
-        root = FakeResponse(fixture("auth_root_login.html"))
+        root = FakeResponse(fixture("auth_root_login_rndsecurityformat.html"))
         challenge = FakeResponse(fixture("auth_rand_count.txt"))
         login = FakeResponse(fixture("auth_login_success.html"))
         proof = FakeResponse(fixture("auth_menu_proof.asp"))
@@ -257,6 +314,7 @@ class HuaweiTransportNegotiationTests(unittest.TestCase):
         self.assertTrue(initial_session is not client.session)
         self.assertFalse(client.session.verify)
         self.assertEqual(client.base_url, "https://192.0.2.10:80")
+        self.assertEqual(client.auth_flow, HuaweiAuthFlow.RAND_COUNT)
 
     def test_wrapped_connection_error_is_network_error_not_auth_rejected(self):
         prepared = requests.Request(
