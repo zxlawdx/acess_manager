@@ -1,0 +1,57 @@
+/* QtWebEngine popup and unthemed legacy controls, light mode only. */
+html[data-theme="light"] select,
+html[data-theme="light"] select option,
+html[data-theme="light"] select optgroup,
+html[data-theme="light"] .field select,
+html[data-theme="light"] .form-group select,
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="light"] textarea {
+    color-scheme:light!important;
+    background-color:var(--am-color-native-surface)!important;
+    color:var(--am-color-native-text)!important;
+    border-color:var(--am-color-native-border)!important;
+    -webkit-text-fill-color:var(--am-color-native-text)!important;
+}
+html[data-theme="light"] select option:checked {
+    background-color:var(--am-color-native-selected-bg)!important;
+    color:var(--am-color-native-selected-text)!important;
+    -webkit-text-fill-color:var(--am-color-native-selected-text)!important;
+}
+html[data-theme="light"] select option:disabled {
+    background-color:var(--am-color-native-disabled-bg)!important;
+    color:var(--am-color-native-disabled-text)!important;
+    -webkit-text-fill-color:var(--am-color-native-disabled-text)!important;
+}
+html[data-theme="light"] .card,
+html[data-theme="light"] .capability-card,
+html[data-theme="light"] .feature-item,
+html[data-theme="light"] .advanced-card,
+html[data-theme="light"] .history-card,
+html[data-theme="light"] #trackerDiscoverySection .operation-row,
+html[data-theme="light"] #page-advanced .operation-row,
+html[data-theme="light"] .hero-flow > div {
+    background-color:var(--am-color-native-surface)!important;
+    background-image:none!important;
+    color:var(--am-color-native-text)!important;
+    border-color:var(--am-color-native-border)!important;
+    box-shadow:none!important;
+}
+html[data-theme="light"] .capability-card strong,
+html[data-theme="light"] .hero-flow > div strong,
+html[data-theme="light"] #page-advanced .operation-row strong {
+    color:var(--am-color-native-text)!important;
+    -webkit-text-fill-color:var(--am-color-native-text)!important;
+}
+html[data-theme="light"] .capability-card p,
+html[data-theme="light"] .capability-card .operation-meta,
+html[data-theme="light"] .hero-flow > div small,
+html[data-theme="light"] #trackerDiscoveryStatus,
+html[data-theme="light"] #trackerDiscoverySection .muted,
+html[data-theme="light"] #page-advanced .operation-row .muted {
+    color:var(--am-color-text-muted)!important;
+    -webkit-text-fill-color:var(--am-color-text-muted)!important;
+}
+html[data-theme="light"] .hero-flow > div > span {
+    color:var(--am-color-primary-strong)!important;
+    -webkit-text-fill-color:var(--am-color-primary-strong)!important;
+}

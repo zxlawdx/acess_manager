@@ -1,0 +1,223 @@
+/* Technical outputs: legible without forcing a dark terminal background. */
+html[data-theme="light"] .terminal-output,
+html[data-theme="light"] .firmware-json,
+html[data-theme="light"] .management-json-editor,
+html[data-theme="light"] .management-code-output,
+html[data-theme="light"] .management-terminal,
+html[data-theme="light"] .operations-output,
+html[data-theme="light"] .adaptive-field {
+  background:#f3f7f3!important;
+  background-image:none!important;
+  color:#20372a!important;
+  border:1px solid var(--ui-border)!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .terminal-output *,
+html[data-theme="light"] .firmware-json *,
+html[data-theme="light"] .management-code-output * {
+  color:inherit!important;
+}
+/* Model discovery is an old dark-only component; cover every depth. */
+html[data-theme="light"] .adaptive-report,
+html[data-theme="light"] .adaptive-card,
+html[data-theme="light"] .adaptive-summary,
+html[data-theme="light"] .adaptive-route-category summary,
+html[data-theme="light"] .adaptive-route-row,
+html[data-theme="light"] .adaptive-nested,
+html[data-theme="light"] .adaptive-empty,
+html[data-theme="light"] .adaptive-errors {
+  color:var(--ui-text)!important;
+  background:var(--ui-surface)!important;
+  background-image:none!important;
+  border-color:var(--ui-border)!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] .adaptive-summary {
+  background:var(--ui-accent-wash)!important;
+}
+html[data-theme="light"] .adaptive-score,
+html[data-theme="light"] .adaptive-badge.is-ok {
+  background:var(--ui-success-wash)!important;
+  border-color:#aed1b4!important;
+  color:var(--ui-success)!important;
+}
+html[data-theme="light"] .adaptive-eyebrow,
+html[data-theme="light"] .adaptive-record-index,
+html[data-theme="light"] .adaptive-choice-group legend,
+html[data-theme="light"] .adaptive-nested h4,
+html[data-theme="light"] .adaptive-field dt,
+html[data-theme="light"] .adaptive-route-row small,
+html[data-theme="light"] .adaptive-progress,
+html[data-theme="light"] .adaptive-summary p,
+html[data-theme="light"] .adaptive-empty,
+html[data-theme="light"] .adaptive-choice-note {
+  color:var(--ui-text-secondary)!important;
+}
+html[data-theme="light"] .adaptive-field dd {
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .management-tab {
+  color:var(--ui-text-secondary)!important;
+  background:var(--ui-surface)!important;
+  border-color:var(--ui-border)!important;
+}
+html[data-theme="light"] .management-tab.active,
+html[data-theme="light"] .management-tab:hover {
+  color:var(--ui-accent)!important;
+  background:var(--ui-accent-wash)!important;
+  border-color:#9cc5a7!important;
+}
+html[data-theme="light"] .management-monitor-chart,
+html[data-theme="light"] .topology-node {
+  background:var(--ui-elevated)!important;
+  color:var(--ui-text)!important;
+  border:1px solid var(--ui-border)!important;
+}
+html[data-theme="light"] .management-list-item span,
+html[data-theme="light"] .management-list-item small,
+html[data-theme="light"] .topology-node span {
+  color:var(--ui-text-secondary)!important;
+}
+html[data-theme="light"] .support-control-panel::after {
+  display:none!important;
+}
+html[data-theme="light"] .support-result-card,
+html[data-theme="light"] .support-summary,
+html[data-theme="light"] .support-metric,
+html[data-theme="light"] .finding-item {
+  background:var(--ui-surface)!important;
+  color:var(--ui-text)!important;
+  border-color:var(--ui-border)!important;
+}
+html[data-theme="light"] .finding-copy p,
+html[data-theme="light"] .support-summary p,
+html[data-theme="light"] .support-summary h3,
+html[data-theme="light"] .support-metric strong {
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] .finding-copy small,
+html[data-theme="light"] .support-metric span,
+html[data-theme="light"] .channel-score span,
+html[data-theme="light"] .speed-hero-grid span {
+  color:var(--ui-text-secondary)!important;
+}
+/* The experimental F6201B pane had literal dark-only colors. */
+html[data-theme="light"] .f6201b-editor,
+html[data-theme="light"] .f6201b-inline-result,
+html[data-theme="light"] .f6201b-diff-item,
+html[data-theme="light"] .f6201b-warning {
+  background:var(--ui-elevated)!important;
+  color:var(--ui-text)!important;
+  border:1px solid var(--ui-border)!important;
+}
+html[data-theme="light"] .f6201b-badge {
+  background:var(--ui-warning-wash)!important;
+  color:var(--ui-warning)!important;
+}
+html[data-theme="light"] .f6201b-badge.enabled,
+html[data-theme="light"] .f6201b-diff-item strong,
+html[data-theme="light"] .f6201b-message.success {
+  background:var(--ui-success-wash)!important;
+  color:var(--ui-success)!important;
+}
+html[data-theme="light"] .f6201b-field,
+html[data-theme="light"] .f6201b-message,
+html[data-theme="light"] .f6201b-inline-result p {
+  color:var(--ui-text-secondary)!important;
+}
+html[data-theme="light"] .f6201b-field input,
+html[data-theme="light"] .f6201b-field select,
+html[data-theme="light"] .f6201b-confirm,
+html[data-theme="light"] .f6201b-ssid-form .f6201b-inline-result input {
+  background:var(--ui-field)!important;
+  color:var(--ui-text)!important;
+  border:1px solid var(--ui-border)!important;
+}
+html[data-theme="light"] #f6201b-workbench {
+  background:var(--ui-surface)!important;
+  color:var(--ui-text)!important;
+  border-color:var(--ui-border)!important;
+}
+html[data-theme="light"] #f6201b-workbench .f6201b-wb-routes {
+  background:var(--ui-sidebar)!important;
+}
+html[data-theme="light"] #f6201b-workbench .f6201b-wb-item:hover,
+html[data-theme="light"] #f6201b-workbench .f6201b-wb-item.is-active {
+  background:var(--ui-accent-wash)!important;
+}
+html[data-theme="light"] #f6201b-workbench .f6201b-wb-status,
+html[data-theme="light"] #f6201b-workbench .f6201b-wb-table th {
+  background:var(--ui-elevated)!important;
+  color:var(--ui-text)!important;
+}
+/* Technician profiles are editors rather than dashboard hero cards. */
+#profileRadios {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+  align-items:start;
+  margin:14px 0 16px;
+}
+#profileRadios .profile-radio-card,
+#profileRadios .profile-loading-card {
+  min-width:0;
+}
+#profileRadios .profile-radio-card .radio-card-hero {
+  padding:13px 16px;
+}
+#profileRadios .profile-radio-card .profile-fields {
+  padding-top:11px;
+}
+#profileRadios .profile-loading-card {
+  min-height:112px;
+}
+#profileApplyResult .profile-action-success {
+  padding:13px 15px;
+  border-radius:5px;
+  border:1px solid var(--ui-success);
+  background:var(--ui-success-wash);
+  color:var(--ui-text);
+  font-size:12px;
+  line-height:1.55;
+}
+#profileApplyResult .profile-action-error {
+  padding:13px 15px;
+  border-radius:5px;
+  border:1px solid var(--ui-danger);
+  background:var(--ui-danger-wash);
+  color:var(--ui-text);
+  overflow-wrap:anywhere;
+}
+#profileApplyResult .profile-action-error strong {
+  display:block;
+  font-size:13px;
+  color:var(--ui-danger);
+}
+#profileApplyResult .profile-action-error p {
+  margin:7px 0;
+  color:var(--ui-text);
+  white-space:pre-wrap;
+  font-size:12px;
+}
+#profileApplyResult .profile-action-error small {
+  color:var(--ui-text-secondary);
+  font-size:11px;
+}
+html[data-theme="light"] .profile-loading-card {
+  background:var(--ui-elevated)!important;
+  border-style:dashed!important;
+  color:var(--ui-text)!important;
+}
+html[data-theme="light"] #profileApplyResult .profile-experiment-warning {
+  color:var(--ui-text)!important;
+  background:var(--ui-warning-wash)!important;
+  border-color:var(--ui-warning)!important;
+}
+@media(max-width:1060px){
+  #profileRadios {grid-template-columns:1fr;gap:12px}
+}
+@media(max-width:750px){
+  html[data-theme="light"] .sidebar {border-right-color:var(--ui-border)!important}
+  html[data-theme="light"] .topbar {padding:11px 14px!important}
+  #profileRadios {gap:10px}
+}
