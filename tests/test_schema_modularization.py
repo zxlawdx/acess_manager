@@ -20,7 +20,7 @@ EXPECTED_CONTRACTS = {
     "DnsRequest", "DriftRequest", "FilterGlobalManagementRequest",
     "FirewallManagementRequest", "FirewallRuleManagementRequest",
     "FirmwareRegisterRequest", "FirmwareUpgradeRequest",
-    "GatewayCommandRequest", "HuaweiFeatureUpdateRequest",
+    "GatewayCommandRequest", "HuaweiCliRequest", "HuaweiFeatureUpdateRequest",
     "HuaweiIPv4FilterDeleteRequest", "HuaweiIPv4FilterRuleRequest",
     "InventorySyncRequest", "InventoryUpdateRequest", "ManagementBackupRequest",
     "ManagementProfileRequest", "MeshConfigRequest", "MeshPairRequest",

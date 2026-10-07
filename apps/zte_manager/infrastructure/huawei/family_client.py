@@ -11,6 +11,7 @@ from .protocol import (
     HuaweiProtocolFingerprint,
     auth_flow_from_login_page,
     clean_huawei_token,
+    extract_huawei_challenge,
     plausible_huawei_token,
     protocol_family_from_observations,
 )
@@ -81,14 +82,20 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             evidence=self.protocol_evidence,
         ).as_dict()
 
+    def _record_evidence(self, *values: str) -> None:
+        self.protocol_evidence = tuple(
+            dict.fromkeys((
+                *self.protocol_evidence,
+                *(str(value) for value in values if value),
+            ))
+        )
+
     def _record_family(self, *paths: str, sources=()) -> None:
         family, evidence = protocol_family_from_observations(paths, sources=sources)
         if family is HuaweiProtocolFamily.UNKNOWN:
             return
         self.protocol_family = family
-        self.protocol_evidence = tuple(
-            dict.fromkeys((*self.protocol_evidence, *evidence))
-        )
+        self._record_evidence(*evidence)
 
     def _fetch_rand_count(self):
         headers = {
@@ -104,24 +111,31 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             allow_redirects=False,
         )
         if plausible_huawei_token(response.text):
+            self._record_evidence("auth:rand-count-post")
             return response
         # Some independently observed Huawei WebUIs use GET for the same
         # challenge endpoint. Falling back here is safe because no credential
         # has been submitted yet.
-        return self.session.get(
+        response = self.session.get(
             self.url(RAND_PATH),
             headers={"Referer": self.base_url + "/"},
             timeout=self.timeout,
             allow_redirects=False,
         )
+        if plausible_huawei_token(response.text):
+            self._record_evidence("auth:rand-count-get")
+        return response
 
     def _fetch_rand_string(self):
-        return self.session.get(
+        response = self.session.get(
             self.url(RAND_STRING_PATH),
             headers={"Referer": self.base_url + "/"},
             timeout=self.timeout,
             allow_redirects=False,
         )
+        if plausible_huawei_token(response.text):
+            self._record_evidence("auth:rand-string-get")
+        return response
 
     def _select_auth_flow(self, login_html: str) -> HuaweiAuthFlow:
         explicit = auth_flow_from_login_page(login_html)
@@ -176,7 +190,7 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
 
     def _authenticate_rand_count(self) -> bool:
         challenge_response = self._fetch_rand_count()
-        challenge = clean_huawei_token(challenge_response.text)
+        challenge = extract_huawei_challenge(challenge_response.text)
         if not plausible_huawei_token(challenge):
             raise RuntimeError("Huawei RandCount challenge was not returned")
 
@@ -261,6 +275,15 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             return self._authenticate_rand_string()
         if flow is HuaweiAuthFlow.RAND_COUNT:
             return self._authenticate_rand_count()
+        if flow is HuaweiAuthFlow.RAND_COOKIE_HASH:
+            # This variant is characterized for older HG8010H-family firmware,
+            # but not implemented because its credential/cookie derivation has
+            # not been physically validated in Access Manager. Crucially, do
+            # not fall through to ordinary RandCount and submit credentials.
+            raise RuntimeError(
+                "Fluxo Huawei RandCount com cookie derivado reconhecido, "
+                "mas ainda não habilitado para autenticação."
+            )
         raise RuntimeError("Fluxo de autenticação Huawei não reconhecido.")
 
     def login(self, retries: int = 1) -> bool:

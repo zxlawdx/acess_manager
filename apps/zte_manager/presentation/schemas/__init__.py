@@ -1,4 +1,4 @@
-from .connection import AdminPasswordRequest, ConnectRequest
+from .connection import AdminPasswordRequest, ConnectRequest, HuaweiCliRequest
 from .device import CapabilityProbeRequest
 from .diagnostics import (
     AttendanceReportRequest,
@@ -104,6 +104,7 @@ __all__ = [
     "FirmwareRegisterRequest",
     "FirmwareUpgradeRequest",
     "GatewayCommandRequest",
+    "HuaweiCliRequest",
     "HuaweiFeatureUpdateRequest",
     "HuaweiIPv4FilterDeleteRequest",
     "HuaweiIPv4FilterRuleRequest",

@@ -1,0 +1,13 @@
+WAP>display optic
+LinkStatus  : ok
+Voltage      : 3317 (mV)
+Bias         : 7 (mA)
+Temperature  : 53 (C)
+RxPower      : -19.07 (dBm)
+TxPower      : 2.16 (dBm)
+RfRxPower    : -- (dBm)
+RfOutputPower: -- (dBmV)
+VendorName   : HUAWEI
+VendorSN     : REDACTED
+success!
+WAP>

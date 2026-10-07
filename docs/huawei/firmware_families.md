@@ -9,16 +9,18 @@ This name describes the generated Huawei WebUI surface containing combinations o
 - `/html/ssmp/`
 - `/html/amp/`
 - `/html/bbsp/`
+- older `/html/status/` read pages
 - `/login.cgi`
 - JavaScript constructor records such as device/WAN/Ethernet/ONT state objects
 
-The family can contain more than one authentication strategy.
+The family can contain more than one authentication strategy and more than one endpoint generation.
 
 ### Auth variant: `rand_count`
 
 Evidence:
 
 - Access Manager local EG8041X7-10 implementation;
+- HG8010H/EG8010H newer firmware research;
 - `Erenn0989/huawei-ont-mcp` on an HG8245X6-family ISP firmware;
 - `chickenzord/go-huawei-client` on EG8145V5;
 - `logon84/Huawei-Optistar-EG8145X6-10-remote-login-example` on EG8145X6-10.
@@ -32,7 +34,27 @@ Common shape:
 -> /html/{ssmp,amp,bbsp}/...
 ```
 
-`x.X_HW_Token` is used in login payloads. Details differ: method used for the challenge, proof-of-login page and possible TCP connection affinity are firmware-specific.
+`x.X_HW_Token` is used in login payloads. Details differ by firmware:
+
+- challenge may be requested with POST or GET;
+- some responses are the token itself while one HG8010H exporter observes a
+  larger response whose final 32 hexadecimal characters are the token;
+- proof-of-login pages differ;
+- HG8245X6 material reports possible challenge/login TCP affinity.
+
+Access Manager records POST-vs-GET challenge evidence and only applies the
+trailing-32 extraction to the exact 32-hex suffix signature.
+
+### Auth variant: `rand_cookie_hash`
+
+Older HG8010H research shows a materially different generation where a
+RandCount challenge participates in a derived authentication cookie instead of
+the ordinary UserName/PassWord RandCount form. `RndSecurityFormat` and derived
+cookie markers characterize this variant.
+
+Access Manager currently **recognizes and refuses** this flow before submitting
+credentials. It is not treated as ordinary RandCount and no external credential
+derivation/bypass implementation was copied.
 
 ### Auth variant: `rand_string_session_token`
 
@@ -46,6 +68,18 @@ Evidence: `siedgustavo/huawei-ont-stats` on EG8021V5.
 ```
 
 This is not treated as a cosmetic variation of RandCount. The challenge endpoint and post-login token lifecycle are different enough to justify a separate auth strategy while keeping the same shared transport/session abstraction.
+
+### Optical endpoint/signature variants
+
+Cross-source HG8010H/Huawei WebUI evidence includes:
+
+- `/html/status/opticinfo.asp` with `stOpticInfo/6`;
+- `/html/amp/opticinfo/opticinfo.asp` with `stOpticInfo/8`;
+- `/html/amp/opticinfo/opticinfo.asp` with extended `stOpticInfo/16`.
+
+These are modeled as endpoint/signature variants inside the generated WebUI
+family. Access Manager does not infer units/positions for any other argument
+count.
 
 ## `asp_config`
 
@@ -63,15 +97,16 @@ Unknown is a valid state and preferable to assigning a model to the wrong family
 
 ## Detection rules
 
-The first implementation uses these conservative rules:
+The implementation uses these conservative rules:
 
 1. public login-page markers can select an auth strategy before credential submission;
 2. read-only challenge endpoints may be probed when the login page is ambiguous;
-3. observed `/html/ssmp|amp|bbsp/` endpoints establish `amp_bbsp` evidence;
+3. observed `/html/ssmp|amp|bbsp|status/` endpoints establish generated-WebUI/`amp_bbsp` evidence;
 4. actually observed `/asp/GetConfig.asp` or `/asp/SetConfig.asp` establishes `asp_config` evidence;
 5. model name is recorded independently and is never sufficient to choose all behavior;
 6. firmware version is retained when found in authenticated device information;
-7. an unknown model can be identified with medium confidence without being marked as a locally verified profile.
+7. an unknown operational profile can be model-recognized without becoming locally verified;
+8. feature support is promoted only by an endpoint/transport response plus a successful parser.
 
 ## Capability promotion
 
@@ -80,7 +115,7 @@ Protocol-family detection and feature capabilities are separate decisions.
 For a read feature:
 
 ```text
-endpoint exists
+endpoint or already-enabled CLI transport exists
 + recognizable response
 + parser succeeds
 = READ_SUPPORTED
@@ -91,6 +126,9 @@ For a write feature, endpoint presence is insufficient. Payload, mapping and sem
 ## Current validation status
 
 - **EG8041X7-10 RandCount:** existing local/physical evidence predates this PR; regressions must preserve it.
+- **HG8010H newer RandCount + optical/WAP telemetry:** multiple external sources + sanitized characterization fixtures + automated tests; **not physically validated in this PR**.
+- **HG8010H older derived-cookie auth:** externally observed; recognized but deliberately unsupported for authentication.
+- **EG8010H:** external family evidence; recognized only, not promoted to HG8010H read support by model similarity.
 - **EG8021V5 RandString:** observed in external firmware/source; implemented and fixture-tested in Access Manager; **pending physical validation on a real device**.
 - **HG8245X6 same-TCP RandCount:** externally observed; **not implemented as strict socket affinity yet**.
 - **EG8145V5 / EG8145X6-10 RandCount:** externally observed; family evidence only, not a promise of all EG8041 features.

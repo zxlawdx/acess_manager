@@ -1,0 +1,6 @@
+WAP>display onu info
+GPON ONU information
+status:O5
+On Line: 0 Days 3 Hour 17 Min 24 Sec
+success!
+WAP>

@@ -7,9 +7,12 @@ from typing import Any
 
 from apps.zte_manager.infrastructure.huawei import HuaweiFamilyAwareWebClient
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
+from apps.zte_manager.model.device_adapters.huawei_registry import (
+    is_recognized_huawei_model,
+)
 from apps.zte_manager.services.huawei_service import HuaweiService
-from apps.zte_manager.services.huawei_wifi_domain_runtime import (
-    HuaweiWifiDomainRuntimeService,
+from apps.zte_manager.services.huawei_telemetry_runtime import (
+    HuaweiTelemetryRuntimeService,
 )
 from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
@@ -58,7 +61,7 @@ class DeviceService:
         self,
         *,
         zte_provider: ZTEService | None = None,
-        huawei_factory=HuaweiWifiDomainRuntimeService,
+        huawei_factory=HuaweiTelemetryRuntimeService,
         huawei_client_type=HuaweiFamilyAwareWebClient,
     ) -> None:
         self._zte_service = zte_provider or zte_service
@@ -123,9 +126,14 @@ class DeviceService:
         https: bool = False,
         attendant: str | None = None,
         model_hint: str | None = None,
+        huawei_cli: dict | None = None,
     ) -> dict:
-        manual_huawei = is_known_huawei_model(
-            model_hint
+        # Knowledge-registry recognition routes the request to the Huawei
+        # provider, but does not grant an operational profile/capability. The
+        # Huawei runtime still requires auth + real endpoint probes.
+        manual_huawei = (
+            is_known_huawei_model(model_hint)
+            or is_recognized_huawei_model(model_hint)
         )
         detected_huawei = False
 
@@ -149,8 +157,10 @@ class DeviceService:
                 https=https,
                 attendant=attendant,
                 model_hint=model_hint,
+                huawei_cli=huawei_cli,
             )
 
+        # Huawei-only CLI options must never leak into ZTE providers.
         return self._connect_zte(
             ip=ip,
             username=username,
@@ -194,6 +204,12 @@ class DeviceService:
                 self._zte_service.disconnect()
             service = self._huawei_factory()
 
+        # Legacy/injected HuaweiService providers predate optional CLI support.
+        # Do not change their call contract when the operator did not request
+        # CLI. The default telemetry runtime receives the explicit mapping when
+        # present and remains the only provider that interprets it.
+        if kwargs.get("huawei_cli") is None:
+            kwargs.pop("huawei_cli", None)
         result = service.connect(**kwargs)
         provider_name = (
             "HuaweiService"

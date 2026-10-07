@@ -31,6 +31,11 @@ def connect(context=None):
             https=data.https,
             attendant=data.attendant,
             model_hint=data.model_hint,
+            huawei_cli=(
+                data.huawei_cli.model_dump()
+                if data.huawei_cli is not None
+                else None
+            ),
         )
     return _safe_call(action)
 
