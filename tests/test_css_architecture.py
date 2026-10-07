@@ -35,8 +35,26 @@ EXPECTED_STYLESHEET_ORDER = [
 ]
 
 STYLE_REF = re.compile(r"static\(['\"]zte_manager/css/([^'\"]+)['\"]\)")
-CANONICAL_DEFINITION = re.compile(r"(--am-(?:color|space|radius|focus|transition|z|font|shadow)-[a-z0-9-]+)\s*:", re.I)
+CANONICAL_DEFINITION = re.compile(
+    r"(--am-(?:"
+    r"color-[a-z0-9-]+|"
+    r"space-[a-z0-9-]+|"
+    r"radius-[a-z0-9-]+|"
+    r"focus-[a-z0-9-]+|"
+    r"transition-[a-z0-9-]+|"
+    r"z-[a-z0-9-]+|"
+    r"font-(?:sans|mono)|"
+    r"shadow-[a-z0-9-]+"
+    r"))\s*:",
+    re.I,
+)
 INLINE_STYLE = re.compile(r"\sstyle\s*=\s*['\"]", re.I)
+
+# First measured after the template/bootstrap cleanup. These are ceilings, not
+# goals: dedicated cleanup PRs must lower them rather than silently growing the
+# specificity/inline-style debt again.
+IMPORTANT_BASELINE = 1538
+INLINE_STYLE_BASELINE = 2
 
 
 def stylesheet_refs(source: str) -> list[str]:
@@ -84,7 +102,7 @@ class CssArchitectureTests(unittest.TestCase):
         self.assertTrue((CSS_ROOT / "components/structured_forms.css").is_file())
         self.assertTrue((CSS_ROOT / "components/configuration_cards.css").is_file())
 
-    def test_css_and_inline_style_inventory_is_visible_in_ci(self):
+    def test_css_and_inline_style_debt_does_not_increase(self):
         important_by_file = {}
         for path in css_files():
             count = path.read_text(encoding="utf-8").count("!important")
@@ -98,14 +116,15 @@ class CssArchitectureTests(unittest.TestCase):
             if count:
                 inline_by_file[path.relative_to(source_root).as_posix()] = count
 
+        important_total = sum(important_by_file.values())
+        inline_total = sum(inline_by_file.values())
         print("CSS !important inventory:", important_by_file)
-        print("CSS !important total:", sum(important_by_file.values()))
+        print("CSS !important total:", important_total)
         print("Template inline-style inventory:", inline_by_file)
-        print("Template inline-style total:", sum(inline_by_file.values()))
+        print("Template inline-style total:", inline_total)
 
-        # Inventory is diagnostic in this slice; future cleanup PRs may lower
-        # these values and then lock stricter ceilings without guessing today.
-        self.assertTrue(TOKENS.is_file())
+        self.assertLessEqual(important_total, IMPORTANT_BASELINE)
+        self.assertLessEqual(inline_total, INLINE_STYLE_BASELINE)
 
 
 if __name__ == "__main__":
