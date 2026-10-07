@@ -1,4 +1,4 @@
-/* Named technician presets coexist with the original primary Wi-Fi/DNS flow. */
+/* Named technician presets coexist with the provider-neutral primary profile flow. */
 (() => {
   "use strict";
   const PRIMARY = "Configuração principal";
@@ -54,7 +54,7 @@
       currentProfile = null;
       await ensureAttendantProfile();
       if (generation !== state.generation || owner !== currentAttendant) return;
-      hint("Configuração principal ativa (compatível com a tela anterior).");
+      hint("Configuração principal ativa para o provedor conectado.");
       return;
     }
     try {
@@ -91,16 +91,53 @@
     currentProfile = saved;
     hint("Configuração " + state.name + " salva para " + owner + ".");
   }
+  async function applyPrimaryGeneric() {
+    if (!currentAttendant) throw Error("Informe um atendente conectado.");
+    if (!routerWriteEnabled) {
+      throw Error("A sessão atual não confirmou gravações para o perfil solicitado.");
+    }
+    const owner = currentAttendant;
+    // Persist exactly what is visible before asking the active provider to
+    // calculate requirements/capabilities and apply. The backend owns the
+    // no-partial-apply preflight and each provider owns write/readback safety.
+    await saveProfile(true);
+    if (owner !== currentAttendant) return;
+    if (!window.confirm(
+      "Aplicar a configuração principal à ONT atual? O backend validará as capacidades antes de gravar."
+    )) return;
+    setBusy(true, "Validando capacidades e aplicando o perfil...");
+    try {
+      const result = await post("/profiles/apply", {attendant: owner});
+      if (owner !== currentAttendant) return;
+      if (id("profileApplyResult")) renderProfileApplyResult(result);
+      if (result?.success === false && Array.isArray(result?.unsupported)) {
+        hint(
+          "Perfil não aplicado. Recursos não suportados: " +
+          result.unsupported.join(", ") + ".",
+          true
+        );
+        return;
+      }
+      hint(result?.verified === true
+        ? "Configuração aplicada e confirmada por leitura."
+        : "Configuração processada pelo provedor ativo; confira o relatório de verificação.");
+      await loadWifi();
+      await loadDns();
+    } finally {
+      setBusy(false);
+    }
+  }
   async function applySelected() {
     if (!currentAttendant) throw Error("Informe um atendente conectado.");
     if (state.name === PRIMARY) {
-      await applyProfile();
+      await applyPrimaryGeneric();
       return;
     }
     if (!routerWriteEnabled) {
       throw Error("Esta ONT exige um fluxo capturado específico; não aplicar um batch genérico.");
     }
-    // Save the visible editor before applying, never an older database value.
+    // Named presets are still provider-specific on the server. Save the visible
+    // editor before applying, never an older database value.
     await saveSelected();
     if (!window.confirm(
       "Aplicar " + state.name + " à ONT atual? O Wi-Fi pode reiniciar."
@@ -128,6 +165,17 @@
     finally { state.pending = false; }
   }
   function init() {
+    // app.js still carries the historical F6201B compatibility function. The
+    // visible primary Profile button is provider-neutral; intercept it in the
+    // capture phase so the legacy button listener cannot route Huawei through
+    // `/f6201b/profile/apply-saved`.
+    document.addEventListener("click", event => {
+      const button = event.target.closest("#applyProfileButton");
+      if (!button || state.name !== PRIMARY) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void execute(applyPrimaryGeneric);
+    }, true);
     id("namedPresetSelect")?.addEventListener("change", event =>
       void execute(() => selectPreset(event.target.value)));
     id("namedPresetCreate")?.addEventListener("click", () => execute(async () => {
@@ -165,7 +213,14 @@
     });
     document.addEventListener("device:page-open", event => {
       if (event.detail?.pageName !== "profiles" || !currentAttendant) return;
-      if (event.detail?.vendor === "huawei") return;
+      // Named presets remain ZTE-specific. The primary profile is already
+      // provider-neutral and is kept enabled for Huawei sessions.
+      if (event.detail?.vendor === "huawei") {
+        state.name = PRIMARY;
+        globalThis.activeNamedPreset = PRIMARY;
+        legacyControls(false);
+        return;
+      }
       void execute(async () => {
         await refreshNames();
         // Primary editor is loaded by app.js; alternate editor is ours.

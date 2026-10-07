@@ -30,7 +30,7 @@ class HuaweiModelProfile:
 
     Runtime family detection and capability probes remain authoritative. This
     registry exists so model aliases and researched evidence do not get mixed
-    with the physically validated operational HuaweiProfile capabilities.
+    with operational HuaweiProfile capabilities.
     """
 
     canonical_model: str
@@ -38,9 +38,15 @@ class HuaweiModelProfile:
     known_hardware_revisions: tuple[str, ...] = ()
     known_firmware_versions: tuple[str, ...] = ()
     probable_protocol_families: tuple[str, ...] = ()
+    probable_firmware_families: tuple[str, ...] = ()
+    known_cfg_modes: tuple[str, ...] = ()
     observed_auth_strategies: tuple[str, ...] = ()
     known_endpoint_signatures: tuple[str, ...] = ()
     known_cli_surfaces: tuple[str, ...] = ()
+    observed_transports: tuple[str, ...] = ()
+    observed_features: tuple[str, ...] = ()
+    physically_validated_features: tuple[str, ...] = ()
+    write_validation_status: str = "not_validated"
     reference_sources: tuple[str, ...] = ()
     confidence: HuaweiEvidenceLevel = HuaweiEvidenceLevel.SOURCE_MENTIONED
     support_level: HuaweiSupportLevel = HuaweiSupportLevel.RESEARCH_ONLY
@@ -53,9 +59,15 @@ class HuaweiModelProfile:
             "known_hardware_revisions": list(self.known_hardware_revisions),
             "known_firmware_versions": list(self.known_firmware_versions),
             "probable_protocol_families": list(self.probable_protocol_families),
+            "probable_firmware_families": list(self.probable_firmware_families),
+            "known_cfg_modes": list(self.known_cfg_modes),
             "observed_auth_strategies": list(self.observed_auth_strategies),
             "known_endpoint_signatures": list(self.known_endpoint_signatures),
             "known_cli_surfaces": list(self.known_cli_surfaces),
+            "observed_transports": list(self.observed_transports),
+            "observed_features": list(self.observed_features),
+            "physically_validated_features": list(self.physically_validated_features),
+            "write_validation_status": self.write_validation_status,
             "reference_sources": list(self.reference_sources),
             "confidence": self.confidence.value,
             "support_level": self.support_level.value,
@@ -71,15 +83,59 @@ def _compact(model: str | None) -> str:
 
 HUAWEI_MODEL_REGISTRY: tuple[HuaweiModelProfile, ...] = (
     HuaweiModelProfile(
+        canonical_model="EG8041X6-10",
+        aliases=("EG8041X610", "EG8041X6 10", "EG8041X6_10"),
+        probable_protocol_families=("amp_bbsp",),
+        probable_firmware_families=("brebg2",),
+        known_cfg_modes=("BREBG2",),
+        observed_auth_strategies=("rand_count",),
+        known_endpoint_signatures=(
+            "/asp/GetRandCount.asp",
+            "/html/ssmp/deviceinfo/deviceinfo.asp",
+            "/html/amp/wlanadv/WlanAdvance.asp?2G",
+            "/html/amp/wlanadv/WlanAdvance.asp?5G",
+            "/html/amp/common/WlanChannel.asp?1=1",
+            "/html/bbsp/maintenance/diagnosecommon.asp",
+            "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1",
+            "InternetGatewayDevice.LANDevice.1.WLANConfiguration.5",
+            "InternetGatewayDevice.LANDevice.1.WiFi.Radio.1",
+            "InternetGatewayDevice.LANDevice.1.WiFi.Radio.2",
+        ),
+        observed_transports=("webui:http-bootstrap", "webui:https:80"),
+        observed_features=(
+            "device_info", "wifi_basic", "wifi_radio", "wifi_advanced",
+            "wifi_channel_discovery", "wan", "optical_telemetry",
+            "diagnostics.ping", "diagnostics.traceroute",
+        ),
+        physically_validated_features=(
+            "device_info", "wifi_radio", "wifi_channel_discovery", "wan",
+            "diagnostics.ping", "diagnostics.traceroute",
+        ),
+        write_validation_status=(
+            "wifi mutation surface captured; physical write effect/readback "
+            "must still be confirmed per operation"
+        ),
+        reference_sources=("access-manager:eg8041x6_10_local",),
+        confidence=HuaweiEvidenceLevel.PHYSICALLY_VALIDATED,
+        support_level=HuaweiSupportLevel.READ_SUPPORTED,
+        physical_validation=True,
+    ),
+    HuaweiModelProfile(
         canonical_model="EG8041X7-10",
         aliases=("EG8041X710", "EG8041X7 10", "EG8041X7_10"),
         probable_protocol_families=("amp_bbsp",),
+        probable_firmware_families=("brebg2",),
+        known_cfg_modes=("BREBG2",),
         observed_auth_strategies=("rand_count",),
         known_endpoint_signatures=(
             "/html/ssmp/deviceinfo/deviceinfo.asp",
             "/html/amp/opticinfo/opticinfo.asp",
             "/html/bbsp/",
         ),
+        observed_transports=("webui",),
+        observed_features=("broad_amp_bbsp_surface",),
+        physically_validated_features=("broad_amp_bbsp_surface",),
+        write_validation_status="physically validated with readback for mapped operations",
         reference_sources=("access-manager:eg8041x7_10_local",),
         confidence=HuaweiEvidenceLevel.PHYSICALLY_VALIDATED,
         support_level=HuaweiSupportLevel.WRITE_SUPPORTED,
@@ -103,6 +159,7 @@ HUAWEI_MODEL_REGISTRY: tuple[HuaweiModelProfile, ...] = (
             "WAP>:display sysinfo",
             "WAP>:display pon statistics",
         ),
+        observed_transports=("webui", "telnet-wap", "ssh-wap"),
         reference_sources=(
             "sirjeannot/huawei-ont-2-mqtt",
             "loiklo/huawei-onu-to-graphite",
@@ -116,7 +173,6 @@ HUAWEI_MODEL_REGISTRY: tuple[HuaweiModelProfile, ...] = (
         ),
         confidence=HuaweiEvidenceLevel.MULTIPLE_SOURCES_AGREE,
         support_level=HuaweiSupportLevel.READ_PARTIAL,
-        physical_validation=False,
     ),
     HuaweiModelProfile(
         canonical_model="EG8010H",
@@ -128,10 +184,10 @@ HUAWEI_MODEL_REGISTRY: tuple[HuaweiModelProfile, ...] = (
             "/html/amp/opticinfo/opticinfo.asp",
         ),
         known_cli_surfaces=("WAP>",),
+        observed_transports=("webui", "wap"),
         reference_sources=("CAPS:Acces ONT HG8010H et EG8010H",),
         confidence=HuaweiEvidenceLevel.SOURCE_CODE_OBSERVED,
         support_level=HuaweiSupportLevel.RECOGNIZED,
-        physical_validation=False,
     ),
     HuaweiModelProfile(
         canonical_model="EG8021V5",
@@ -144,10 +200,10 @@ HUAWEI_MODEL_REGISTRY: tuple[HuaweiModelProfile, ...] = (
             "/html/bbsp/common/ontstate.asp",
             "/html/amp/opticinfo/opticinfo.asp",
         ),
+        observed_transports=("webui",),
         reference_sources=("siedgustavo/huawei-ont-stats",),
         confidence=HuaweiEvidenceLevel.TESTED_AUTOMATICALLY,
         support_level=HuaweiSupportLevel.READ_PARTIAL,
-        physical_validation=False,
     ),
     HuaweiModelProfile(
         canonical_model="EG8145V5",
@@ -158,14 +214,77 @@ HUAWEI_MODEL_REGISTRY: tuple[HuaweiModelProfile, ...] = (
             "/html/ssmp/deviceinfo/deviceinfo.asp",
             "/html/amp/opticinfo/opticinfo.asp",
         ),
+        observed_transports=("webui", "ssh-wap"),
         reference_sources=(
             "chickenzord/go-huawei-client",
             "jasperf/huawei-echolife-eg8145V5",
+            "kevinantoniowiyonolauw/netcut",
         ),
         confidence=HuaweiEvidenceLevel.MULTIPLE_SOURCES_AGREE,
         support_level=HuaweiSupportLevel.RECOGNIZED,
-        physical_validation=False,
     ),
+    HuaweiModelProfile(
+        canonical_model="EG8145V5-V2",
+        aliases=("Huawei EG8145V5-V2", "EG8145V5 V2"),
+        probable_protocol_families=("amp_bbsp",),
+        probable_firmware_families=("brebg2_candidate",),
+        known_cfg_modes=("BREBG2",),
+        observed_auth_strategies=("rand_count",),
+        known_endpoint_signatures=(
+            "/asp/GetRandCount.asp", "/login.cgi", "/html/ssmp/",
+        ),
+        observed_transports=("webui",),
+        reference_sources=(
+            "EletronicaBR:EG8145V5-V2 firmware R020/R021 research",
+        ),
+        confidence=HuaweiEvidenceLevel.SOURCE_MENTIONED,
+        support_level=HuaweiSupportLevel.RESEARCH_ONLY,
+    ),
+    HuaweiModelProfile(
+        canonical_model="EG8145X6-10",
+        probable_protocol_families=("amp_bbsp",),
+        observed_auth_strategies=("rand_count",),
+        known_endpoint_signatures=(
+            "/asp/GetRandCount.asp", "/login.cgi",
+            "/html/bbsp/userdevinfo/getuserdevinfo.asp",
+        ),
+        observed_transports=("webui:https:80",),
+        reference_sources=("logon84/Huawei-Optistar-EG8145X6-10-remote-login-example",),
+        confidence=HuaweiEvidenceLevel.SOURCE_CODE_OBSERVED,
+        support_level=HuaweiSupportLevel.RESEARCH_ONLY,
+    ),
+    HuaweiModelProfile(
+        canonical_model="HG8245X6",
+        probable_protocol_families=("amp_bbsp",),
+        observed_auth_strategies=("rand_count_same_tcp_candidate",),
+        reference_sources=("Erenn0989/huawei-ont-mcp",),
+        confidence=HuaweiEvidenceLevel.SOURCE_CODE_OBSERVED,
+        support_level=HuaweiSupportLevel.RESEARCH_ONLY,
+    ),
+    HuaweiModelProfile(
+        canonical_model="HG8245H5",
+        probable_protocol_families=("asp_config",),
+        known_endpoint_signatures=("/asp/GetConfig.asp", "/asp/SetConfig.asp"),
+        reference_sources=("minzique/huawei-hg8245h5",),
+        confidence=HuaweiEvidenceLevel.SOURCE_CODE_OBSERVED,
+        support_level=HuaweiSupportLevel.RESEARCH_ONLY,
+    ),
+    HuaweiModelProfile(canonical_model="HG8245H", support_level=HuaweiSupportLevel.RESEARCH_ONLY),
+    HuaweiModelProfile(canonical_model="HG8012H", support_level=HuaweiSupportLevel.RESEARCH_ONLY),
+    HuaweiModelProfile(canonical_model="HG8240H5", support_level=HuaweiSupportLevel.RESEARCH_ONLY),
+    HuaweiModelProfile(
+        canonical_model="HN8010TS",
+        probable_protocol_families=("amp_bbsp",),
+        reference_sources=("chickenzord/go-huawei-client:draft",),
+        support_level=HuaweiSupportLevel.RESEARCH_ONLY,
+    ),
+    HuaweiModelProfile(canonical_model="HN8010T", aliases=("HN8010T-like",)),
+    HuaweiModelProfile(canonical_model="HG8245Q2"),
+    HuaweiModelProfile(canonical_model="HG8546M"),
+    HuaweiModelProfile(canonical_model="HS8145V5", probable_protocol_families=("amp_bbsp",)),
+    HuaweiModelProfile(canonical_model="EG8141A5"),
+    HuaweiModelProfile(canonical_model="HG8245U"),
+    HuaweiModelProfile(canonical_model="HG8245X6-8NE", aliases=("HG8245X6-8Ne",)),
 )
 
 
