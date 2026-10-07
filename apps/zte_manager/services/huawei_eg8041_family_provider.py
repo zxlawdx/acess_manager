@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from apps.zte_manager.infrastructure.huawei.diagnostic_result import (
+    decode_huawei_diagnostic_result,
+)
 from apps.zte_manager.services.huawei_eg8041_family_runtime import (
     HuaweiEG8041FamilyRuntimeService,
 )
@@ -51,6 +54,19 @@ class HuaweiEG8041FamilyProvider(HuaweiEG8041FamilyRuntimeService):
         "diagnostics.traceroute": "Native ONT traceroute",
         "speed_test": "Speed-test WebUI surface",
     }
+
+    @staticmethod
+    def _decode_diagnostic_result(source: object) -> tuple[str, str]:
+        """Decode the physically observed EG8041 polling response grammar.
+
+        The X6 firmware emits GetPing/GetRoute frames as concatenated quoted
+        JavaScript strings. The base Huawei transport historically understood
+        only one quoted literal, so a real ``Complete`` frame was kept polling
+        until timeout. Keep the characterization at the EG8041 family boundary
+        while the generic Huawei parser remains conservative for other families.
+        """
+
+        return decode_huawei_diagnostic_result(source)
 
     def _family_feature_reader(self, feature: str):
         readers = {
