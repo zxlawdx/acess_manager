@@ -12,6 +12,8 @@ on:
       - "apps/zte_manager/model/device_adapters/huawei.py"
       - "apps/zte_manager/model/device_adapters/huawei_registry.py"
       - "apps/zte_manager/model/telemetry.py"
+      - "apps/zte_manager/model/diagnostics.py"
+      - "apps/zte_manager/model/wifi.py"
       - "apps/zte_manager/services/device_service.py"
       - "apps/zte_manager/services/huawei_*.py"
       - "apps/zte_manager/services/profile_service.py"
@@ -85,15 +87,20 @@ jobs:
             apps/zte_manager/infrastructure/huawei/client.py \
             apps/zte_manager/infrastructure/huawei/cli.py \
             apps/zte_manager/infrastructure/huawei/family_client.py \
+            apps/zte_manager/infrastructure/huawei/negotiating_client.py \
             apps/zte_manager/infrastructure/huawei/protocol.py \
             apps/zte_manager/infrastructure/huawei/response.py \
+            apps/zte_manager/model/diagnostics.py \
             apps/zte_manager/model/telemetry.py \
+            apps/zte_manager/model/wifi.py \
             apps/zte_manager/model/device_adapters/huawei.py \
             apps/zte_manager/model/device_adapters/huawei_registry.py \
             apps/zte_manager/services/huawei_service.py \
             apps/zte_manager/services/huawei_eg8041x7_runtime.py \
             apps/zte_manager/services/huawei_wifi_domain_runtime.py \
             apps/zte_manager/services/huawei_telemetry_runtime.py \
+            apps/zte_manager/services/huawei_eg8041_family_runtime.py \
+            apps/zte_manager/services/huawei_eg8041_family_provider.py \
             apps/zte_manager/services/huawei_telemetry.py \
             apps/zte_manager/services/huawei_cli_telemetry.py \
             apps/zte_manager/services/huawei_pon.py \
@@ -151,6 +158,7 @@ jobs:
             tests.test_huawei_multirepo_foundation \
             tests.test_huawei_hg8010_telemetry \
             tests.test_huawei_eg8041x7_runtime \
+            tests.test_huawei_eg8041_family_runtime \
             tests.test_huawei_dns_physical_state \
             tests.test_huawei_diagnostics \
             tests.test_huawei_provider_architecture \
