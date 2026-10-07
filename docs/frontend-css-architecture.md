@@ -48,8 +48,11 @@ explicit review because several legacy files still depend on cascade order.
 - `--am-focus-*`
 - `--am-transition-*`
 - `--am-z-*`
-- `--am-font-*`
+- `--am-font-sans` / `--am-font-mono`
 - `--am-shadow-*`
+
+Runtime/layout variables such as `--am-font-scale` and `--am-shell-column` are
+not design tokens and stay with the component that owns their behavior.
 
 Light and dark themes change token values rather than duplicating component
 rules. Existing `--am-*`, `--ui-*` and original NOC variables are compatibility
@@ -105,6 +108,30 @@ The duplicated legacy token block will be deleted in a later slice when the
 large file can be edited and visually validated safely. Until then, tests make
 sure no `--am-color-*` definitions appear outside the canonical foundation.
 
+## Specificity debt baseline
+
+The first CI inventory after the template/bootstrap cleanup measured:
+
+- `!important`: **1538** declarations across the CSS tree;
+- template inline `style="..."`: **2** occurrences, both in
+  `pages/advanced/workbench_discovery.html`.
+
+These values are ceilings, not targets. `tests/test_css_architecture.py` prevents
+new CSS/inline-style debt from increasing them. Future cleanup slices should
+lower the ceilings only after the affected components have visual validation.
+
+Largest current `!important` owners in that baseline are:
+
+- `tangerine.css`: 545;
+- `light_mode_refine.css`: 234;
+- `brmodelo_workbench.css`: 197;
+- `tangerine_workflows.css`: 146;
+- `components/shell_layout.css`: 133;
+- `neutral_console.css`: 113.
+
+This inventory is why the global corrective layers are not deleted by grep or
+rewritten wholesale in the same PR as token consolidation.
+
 ## `!important` policy
 
 Existing `!important` declarations are not removed based only on textual
@@ -113,8 +140,7 @@ several late compatibility layers. Remove an `!important` only when the
 component has been migrated, its load order is explicit, and light/dark visual
 validation confirms the computed style remains unchanged.
 
-The CI inventory prints current `!important` and template inline-style counts so
-future cleanup PRs can lower them intentionally and then lock stricter limits.
+CI prints the per-file inventory and enforces the current total as a maximum.
 
 ## State naming
 
