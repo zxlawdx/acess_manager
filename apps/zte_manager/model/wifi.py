@@ -26,6 +26,7 @@ class WifiRadioConfiguration:
     dtim_period: int | None = None
     beacon_period: int | None = None
     rts_threshold: int | None = None
+    fragmentation_threshold: int | None = None
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -70,6 +71,7 @@ class WifiRadioCapabilities:
     dtim_period: bool = False
     beacon_period: bool = False
     rts_threshold: bool = False
+    fragmentation_threshold: bool = False
 
     def as_dict(self) -> dict:
         return {
@@ -87,6 +89,7 @@ class WifiRadioCapabilities:
                 "dtim_period": self.dtim_period,
                 "beacon_period": self.beacon_period,
                 "rts_threshold": self.rts_threshold,
+                "fragmentation_threshold": self.fragmentation_threshold,
             },
         }
 
