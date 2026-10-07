@@ -163,6 +163,7 @@ jobs:
             tests.test_huawei_eg8041_family_provider \
             tests.test_huawei_transport_negotiation \
             tests.test_huawei_transport_error_policy \
+            tests.test_huawei_production_transport \
             tests.test_huawei_dns_physical_state \
             tests.test_huawei_diagnostics \
             tests.test_huawei_provider_architecture \
