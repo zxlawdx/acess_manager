@@ -42,6 +42,21 @@ EXPECTED_LIGHT_IMPORTS = [
     "./components/native_controls_light.css",
 ]
 
+EXPECTED_TANGERINE_IMPORTS = [
+    "./foundation/tangerine_tokens.css",
+    "./themes/tangerine_base_compat.css",
+    "./pages/dashboard_tangerine.css",
+    "./themes/tangerine_terminal_compat.css",
+    "./layout/editorial_workspace.css",
+    "./pages/advanced_tangerine.css",
+    "./components/history_timeline.css",
+    "./pages/connection_inventory.css",
+    "./pages/clients_tangerine.css",
+    "./pages/device_tangerine.css",
+    "./pages/tr069_tangerine.css",
+    "./pages/diagnostics_tangerine.css",
+]
+
 EXPECTED_WORKFLOW_IMPORTS = [
     "./foundation/tangerine_tokens.css",
     "./pages/support_workbench.css",
@@ -50,6 +65,20 @@ EXPECTED_WORKFLOW_IMPORTS = [
     "./pages/workbench_responsive.css",
     "./components/operator_results.css",
 ]
+
+TANGERINE_OWNER_LANDMARKS = {
+    "themes/tangerine_base_compat.css": ".menu-item.active",
+    "pages/dashboard_tangerine.css": ".am-dashboard-hero",
+    "themes/tangerine_terminal_compat.css": "#pingOutput.terminal-output",
+    "layout/editorial_workspace.css": ".am-session-bar",
+    "pages/advanced_tangerine.css": ".am-workbench-tab",
+    "components/history_timeline.css": ".am-history-timeline",
+    "pages/connection_inventory.css": ".am-inventory-panel",
+    "pages/clients_tangerine.css": ".am-client-workbench",
+    "pages/device_tangerine.css": ".am-device-summary",
+    "pages/tr069_tangerine.css": ".am-tr069-workspace",
+    "pages/diagnostics_tangerine.css": ".am-diagnostic-tabbed",
+}
 
 STYLE_REF = re.compile(r"static\(['\"]zte_manager/css/([^'\"]+)['\"]\)")
 CSS_IMPORT = re.compile(r"@import\s+url\(['\"]([^'\"]+)['\"]\)\s*;")
@@ -68,8 +97,10 @@ CANONICAL_DEFINITION = re.compile(
 )
 INLINE_STYLE = re.compile(r"\sstyle\s*=\s*['\"]", re.I)
 
-# Measured ceilings. Cleanup slices must lower them rather than growing debt.
-IMPORTANT_BASELINE = 1537
+# The Tangerine split moves rules without deleting specificity. Exact count is
+# a characterization guard for this slice; later cleanup PRs may deliberately
+# lower it together with a new tested baseline.
+IMPORTANT_EXPECTED = 1537
 INLINE_STYLE_BASELINE = 2
 
 
@@ -113,6 +144,16 @@ class CssArchitectureTests(unittest.TestCase):
         source = (CSS_ROOT / "light_mode_refine.css").read_text(encoding="utf-8")
         self.assertNotRegex(source, r"--ui-[a-z0-9-]+\s*:")
 
+    def test_tangerine_entrypoint_preserves_original_feature_order(self):
+        assert_import_entrypoint(self, "tangerine.css", EXPECTED_TANGERINE_IMPORTS)
+
+    def test_tangerine_real_owners_keep_characterization_landmarks(self):
+        for relative, landmark in TANGERINE_OWNER_LANDMARKS.items():
+            with self.subTest(relative=relative):
+                source = (CSS_ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn(landmark, source)
+                self.assertGreater(len(source.strip()), 180)
+
     def test_workflow_entrypoint_preserves_layer_order_and_real_assets(self):
         assert_import_entrypoint(self, "tangerine_workflows.css", EXPECTED_WORKFLOW_IMPORTS)
 
@@ -140,13 +181,19 @@ class CssArchitectureTests(unittest.TestCase):
         self.assertTrue((CSS_ROOT / "components/structured_forms.css").is_file())
         self.assertTrue((CSS_ROOT / "components/configuration_cards.css").is_file())
 
-    def test_css_and_inline_style_debt_does_not_increase(self):
+    def test_css_specificity_count_is_preserved_by_tangerine_split(self):
         important_by_file = {}
         for path in css_files():
             count = path.read_text(encoding="utf-8").count("!important")
             if count:
                 important_by_file[path.relative_to(CSS_ROOT).as_posix()] = count
 
+        important_total = sum(important_by_file.values())
+        print("CSS !important inventory:", important_by_file)
+        print("CSS !important total:", important_total)
+        self.assertEqual(important_total, IMPORTANT_EXPECTED)
+
+    def test_template_inline_style_debt_does_not_increase(self):
         inline_by_file = {}
         source_root = ROOT / "apps" / "zte_manager" / "templates" / "source"
         for path in sorted(source_root.rglob("*.html")):
@@ -154,14 +201,9 @@ class CssArchitectureTests(unittest.TestCase):
             if count:
                 inline_by_file[path.relative_to(source_root).as_posix()] = count
 
-        important_total = sum(important_by_file.values())
         inline_total = sum(inline_by_file.values())
-        print("CSS !important inventory:", important_by_file)
-        print("CSS !important total:", important_total)
         print("Template inline-style inventory:", inline_by_file)
         print("Template inline-style total:", inline_total)
-
-        self.assertLessEqual(important_total, IMPORTANT_BASELINE)
         self.assertLessEqual(inline_total, INLINE_STYLE_BASELINE)
 
 
