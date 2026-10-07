@@ -11,8 +11,8 @@ from apps.zte_manager.model.device_adapters.huawei_registry import (
     is_recognized_huawei_model,
 )
 from apps.zte_manager.services.huawei_service import HuaweiService
-from apps.zte_manager.services.huawei_wifi_domain_runtime import (
-    HuaweiWifiDomainRuntimeService,
+from apps.zte_manager.services.huawei_telemetry_runtime import (
+    HuaweiTelemetryRuntimeService,
 )
 from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
@@ -61,7 +61,7 @@ class DeviceService:
         self,
         *,
         zte_provider: ZTEService | None = None,
-        huawei_factory=HuaweiWifiDomainRuntimeService,
+        huawei_factory=HuaweiTelemetryRuntimeService,
         huawei_client_type=HuaweiFamilyAwareWebClient,
     ) -> None:
         self._zte_service = zte_provider or zte_service
