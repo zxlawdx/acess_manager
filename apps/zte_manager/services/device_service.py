@@ -13,8 +13,8 @@ from apps.zte_manager.model.device_adapters.huawei_registry import (
     is_recognized_huawei_model,
 )
 from apps.zte_manager.services.huawei_service import HuaweiService
-from apps.zte_manager.services.huawei_eg8041_family_runtime import (
-    HuaweiEG8041FamilyRuntimeService,
+from apps.zte_manager.services.huawei_eg8041_family_provider import (
+    HuaweiEG8041FamilyProvider,
 )
 from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
@@ -63,7 +63,7 @@ class DeviceService:
         self,
         *,
         zte_provider: ZTEService | None = None,
-        huawei_factory=HuaweiEG8041FamilyRuntimeService,
+        huawei_factory=HuaweiEG8041FamilyProvider,
         huawei_client_type=HuaweiNegotiatingWebClient,
     ) -> None:
         self._zte_service = zte_provider or zte_service
