@@ -221,15 +221,16 @@ The first CI inventory after the template/bootstrap cleanup measured:
 - template inline `style="..."`: **2** occurrences, both in
   `pages/advanced/workbench_discovery.html`.
 
-The first proven-safe specificity cleanup removed one redundant declaration from
-`components/provider_diagnostics.css`, lowering the enforced value to **1537**.
-The later workflow, light-mode and Tangerine decompositions move existing
-specificity to explicit owners but deliberately do not pretend that movement is
-specificity cleanup. Inline styles remain capped at **2**.
+One proven-safe cleanup removed a redundant declaration from
+`components/provider_diagnostics.css`. The subsequent #82 green CI measured the
+actual `main` baseline at **1536** `!important` declarations, with
+`tangerine.css` itself owning **545** of them. The Tangerine decomposition moves
+those same 545 declarations to explicit owners; it does not claim a specificity
+reduction. Inline styles remain capped at **2**.
 
-The current Tangerine-split regression requires the `!important` total to remain
-exactly **1537** in this slice. A later cleanup may lower that value only together
-with evidence and an updated regression.
+The current Tangerine-split regression therefore requires the global
+`!important` total to remain exactly **1536**. A later cleanup may lower that
+value only together with evidence and an updated regression.
 
 ## `!important` policy
 
