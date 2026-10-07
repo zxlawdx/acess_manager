@@ -1,0 +1,30 @@
+/* Profile workbench page-specific presentation. */
+html[data-theme] .am-profile-workspace .profile-banner{
+ display:flex!important;align-items:center;gap:11px!important;flex-wrap:wrap;
+ background:var(--am-color-primary-wash)!important;border:1px solid var(--am-color-selected)!important;
+ padding:19px 22px!important;border-radius:13px!important;box-shadow:none!important;
+}
+html[data-theme] .am-profile-workspace .profile-banner .section-kicker{
+ color:var(--am-color-primary-strong)!important;font:750 10px var(--am-font-sans)!important;
+}
+html[data-theme] .am-profile-workspace .profile-banner>strong{
+ color:var(--am-color-text)!important;font:760 16px/1.5 var(--am-font-sans)!important;
+}
+html[data-theme] .am-profile-workspace .profile-banner>p{
+ color:var(--am-color-text-muted)!important;flex-basis:100%;margin:0!important;
+}
+html[data-theme] .am-profile-workspace #profileRadios{
+ display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))!important;
+ gap:14px!important;min-width:0;
+}
+html[data-theme] .am-profile-workspace .profile-actions{
+ display:flex;flex-wrap:wrap;align-items:center;gap:8px!important;
+}
+html[data-theme] .am-profile-workspace .profile-action-success{
+ background:var(--am-color-success-wash)!important;color:var(--am-color-success)!important;
+ border:1px solid var(--am-color-success)!important;
+}
+html[data-theme] .am-profile-workspace .profile-action-error{
+ background:var(--am-color-danger-wash)!important;color:var(--am-color-danger)!important;
+ border:1px solid var(--am-color-danger)!important;
+}
