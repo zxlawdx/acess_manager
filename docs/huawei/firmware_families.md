@@ -15,11 +15,34 @@ This name describes the generated Huawei WebUI surface containing combinations o
 
 The family can contain more than one authentication strategy and more than one endpoint generation.
 
+### `BREBG2-like` firmware strategy
+
+`BREBG2-like` is a narrower runtime strategy inside `amp_bbsp`; it is not a
+marketing-model alias.
+
+Authorized local evidence now exists for both EG8041X6-10 and EG8041X7-10. The
+shared strategy is selected only when the session proves:
+
+1. AMP/BBSP protocol-family evidence;
+2. expected WLAN object signatures including `WLANConfiguration.1`,
+   `WLANConfiguration.5`, `WiFi.Radio.1` and `WiFi.Radio.2`;
+3. successful parsers/probes for the feature being promoted;
+4. `CfgMode=BREBG2` when it is exposed, or independent local/model evidence for
+   a known EG8041 member.
+
+The local EG8041X6-10 WebUI also demonstrated an HTTP bootstrap that advertises
+`SSLPort=80` and sends browsers to HTTPS on the same explicit port. Scheme and
+port are therefore negotiated independently in the central transport.
+
+External EG8145V5-V2 material also reports `CfgMode=BREBG2`, RandCount and SSMP.
+That is only **candidate family evidence**: `CfgMode` alone is insufficient to
+select this strategy or enable writes.
+
 ### Auth variant: `rand_count`
 
 Evidence:
 
-- Access Manager local EG8041X7-10 implementation;
+- Access Manager local EG8041X6-10 and EG8041X7-10 evidence;
 - HG8010H/EG8010H newer firmware research;
 - `Erenn0989/huawei-ont-mcp` on an HG8245X6-family ISP firmware;
 - `chickenzord/go-huawei-client` on EG8145V5;
@@ -40,7 +63,8 @@ Common shape:
 - some responses are the token itself while one HG8010H exporter observes a
   larger response whose final 32 hexadecimal characters are the token;
 - proof-of-login pages differ;
-- HG8245X6 material reports possible challenge/login TCP affinity.
+- HG8245X6 material reports possible challenge/login TCP affinity;
+- some OptiXstar material uses HTTPS on explicit port 80.
 
 Access Manager records POST-vs-GET challenge evidence and only applies the
 trailing-32 extraction to the exact 32-hex suffix signature.
@@ -106,7 +130,9 @@ The implementation uses these conservative rules:
 5. model name is recorded independently and is never sufficient to choose all behavior;
 6. firmware version is retained when found in authenticated device information;
 7. an unknown operational profile can be model-recognized without becoming locally verified;
-8. feature support is promoted only by an endpoint/transport response plus a successful parser.
+8. feature support is promoted only by an endpoint/transport response plus a successful parser;
+9. `BREBG2` is supporting evidence, not a blanket compatibility switch;
+10. write support is never inherited from another model solely through family recognition.
 
 ## Capability promotion
 
@@ -121,15 +147,29 @@ endpoint or already-enabled CLI transport exists
 = READ_SUPPORTED
 ```
 
-For a write feature, endpoint presence is insufficient. Payload, mapping and semantics must be known, and physical validation is required where the current evidence policy demands it.
+For an EG8041-family write:
+
+```text
+shared object/endpoint signature
++ characterized payload mapping
++ POST once
++ readback
+= runtime WRITE_SUPPORTED operation
+```
+
+Physical-validation metadata remains separate. A captured POST is not a
+successful physical effect.
 
 ## Current validation status
 
-- **EG8041X7-10 RandCount:** existing local/physical evidence predates this PR; regressions must preserve it.
-- **HG8010H newer RandCount + optical/WAP telemetry:** multiple external sources + sanitized characterization fixtures + automated tests; **not physically validated in this PR**.
+- **EG8041X7-10 RandCount/BREBG2:** existing local physical evidence; existing mapped writes and readbacks remain authoritative.
+- **EG8041X6-10 RandCount/BREBG2:** authorized local evidence for model/family, HTTPS:80 bootstrap, dual-band Wi-Fi signatures/channel discovery, WAN and native ping/traceroute. New mutation effects remain physical-validation-pending unless separately exercised with readback.
+- **HG8010H newer RandCount + optical/WAP telemetry:** multiple external sources + sanitized characterization fixtures + automated tests; not physically validated by the HG8010 PR.
 - **HG8010H older derived-cookie auth:** externally observed; recognized but deliberately unsupported for authentication.
 - **EG8010H:** external family evidence; recognized only, not promoted to HG8010H read support by model similarity.
-- **EG8021V5 RandString:** observed in external firmware/source; implemented and fixture-tested in Access Manager; **pending physical validation on a real device**.
-- **HG8245X6 same-TCP RandCount:** externally observed; **not implemented as strict socket affinity yet**.
-- **EG8145V5 / EG8145X6-10 RandCount:** externally observed; family evidence only, not a promise of all EG8041 features.
+- **EG8021V5 RandString:** observed in external firmware/source; implemented and fixture-tested in Access Manager; pending physical validation on a real device.
+- **EG8145V5:** multiple external RandCount/WebUI/CLI sources; recognized only until the exact reader/object signatures are characterized.
+- **EG8145V5-V2:** external RandCount + SSMP + `BREBG2` evidence; research-only family candidate.
+- **HG8245X6 same-TCP RandCount:** externally observed; not implemented as strict socket affinity yet.
+- **EG8145X6-10 RandCount/HTTPS:80:** externally observed; family evidence only, not a promise of EG8041 semantics.
 - **HG8245H5 ASP_CONFIG:** externally documented; runtime support `UNKNOWN` pending stronger evidence/fixture/device.
