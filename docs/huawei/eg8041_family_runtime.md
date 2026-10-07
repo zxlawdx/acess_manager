@@ -54,7 +54,11 @@ Advanced-field validation follows the physically observed family surface: DTIM `
 
 ## HTTPS/TLS and management addressing
 
-The central Huawei transport represents scheme and port separately. An HTTP response containing the characterized Huawei `SSLPort` bootstrap may negotiate to HTTPS while keeping port 80. Embedded/untrusted certificate handling is centralized; readers do not scatter `verify=False` calls.
+The central Huawei transport represents scheme and port separately. An HTTP response containing the characterized Huawei `SSLPort` bootstrap may negotiate to HTTPS while keeping port 80. The physically observed X6 flow is therefore `http://HOST:80` -> HTTP bootstrap -> `https://HOST:80`; port 80 does not imply plaintext HTTP after the scheme changes.
+
+A browser rendering `https://HOST:80` as red/struck-through or `Not secure` means the embedded certificate is not trusted (for example self-signed/private/mismatched). It does **not** mean that the connection became HTTP. Embedded/untrusted certificate handling is centralized in `HuaweiNegotiatingWebClient`; feature readers never scatter `verify=False` calls.
+
+Transport failures are typed before authentication. A TLS handshake/certificate failure remains `TLS_ERROR` and must never be rewritten as `AUTH_REJECTED`. Explicit `https://HOST:80` input preserves port 80, and bootstrap negotiation also preserves the advertised `SSLPort=80`.
 
 Vendor probing includes RFC1918 plus RFC6598 shared address space `100.64.0.0/10`. RFC6598 is never labelled RFC1918.
 
