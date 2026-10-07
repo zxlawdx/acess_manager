@@ -5,14 +5,16 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from apps.zte_manager.infrastructure.huawei import HuaweiFamilyAwareWebClient
+from apps.zte_manager.infrastructure.huawei.negotiating_client import (
+    HuaweiNegotiatingWebClient,
+)
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
 from apps.zte_manager.model.device_adapters.huawei_registry import (
     is_recognized_huawei_model,
 )
 from apps.zte_manager.services.huawei_service import HuaweiService
-from apps.zte_manager.services.huawei_telemetry_runtime import (
-    HuaweiTelemetryRuntimeService,
+from apps.zte_manager.services.huawei_eg8041_family_runtime import (
+    HuaweiEG8041FamilyRuntimeService,
 )
 from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
@@ -61,8 +63,8 @@ class DeviceService:
         self,
         *,
         zte_provider: ZTEService | None = None,
-        huawei_factory=HuaweiTelemetryRuntimeService,
-        huawei_client_type=HuaweiFamilyAwareWebClient,
+        huawei_factory=HuaweiEG8041FamilyRuntimeService,
+        huawei_client_type=HuaweiNegotiatingWebClient,
     ) -> None:
         self._zte_service = zte_provider or zte_service
         self._huawei_factory = huawei_factory
@@ -175,20 +177,27 @@ class DeviceService:
         raw = str(host or "").strip()
         if "://" in raw:
             raw = raw.split("://", 1)[1]
-        raw = raw.split("/", 1)[0].split(":", 1)[0]
+        raw = raw.split("/", 1)[0]
+        if raw.startswith("[") and "]" in raw:
+            raw = raw[1:raw.index("]")]
+        elif raw.count(":") == 1:
+            raw = raw.split(":", 1)[0]
         try:
             address = ipaddress.ip_address(raw)
         except ValueError:
             return True
 
-        private_networks = (
+        # Includes RFC1918 plus RFC6598 shared address space used by managed
+        # CPE/ONT networks. RFC6598 is deliberately not labelled RFC1918.
+        management_probe_networks = (
             ipaddress.ip_network("10.0.0.0/8"),
             ipaddress.ip_network("172.16.0.0/12"),
             ipaddress.ip_network("192.168.0.0/16"),
+            ipaddress.ip_network("100.64.0.0/10"),
         )
         return any(
             address in network
-            for network in private_networks
+            for network in management_probe_networks
         )
 
     def _connect_huawei(self, **kwargs) -> dict:
