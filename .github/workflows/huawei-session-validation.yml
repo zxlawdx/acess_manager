@@ -10,6 +10,8 @@ on:
     paths:
       - "apps/zte_manager/infrastructure/huawei/**"
       - "apps/zte_manager/model/device_adapters/huawei.py"
+      - "apps/zte_manager/model/device_adapters/huawei_registry.py"
+      - "apps/zte_manager/model/telemetry.py"
       - "apps/zte_manager/services/device_service.py"
       - "apps/zte_manager/services/huawei_*.py"
       - "apps/zte_manager/services/profile_service.py"
@@ -42,6 +44,7 @@ on:
       - "apps/zte_manager/static/css/tangerine_cards.css"
       - "apps/zte_manager/static/css/tangerine_workflows.css"
       - "docs/huawei/**"
+      - "tests/fixtures/huawei/**"
       - "tests/test_api_modularization.py"
       - "tests/test_schema_modularization.py"
       - "tests/test_template_modularization.py"
@@ -80,19 +83,25 @@ jobs:
         run: |
           python -m py_compile \
             apps/zte_manager/infrastructure/huawei/client.py \
+            apps/zte_manager/infrastructure/huawei/cli.py \
             apps/zte_manager/infrastructure/huawei/family_client.py \
             apps/zte_manager/infrastructure/huawei/protocol.py \
             apps/zte_manager/infrastructure/huawei/response.py \
+            apps/zte_manager/model/telemetry.py \
+            apps/zte_manager/model/device_adapters/huawei.py \
+            apps/zte_manager/model/device_adapters/huawei_registry.py \
             apps/zte_manager/services/huawei_service.py \
             apps/zte_manager/services/huawei_eg8041x7_runtime.py \
             apps/zte_manager/services/huawei_wifi_domain_runtime.py \
+            apps/zte_manager/services/huawei_telemetry_runtime.py \
+            apps/zte_manager/services/huawei_telemetry.py \
+            apps/zte_manager/services/huawei_cli_telemetry.py \
             apps/zte_manager/services/huawei_pon.py \
             apps/zte_manager/services/huawei_captured_features.py \
             apps/zte_manager/services/huawei_mapped_surface.py \
             apps/zte_manager/services/huawei_ipv4_filter_service.py \
             apps/zte_manager/services/profile_service.py \
             apps/zte_manager/services/device_service.py \
-            apps/zte_manager/model/device_adapters/huawei.py \
             apps/zte_manager/presentation/api/*.py \
             apps/zte_manager/presentation/schemas/*.py \
             apps/zte_manager/schemas.py \
@@ -140,6 +149,7 @@ jobs:
             tests.test_huawei_mapped_surface \
             tests.test_huawei_response_protocol \
             tests.test_huawei_multirepo_foundation \
+            tests.test_huawei_hg8010_telemetry \
             tests.test_huawei_eg8041x7_runtime \
             tests.test_huawei_dns_physical_state \
             tests.test_huawei_diagnostics \
