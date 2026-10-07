@@ -159,6 +159,7 @@ jobs:
             tests.test_huawei_hg8010_telemetry \
             tests.test_huawei_eg8041x7_runtime \
             tests.test_huawei_eg8041_family_runtime \
+            tests.test_huawei_eg8041_family_provider \
             tests.test_huawei_dns_physical_state \
             tests.test_huawei_diagnostics \
             tests.test_huawei_provider_architecture \
