@@ -50,10 +50,11 @@ _SSL_PORT = re.compile(
     r"\bSSLPort\s*=\s*['\"](?P<port>\d{1,5})['\"]",
     re.I,
 )
-_HTTPS_REDIRECT = re.compile(
-    r"(?:window\.)?location(?:\.href)?\s*=.*?https://",
-    re.I | re.S,
+_LOCATION_ASSIGN = re.compile(
+    r"(?:window\.)?location(?:\.href)?\s*=\s*(?P<expr>[^;]+)",
+    re.I,
 )
+_JS_IDENTIFIER = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
 _HUAWEI_MARKERS = (
     "getrandcount.asp",
     "getrandstring.asp",
@@ -64,16 +65,43 @@ _HUAWEI_MARKERS = (
 )
 
 
+def _has_https_location_expression(source: str) -> bool:
+    """Recognize literal or one-hop-variable HTTPS location assignments.
+
+    The physical EG8041X6 bootstrap first builds a local ``target`` variable
+    containing ``https://`` and then assigns ``window.location = target``.
+    Keep the recognition narrow: arbitrary redirects, nested expressions and
+    variables without an explicit HTTPS initializer are rejected.
+    """
+
+    text = str(source or "")
+    for location in _LOCATION_ASSIGN.finditer(text):
+        expression = location.group("expr").strip()
+        if "https://" in expression.casefold():
+            return True
+        if not _JS_IDENTIFIER.fullmatch(expression):
+            continue
+        initializer = re.search(
+            rf"\b(?:var|let|const)\s+{re.escape(expression)}\s*=\s*(?P<expr>[^;]+)",
+            text,
+            re.I,
+        )
+        if initializer and "https://" in initializer.group("expr").casefold():
+            return True
+    return False
+
+
 def parse_huawei_https_bootstrap(source: str) -> int | None:
     """Return the advertised TLS port only for the Huawei-style bootstrap.
 
     A plain JavaScript redirect is not sufficient evidence. The page must
-    expose the dedicated ``SSLPort`` variable and an HTTPS location expression.
+    expose the dedicated ``SSLPort`` variable and an HTTPS location expression,
+    either directly or through one explicit local variable assignment.
     """
 
     text = str(source or "")
     match = _SSL_PORT.search(text)
-    if match is None or _HTTPS_REDIRECT.search(text) is None:
+    if match is None or not _has_https_location_expression(text):
         return None
     port = int(match.group("port"))
     return port if 1 <= port <= 65535 else None
@@ -195,7 +223,7 @@ class HuaweiNegotiatingWebClient(HuaweiFamilyAwareWebClient):
         finally:
             session.close()
 
-    def _negotiate_endpoint(self) -> None:
+    def _negotiate_endpoint(self, *, validate_secure: bool = False) -> None:
         if self.endpoint.scheme != "http":
             return
         try:
@@ -229,8 +257,27 @@ class HuaweiNegotiatingWebClient(HuaweiFamilyAwareWebClient):
         self.base_url = self.endpoint.base_url
         self.negotiated = True
 
+        if not validate_secure:
+            return
+        try:
+            self._probe_root(
+                self.session,
+                self.endpoint,
+                timeout=self.timeout,
+            )
+        except requests.exceptions.SSLError as exc:
+            raise HuaweiTransportError(
+                HuaweiTransportFailure.TLS_ERROR,
+                "O endpoint Huawei HTTPS foi descoberto, mas a negociação TLS falhou.",
+            ) from exc
+        except requests.RequestException as exc:
+            raise HuaweiTransportError(
+                HuaweiTransportFailure.NETWORK_ERROR,
+                "O endpoint Huawei HTTPS foi descoberto, mas não pôde ser alcançado.",
+            ) from exc
+
     def login(self, retries: int = 1) -> bool:
-        self._negotiate_endpoint()
+        self._negotiate_endpoint(validate_secure=True)
         try:
             return super().login(retries=1)
         except HuaweiTransportError:
