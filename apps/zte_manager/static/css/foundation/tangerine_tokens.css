@@ -32,6 +32,10 @@ html[data-theme="light"] {
   --am-color-native-surface:#FFFFFF;
   --am-color-native-text:#111827;
   --am-color-native-border:#D1D5DB;
+  --am-color-native-selected-bg:#E4F2E8;
+  --am-color-native-selected-text:#143D29;
+  --am-color-native-disabled-bg:#F3F4F6;
+  --am-color-native-disabled-text:#526056;
 
   --am-shadow-surface:0 4px 24px rgba(100,53,24,.045);
 }
@@ -61,6 +65,10 @@ html[data-theme="dark"] {
   --am-color-native-surface:var(--am-color-surface);
   --am-color-native-text:var(--am-color-text);
   --am-color-native-border:var(--am-color-border);
+  --am-color-native-selected-bg:var(--am-color-primary-wash);
+  --am-color-native-selected-text:var(--am-color-text);
+  --am-color-native-disabled-bg:var(--am-color-bg);
+  --am-color-native-disabled-text:var(--am-color-text-muted);
   --am-shadow-surface:0 4px 24px rgba(0,0,0,.10);
 }
 
@@ -110,7 +118,7 @@ html[data-theme] {
   --am-primary-ink:var(--am-color-primary-ink);
   --am-shadow:var(--am-shadow-surface);
 
-  /* UI aliases used by light_mode_refine.css and older feature styles. */
+  /* UI aliases used by light compatibility layers and older feature styles. */
   --ui-bg:var(--am-color-bg);
   --ui-sidebar:var(--am-color-sidebar);
   --ui-surface:var(--am-color-surface);
