@@ -11,7 +11,6 @@ from .protocol import (
     HuaweiProtocolFingerprint,
     auth_flow_from_login_page,
     clean_huawei_token,
-    extract_huawei_challenge,
     plausible_huawei_token,
     protocol_family_from_observations,
 )
@@ -190,7 +189,10 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
 
     def _authenticate_rand_count(self) -> bool:
         challenge_response = self._fetch_rand_count()
-        challenge = extract_huawei_challenge(challenge_response.text)
+        # Standard EG8041 RandCount semantics use the response itself as the
+        # challenge. Preserve the complete cleaned value instead of applying
+        # the HG8010H-era trailing-32-hex characterization globally.
+        challenge = clean_huawei_token(challenge_response.text)
         if not plausible_huawei_token(challenge):
             raise RuntimeError("Huawei RandCount challenge was not returned")
 
