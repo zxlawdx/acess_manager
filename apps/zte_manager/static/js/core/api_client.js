@@ -137,9 +137,21 @@ export function createApiClient({
                 }
             }
 
+            // Ping/traceroute are observations, not mutations. A completed
+            // diagnostic may legitimately report success:false (for example
+            // 100% packet loss or max-hop exceeded) and the operator still
+            // needs the measured result. Transport/backend failures keep an
+            // explicit `error` and continue through the normal error policy.
+            const diagnosticObservation = (
+                endpoint === "/diagnostics/ping"
+                || endpoint === "/diagnostics/traceroute"
+            );
             const semanticFailure = data && typeof data === "object"
                 && !Array.isArray(data)
-                && (data.error || data.success === false);
+                && (
+                    data.error
+                    || (data.success === false && !diagnosticObservation)
+                );
             if (!response.ok || semanticFailure) {
                 if (errors) {
                     const payload = data && typeof data === "object"
