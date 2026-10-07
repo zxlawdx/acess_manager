@@ -10,6 +10,11 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
+from apps.zte_manager.infrastructure.huawei.negotiating_client import (
+    HuaweiTransportError,
+    HuaweiTransportFailure,
+)
+
 try:
     from requests import exceptions as req
 except ImportError:  # tests can exercise this module without requests
@@ -136,8 +141,55 @@ class PublicFailure:
         return result
 
 
+def _classify_huawei_transport(error: HuaweiTransportError) -> PublicFailure:
+    """Expose safe Huawei transport semantics without leaking exception text."""
+
+    mapping = {
+        HuaweiTransportFailure.NETWORK_ERROR: PublicFailure(
+            "NETWORK_ERROR",
+            "connection",
+            "Não foi possível alcançar a ONT.",
+            True,
+        ),
+        HuaweiTransportFailure.TLS_ERROR: PublicFailure(
+            "TLS_ERROR",
+            "connection",
+            "Não foi possível estabelecer TLS com a ONT.",
+            True,
+        ),
+        HuaweiTransportFailure.AUTH_REJECTED: PublicFailure(
+            "AUTH_REJECTED",
+            "authentication",
+            "A ONT rejeitou a autenticação.",
+            True,
+        ),
+        HuaweiTransportFailure.AUTH_PROTOCOL_MISMATCH: PublicFailure(
+            "AUTH_PROTOCOL_MISMATCH",
+            "unconfirmed",
+            "O fluxo de autenticação desta Huawei não foi reconhecido.",
+            False,
+        ),
+        HuaweiTransportFailure.SESSION_EXPIRED: PublicFailure(
+            "SESSION_EXPIRED",
+            "session",
+            "A sessão Huawei expirou. Reconecte-se ao equipamento.",
+            True,
+        ),
+    }
+    return mapping.get(
+        error.code,
+        PublicFailure(
+            "OPERATION_STATE",
+            "state",
+            "Não foi possível concluir esta operação com a sessão atual.",
+        ),
+    )
+
+
 def classify(error: BaseException) -> PublicFailure | None:
     """Return None only for unexpected errors that require an incident ID."""
+    if isinstance(error, HuaweiTransportError):
+        return _classify_huawei_transport(error)
     if isinstance(error, ApplicationFailure):
         return PublicFailure(
             error.code, error.category, error.user_message, error.retryable,
