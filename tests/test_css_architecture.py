@@ -66,22 +66,66 @@ EXPECTED_WORKFLOW_IMPORTS = [
     "./components/operator_results.css",
 ]
 
-TANGERINE_OWNER_LANDMARKS = {
-    "themes/tangerine_base_compat.css": ".menu-item.active",
-    "pages/dashboard_tangerine.css": ".am-dashboard-hero",
-    "themes/tangerine_terminal_compat.css": "#pingOutput.terminal-output",
-    "layout/editorial_workspace.css": ".am-session-bar",
-    "pages/advanced_tangerine.css": ".am-workbench-tab",
-    "components/history_timeline.css": ".am-history-timeline",
-    "pages/connection_inventory.css": ".am-inventory-panel",
-    "pages/clients_tangerine.css": ".am-client-workbench",
-    "pages/device_tangerine.css": ".am-device-summary",
-    "pages/tr069_tangerine.css": ".am-tr069-workspace",
-    "pages/diagnostics_tangerine.css": ".am-diagnostic-tabbed",
+# Compact characterization contract for the selectors moved out of the old
+# Tangerine monolith. These are deliberately domain landmarks rather than a
+# giant selector snapshot: each selector must remain in exactly one real owner.
+TANGERINE_OWNER_SELECTORS = {
+    "themes/tangerine_base_compat.css": [
+        "html[data-theme] .brand-mark {",
+        "html[data-theme] #themeToggle {display:none!important;}",
+    ],
+    "pages/dashboard_tangerine.css": [
+        "html[data-theme] .am-dashboard-hero {",
+        "html[data-theme] .am-activity-list {",
+    ],
+    "themes/tangerine_terminal_compat.css": [
+        'html[data-theme="light"] .firmware-json,',
+        "html[data-theme] #pingOutput.terminal-output,",
+    ],
+    "layout/editorial_workspace.css": [
+        "html[data-theme] .am-session-bar{",
+        "html[data-theme] .am-connect-story{",
+        "html[data-theme] .management-tabs{",
+    ],
+    "pages/advanced_tangerine.css": [
+        "html[data-theme] #page-advanced .advanced-actions {",
+        "html[data-theme] .am-toolpanel[hidden] {display:none!important;}",
+        "html[data-theme] #firmwareShapeOutput {",
+    ],
+    "components/history_timeline.css": [
+        "html[data-theme] .am-history-timeline {",
+        "html[data-theme] .am-history-backup {",
+    ],
+    "pages/connection_inventory.css": [
+        "html[data-theme] .login-layout:has(.am-inventory-panel) {",
+        "html[data-theme] .am-inventory-entry {",
+    ],
+    "pages/clients_tangerine.css": [
+        "html[data-theme] #page-clients .am-section-intro {",
+        "html[data-theme] .am-client-workbench {",
+    ],
+    "pages/device_tangerine.css": [
+        "html[data-theme] .am-device-summary {",
+        "html[data-theme] .am-device-maintenance {",
+    ],
+    "pages/tr069_tangerine.css": [
+        "html[data-theme] .am-tr069-workspace {",
+        "html[data-theme] .management-pane[hidden]{display:none!important;}",
+    ],
+    "pages/diagnostics_tangerine.css": [
+        "html[data-theme] .am-diagnostic-workspace.am-diagnostic-tabbed {",
+        "html[data-theme] .am-diagnostic-tabbed .diagnostic-card pre.terminal-output {",
+    ],
 }
+
+TANGERINE_COMPAT_LAYERS = [
+    "themes/tangerine_base_compat.css",
+    "themes/tangerine_terminal_compat.css",
+]
 
 STYLE_REF = re.compile(r"static\(['\"]zte_manager/css/([^'\"]+)['\"]\)")
 CSS_IMPORT = re.compile(r"@import\s+url\(['\"]([^'\"]+)['\"]\)\s*;")
+CUSTOM_PROPERTY_DEFINITION = re.compile(r"--[a-z0-9-]+\s*:", re.I)
 CANONICAL_DEFINITION = re.compile(
     r"(--am-(?:"
     r"color-[a-z0-9-]+|"
@@ -102,6 +146,7 @@ INLINE_STYLE = re.compile(r"\sstyle\s*=\s*['\"]", re.I)
 # lower it together with a new tested baseline.
 IMPORTANT_EXPECTED = 1537
 INLINE_STYLE_BASELINE = 2
+TANGERINE_ENTRYPOINT_MAX_LINES = 24
 
 
 def stylesheet_refs(source: str) -> list[str]:
@@ -112,10 +157,15 @@ def css_files() -> list[Path]:
     return sorted(CSS_ROOT.rglob("*.css"))
 
 
+def normalized_import_path(relative: str) -> str:
+    return relative.removeprefix("./")
+
+
 def assert_import_entrypoint(test_case: unittest.TestCase, relative: str, expected: list[str]) -> None:
     source = (CSS_ROOT / relative).read_text(encoding="utf-8")
     imports = CSS_IMPORT.findall(source)
     test_case.assertEqual(imports, expected)
+    test_case.assertEqual(len(imports), len(set(imports)), f"duplicate imports in {relative}")
     for imported in imports:
         target = (CSS_ROOT / imported).resolve()
         with test_case.subTest(entrypoint=relative, imported=imported):
@@ -147,12 +197,47 @@ class CssArchitectureTests(unittest.TestCase):
     def test_tangerine_entrypoint_preserves_original_feature_order(self):
         assert_import_entrypoint(self, "tangerine.css", EXPECTED_TANGERINE_IMPORTS)
 
-    def test_tangerine_real_owners_keep_characterization_landmarks(self):
-        for relative, landmark in TANGERINE_OWNER_LANDMARKS.items():
+    def test_tangerine_entrypoint_cannot_regrow_into_a_god_stylesheet(self):
+        source = (CSS_ROOT / "tangerine.css").read_text(encoding="utf-8")
+        self.assertLessEqual(len(source.splitlines()), TANGERINE_ENTRYPOINT_MAX_LINES)
+        self.assertNotRegex(source, r"\{\s*[^*]", "tangerine.css must coordinate layers, not own CSS rules")
+
+    def test_tangerine_real_owners_keep_exclusive_characterization_selectors(self):
+        sources = {
+            normalized_import_path(imported): (CSS_ROOT / imported).read_text(encoding="utf-8")
+            for imported in EXPECTED_TANGERINE_IMPORTS
+            if imported != "./foundation/tangerine_tokens.css"
+        }
+        self.assertEqual(set(TANGERINE_OWNER_SELECTORS), set(sources))
+
+        for owner, selectors in TANGERINE_OWNER_SELECTORS.items():
+            for selector in selectors:
+                with self.subTest(owner=owner, selector=selector):
+                    self.assertIn(selector, sources[owner], f"critical selector moved/lost from {owner}")
+                    duplicates = [
+                        other
+                        for other, source in sources.items()
+                        if other != owner and selector in source
+                    ]
+                    self.assertEqual(duplicates, [], f"critical selector duplicated outside {owner}")
+
+    def test_tangerine_real_owners_do_not_hide_more_import_layers(self):
+        for imported in EXPECTED_TANGERINE_IMPORTS:
+            if imported == "./foundation/tangerine_tokens.css":
+                continue
+            relative = normalized_import_path(imported)
+            source = (CSS_ROOT / relative).read_text(encoding="utf-8")
             with self.subTest(relative=relative):
-                source = (CSS_ROOT / relative).read_text(encoding="utf-8")
-                self.assertIn(landmark, source)
-                self.assertGreater(len(source.strip()), 180)
+                self.assertEqual(CSS_IMPORT.findall(source), [], f"nested imports can hide cascade cycles in {relative}")
+
+    def test_tangerine_compat_layers_are_not_token_sources(self):
+        for relative in TANGERINE_COMPAT_LAYERS:
+            source = (CSS_ROOT / relative).read_text(encoding="utf-8")
+            with self.subTest(relative=relative):
+                self.assertIsNone(
+                    CUSTOM_PROPERTY_DEFINITION.search(source),
+                    f"compatibility layer {relative} must consume foundation tokens, not define them",
+                )
 
     def test_workflow_entrypoint_preserves_layer_order_and_real_assets(self):
         assert_import_entrypoint(self, "tangerine_workflows.css", EXPECTED_WORKFLOW_IMPORTS)
