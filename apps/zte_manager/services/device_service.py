@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from apps.zte_manager.infrastructure.huawei import HuaweiWebClient
+from apps.zte_manager.infrastructure.huawei import HuaweiFamilyAwareWebClient
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
 from apps.zte_manager.services.huawei_service import HuaweiService
 from apps.zte_manager.services.huawei_wifi_domain_runtime import (
@@ -59,7 +59,7 @@ class DeviceService:
         *,
         zte_provider: ZTEService | None = None,
         huawei_factory=HuaweiWifiDomainRuntimeService,
-        huawei_client_type=HuaweiWebClient,
+        huawei_client_type=HuaweiFamilyAwareWebClient,
     ) -> None:
         self._zte_service = zte_provider or zte_service
         self._huawei_factory = huawei_factory
