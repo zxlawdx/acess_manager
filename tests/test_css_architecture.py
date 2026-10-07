@@ -141,10 +141,11 @@ CANONICAL_DEFINITION = re.compile(
 )
 INLINE_STYLE = re.compile(r"\sstyle\s*=\s*['\"]", re.I)
 
-# The Tangerine split moves rules without deleting specificity. Exact count is
-# a characterization guard for this slice; later cleanup PRs may deliberately
-# lower it together with a new tested baseline.
-IMPORTANT_EXPECTED = 1537
+# PR #82's green CI measured 1536 declarations on main. The Tangerine split
+# relocates all 545 declarations previously owned by tangerine.css without
+# changing that global total. Later cleanup PRs may deliberately lower it only
+# together with evidence and a new tested baseline.
+IMPORTANT_EXPECTED = 1536
 INLINE_STYLE_BASELINE = 2
 TANGERINE_ENTRYPOINT_MAX_LINES = 24
 
