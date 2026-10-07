@@ -1,0 +1,8 @@
+/* Responsive rules kept after the page blocks to preserve original cascade order. */
+@media(max-width:835px){
+ html[data-theme] .am-diagnostic-workspace{grid-template-columns:minmax(0,1fr)!important;}
+}
+@media(max-width:650px){
+ html[data-theme] .am-support-workspace .support-form-grid,
+ html[data-theme] .am-support-workspace .support-check-grid{grid-template-columns:minmax(0,1fr)!important;}
+}
