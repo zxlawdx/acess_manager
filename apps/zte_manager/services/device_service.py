@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from apps.zte_manager.infrastructure.huawei import HuaweiWebClient
+from apps.zte_manager.infrastructure.huawei import HuaweiFamilyAwareWebClient
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
 from apps.zte_manager.services.huawei_service import HuaweiService
 from apps.zte_manager.services.huawei_wifi_domain_runtime import (
@@ -59,7 +59,7 @@ class DeviceService:
         *,
         zte_provider: ZTEService | None = None,
         huawei_factory=HuaweiWifiDomainRuntimeService,
-        huawei_client_type=HuaweiWebClient,
+        huawei_client_type=HuaweiFamilyAwareWebClient,
     ) -> None:
         self._zte_service = zte_provider or zte_service
         self._huawei_factory = huawei_factory
@@ -218,36 +218,33 @@ class DeviceService:
         logger.info(
             "device_provider_selected vendor=huawei provider=%s profile=%s",
             provider_name,
-            result.get("profile") or "huawei_unknown",
+            result.get("profile"),
         )
         return result
 
     def _connect_zte(self, **kwargs) -> dict:
         if (
             self._session is not None
-            and self._session.vendor == "huawei"
+            and self._session.vendor != "zte"
         ):
             self.disconnect()
 
         result = self._zte_service.connect(**kwargs)
-        if self._zte_service.connected:
-            self._session = DeviceSession(
-                vendor="zte",
-                model=result.get("model"),
-                profile=result.get("adapter"),
-                provider=type(self._zte_service).__name__,
-                service=self._zte_service,
-                capabilities={},
-                model_verified=bool(
-                    result.get("model_verified")
-                ),
-                host=result.get("host"),
-                attendant=result.get("attendant"),
-                session_revision=result.get("session_revision"),
-            )
+        self._session = DeviceSession(
+            vendor="zte",
+            model=result.get("model"),
+            profile=None,
+            provider="ZTEService",
+            service=self._zte_service,
+            capabilities=result.get("capabilities") or {},
+            model_verified=bool(result.get("model_verified")),
+            host=result.get("host"),
+            attendant=result.get("attendant"),
+            session_revision=result.get("session_revision"),
+        )
         logger.info(
-            "device_provider_selected vendor=zte provider=%s",
-            type(self._zte_service).__name__,
+            "device_provider_selected vendor=zte provider=ZTEService model=%s",
+            result.get("model"),
         )
         return result
 
@@ -260,69 +257,22 @@ class DeviceService:
             self._zte_service.disconnect()
 
     def status(self) -> dict:
-        if self._session is None:
-            if self._zte_service.connected:
-                return {
-                    "connected": True,
-                    "vendor": "zte",
-                    "model": self._zte_service._selected_model,
-                    "profile": (
-                        self._zte_service._adapter.name
-                        if self._zte_service._adapter
-                        else None
-                    ),
-                    "provider": type(self._zte_service).__name__,
-                    "capabilities": {},
-                    "model_verified": self._zte_service._model_verified,
-                    "host": self._zte_service.current_host,
-                    "attendant": self._zte_service.current_attendant,
-                    "session_revision": self._zte_service._session_revision,
-                    "writes_enabled": bool(
-                        getattr(
-                            self._zte_service._zte,
-                            "writes_enabled",
-                            False,
-                        )
-                    ),
-                }
-            return {
-                "connected": False,
-                "vendor": None,
-                "model": None,
-                "profile": None,
-                "provider": None,
-                "capabilities": {},
-                "model_verified": False,
-                "host": None,
-                "attendant": None,
-                "session_revision": None,
-                "writes_enabled": False,
-            }
-
-        service = self._session.service
-        self._session.capabilities = (
-            service.capabilities
-            if self._session.vendor == "huawei"
-            else self._session.capabilities
-        )
-        data = self._session.public()
-        data["connected"] = bool(service.connected)
-        data["writes_enabled"] = bool(
-            getattr(service, "writes_enabled", False)
-            if self._session.vendor == "huawei"
-            else getattr(
-                self._zte_service._zte,
-                "writes_enabled",
-                False,
-            )
-        )
-        return data
-
-    def capability_catalog(self):
-        return self.active_service.capability_catalog()
-
-    def probe_capabilities(self, features=None):
-        return self.active_service.probe_capabilities(features)
+        if self._session is not None:
+            result = self._session.public()
+            result["connected"] = bool(self._session.service.connected)
+            return result
+        return {
+            "connected": False,
+            "vendor": None,
+            "model": None,
+            "profile": None,
+            "provider": None,
+            "capabilities": {},
+            "model_verified": False,
+            "host": None,
+            "attendant": None,
+            "session_revision": None,
+        }
 
     def capability_shape(self, feature, *, refresh=False):
         if self.vendor == "huawei":
@@ -339,72 +289,3 @@ class DeviceService:
                 refresh=refresh,
             )
         return self.active_service.read_capability(feature)
-
-    def _require_huawei(self) -> HuaweiService:
-        if (
-            self._session is None
-            or self._session.vendor != "huawei"
-            or not isinstance(
-                self._session.service,
-                HuaweiService,
-            )
-        ):
-            raise RuntimeError(
-                "A sessão atual não pertence a uma ONT Huawei."
-            )
-        return self._session.service
-
-    def list_ipv4_filters(self, *, refresh=False):
-        result = self._require_huawei().list_ipv4_filters(
-            refresh=refresh
-        )
-        # Do not erase DHCP/DNS/Wi-Fi/etc. capabilities merely because the
-        # IPv4 filter panel refreshed. The previous replacement caused the
-        # Huawei sidebar/discovery state to collapse to one feature.
-        self._session.capabilities = {
-            **(self._session.capabilities or {}),
-            "ipv4_filter": dict(
-                result.get("capability") or {}
-            ),
-        }
-        return result
-
-    def create_ipv4_filter(self, config):
-        return self._require_huawei().create_ipv4_filter(config)
-
-    def update_ipv4_filter(
-        self,
-        instance_or_domain,
-        config,
-    ):
-        return self._require_huawei().update_ipv4_filter(
-            instance_or_domain,
-            config,
-        )
-
-    def delete_ipv4_filter(self, instance_or_domain):
-        return self._require_huawei().delete_ipv4_filter(
-            instance_or_domain
-        )
-
-    def huawei_session_snapshot(self):
-        return self._require_huawei().session_snapshot()
-
-    def warm_huawei_session_snapshot(self, *, refresh=False):
-        return self._require_huawei().warm_session_snapshot(
-            refresh=refresh
-        )
-
-    def generate_attendance(self, diagnostic_id=None):
-        return self.active_service.generate_attendance(
-            diagnostic_id
-        )
-
-    def capture_snapshot(self, reason="manual"):
-        return self.active_service.capture_snapshot(reason)
-
-    def history(self, limit=50):
-        return self.active_service.history(limit)
-
-
-device_service = DeviceService()
