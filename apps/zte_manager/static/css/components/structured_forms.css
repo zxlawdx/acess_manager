@@ -1,0 +1,79 @@
+/* Shared structured configuration forms.
+ * Theme decisions come from foundation/tangerine_tokens.css; this file owns
+ * component structure only.
+ */
+html[data-theme] .am-structured-ready .am-source-json.am-editor-mounted{display:none!important;}
+html[data-theme] .am-form-editor{
+ display:grid;gap:13px;min-width:0;margin:13px 0 20px;
+ border:1px solid var(--am-color-border);border-radius:var(--am-radius-md);
+ background:var(--am-color-bg);padding:clamp(14px,2vw,22px);
+}
+html[data-theme] .am-form-editor-head{display:flex;flex-direction:column;gap:4px;
+ padding-bottom:11px;border-bottom:1px solid var(--am-color-border);}
+html[data-theme] .am-form-editor-head strong{font:760 14px var(--am-font-sans);color:var(--am-color-text);}
+html[data-theme] .am-form-editor-head small{font:450 11px/1.6 var(--am-font-sans);color:var(--am-color-text-muted);}
+html[data-theme] .am-form-editor-content{display:grid;gap:13px;min-width:0;
+ grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));}
+html[data-theme] .am-editor-group{border:1px solid var(--am-color-border);border-radius:10px;
+ padding:13px;display:grid;gap:10px;grid-column:1/-1;min-width:0;
+ grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));background:var(--am-color-surface);}
+html[data-theme] .am-editor-group legend{padding:0 7px;color:var(--am-color-primary-strong);
+ font:750 12px var(--am-font-sans);}
+html[data-theme] .am-editor-field{display:flex;flex-direction:column;gap:6px;
+ font:650 11px/1.5 var(--am-font-sans);color:var(--am-color-text);min-width:0;}
+html[data-theme] .am-editor-field>input:not([type=checkbox]){
+ min-width:0;width:100%;min-height:38px;border-radius:var(--am-radius-sm);
+ border:1px solid var(--am-color-border);padding:7px 10px;color:var(--am-color-text);
+ background:var(--am-color-surface);font:520 12px var(--am-font-sans);}
+html[data-theme] .am-editor-field.am-editor-toggle{flex-direction:row;align-items:center;
+ justify-content:space-between;gap:15px;max-width:320px;}
+html[data-theme] .am-editor-toggle input{width:18px;height:18px;accent-color:var(--am-color-primary-strong);}
+html[data-theme] .am-add-setting,html[data-theme] .am-remove-setting{
+ background:var(--am-color-primary-wash);color:var(--am-color-primary-strong);
+ border:1px dashed var(--am-color-primary);border-radius:var(--am-radius-sm);
+ padding:9px 12px;font:700 11px var(--am-font-sans);cursor:pointer;
+}
+html[data-theme] .am-remove-setting{border-style:solid;color:var(--am-color-danger);
+ border-color:var(--am-color-border);background:var(--am-color-surface);}
+html[data-theme] .am-dynamic-field{display:grid;grid-template-columns:1fr .7fr 1fr auto;
+ align-items:center;gap:6px;grid-column:1/-1;min-width:0;}
+html[data-theme] .am-dynamic-field input,html[data-theme] .am-dynamic-field select{
+ min-width:0;width:100%;min-height:36px;border:1px solid var(--am-color-border);
+ border-radius:var(--am-radius-sm);padding:5px 9px;color:var(--am-color-text);background:var(--am-color-surface);}
+html[data-theme] .am-form-editor-feedback{font:600 11px var(--am-font-sans);
+ color:var(--am-color-danger);min-height:0;}
+html[data-theme] .am-editor-field input:focus-visible,
+html[data-theme] .am-dynamic-field input:focus-visible{
+ outline:var(--am-focus-width) solid var(--am-focus-color);
+ outline-offset:2px;
+}
+
+/* Profiles are rendered dynamically inside .radio-card. Normal radio cards
+   wrap their controls with .radio-form (which supplies the inner padding),
+   while profile cards mount the fields in .profile-fields. Without the
+   equivalent inset the form touches the clipping edge of .radio-card and the
+   Huawei note/checkbox appear visually cut off in the desktop WebView. */
+html[data-theme] #page-profiles #profileRadios{
+ margin-top:14px;
+ align-items:start;
+}
+html[data-theme] #page-profiles .profile-radio-card{
+ align-self:start;
+ min-width:0;
+}
+html[data-theme] #page-profiles .profile-radio-card .profile-fields{
+ padding:15px 16px 16px;
+ min-width:0;
+}
+html[data-theme] #page-profiles .profile-radio-card .profile-fields>.muted{
+ margin-top:10px;
+ line-height:1.55;
+ overflow-wrap:anywhere;
+}
+html[data-theme] #page-profiles .profile-radio-card .checkbox-container{
+ margin-top:10px;
+}
+
+@media(max-width:650px){
+ html[data-theme] .am-dynamic-field{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+}
