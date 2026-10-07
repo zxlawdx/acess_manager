@@ -86,14 +86,18 @@ class SequencedSession:
 
 
 class HuaweiTransportNegotiationTests(unittest.TestCase):
-    def _auth_frames(self):
+    def _auth_frames(self, challenge_fixture: str = "auth_rand_count.txt"):
         return [
             (
                 "GET",
                 "/",
                 FakeResponse(fixture("auth_root_login_rndsecurityformat.html")),
             ),
-            ("POST", "/asp/GetRandCount.asp", FakeResponse(fixture("auth_rand_count.txt"))),
+            (
+                "POST",
+                "/asp/GetRandCount.asp",
+                FakeResponse(fixture(challenge_fixture)),
+            ),
             ("POST", "/login.cgi", FakeResponse(fixture("auth_login_success.html"))),
             ("POST", "/asp/getMenuArray.asp", FakeResponse(fixture("auth_menu_proof.asp"))),
         ]
@@ -243,6 +247,38 @@ class HuaweiTransportNegotiationTests(unittest.TestCase):
         )
         self.assertTrue(all(urlsplit(item["url"]).scheme == "https" for item in authenticated.calls))
         self.assertTrue(all(urlsplit(item["url"]).port == 80 for item in authenticated.calls))
+
+    def test_standard_randcount_preserves_full_cleaned_challenge_in_login_payload(self):
+        initial = SequencedSession([], verify=False)
+        authenticated = SequencedSession(
+            self._auth_frames("auth_rand_count_prefixed.txt"),
+            verify=False,
+        )
+        with patch.object(
+            HuaweiNegotiatingWebClient,
+            "_new_session",
+            side_effect=[initial, authenticated],
+        ):
+            client = HuaweiNegotiatingWebClient(
+                "192.0.2.10:80",
+                "operator",
+                "fixture-password",
+                https=True,
+            )
+            self.assertTrue(client.login())
+
+        full_challenge = fixture("auth_rand_count_prefixed.txt").strip()
+        login_call = authenticated.calls[2]
+        self.assertEqual(urlsplit(login_call["url"]).path, "/login.cgi")
+        self.assertEqual(
+            login_call["kwargs"]["data"]["x.X_HW_Token"],
+            full_challenge,
+        )
+        self.assertNotEqual(
+            login_call["kwargs"]["data"]["x.X_HW_Token"],
+            full_challenge[-32:],
+        )
+        self.assertEqual(client.auth_flow, HuaweiAuthFlow.RAND_COUNT)
 
     def test_auto_http_bootstrap_converges_to_same_https_80_auth_pipeline(self):
         bootstrap = SequencedSession([
