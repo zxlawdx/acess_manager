@@ -9,7 +9,6 @@ from apps.zte_manager.infrastructure.huawei.cli import (
     create_huawei_cli_transport,
 )
 from apps.zte_manager.model.device_adapters.huawei_registry import (
-    HuaweiSupportLevel,
     resolve_huawei_model_knowledge,
 )
 from apps.zte_manager.model.telemetry import PonStatus
@@ -288,8 +287,12 @@ class HuaweiTelemetryRuntimeService(HuaweiWifiDomainRuntimeService):
     def connect(self, *args, **kwargs):
         huawei_cli = kwargs.pop("huawei_cli", None)
         model_hint = kwargs.get("model_hint")
-        self._cli_options = HuaweiCliOptions.from_mapping(huawei_cli)
+        requested_cli = HuaweiCliOptions.from_mapping(huawei_cli)
+        # HuaweiService.connect calls self.disconnect() before creating a fresh
+        # WebUI session. Restore the operator's CLI options only after that
+        # lifecycle completes so secrets are still cleared on real disconnect.
         result = super().connect(*args, **kwargs)
+        self._cli_options = requested_cli
         self._canonicalize_researched_identity(model_hint)
         self._optical_telemetry_reader = (
             HuaweiOpticalTelemetryReader(self._client)
