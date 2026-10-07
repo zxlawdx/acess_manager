@@ -115,6 +115,40 @@ test("backend semantic error envelope rejects even with HTTP 200", async () => {
     });
 });
 
+test("negative ping and traceroute outcomes remain renderable diagnostic data", async () => {
+    for (const endpoint of ["/diagnostics/ping", "/diagnostics/traceroute"]) {
+        const payload = {
+            success: false,
+            verified: true,
+            uncertain: false,
+            diagnostics_state: "Complete_Err",
+            resultado: "diagnostic measurement completed",
+        };
+        const h = harness(async () => response(200, payload));
+        assert.deepEqual(await h.request(endpoint, {method: "POST"}), payload);
+        assert.equal(
+            h.events.some(([name]) => name === "request:error"),
+            false,
+        );
+        assert.equal(
+            h.events.some(([name]) => name === "request:success"),
+            true,
+        );
+    }
+});
+
+test("diagnostic endpoints still reject explicit backend error envelopes", async () => {
+    const h = harness(async () => response(200, {
+        success: false,
+        code: "OPERATION_STATE",
+        error: "Falha controlada no diagnóstico.",
+    }));
+    await assert.rejects(h.request("/diagnostics/ping", {method: "POST"}), error => {
+        assert.equal(error.code, "OPERATION_STATE");
+        return true;
+    });
+});
+
 test("timeout aborts fetch and preserves AbortError/timeout contract", async () => {
     const h = harness((_url, options) => new Promise((_resolve, reject) => {
         options.signal.addEventListener("abort", () => {

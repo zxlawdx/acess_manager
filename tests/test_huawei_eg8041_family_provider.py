@@ -10,6 +10,9 @@ from apps.zte_manager.services.huawei_eg8041_family_provider import (
 )
 
 
+FIXTURES = Path("tests/fixtures/huawei/eg8041x6_10_local")
+
+
 class FakeZte:
     connected = False
 
@@ -26,6 +29,16 @@ class FakeHuaweiProfileProvider:
 
     def apply_profile(self, attendant=None):
         return {"provider": "huawei", "attendant": attendant, "success": True}
+
+
+class TerminalDiagnosticClient:
+    def __init__(self, frame: str) -> None:
+        self.frame = frame
+        self.calls = []
+
+    def post_read(self, path, payload=None, *, referer="/index.asp"):
+        self.calls.append((path, dict(payload or {}), referer))
+        return self.frame
 
 
 class HuaweiEg8041FamilyProviderTests(unittest.TestCase):
@@ -74,6 +87,66 @@ class HuaweiEg8041FamilyProviderTests(unittest.TestCase):
         contract = response["objects"]["items"]
         self.assertEqual(contract["start_route"], "/diagnostics/ping")
         self.assertTrue(contract["native"])
+
+    def test_x6_concatenated_traceroute_frame_decodes_complete_and_hops(self):
+        source = (FIXTURES / "diagnostic_traceroute_concat.txt").read_text(
+            encoding="utf-8"
+        )
+        output, state = HuaweiEG8041FamilyProvider._decode_diagnostic_result(
+            source
+        )
+
+        self.assertEqual(state, "Complete")
+        self.assertIn("traceroute to 8.8.8.8", output)
+        self.assertIn("dns.google (8.8.8.8)", output)
+        self.assertNotIn(r"\x20", output)
+
+        hops = HuaweiEG8041FamilyProvider._parse_traceroute_hops(output)
+        self.assertEqual([item["numero"] for item in hops], [1, 10])
+        self.assertEqual(hops[-1]["ip"], "8.8.8.8")
+        self.assertEqual(hops[-1]["latencias_ms"], [31.856])
+
+    def test_x6_terminal_concatenated_frame_stops_polling_immediately(self):
+        frame = (FIXTURES / "diagnostic_traceroute_concat.txt").read_text(
+            encoding="utf-8"
+        )
+        service = HuaweiEG8041FamilyProvider()
+        client = TerminalDiagnosticClient(frame)
+        service._client = client
+
+        output, state, complete = service._poll_huawei_diagnostic(
+            service._TRACE_RESULT_PATH,
+            deadline_seconds=20,
+            client=client,
+        )
+
+        self.assertTrue(complete)
+        self.assertEqual(state, "Complete")
+        self.assertIn("8.8.8.8", output)
+        self.assertEqual(len(client.calls), 1)
+
+    def test_x6_concatenated_ping_frame_preserves_valid_negative_result_data(self):
+        source = (
+            '"PING\\x208\\x2e8\\x2e8\\x2e8\\n" + '
+            '"4 packets transmitted, 0 packets received, 100% packet loss\\n" + '
+            '"\\x5b\\x40\\x23\\x40\\x5dComplete_Err";'
+        )
+        output, state = HuaweiEG8041FamilyProvider._decode_diagnostic_result(source)
+        stats = HuaweiEG8041FamilyProvider._parse_ping_output(
+            output,
+            requested_count=4,
+        )
+
+        self.assertEqual(state, "Complete_Err")
+        self.assertEqual(stats["sucesso"], 0)
+        self.assertEqual(stats["falha"], 4)
+        self.assertEqual(stats["perda_percentual"], 100)
+
+    def test_diagnostic_decoder_never_executes_non_string_expression(self):
+        source = '"safe" + dangerous_call()'
+        output, state = HuaweiEG8041FamilyProvider._decode_diagnostic_result(source)
+        self.assertEqual(output, source)
+        self.assertEqual(state, "")
 
     def test_configuration_profile_api_remains_device_service_driven(self):
         source = Path(
