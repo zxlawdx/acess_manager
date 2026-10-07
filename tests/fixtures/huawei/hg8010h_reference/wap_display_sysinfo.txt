@@ -1,0 +1,8 @@
+WAP>display sysinfo
+*************** system infomation ***************
+CpuUsed  = 4 Percent(s)
+MemUsed  = 70 Percent(s)
+CurTime  = 2026-10-07 00:00:00
+*************************************************
+success!
+WAP>
