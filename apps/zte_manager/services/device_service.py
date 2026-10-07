@@ -7,6 +7,9 @@ from typing import Any
 
 from apps.zte_manager.infrastructure.huawei import HuaweiFamilyAwareWebClient
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
+from apps.zte_manager.model.device_adapters.huawei_registry import (
+    is_recognized_huawei_model,
+)
 from apps.zte_manager.services.huawei_service import HuaweiService
 from apps.zte_manager.services.huawei_wifi_domain_runtime import (
     HuaweiWifiDomainRuntimeService,
@@ -123,9 +126,14 @@ class DeviceService:
         https: bool = False,
         attendant: str | None = None,
         model_hint: str | None = None,
+        huawei_cli: dict | None = None,
     ) -> dict:
-        manual_huawei = is_known_huawei_model(
-            model_hint
+        # Knowledge-registry recognition routes the request to the Huawei
+        # provider, but does not grant an operational profile/capability. The
+        # Huawei runtime still requires auth + real endpoint probes.
+        manual_huawei = (
+            is_known_huawei_model(model_hint)
+            or is_recognized_huawei_model(model_hint)
         )
         detected_huawei = False
 
@@ -149,8 +157,10 @@ class DeviceService:
                 https=https,
                 attendant=attendant,
                 model_hint=model_hint,
+                huawei_cli=huawei_cli,
             )
 
+        # Huawei-only CLI options must never leak into ZTE providers.
         return self._connect_zte(
             ip=ip,
             username=username,
