@@ -160,6 +160,7 @@ jobs:
             tests.test_huawei_eg8041x7_runtime \
             tests.test_huawei_eg8041_family_runtime \
             tests.test_huawei_eg8041_family_provider \
+            tests.test_huawei_transport_negotiation \
             tests.test_huawei_dns_physical_state \
             tests.test_huawei_diagnostics \
             tests.test_huawei_provider_architecture \
@@ -179,4 +180,5 @@ jobs:
         run: |
           node --test \
             tests/test_huawei_navigation_snapshot.cjs \
-            tests/test_profile_error_contract.cjs
+            tests/test_profile_error_contract.cjs \
+            tests/test_profile_provider_neutral_ui.cjs
