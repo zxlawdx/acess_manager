@@ -39,10 +39,22 @@ test("malformed successful payload still uses invalid-device-response", () => {
 });
 
 test("profile cards have an explicit padded dynamic body", () => {
-    const css = fs.readFileSync(
-        path.join(__dirname, "..", "apps", "zte_manager", "static", "css", "tangerine_forms.css"),
+    const cssRoot = path.join(
+        __dirname, "..", "apps", "zte_manager", "static", "css"
+    );
+    const entrypoint = fs.readFileSync(
+        path.join(cssRoot, "tangerine_forms.css"),
         "utf8"
     );
-    assert.match(css, /\.profile-radio-card \.profile-fields\s*\{/);
-    assert.match(css, /padding:15px 16px 16px/);
+    const component = fs.readFileSync(
+        path.join(cssRoot, "components", "structured_forms.css"),
+        "utf8"
+    );
+
+    assert.match(
+        entrypoint,
+        /^@import url\("\.\/components\/structured_forms\.css"\);/
+    );
+    assert.match(component, /\.profile-radio-card \.profile-fields\s*\{/);
+    assert.match(component, /padding:15px 16px 16px/);
 });
