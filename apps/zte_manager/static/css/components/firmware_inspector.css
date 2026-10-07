@@ -8,15 +8,15 @@
 #page-advanced .am-inspector-selector label{min-width:0;display:grid;gap:7px;}
 #page-advanced .am-inspector-selector select{
   min-width:0;width:100%;min-height:44px;padding:9px 35px 9px 13px;
-  font:600 13px/1.4 var(--font-sans);background:var(--am-surface);
-  color:var(--am-text);border:1px solid var(--am-border);border-radius:10px;
+  font:600 13px/1.4 var(--am-font-sans);background:var(--am-color-surface);
+  color:var(--am-color-text);border:1px solid var(--am-color-border);border-radius:10px;
 }
 #page-advanced .am-inspector-selector button{
   min-height:44px!important;white-space:nowrap;padding:10px 23px!important;
 }
 #page-advanced #firmwareInspectorNotice{
-  grid-column:1/-1;font:480 11px/1.6 var(--font-sans);
-  color:var(--am-text-2);margin:0;
+  grid-column:1/-1;font:480 11px/1.6 var(--am-font-sans);
+  color:var(--am-color-text-muted);margin:0;
 }
 #page-advanced #featureInspectorOutput.am-inspector-result{
   max-width:100%;width:100%;min-width:0;padding:0!important;
@@ -25,53 +25,53 @@
 }
 .am-inspector-card{
   display:grid;gap:18px;min-width:0;
-  border:1px solid var(--am-border);background:var(--am-surface);
+  border:1px solid var(--am-color-border);background:var(--am-color-surface);
   border-radius:14px;padding:clamp(16px,2.6vw,29px);
 }
 .am-inspector-header{
   display:flex;align-items:center;justify-content:space-between;
-  gap:15px;flex-wrap:wrap;padding-bottom:17px;border-bottom:1px solid var(--am-border);
+  gap:15px;flex-wrap:wrap;padding-bottom:17px;border-bottom:1px solid var(--am-color-border);
 }
 .am-inspector-heading{min-width:0;}
-.am-inspector-kicker{color:var(--am-primary-deep);
-  font:800 10px var(--font-sans);letter-spacing:.12em;}
-.am-inspector-heading h3{font:790 clamp(19px,2.2vw,25px)/1.3 var(--font-sans);
-  letter-spacing:-.04em;color:var(--am-text);margin:7px 0 0;overflow-wrap:anywhere;}
-.am-inspector-status{font:700 11px var(--font-sans);border-radius:30px;
-  border:1px solid var(--am-border);padding:9px 12px;color:var(--am-text-2);
-  background:var(--am-bg);}
-.am-inspector-status.is-confirmed{background:var(--am-success-wash);
-  color:var(--am-success);border-color:var(--am-success);}
-.am-inspector-description{font:480 13px/1.75 var(--font-sans);
-  margin:0;color:var(--am-text-2);max-width:80ch;}
+.am-inspector-kicker{color:var(--am-color-primary-strong);
+  font:800 10px var(--am-font-sans);letter-spacing:.12em;}
+.am-inspector-heading h3{font:790 clamp(19px,2.2vw,25px)/1.3 var(--am-font-sans);
+  letter-spacing:-.04em;color:var(--am-color-text);margin:7px 0 0;overflow-wrap:anywhere;}
+.am-inspector-status{font:700 11px var(--am-font-sans);border-radius:30px;
+  border:1px solid var(--am-color-border);padding:9px 12px;color:var(--am-color-text-muted);
+  background:var(--am-color-bg);}
+.am-inspector-status.is-confirmed{background:var(--am-color-success-wash);
+  color:var(--am-color-success);border-color:var(--am-color-success);}
+.am-inspector-description{font:480 13px/1.75 var(--am-font-sans);
+  margin:0;color:var(--am-color-text-muted);max-width:80ch;}
 .am-inspector-mode{display:grid;gap:7px;min-width:0;
-  background:var(--am-primary-wash);border-left:4px solid var(--am-primary);
+  background:var(--am-color-primary-wash);border-left:4px solid var(--am-color-primary);
   padding:13px 16px;border-radius:9px;}
-.am-inspector-mode strong{font:790 11px var(--font-sans);color:var(--am-text);}
-.am-inspector-mode span{font:540 13px/1.5 var(--font-sans);color:var(--am-text);}
+.am-inspector-mode strong{font:790 11px var(--am-font-sans);color:var(--am-color-text);}
+.am-inspector-mode span{font:540 13px/1.5 var(--am-font-sans);color:var(--am-color-text);}
 .am-inspector-fields{display:grid;gap:12px;}
-.am-inspector-fields h4{font:770 14px var(--font-sans);color:var(--am-text);
+.am-inspector-fields h4{font:770 14px var(--am-font-sans);color:var(--am-color-text);
   margin:0 0 4px;}
 .am-inspector-fields-grid{
   display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));
   gap:11px;margin:0;
 }
-.am-inspector-field{display:grid;gap:9px;background:var(--am-bg);
-  border:1px solid var(--am-border);border-radius:11px;padding:15px;min-width:0;}
-.am-inspector-field dt{font:700 11px/1.4 var(--font-sans);color:var(--am-text-2);}
-.am-inspector-field dd{margin:0;font:770 15px/1.45 var(--font-sans);
-  color:var(--am-text);overflow-wrap:anywhere;}
-.am-inspector-quiet{font:530 12px/1.6 var(--font-sans);
-  color:var(--am-text-2);margin:0;}
+.am-inspector-field{display:grid;gap:9px;background:var(--am-color-bg);
+  border:1px solid var(--am-color-border);border-radius:11px;padding:15px;min-width:0;}
+.am-inspector-field dt{font:700 11px/1.4 var(--am-font-sans);color:var(--am-color-text-muted);}
+.am-inspector-field dd{margin:0;font:770 15px/1.45 var(--am-font-sans);
+  color:var(--am-color-text);overflow-wrap:anywhere;}
+.am-inspector-quiet{font:530 12px/1.6 var(--am-font-sans);
+  color:var(--am-color-text-muted);margin:0;}
 .am-inspector-actions{display:flex;align-items:center;gap:17px;flex-wrap:wrap;
-  border-top:1px solid var(--am-border);padding-top:17px;}
+  border-top:1px solid var(--am-color-border);padding-top:17px;}
 .am-inspector-actions .button{min-height:43px!important;}
 .am-inspector-actions small{flex:1 1 220px;
-  font:500 11px/1.6 var(--font-sans);color:var(--am-text-2);}
+  font:500 11px/1.6 var(--am-font-sans);color:var(--am-color-text-muted);}
 .am-inspector-warning,.am-inspector-alert{
-  background:var(--am-warning-wash);color:var(--am-warning);
-  border:1px solid var(--am-border);border-radius:10px;padding:14px;
-  font:550 12px/1.7 var(--font-sans);margin:0;
+  background:var(--am-color-warning-wash);color:var(--am-color-warning);
+  border:1px solid var(--am-color-border);border-radius:10px;padding:14px;
+  font:550 12px/1.7 var(--am-font-sans);margin:0;
 }
 @media(max-width:720px){
  #page-advanced .am-inspector-selector{grid-template-columns:minmax(0,1fr);}
@@ -81,21 +81,21 @@
 /* The capability map intentionally excludes raw feature codes, view names,
    protocol paths, request parameters and firmware object labels. */
 .am-firmware-map{min-width:0;display:grid;gap:12px;margin-top:14px;}
-.am-inspector-map-heading{font:770 15px/1.45 var(--font-sans);color:var(--am-text);
+.am-inspector-map-heading{font:770 15px/1.45 var(--am-font-sans);color:var(--am-color-text);
   margin:0;}
-.am-inspector-map-summary{font:650 11px/1.6 var(--font-sans);color:var(--am-text-2);
+.am-inspector-map-summary{font:650 11px/1.6 var(--am-font-sans);color:var(--am-color-text-muted);
   margin:0;}
 .am-inspector-map-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));
   gap:12px;margin:0;padding:0;list-style:none;}
 .am-inspector-map-item{min-width:0;display:grid;align-content:start;gap:11px;
-  border:1px solid var(--am-border);background:var(--am-surface);
+  border:1px solid var(--am-color-border);background:var(--am-color-surface);
   border-radius:11px;padding:16px;}
-.am-inspector-map-item strong{font:750 13px/1.4 var(--font-sans);color:var(--am-text);}
-.am-inspector-map-state{width:max-content;max-width:100%;font:750 10px var(--font-sans);
-  padding:6px 10px;border-radius:30px;color:var(--am-text-2);
-  border:1px solid var(--am-border);background:var(--am-bg);}
-.am-inspector-map-state.confirmed{color:var(--am-success);
-  background:var(--am-success-wash);border-color:var(--am-success);}
-.am-inspector-map-state.unconfirmed{color:var(--am-warning);
-  background:var(--am-warning-wash);border-color:var(--am-border);}
-.am-inspector-map-item small{font:480 11px/1.65 var(--font-sans);color:var(--am-text-2);}
+.am-inspector-map-item strong{font:750 13px/1.4 var(--am-font-sans);color:var(--am-color-text);}
+.am-inspector-map-state{width:max-content;max-width:100%;font:750 10px var(--am-font-sans);
+  padding:6px 10px;border-radius:30px;color:var(--am-color-text-muted);
+  border:1px solid var(--am-color-border);background:var(--am-color-bg);}
+.am-inspector-map-state.confirmed{color:var(--am-color-success);
+  background:var(--am-color-success-wash);border-color:var(--am-color-success);}
+.am-inspector-map-state.unconfirmed{color:var(--am-color-warning);
+  background:var(--am-color-warning-wash);border-color:var(--am-color-border);}
+.am-inspector-map-item small{font:480 11px/1.65 var(--am-font-sans);color:var(--am-color-text-muted);}
