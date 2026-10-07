@@ -6,54 +6,68 @@ const path = require("node:path");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
-const tokensPath = path.join(
-    root, "apps/zte_manager/static/css/foundation/tangerine_tokens.css"
-);
-const workflowsPath = path.join(
-    root, "apps/zte_manager/static/css/tangerine_workflows.css"
-);
-const legacyPath = path.join(
-    root, "apps/zte_manager/static/css/tangerine.css"
-);
+const css = relative => fs.readFileSync(path.join(root, "apps/zte_manager/static/css", relative), "utf8");
 
-function compact(value) {
-    return String(value).replace(/\s+/g, "");
-}
+const tokensSource = css("foundation/tangerine_tokens.css");
+const legacySource = css("tangerine.css");
+const workflowsSource = css("tangerine_workflows.css");
+const formsEntrypoint = css("tangerine_forms.css");
+const cardsEntrypoint = css("tangerine_cards.css");
+const structuredForms = css("components/structured_forms.css");
+const configurationCards = css("components/configuration_cards.css");
 
-function declarations(source) {
-    return [...source.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)]
-        .map(match => `${match[1]}:${compact(match[2])};`);
-}
-
-test("Tangerine workflow stylesheet loads the canonical token module first", () => {
-    const source = fs.readFileSync(workflowsPath, "utf8");
+test("Tangerine workflow stylesheet still loads the canonical token module", () => {
     assert.match(
-        source,
+        workflowsSource,
         /^@import url\("\.\/foundation\/tangerine_tokens\.css"\);/
     );
 });
 
-test("extracted design tokens preserve the current Tangerine values", () => {
-    const tokens = fs.readFileSync(tokensPath, "utf8");
-    const legacy = compact(fs.readFileSync(legacyPath, "utf8"));
-    const extracted = declarations(tokens);
+test("canonical tokens own theme values and legacy names are aliases", () => {
+    assert.match(tokensSource, /:root,\s*html\[data-theme="light"\]/);
+    assert.match(tokensSource, /html\[data-theme="dark"\]/);
 
-    assert.ok(extracted.length >= 50, "expected theme and compatibility tokens");
-    for (const declaration of extracted) {
-        assert.ok(
-            legacy.includes(declaration),
-            `legacy Tangerine value changed or token missing: ${declaration}`
-        );
-    }
+    assert.match(tokensSource, /--am-color-primary:#FF6C37;/);
+    assert.match(tokensSource, /--am-color-primary:#FF8654;/);
+    assert.match(tokensSource, /--am-color-bg:#FFFDF8;/);
+    assert.match(tokensSource, /--am-color-bg:#211C19;/);
+    assert.match(tokensSource, /--am-color-text:#29221E;/);
+    assert.match(tokensSource, /--am-color-text:#FFF8F1;/);
+
+    assert.match(tokensSource, /--am-bg:var\(--am-color-bg\);/);
+    assert.match(tokensSource, /--am-primary:var\(--am-color-primary\);/);
+    assert.match(tokensSource, /--ui-accent:var\(--am-color-primary\);/);
+    assert.match(tokensSource, /--bg:var\(--am-color-bg\);/);
+    assert.match(tokensSource, /--font-mono:var\(--am-font-mono\);/);
+
+    assert.match(tokensSource, /--am-radius-sm:8px;/);
+    assert.match(tokensSource, /--am-space-4:16px;/);
+    assert.match(tokensSource, /--am-focus-width:2px;/);
+    assert.match(tokensSource, /--am-transition-standard:180ms ease;/);
 });
 
-test("token module carries light, dark and legacy compatibility contracts", () => {
-    const source = fs.readFileSync(tokensPath, "utf8");
-    assert.match(source, /:root,\s*html\[data-theme="light"\]/);
-    assert.match(source, /html\[data-theme="dark"\]/);
-    assert.match(source, /--am-primary:#FF6C37;/);
-    assert.match(source, /--am-primary:#FF8654;/);
-    assert.match(source, /--ui-accent:var\(--am-primary\);/);
-    assert.match(source, /--bg:var\(--am-bg\);/);
-    assert.match(source, /--font-mono:"JetBrains Mono"/);
+test("legacy Tangerine stylesheet does not define the canonical namespace", () => {
+    assert.doesNotMatch(legacySource, /--am-color-[a-z0-9-]+\s*:/i);
+    assert.doesNotMatch(legacySource, /--am-space-[a-z0-9-]+\s*:/i);
+});
+
+test("component entrypoints delegate instead of owning component rules", () => {
+    assert.match(formsEntrypoint, /^@import url\("\.\/components\/structured_forms\.css"\);/);
+    assert.match(cardsEntrypoint, /^@import url\("\.\/components\/configuration_cards\.css"\);/);
+
+    assert.doesNotMatch(formsEntrypoint, /\.am-form-editor\s*\{/);
+    assert.doesNotMatch(cardsEntrypoint, /\.am-wifi-card[\s,]/);
+    assert.match(structuredForms, /\.am-form-editor\s*\{/);
+    assert.match(configurationCards, /\.am-wifi-card,/);
+});
+
+test("extracted components consume canonical tokens directly", () => {
+    for (const [name, source] of [
+        ["structured forms", structuredForms],
+        ["configuration cards", configurationCards],
+    ]) {
+        assert.match(source, /var\(--am-color-/i, `${name} should use canonical color tokens`);
+        assert.doesNotMatch(source, /var\(--ui-/i, `${name} must not regress to ui aliases`);
+        assert.doesNotMatch(source, /#[0-9a-f]{3,8}\b/i, `${name} should not hard-code palette colors`);
+    }
 });
