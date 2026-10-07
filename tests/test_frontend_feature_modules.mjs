@@ -9,6 +9,8 @@ const dataUrl = value => "data:text/javascript;base64," + Buffer.from(value).toS
 const managementSource = source("apps/zte_manager/static/js/services/management_api.js");
 const advancedWifiSource = source("apps/zte_manager/static/js/advanced/wifi_radio_fields.js");
 const bootstrapSource = source("apps/zte_manager/static/js/frontend_bootstrap.js");
+const inventoryViewSource = source("apps/zte_manager/static/js/management/inventory_view.js");
+const shellEndSource = source("apps/zte_manager/templates/source/shell_end.html");
 const {createManagementApi} = await import(dataUrl(managementSource));
 const {installAdvancedWifiFields} = await import(dataUrl(advancedWifiSource));
 
@@ -69,6 +71,20 @@ test("frontend composition owns management compatibility without a bridge module
         )),
         false,
     );
+});
+
+test("classic management controller loads before the module composition root", () => {
+    const classicIndex = shellEndSource.indexOf("zte_manager/js/management.js");
+    const inventoryIndex = shellEndSource.indexOf(
+        "zte_manager/js/management/inventory_view.js",
+    );
+    assert.ok(classicIndex >= 0, "management.js must remain in the application shell");
+    assert.ok(
+        inventoryIndex > classicIndex,
+        "inventory module must load after the classic management controller",
+    );
+    assert.match(inventoryViewSource, /^import "\.\.\/frontend_bootstrap\.js";/);
+    assert.doesNotMatch(shellEndSource, /frontend_bootstrap\.js/);
 });
 
 function fakeForm(fields) {
