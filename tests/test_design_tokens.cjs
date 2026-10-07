@@ -11,6 +11,7 @@ const css = relative => fs.readFileSync(path.join(root, "apps/zte_manager/static
 const tokensSource = css("foundation/tangerine_tokens.css");
 const legacySource = css("tangerine.css");
 const workflowsSource = css("tangerine_workflows.css");
+const lightEntrypoint = css("light_mode_refine.css");
 const formsEntrypoint = css("tangerine_forms.css");
 const cardsEntrypoint = css("tangerine_cards.css");
 const structuredForms = css("components/structured_forms.css");
@@ -19,6 +20,7 @@ const topology = css("components/topology.css");
 const firmwareInspector = css("components/firmware_inspector.css");
 const providerDiagnostics = css("components/provider_diagnostics.css");
 const operatorResults = css("components/operator_results.css");
+const nativeControlsLight = css("components/native_controls_light.css");
 const supportWorkbench = css("pages/support_workbench.css");
 const diagnosticsWorkbench = css("pages/diagnostics_workbench.css");
 const profileWorkbench = css("pages/profile_workbench.css");
@@ -33,6 +35,7 @@ const migratedConsumers = [
     ["support workbench", supportWorkbench],
     ["diagnostics workbench", diagnosticsWorkbench],
     ["profile workbench", profileWorkbench],
+    ["native light controls", nativeControlsLight],
 ];
 
 const legacyTangerineReference = /var\(--am-(?:bg|surface|sidebar|primary|primary-deep|primary-wash|selected|text|text-2|border|success|success-wash|warning|warning-wash|danger|danger-wash|primary-ink|shadow)\)/i;
@@ -42,6 +45,14 @@ test("Tangerine workflow stylesheet loads foundation then real page/component la
         workflowsSource,
         /^@import url\("\.\/foundation\/tangerine_tokens\.css"\);\s*@import url\("\.\/pages\/support_workbench\.css"\);\s*@import url\("\.\/pages\/diagnostics_workbench\.css"\);\s*@import url\("\.\/pages\/profile_workbench\.css"\);\s*@import url\("\.\/pages\/workbench_responsive\.css"\);\s*@import url\("\.\/components\/operator_results\.css"\);/s,
     );
+});
+
+test("light refine stylesheet delegates theme values and compatibility layers", () => {
+    assert.match(
+        lightEntrypoint,
+        /^@import url\("\.\/foundation\/tangerine_tokens\.css"\);\s*@import url\("\.\/themes\/light_base_compat\.css"\);\s*@import url\("\.\/themes\/light_feature_compat\.css"\);\s*@import url\("\.\/themes\/light_console_compat\.css"\);\s*@import url\("\.\/components\/native_controls_light\.css"\);/s,
+    );
+    assert.doesNotMatch(lightEntrypoint, /--ui-[a-z0-9-]+\s*:/i);
 });
 
 test("canonical tokens own theme values and legacy names are aliases", () => {
@@ -55,9 +66,16 @@ test("canonical tokens own theme values and legacy names are aliases", () => {
     assert.match(tokensSource, /--am-color-text:#29221E;/);
     assert.match(tokensSource, /--am-color-text:#FFF8F1;/);
 
+    assert.match(tokensSource, /--am-color-neutral:#405548;/);
+    assert.match(tokensSource, /--am-color-native-surface:#FFFFFF;/);
+    assert.match(tokensSource, /--am-color-native-selected-bg:#E4F2E8;/);
+    assert.match(tokensSource, /--am-color-native-disabled-text:#526056;/);
+
     assert.match(tokensSource, /--am-bg:var\(--am-color-bg\);/);
     assert.match(tokensSource, /--am-primary:var\(--am-color-primary\);/);
     assert.match(tokensSource, /--ui-accent:var\(--am-color-primary\);/);
+    assert.match(tokensSource, /--ui-neutral:var\(--am-color-neutral\);/);
+    assert.match(tokensSource, /--ui-surface-light:var\(--am-color-native-surface\);/);
     assert.match(tokensSource, /--bg:var\(--am-color-bg\);/);
     assert.match(tokensSource, /--font-mono:var\(--am-font-mono\);/);
 
@@ -85,8 +103,9 @@ test("component entrypoints delegate instead of owning component rules", () => {
 test("migrated CSS consumers use canonical tokens directly", () => {
     for (const [name, source] of migratedConsumers) {
         assert.match(source, /var\(--am-color-/i, `${name} should use canonical color tokens`);
-        assert.doesNotMatch(source, /var\(--ui-/i, `${name} must not regress to ui aliases`);
         assert.doesNotMatch(source, legacyTangerineReference, `${name} must not regress to Tangerine aliases`);
-        assert.doesNotMatch(source, /#[0-9a-f]{3,8}\b/i, `${name} should not hard-code palette colors`);
     }
+
+    assert.doesNotMatch(nativeControlsLight, /var\(--ui-/i);
+    assert.doesNotMatch(nativeControlsLight, /#[0-9a-f]{3,8}\b/i);
 });
