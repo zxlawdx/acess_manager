@@ -18,21 +18,29 @@ const configurationCards = css("components/configuration_cards.css");
 const topology = css("components/topology.css");
 const firmwareInspector = css("components/firmware_inspector.css");
 const providerDiagnostics = css("components/provider_diagnostics.css");
+const operatorResults = css("components/operator_results.css");
+const supportWorkbench = css("pages/support_workbench.css");
+const diagnosticsWorkbench = css("pages/diagnostics_workbench.css");
+const profileWorkbench = css("pages/profile_workbench.css");
 
-const migratedComponents = [
+const migratedConsumers = [
     ["structured forms", structuredForms],
     ["configuration cards", configurationCards],
     ["topology", topology],
     ["firmware inspector", firmwareInspector],
     ["provider diagnostics", providerDiagnostics],
+    ["operator results", operatorResults],
+    ["support workbench", supportWorkbench],
+    ["diagnostics workbench", diagnosticsWorkbench],
+    ["profile workbench", profileWorkbench],
 ];
 
 const legacyTangerineReference = /var\(--am-(?:bg|surface|sidebar|primary|primary-deep|primary-wash|selected|text|text-2|border|success|success-wash|warning|warning-wash|danger|danger-wash|primary-ink|shadow)\)/i;
 
-test("Tangerine workflow stylesheet still loads the canonical token module", () => {
+test("Tangerine workflow stylesheet loads foundation then real page/component layers", () => {
     assert.match(
         workflowsSource,
-        /^@import url\("\.\/foundation\/tangerine_tokens\.css"\);/
+        /^@import url\("\.\/foundation\/tangerine_tokens\.css"\);\s*@import url\("\.\/pages\/support_workbench\.css"\);\s*@import url\("\.\/pages\/diagnostics_workbench\.css"\);\s*@import url\("\.\/pages\/profile_workbench\.css"\);\s*@import url\("\.\/pages\/workbench_responsive\.css"\);\s*@import url\("\.\/components\/operator_results\.css"\);/s,
     );
 });
 
@@ -74,8 +82,8 @@ test("component entrypoints delegate instead of owning component rules", () => {
     assert.match(configurationCards, /\.am-wifi-card,/);
 });
 
-test("migrated components consume canonical tokens directly", () => {
-    for (const [name, source] of migratedComponents) {
+test("migrated CSS consumers use canonical tokens directly", () => {
+    for (const [name, source] of migratedConsumers) {
         assert.match(source, /var\(--am-color-/i, `${name} should use canonical color tokens`);
         assert.doesNotMatch(source, /var\(--ui-/i, `${name} must not regress to ui aliases`);
         assert.doesNotMatch(source, legacyTangerineReference, `${name} must not regress to Tangerine aliases`);
