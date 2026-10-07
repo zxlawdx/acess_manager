@@ -204,6 +204,12 @@ class DeviceService:
                 self._zte_service.disconnect()
             service = self._huawei_factory()
 
+        # Legacy/injected HuaweiService providers predate optional CLI support.
+        # Do not change their call contract when the operator did not request
+        # CLI. The default telemetry runtime receives the explicit mapping when
+        # present and remains the only provider that interprets it.
+        if kwargs.get("huawei_cli") is None:
+            kwargs.pop("huawei_cli", None)
         result = service.connect(**kwargs)
         provider_name = (
             "HuaweiService"
