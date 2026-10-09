@@ -25,6 +25,7 @@ html[data-theme="light"] {
   --am-color-danger:#A62A31;
   --am-color-danger-wash:#FEF2F2;
   --am-color-primary-ink:#29221E;
+  --am-background-image:none;
 
   /* Remaining values consumed only by legacy light-mode compatibility rules. */
   --am-color-neutral:#405548;
@@ -43,25 +44,28 @@ html[data-theme="light"] {
 html[data-theme="dark"] {
   color-scheme: dark;
 
-  --am-color-bg:#211C19;
-  --am-color-surface:#302722;
-  --am-color-sidebar:#28211D;
-  --am-color-primary:#FF8654;
-  --am-color-primary-strong:#FFAC88;
-  --am-color-primary-wash:#3D2418;
-  --am-color-selected:#523325;
-  --am-color-text:#FFF8F1;
-  --am-color-text-muted:#C5B5A8;
-  --am-color-border:#493C34;
-  --am-color-success:#6BDD9F;
-  --am-color-success-wash:#0D2E1F;
-  --am-color-warning:#FBBF24;
-  --am-color-warning-wash:#2A1F0A;
-  --am-color-danger:#FF9D9D;
-  --am-color-danger-wash:#2A0F0F;
-  --am-color-primary-ink:#211C19;
-  --am-color-neutral:var(--am-color-text-muted);
-  --am-color-neutral-wash:var(--am-color-primary-wash);
+  /* ONTWatch-inspired telemetry palette: near-black ink, glass panels,
+   * hairline borders and a restrained fibre-signal amber accent. */
+  --am-color-bg:#07090D;
+  --am-color-surface:#121820;
+  --am-color-sidebar:#0D1219;
+  --am-color-primary:#FFB454;
+  --am-color-primary-strong:#FFD08A;
+  --am-color-primary-wash:rgba(255,180,84,.14);
+  --am-color-selected:rgba(255,180,84,.18);
+  --am-color-text:#E8ECEF;
+  --am-color-text-muted:#7A8B99;
+  --am-color-border:#1E2732;
+  --am-color-success:#3AD6C2;
+  --am-color-success-wash:rgba(58,214,194,.10);
+  --am-color-warning:#F2C063;
+  --am-color-warning-wash:rgba(242,192,99,.12);
+  --am-color-danger:#E05B4D;
+  --am-color-danger-wash:rgba(224,91,77,.13);
+  --am-color-primary-ink:#1A1204;
+  --am-background-image:radial-gradient(1200px 420px at 78% -12%, rgba(255,180,84,.05), transparent 62%);
+  --am-color-neutral:#8FA3B8;
+  --am-color-neutral-wash:rgba(143,163,184,.10);
   --am-color-native-surface:var(--am-color-surface);
   --am-color-native-text:var(--am-color-text);
   --am-color-native-border:var(--am-color-border);
@@ -69,7 +73,7 @@ html[data-theme="dark"] {
   --am-color-native-selected-text:var(--am-color-text);
   --am-color-native-disabled-bg:var(--am-color-bg);
   --am-color-native-disabled-text:var(--am-color-text-muted);
-  --am-shadow-surface:0 4px 24px rgba(0,0,0,.10);
+  --am-shadow-surface:0 1px 0 rgba(255,255,255,.012);
 }
 
 html[data-theme] {
