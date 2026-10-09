@@ -13,7 +13,14 @@ from apps.zte_manager.infrastructure.huawei import (
 from apps.zte_manager.model.device_adapters.huawei import canonical_huawei_model
 from apps.zte_manager.services.huawei_captured_features import (
     HuaweiCapturedFeatureService,
+    LAN_USER_DEV_PAGE,
+    USER_DEVICE_PAGE,
+    WLAN_LIST_PAGE,
+    _ip_from_record,
+    _mac_from_record,
     _record_domain,
+    _record_text,
+    parse_huawei_js_records,
 )
 from apps.zte_manager.services.huawei_service import HuaweiService
 
@@ -38,6 +45,8 @@ _SEARCH_INSTANCE = re.compile(
 _HOST_INSTANCE = re.compile(
     r"^InternetGatewayDevice\.X_HW_DNS\.HOSTS\.\d+$"
 )
+_WLAN_PSK_PROTECT_PAGE = "/html/amp/wlanadv/wlanpskprotect.asp"
+_SSID_PROC_FLAG_PATH = "/html/amp/common/getSsidProcFlag.asp?&1=1"
 
 
 def _trace_enabled() -> bool:
@@ -140,7 +149,229 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
     not live configuration records. This specialization accepts only instance
     domains that the firmware actually materialized (``...SearList.N`` and
     ``...HOSTS.N``), preventing executable page source from becoming state.
+
+    Wi-Fi behavior in this class is intentionally restricted to the endpoints
+    observed on the physical EG8041X7-10 capture. In particular, associated
+    stations come from ``wlan_list.asp`` and are enriched through
+    ``GetLanUserDevInfo.asp``; the wlaninfo/getassociated* endpoints used by
+    other Huawei families are never touched by this runtime.
     """
+
+    @staticmethod
+    def _valid_wifi_psk(value: object) -> str:
+        text = str(value or "").strip()
+        if not text or text.startswith("InternetGatewayDevice."):
+            return ""
+        if set(text) <= {"*", "•", "·"}:
+            return ""
+        if 8 <= len(text) <= 63:
+            return text
+        if len(text) == 64 and all(char in "0123456789abcdefABCDEF" for char in text):
+            return text
+        return ""
+
+    def _eg8041_lan_inventory_records(self) -> list[dict[str, Any]]:
+        chunks: list[str] = []
+        try:
+            chunks.append(self._page(LAN_USER_DEV_PAGE))
+        except Exception:
+            pass
+        try:
+            chunks.append(
+                self.client.post_read(
+                    LAN_USER_DEV_PAGE,
+                    referer=USER_DEVICE_PAGE,
+                )
+            )
+        except Exception:
+            pass
+        return parse_huawei_js_records("\n".join(chunks))
+
+    def wifi_clients(self) -> list[dict[str, Any]]:
+        """Read X7 Wi-Fi clients only from the physically captured WLAN feed."""
+        try:
+            association_source = self._page(WLAN_LIST_PAGE)
+        except Exception:
+            return []
+
+        association_records = parse_huawei_js_records(association_source)
+        try:
+            lan_records = self._eg8041_lan_inventory_records()
+        except Exception:
+            lan_records = []
+
+        lan_by_mac: dict[str, dict[str, Any]] = {}
+        for item in lan_records:
+            mac = _mac_from_record(item)
+            if mac:
+                lan_by_mac[mac] = item
+
+        clients: dict[str, dict[str, Any]] = {}
+        for item in association_records:
+            mac = _mac_from_record(item)
+            if not mac:
+                continue
+
+            lan = lan_by_mac.get(mac, {})
+            association_interface = _record_text(
+                item,
+                "Interface", "InterfaceType", "Layer2Interface",
+                "Port", "PortName",
+            )
+            # wlan_list.asp is the source of truth for association. Do not copy
+            # a wired interface label from the LAN inventory onto a Wi-Fi row.
+            interface = association_interface or "Wi-Fi"
+            ip = _ip_from_record(item) or _ip_from_record(lan)
+            hostname = _record_text(
+                item,
+                "HostName", "hostname", "DeviceName", "Name",
+            ) or _record_text(
+                lan,
+                "HostName", "hostname", "DeviceName", "Name",
+            )
+
+            clients[mac] = {
+                "hostname": hostname,
+                "ip": ip,
+                "mac": mac,
+                "ssid": _record_text(
+                    item,
+                    "SSID", "SSIDName", "WlanName", "NetworkName",
+                ),
+                # RSSI/SNR/rates are taken exclusively from wlan_list.asp.
+                "rssi": _record_text(
+                    item,
+                    "SignalStrength", "RSSI", "Rssi", "Signal",
+                ),
+                "snr": _record_text(
+                    item,
+                    "SNR", "Snr", "SignalNoiseRatio",
+                ),
+                "rx_rate": _record_text(
+                    item,
+                    "RxRate", "ReceiveRate", "LastDataDownlinkRate",
+                ),
+                "tx_rate": _record_text(
+                    item,
+                    "TxRate", "TransmitRate", "LastDataUplinkRate",
+                ),
+                "interface": interface,
+                "connection_type": "wifi",
+                "status": _record_text(
+                    item,
+                    "Status", "Active", "Online", "DeviceStatus",
+                ) or _record_text(
+                    lan,
+                    "Status", "Active", "Online", "DeviceStatus",
+                ),
+                "address_source": _record_text(
+                    lan,
+                    "AddressSource", "IPType", "DhcpType", "DHCPType",
+                ),
+                "ipv6": _record_text(
+                    lan,
+                    "IPv6Address", "IPv6Addr", "GlobalIPv6Address",
+                ),
+                "lease": _record_text(
+                    lan,
+                    "RemainingLeaseTime", "LeaseTime", "LeaseTimeRemaining",
+                ),
+                "vendor": _record_text(
+                    lan,
+                    "Vendor", "Manufacturer", "Brand",
+                ),
+                "os": _record_text(
+                    lan,
+                    "OS", "OperatingSystem", "OsType",
+                ),
+            }
+        return list(clients.values())
+
+    def _wifi_basic_record(
+        self,
+        band: str,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        record, records = super()._wifi_basic_record(band)
+        _display, instance, _page, _adv = self._wifi_pages(band)
+        base_domain = (
+            "InternetGatewayDevice.LANDevice.1."
+            f"WLANConfiguration.{instance}"
+        )
+        try:
+            psk_source = self._page(_WLAN_PSK_PROTECT_PAGE)
+        except Exception:
+            return record, records
+
+        # Only retain material explicitly bound to this WLAN instance. Empty
+        # or ambiguous records are ignored so a key can never bleed across
+        # 2.4/5 GHz merely because the protection page contains helper code.
+        for item in parse_huawei_js_records(psk_source):
+            domain = _record_domain(item)
+            if (
+                domain == base_domain
+                or domain.startswith(base_domain + ".PreSharedKey.")
+            ):
+                records.append(item)
+        return record, records
+
+    def _wifi_password_from_records(self, band: str) -> str:
+        _display, instance, _page, _adv = self._wifi_pages(band)
+        base_domain = (
+            "InternetGatewayDevice.LANDevice.1."
+            f"WLANConfiguration.{instance}"
+        )
+        psk_domain = f"{base_domain}.PreSharedKey.1"
+        record, records = self._wifi_basic_record(band)
+        candidates = [record, *records]
+        candidates.sort(
+            key=lambda row: 0
+            if _record_domain(row) == psk_domain
+            else 1
+            if _record_domain(row) == base_domain
+            else 2
+        )
+        for row in candidates:
+            domain = _record_domain(row)
+            if domain not in {base_domain, psk_domain} and not domain.startswith(
+                base_domain + ".PreSharedKey."
+            ):
+                continue
+            for key in (
+                "PreSharedKey", "KeyPassphrase", "WPAKey",
+                "WPA2Key", "WPA3Key", "PSK", "Key",
+            ):
+                value = self._valid_wifi_psk(row.get(key))
+                if value:
+                    return value
+            constructor = str(row.get("_constructor") or "").casefold()
+            if "preshared" in constructor or "psk" in constructor:
+                for value in reversed(row.get("_args") or []):
+                    secret = self._valid_wifi_psk(value)
+                    if secret:
+                        return secret
+        return ""
+
+    def wifi_networks(self, reveal_password: bool = False) -> list[dict[str, Any]]:
+        rows = super().wifi_networks(reveal_password=False)
+        result: list[dict[str, Any]] = []
+        for network in rows:
+            row = dict(network)
+            password = self._wifi_password_from_records(
+                str(row.get("banda") or "")
+            )
+            row["password_readable"] = bool(password)
+            row["password"] = password if reveal_password else ""
+            row["password_hidden"] = not bool(reveal_password and password)
+            result.append(row)
+        return result
+
+    def _poll_ssid_proc_flag(self, instance: str, *, referer: str) -> None:
+        """Perform the firmware's captured pre-save readiness read."""
+        self.client.post_read(
+            _SSID_PROC_FLAG_PATH,
+            {"wlanid": str(instance)},
+            referer=referer,
+        )
 
     def _post_verified(
         self,
@@ -150,6 +381,14 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
         payload: dict[str, str],
         verifier: Callable[[], Any] | None,
     ) -> dict[str, Any]:
+        if str(path).startswith("/html/amp/wlanbasic/set.cgi"):
+            instance = (
+                "5"
+                if "WLANConfiguration.5" in str(path)
+                else "1"
+            )
+            self._poll_ssid_proc_flag(instance, referer=request_file)
+
         page = self._page(request_file)
         token = self.client.extract_token(page)
         body = {**payload, "x.X_HW_Token": token}
@@ -375,10 +614,6 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
                     )
                 continue
 
-            # Critical ordering: if the physical row already matches, this is
-            # a no-op and must not be rejected just because this firmware keeps
-            # DomainName empty in its existing SearList records. Validation of
-            # required form fields belongs only to a mutation we will send.
             if (
                 existing is not None
                 and existing_server == expected_server
@@ -418,8 +653,6 @@ class HuaweiEG8041X7CapturedFeatureService(HuaweiCapturedFeatureService):
                 "domain": existing_domain,
             })
 
-        # We still do not invent a SearList delete CGI. If the requested profile
-        # truly asks to remove an existing slot, abort before any DNS mutation.
         if preflight_errors:
             first = preflight_errors[0]
             return {
