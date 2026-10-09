@@ -17,6 +17,9 @@ from apps.zte_manager.services.huawei_hg8145x6_runtime import (
     HG8145X6_OPTICAL_CANDIDATE_PAGES,
     HuaweiHG8145X6CapturedFeatureService,
 )
+from apps.zte_manager.services.huawei_hg8245h_runtime import (
+    HuaweiHG8245HApiRuntime,
+)
 from apps.zte_manager.services.huawei_telemetry_runtime import (
     HuaweiTelemetryRuntimeService,
 )
@@ -27,8 +30,10 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
 
     EG8041 keeps the existing family runtime. HG8145X6 uses the read-only
     ONTWatch-derived contract. EG8145V5/HN8010TS use one shared RandCount
-    session plus model-specific read schemas. A model name is always a hint;
-    runtime endpoint/parser evidence decides which specialization is attached.
+    session plus model-specific read schemas. HG8245H Phase 3 adds the modern
+    SesTokenInfo /api/ family while preserving legacy RandCount fallback.
+    Model names are hints; authenticated endpoint/parser evidence decides which
+    specialization is attached.
     """
 
     FAMILY_RUNTIME_FEATURES = frozenset({
@@ -49,6 +54,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         super().__init__(**kwargs)
         self._phase2_runtime: HuaweiEG8145V5FamilyRuntime | None = None
         self._phase2_profile: HuaweiEG8145FamilyProfile | None = None
+        self._phase3_runtime: HuaweiHG8245HApiRuntime | None = None
 
     @classmethod
     def _is_hg8145x6_model(cls, model: object) -> bool:
@@ -65,9 +71,13 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         return self._phase2_runtime is not None and self._phase2_profile is not None
 
     @property
+    def _phase3_active(self) -> bool:
+        return self._phase3_runtime is not None
+
+    @property
     def capabilities(self) -> dict[str, dict]:
         data = super().capabilities
-        if not self._hg8145x6_active and not self._phase2_active:
+        if not self._hg8145x6_active and not self._phase2_active and not self._phase3_active:
             return data
 
         # Generic EG8041 Wi-Fi descriptors contain family-specific write/radio
@@ -77,7 +87,12 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         data["family"] = self.family_descriptor
         return data
 
-    def _force_specialized_read_only(self, evidence: str) -> None:
+    def _force_specialized_read_only(
+        self,
+        evidence: str,
+        *,
+        preserve_existing_reads: bool = True,
+    ) -> None:
         for feature, current in list(self._capabilities.items()):
             if not isinstance(current, dict):
                 continue
@@ -85,11 +100,14 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
             for key in ("create", "update", "delete", "write", "start"):
                 if key in operations:
                     operations[key] = False
+            if not preserve_existing_reads and "read" in operations:
+                operations["read"] = False
             operations["verified"] = False
             operations["physical_validation"] = False
             operations["state"] = (
                 "READ_SUPPORTED" if operations.get("read") else "UNKNOWN"
             )
+            operations["evidence"] = evidence
             self._capabilities[feature] = operations
 
         for feature in (
@@ -198,6 +216,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
     ) -> None:
         self._phase2_runtime = None
         self._phase2_profile = None
+        self._phase3_runtime = None
         self._captured = captured
         self._clear_session_snapshot()
         self._family_compatible = bool(signature.get("compatible"))
@@ -280,9 +299,6 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
                 signature = candidate.source_signature()
             except Exception:
                 continue
-            # Phase-2 selection requires the model parsed from authenticated
-            # deviceinfo plus its endpoint schema. A model hint alone can only
-            # reorder candidates; it never makes a signature compatible.
             if bool(signature.get("compatible")) and bool(signature.get("strong_fingerprint")):
                 return candidate, profile, signature
         return None
@@ -293,6 +309,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         profile: HuaweiEG8145FamilyProfile,
         signature: dict[str, Any],
     ) -> None:
+        self._phase3_runtime = None
         self._phase2_runtime = runtime
         self._phase2_profile = profile
         self._family_compatible = bool(signature.get("compatible"))
@@ -348,23 +365,108 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
                 endpoint_evidence=profile.optical.path,
             )
 
+    # ------------------------------------------------------------------
+    # Phase 3: HG8245H modern /api/ runtime
+
+    def _probe_phase3_candidate(
+        self,
+    ) -> tuple[HuaweiHG8245HApiRuntime, dict[str, Any]] | None:
+        if self._client is None:
+            return None
+        if getattr(self._client, "auth_flow", None) not in {
+            HuaweiAuthFlow.API_SES_TOKEN,
+            HuaweiAuthFlow.API_SES_TOKEN.value,
+        }:
+            return None
+        runtime = HuaweiHG8245HApiRuntime(self._client)
+        try:
+            signature = runtime.source_signature()
+        except Exception:
+            return None
+        if not bool(signature.get("compatible")) or not bool(signature.get("strong_fingerprint")):
+            return None
+        return runtime, signature
+
+    def _configure_phase3_runtime(
+        self,
+        runtime: HuaweiHG8245HApiRuntime,
+        signature: dict[str, Any],
+    ) -> None:
+        self._phase3_runtime = runtime
+        self._phase2_runtime = None
+        self._phase2_profile = None
+        # A modern /api/ session must not inherit AMP/BBSP readers, mapped
+        # pages, IPv4-filter probes or writers from the legacy Huawei provider.
+        self._captured = None
+        self._mapped = None
+        self._ipv4_filter = None
+        self._family_compatible = bool(signature.get("compatible"))
+        self.model = HuaweiHG8245HApiRuntime.MODEL
+        self.model_verified = True
+        self.model_source = "runtime_api_deviceinfo"
+        self._device_info = {
+            "fabricante": "Huawei",
+            "modelo": self.model,
+        }
+        self._clear_session_snapshot()
+        self._family_descriptor = {
+            "protocol_family": "api_sestoken",
+            "firmware_family": "HG8245H-api",
+            "cfg_mode": None,
+            "compatible": self._family_compatible,
+            "model": self.model,
+            "strong_fingerprint": bool(signature.get("strong_fingerprint")),
+            "source": signature.get("source") or HuaweiHG8245HApiRuntime.SOURCE,
+            "evidence": list(signature.get("evidence") or []),
+            "endpoints": deepcopy(signature.get("endpoints") or {}),
+            "physical_validation": False,
+            "phase": 3,
+        }
+        self._force_specialized_read_only(
+            "phase3_hg8245h_api_read_only",
+            preserve_existing_reads=False,
+        )
+        self._capabilities["reboot"] = self._ops(
+            read=False,
+            update=False,
+            verified=False,
+            physical_validation=False,
+            evidence="phase3_reboot_requires_physical_validation",
+            state="UNKNOWN",
+        )
+        if not self._family_compatible:
+            return
+        self._promote_specialized_reader(
+            "device_info",
+            lambda: self.device_status(refresh=True),
+            endpoint_evidence=HuaweiHG8245HApiRuntime.DEVICE_INFO_PATH,
+        )
+
     def connect(self, *args, **kwargs):
         result = HuaweiTelemetryRuntimeService.connect(self, *args, **kwargs)
 
-        hg_candidate = self._probe_hg8145x6_candidate()
-        if hg_candidate is not None:
-            captured, signature = hg_candidate
-            self._configure_hg8145x6_runtime(captured, signature)
+        # Protocol family wins over marketing model hints. An authenticated
+        # API SesToken session is resolved before any AMP/BBSP specialization.
+        phase3_candidate = self._probe_phase3_candidate()
+        if phase3_candidate is not None:
+            runtime, signature = phase3_candidate
+            self._configure_phase3_runtime(runtime, signature)
         else:
-            phase2_candidate = self._probe_phase2_candidate()
-            if phase2_candidate is not None:
-                runtime, profile, signature = phase2_candidate
-                self._configure_phase2_runtime(runtime, profile, signature)
+            hg_candidate = self._probe_hg8145x6_candidate()
+            if hg_candidate is not None:
+                captured, signature = hg_candidate
+                self._configure_hg8145x6_runtime(captured, signature)
             else:
-                self._phase2_runtime = None
-                self._phase2_profile = None
-                self._characterize_family()
-                self._promote_family_capabilities()
+                phase2_candidate = self._probe_phase2_candidate()
+                if phase2_candidate is not None:
+                    runtime, profile, signature = phase2_candidate
+                    self._configure_phase2_runtime(runtime, profile, signature)
+                else:
+                    self._phase3_runtime = None
+                    self._phase2_runtime = None
+                    self._phase2_profile = None
+                    self._characterize_family()
+                    self._promote_family_capabilities()
 
         result.update({
             "model": self.model,
@@ -381,6 +483,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         return result
 
     def disconnect(self) -> None:
+        self._phase3_runtime = None
         self._phase2_runtime = None
         self._phase2_profile = None
         super().disconnect()
@@ -389,10 +492,36 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
     # Specialized read surfaces
 
     def device_status(self, *, refresh: bool = False) -> dict[str, Any]:
+        if self._phase3_active:
+            def load_phase3():
+                runtime = self._phase3_runtime
+                if runtime is None:
+                    raise RuntimeError("Runtime Phase-3 não está ativo.")
+                details = runtime.device_status(refresh=refresh)
+                raw_uptime = details.get("uptime")
+                uptime_days = None
+                try:
+                    if raw_uptime not in (None, ""):
+                        uptime_days = int(float(raw_uptime)) // 86400
+                except (TypeError, ValueError):
+                    uptime_days = None
+                return {
+                    **details,
+                    "host": self.current_host,
+                    "profile": self.profile_key,
+                    "provider": type(self).__name__,
+                    "model_verified": self.model_verified,
+                    "capabilities": self.capabilities,
+                    "uptime_dias": uptime_days,
+                }
+
+            with self._lock:
+                return self._snapshot_read("device", load_phase3, refresh=refresh)
+
         if not self._phase2_active:
             return super().device_status(refresh=refresh)
 
-        def load():
+        def load_phase2():
             runtime = self._phase2_runtime
             if runtime is None:
                 raise RuntimeError("Runtime Phase-2 não está ativo.")
@@ -415,9 +544,16 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
             }
 
         with self._lock:
-            return self._snapshot_read("device", load, refresh=refresh)
+            return self._snapshot_read("device", load_phase2, refresh=refresh)
+
+    def _phase3_read_unavailable(self, feature: str):
+        if self._phase3_active:
+            raise RuntimeError(
+                f"{feature} não foi caracterizado para o runtime HG8245H /api/ Phase-3."
+            )
 
     def wifi_traffic(self, *, refresh: bool = False) -> list[dict[str, Any]]:
+        self._phase3_read_unavailable("Contadores Wi-Fi")
         if not self._hg8145x6_active:
             raise RuntimeError(
                 "Contadores Wi-Fi ONTWatch estão caracterizados apenas para o "
@@ -431,6 +567,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         )
 
     def resource_telemetry(self, *, refresh: bool = False) -> dict[str, Any]:
+        self._phase3_read_unavailable("Telemetria de recursos")
         if self._phase2_active:
             runtime = self._phase2_runtime
             if runtime is None:
@@ -451,6 +588,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         return super().resource_telemetry(refresh=refresh)
 
     def clients(self, *, refresh: bool = False) -> list[dict]:
+        self._phase3_read_unavailable("Clientes")
         if self._phase2_active:
             runtime = self._phase2_runtime
             if runtime is None:
@@ -487,7 +625,12 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
             })
         return rows
 
+    def wan_status(self, *, refresh: bool = False):
+        self._phase3_read_unavailable("WAN")
+        return super().wan_status(refresh=refresh)
+
     def lan_clients(self, *, refresh: bool = False):
+        self._phase3_read_unavailable("Clientes LAN")
         if not self._phase2_active:
             return super().lan_clients(refresh=refresh)
         return [
@@ -496,6 +639,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         ]
 
     def wifi_clients(self, *, refresh: bool = False):
+        self._phase3_read_unavailable("Clientes Wi-Fi")
         if not self._phase2_active:
             return super().wifi_clients(refresh=refresh)
         return [
@@ -504,6 +648,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         ]
 
     def optical_status(self, *, refresh: bool = False):
+        self._phase3_read_unavailable("Óptica")
         if not self._phase2_active:
             return super().optical_status(refresh=refresh)
         runtime = self._phase2_runtime
@@ -515,6 +660,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         return self._snapshot_read("optical", runtime.optical_status, refresh=refresh)
 
     def optical_telemetry(self, *, refresh: bool = False) -> dict[str, Any]:
+        self._phase3_read_unavailable("Telemetria óptica")
         if not self._phase2_active:
             return super().optical_telemetry(refresh=refresh)
         runtime = self._phase2_runtime
@@ -535,6 +681,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         *,
         refresh: bool = False,
     ) -> list[dict]:
+        self._phase3_read_unavailable("Wi-Fi")
         if self._phase2_active:
             raise RuntimeError(
                 "Wi-Fi EG8145V5/HN8010TS ainda não possui endpoint/schema "
@@ -551,9 +698,14 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
             refresh=refresh,
         )
 
-    # Explicit write guards. The generic Huawei service owns physically
-    # validated EG8041 writers, so Phase-2 must fail before reaching them.
-    def _phase2_block_write(self):
+    # Explicit write guards. Generic Huawei service owns physically validated
+    # EG8041 writers; Phase 2/3 fail before reaching them.
+    def _specialized_block_write(self):
+        if self._phase3_active:
+            raise RuntimeError(
+                "O runtime HG8245H /api/ Phase-3 é somente leitura; nenhuma "
+                "mutação foi fisicamente validada."
+            )
         if self._phase2_active:
             raise RuntimeError(
                 "Este runtime Phase-2 é somente leitura; nenhuma captura física "
@@ -561,32 +713,40 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
             )
 
     def set_ssid_config(self, ssid_id, config):
-        self._phase2_block_write()
+        self._specialized_block_write()
         return super().set_ssid_config(ssid_id, config)
 
     def set_wifi_radio(self, band, config):
-        self._phase2_block_write()
+        self._specialized_block_write()
         return super().set_wifi_radio(band, config)
 
     def set_radio_power(self, band, enabled):
-        self._phase2_block_write()
+        self._specialized_block_write()
         return super().set_radio_power(band, enabled)
 
     def set_wifi_schedule(self, config):
-        self._phase2_block_write()
+        self._specialized_block_write()
         return super().set_wifi_schedule(config)
 
     def set_wps(self, band, mode):
-        self._phase2_block_write()
+        self._specialized_block_write()
         return super().set_wps(band, mode)
 
     def set_band_steering(self, enabled):
-        self._phase2_block_write()
+        self._specialized_block_write()
         return super().set_band_steering(enabled)
 
     def configure_band_steering(self, config):
-        self._phase2_block_write()
+        self._specialized_block_write()
         return super().configure_band_steering(config)
+
+    def reboot(self):
+        if self._phase3_active:
+            raise RuntimeError(
+                "Reboot HG8245H Phase-3 permanece desabilitado até validação "
+                "física do endpoint, framing e efeito real."
+            )
+        return super().reboot()
 
     def _family_feature_reader(self, feature: str):
         if feature == "wifi_traffic":
