@@ -12,7 +12,7 @@ from .auth import (
     RandCountAuth,
     RandStringSessionTokenAuth,
 )
-from .client import HuaweiWebClient, LOGIN_PATH, MENU_PATH, RAND_PATH
+from .client import HuaweiMutationTransport, HuaweiWebClient, LOGIN_PATH, MENU_PATH, RAND_PATH
 from .errors import (
     HuaweiArchitectureError,
     HuaweiAuthFamilyAmbiguousError,
@@ -42,13 +42,11 @@ API_DEVICE_INFO_PATH = "/api/system/deviceinfo"
 class HuaweiFamilyAwareWebClient(HuaweiWebClient):
     """Huawei transport with evidence-driven authentication selection.
 
-    The existing Huawei transport remains authoritative for normal reads and
-    writes. This subclass centralizes authentication variants that differ
-    across Huawei WebUI firmware families.
-
     Credential-bearing login is submitted at most once per login/reauth call.
-    Auto-detection may probe read-only challenge/session endpoints, but it never
-    tries a second credential algorithm after a credential-bearing request.
+    Read-only fingerprint probes are allowed, but a proven legacy login page is
+    never perturbed with an unrelated API probe. Firmware-family boundaries are
+    enforced after authentication so API sessions cannot fall through into
+    AMP/BBSP readers or writers.
     """
 
     def __init__(
@@ -115,7 +113,24 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
                 "x_hw_token",
                 "huawei",
             )
-            return response.status_code < 500 and any(marker in body for marker in markers)
+            if response.status_code < 500 and any(marker in body for marker in markers):
+                return True
+
+            # Some modern HG8245H builds expose a generic root page. A valid
+            # SesTokenInfo pair is a stronger vendor/protocol fingerprint and
+            # remains read-only, so it is safe to use for vendor discovery.
+            api = session.get(
+                base + API_SES_TOKEN_PATH,
+                timeout=(2.0, timeout),
+                allow_redirects=False,
+            )
+            if api.status_code >= 400:
+                return False
+            try:
+                ApiSesTokenAuth.parse_session_token_info(api.text)
+            except ValueError:
+                return False
+            return True
         except requests.RequestException:
             return False
         finally:
@@ -129,8 +144,6 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
         ).as_dict()
 
     def authenticated_identity_source(self) -> tuple[str, str] | None:
-        """Return the already-validated API identity body without router I/O."""
-
         if self.auth_flow is not HuaweiAuthFlow.API_SES_TOKEN:
             return None
         if not self._api_device_info_source:
@@ -304,9 +317,21 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
         return mode
 
     def _select_auth_flow(self, login_html: str) -> HuaweiAuthFlow:
-        # Phase 3 rule: a valid SesTokenInfo fingerprint wins over marketing
-        # model names and over legacy CGI markers. If it is absent/unparseable,
-        # the detector falls back to the existing legacy flows.
+        explicit = auth_flow_from_login_page(login_html)
+
+        # Preserve already-proven legacy contracts exactly. This prevents a
+        # harmless-but-unnecessary /api/ GET from perturbing strict legacy
+        # firmware/transport sequences and keeps Phase 0/1 behavior stable.
+        if explicit in {
+            HuaweiAuthFlow.RAND_COUNT,
+            HuaweiAuthFlow.RAND_STRING_SESSION_TOKEN,
+            HuaweiAuthFlow.RAND_COOKIE_HASH,
+            HuaweiAuthFlow.SCRAM_CPE,
+        }:
+            return explicit
+
+        # When the login page is API-like or inconclusive, SesTokenInfo is the
+        # decisive Phase-3 fingerprint. A valid pair wins over model hints.
         try:
             _api_response, context = self._fetch_api_ses_token()
         except requests.RequestException:
@@ -315,10 +340,9 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             self._api_context = context
             return HuaweiAuthFlow.API_SES_TOKEN
 
-        explicit = auth_flow_from_login_page(login_html)
         if explicit is HuaweiAuthFlow.API_SES_TOKEN:
-            # Merely mentioning /api/ in HTML is not enough. The required safe
-            # fingerprint above did not return a valid SesInfo/TokInfo pair.
+            # A string mention is insufficient if the endpoint itself did not
+            # return a valid SesInfo/TokInfo structure.
             explicit = HuaweiAuthFlow.UNKNOWN
         if explicit is not HuaweiAuthFlow.UNKNOWN:
             return explicit
@@ -535,6 +559,11 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
     def get_api_page(self, path: str) -> str:
         """Read a characterized /api/ endpoint with one auth recovery."""
 
+        if not str(path or "").startswith("/api/"):
+            raise HuaweiUnsupportedFirmwareError(
+                "Uma sessão Huawei /api/ só pode usar endpoints /api/ caracterizados."
+            )
+
         def request():
             return self.session.get(
                 self.url(path),
@@ -554,6 +583,49 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             raise RuntimeError("Endpoint Huawei /api/ indisponível ou sessão expirada.")
         self._refresh_api_token_from_response(response)
         return str(response.text or "")
+
+    def _guard_api_family_path(self, path: str, *, mutation: bool = False) -> None:
+        if self.auth_flow is not HuaweiAuthFlow.API_SES_TOKEN:
+            return
+        if str(path or "").startswith("/api/"):
+            if mutation:
+                raise HuaweiUnsupportedFirmwareError(
+                    "Writes Huawei /api/ ainda não foram fisicamente validados."
+                )
+            return
+        raise HuaweiUnsupportedFirmwareError(
+            "A sessão Huawei /api/ não pode cair em endpoints AMP/BBSP/CGI legados."
+        )
+
+    def get_page(self, path: str) -> str:
+        self._guard_api_family_path(path)
+        if self.auth_flow is HuaweiAuthFlow.API_SES_TOKEN:
+            return self.get_api_page(path)
+        return super().get_page(path)
+
+    def post_read(
+        self,
+        path: str,
+        payload: dict[str, str] | None = None,
+        *,
+        referer: str = "/index.asp",
+    ) -> str:
+        self._guard_api_family_path(path)
+        if self.auth_flow is HuaweiAuthFlow.API_SES_TOKEN:
+            raise HuaweiUnsupportedFirmwareError(
+                "POST read Huawei /api/ ainda não foi caracterizado nesta fase."
+            )
+        return super().post_read(path, payload, referer=referer)
+
+    def post_form(
+        self,
+        path: str,
+        payload: dict[str, str],
+        *,
+        referer: str,
+    ) -> HuaweiMutationTransport:
+        self._guard_api_family_path(path, mutation=True)
+        return super().post_form(path, payload, referer=referer)
 
     def _authenticate_flow(self, flow: HuaweiAuthFlow) -> bool:
         if flow is HuaweiAuthFlow.RAND_STRING_SESSION_TOKEN:
