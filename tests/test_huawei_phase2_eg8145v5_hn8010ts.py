@@ -67,6 +67,7 @@ class HuaweiPhase2Tests(unittest.TestCase):
 
         device = runtime.device_status()
         self.assertEqual(device["modelo"], "EG8145V5")
+        self.assertEqual(device["detected_model"], "EG8145V5")
         self.assertEqual(device["cpu_percent"], 17.0)
         self.assertEqual(device["memoria_percent"], 43.0)
         self.assertEqual(device["uptime"], 172801)
@@ -116,6 +117,19 @@ class HuaweiPhase2Tests(unittest.TestCase):
         signature = runtime.source_signature()
         self.assertFalse(signature["compatible"])
         self.assertIn("device-model:mismatch", signature["evidence"])
+        self.assertFalse(any(method == "POST" for method, _path in client.calls))
+
+    def test_profile_hint_cannot_replace_missing_model_evidence(self):
+        client = Phase2Client("EG8145V5")
+        path = "/html/ssmp/deviceinfo/deviceinfo.asp"
+        client.pages[path] = client.pages[path].replace(
+            ",'EG8145V5','HWTC'",
+            ",'','HWTC'",
+        )
+        runtime = HuaweiEG8145V5FamilyRuntime(client, EG8145V5_PROFILE)
+        signature = runtime.source_signature()
+        self.assertFalse(signature["compatible"])
+        self.assertIn("device-model:missing", signature["evidence"])
         self.assertFalse(any(method == "POST" for method, _path in client.calls))
 
     def test_non_randcount_session_is_rejected_before_phase2_probe(self):
