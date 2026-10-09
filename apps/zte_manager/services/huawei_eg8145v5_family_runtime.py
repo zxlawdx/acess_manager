@@ -208,8 +208,7 @@ def _normalize_mac(value: object) -> str:
 
 def _ipv4(value: object) -> str:
     text = str(value or "").strip()
-    match = re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", text)
-    if not match:
+    if not re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", text):
         return ""
     try:
         if any(int(part) > 255 for part in text.split(".")):
@@ -264,8 +263,7 @@ class HuaweiEG8145V5FamilyRuntime:
 
     def device_status(self) -> dict[str, Any]:
         source, record = self._device_source_and_record()
-
-        model = (
+        detected_model = str(
             _record_value(record, "ModelName", "ProductName", "ProductClass")
             or _source_scalar(source, "ModelName", "ProductName", "ProductClass")
             or ""
@@ -274,17 +272,19 @@ class HuaweiEG8145V5FamilyRuntime:
         firmware = _record_value(record, "SoftwareVersion", "SoftwareVer")
         hardware = _record_value(record, "HardwareVersion", "HardwareVer")
         mac = _normalize_mac(_record_value(record, "Mac", "MAC", "MACAddress"))
-
         cpu = _number(_source_scalar(source, "cpuUsed", "CPUUsage"))
         memory = _number(_source_scalar(source, "memUsed", "MemoryUsage"))
         uptime = _number(_source_scalar(source, "dev_uptime", "UpTime", "Uptime"))
 
-        if not model and not record:
+        if not detected_model and not record:
             raise RuntimeError("DeviceInfo EG8145/HN8010 sem estrutura reconhecível.")
 
         return {
             "fabricante": "Huawei",
-            "modelo": str(model or self.profile.canonical_model),
+            "modelo": detected_model or self.profile.canonical_model,
+            # This field is deliberately not backfilled from the selected
+            # profile. Runtime fingerprinting consumes it as evidence.
+            "detected_model": detected_model,
             "serial": str(serial or ""),
             "firmware": str(firmware or ""),
             "hardware": str(hardware or ""),
@@ -321,8 +321,12 @@ class HuaweiEG8145V5FamilyRuntime:
         self._last_client_endpoint = None
         self._last_client_recognized = False
         if last_error is not None:
-            raise RuntimeError("Nenhum endpoint de clientes Phase-2 respondeu com schema reconhecido.") from last_error
-        raise RuntimeError("Nenhum endpoint de clientes Phase-2 respondeu com schema reconhecido.")
+            raise RuntimeError(
+                "Nenhum endpoint de clientes Phase-2 respondeu com schema reconhecido."
+            ) from last_error
+        raise RuntimeError(
+            "Nenhum endpoint de clientes Phase-2 respondeu com schema reconhecido."
+        )
 
     def clients(self) -> list[dict[str, Any]]:
         records, endpoint, _recognized = self._read_client_records()
@@ -411,7 +415,11 @@ class HuaweiEG8145V5FamilyRuntime:
         }
 
         auth_flow = getattr(self.client, "auth_flow", None)
-        auth_ok = auth_flow in (None, HuaweiAuthFlow.RAND_COUNT, HuaweiAuthFlow.RAND_COUNT.value)
+        auth_ok = auth_flow in (
+            None,
+            HuaweiAuthFlow.RAND_COUNT,
+            HuaweiAuthFlow.RAND_COUNT.value,
+        )
         if auth_flow is not None:
             evidence.append(f"auth:{getattr(auth_flow, 'value', auth_flow)}")
         if not auth_ok:
@@ -436,12 +444,16 @@ class HuaweiEG8145V5FamilyRuntime:
                 "endpoints": endpoints,
             }
 
-        actual_model = str(device.get("modelo") or "")
-        model_match = _compact_model(actual_model) in self.profile.model_compacts
+        actual_model = str(device.get("detected_model") or "")
+        model_match = bool(actual_model) and (
+            _compact_model(actual_model) in self.profile.model_compacts
+        )
         if model_match:
             evidence.append(f"device-model:{self.profile.canonical_model}")
         else:
-            evidence.append("device-model:mismatch")
+            evidence.append(
+                "device-model:missing" if not actual_model else "device-model:mismatch"
+            )
             return {
                 "compatible": False,
                 "strong_fingerprint": False,
@@ -485,7 +497,9 @@ class HuaweiEG8145V5FamilyRuntime:
         }
 
 
-def ordered_phase2_profiles(model_hint: object = None) -> tuple[HuaweiEG8145FamilyProfile, ...]:
+def ordered_phase2_profiles(
+    model_hint: object = None,
+) -> tuple[HuaweiEG8145FamilyProfile, ...]:
     compact = _compact_model(model_hint)
     return tuple(
         sorted(
