@@ -36,7 +36,8 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
 
     @classmethod
     def _is_hg8145x6_model(cls, model: object) -> bool:
-        compact = re.sub(r"[^A-Z0-9]+", "", str(model or "").upper())
+        value = re.sub(r"\bHUAWEI\b", " ", str(model or "").upper())
+        compact = re.sub(r"[^A-Z0-9]+", "", value)
         return compact in cls._HG8145X6_COMPACT
 
     @property
