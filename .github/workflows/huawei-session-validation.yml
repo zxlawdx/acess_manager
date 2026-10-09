@@ -101,6 +101,8 @@ jobs:
             apps/zte_manager/services/huawei_telemetry_runtime.py \
             apps/zte_manager/services/huawei_eg8041_family_runtime.py \
             apps/zte_manager/services/huawei_eg8041_family_provider.py \
+            apps/zte_manager/services/huawei_hg8145x6_runtime.py \
+            apps/zte_manager/services/huawei_unified_provider.py \
             apps/zte_manager/services/huawei_telemetry.py \
             apps/zte_manager/services/huawei_cli_telemetry.py \
             apps/zte_manager/services/huawei_pon.py \
@@ -162,6 +164,7 @@ jobs:
             tests.test_huawei_eg8041_capture_contract \
             tests.test_huawei_eg8041_family_runtime \
             tests.test_huawei_eg8041_family_provider \
+            tests.test_huawei_hg8145x6_ontwatch \
             tests.test_huawei_transport_negotiation \
             tests.test_huawei_transport_error_policy \
             tests.test_huawei_production_transport \
