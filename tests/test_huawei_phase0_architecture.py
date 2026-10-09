@@ -19,6 +19,7 @@ from apps.zte_manager.infrastructure.huawei.errors import (
 from apps.zte_manager.infrastructure.huawei.family_client import HuaweiFamilyAwareWebClient
 from apps.zte_manager.infrastructure.huawei.js_parser import HuaweiJsConstructorParser
 from apps.zte_manager.infrastructure.huawei.negotiating_client import (
+    HuaweiNegotiatingWebClient,
     _endpoint_from_input,
     parse_huawei_https_bootstrap,
 )
@@ -145,6 +146,36 @@ class HuaweiPhase0ArchitectureTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, "auth_family_ambiguous")
         self.assertEqual(client._credential_budget.used, 0)
         client.close()
+
+    def test_negotiating_client_preserves_explicit_auth_ambiguity(self):
+        client = HuaweiNegotiatingWebClient(
+            "https://192.0.2.10:80",
+            "fixture-user",
+            "fixture-password",
+        )
+        try:
+            with patch.object(
+                HuaweiFamilyAwareWebClient,
+                "login",
+                side_effect=HuaweiAuthFamilyAmbiguousError(),
+            ):
+                with self.assertRaises(HuaweiAuthFamilyAmbiguousError) as raised:
+                    client.login()
+            self.assertEqual(raised.exception.code, "auth_family_ambiguous")
+        finally:
+            client.close()
+
+    def test_api_boundary_exposes_auth_ambiguity_without_secret_text(self):
+        from apps.zte_manager.presentation.api.common import _safe_call
+
+        result = _safe_call(
+            lambda: (_ for _ in ()).throw(HuaweiAuthFamilyAmbiguousError())
+        )
+        self.assertEqual(result["code"], "auth_family_ambiguous")
+        self.assertEqual(result["type"], "unconfirmed")
+        self.assertFalse(result["retryable"])
+        self.assertIn("Nenhuma credencial foi submetida", result["error"])
+        self.assertNotIn("fixture", result["error"].casefold())
 
     def test_js_constructor_parser_handles_hex_nested_and_variable_fields(self):
         source = r'''
