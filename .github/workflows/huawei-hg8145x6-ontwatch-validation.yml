@@ -1,0 +1,48 @@
+name: Huawei HG8145X6 ONTWatch validation
+
+on:
+  pull_request:
+    paths:
+      - "apps/zte_manager/services/huawei_hg8145x6_runtime.py"
+      - "apps/zte_manager/services/huawei_unified_provider.py"
+      - "apps/zte_manager/services/device_service.py"
+      - "tests/test_huawei_hg8145x6_ontwatch.py"
+      - ".github/workflows/huawei-hg8145x6-ontwatch-validation.yml"
+  push:
+    paths:
+      - "apps/zte_manager/services/huawei_hg8145x6_runtime.py"
+      - "apps/zte_manager/services/huawei_unified_provider.py"
+      - "apps/zte_manager/services/device_service.py"
+      - "tests/test_huawei_hg8145x6_ontwatch.py"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+      - name: Python syntax
+        run: |
+          python -m py_compile \
+            apps/zte_manager/services/huawei_hg8145x6_runtime.py \
+            apps/zte_manager/services/huawei_unified_provider.py \
+            apps/zte_manager/services/device_service.py \
+            tests/test_huawei_hg8145x6_ontwatch.py
+      - name: HG8145X6 ONTWatch regressions
+        run: |
+          python -m unittest tests.test_huawei_hg8145x6_ontwatch
+      - name: Huawei provider architecture regressions
+        run: |
+          python -m unittest \
+            tests.test_huawei_provider_architecture \
+            tests.test_huawei_eg8041_family_runtime \
+            tests.test_huawei_eg8041_family_provider \
+            tests.test_multivendor_runtime_regressions
