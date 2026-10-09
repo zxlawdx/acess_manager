@@ -38,18 +38,14 @@ def _trace_mode() -> str:
 
 
 def _trace_enabled() -> bool:
+    # Keep legacy raw/unsafe values as aliases for enabling diagnostics, but
+    # they never disable secret redaction. Credentials/tokens/PSKs must not be
+    # written to logs under any trace level.
     return _trace_mode() in {"1", "true", "yes", "basic", "raw", "unsafe"}
-
-
-def _trace_raw() -> bool:
-    return _trace_mode() in {"raw", "unsafe"}
 
 
 def _safe_mapping(values) -> dict:
     data = dict(values or {})
-    if _trace_raw():
-        return data
-
     redacted = {}
     for key, value in data.items():
         normalized = str(key).strip().casefold()
@@ -58,6 +54,8 @@ def _safe_mapping(values) -> dict:
             or "password" in normalized
             or normalized.endswith("token")
             or "presharedkey" in normalized
+            or normalized.endswith("psk")
+            or "cookie" in normalized
         ):
             redacted[key] = "<redacted>"
         else:
@@ -80,9 +78,6 @@ def _trace_http(
 
     safe_headers = _safe_mapping(headers)
     safe_payload = _safe_mapping(payload)
-    raw_body = str(body or "")
-    if not _trace_raw() and len(raw_body) > 4000:
-        raw_body = raw_body[:4000] + "\n...[truncated; use HUAWEI_HTTP_TRACE=raw]"
 
     lines = [
         f"[HUAWEI HTTP] {phase} {method} {url}",
@@ -94,9 +89,13 @@ def _trace_http(
     if headers is not None:
         lines.append(f"[HUAWEI HTTP] headers={safe_headers!r}")
     if body is not None:
-        lines.append("[HUAWEI HTTP] body-begin")
-        lines.append(raw_body)
-        lines.append("[HUAWEI HTTP] body-end")
+        # Huawei configuration/login pages may echo credentials, PSKs, cookies
+        # or X_HW tokens. Never dump response/request bodies to logs. The body
+        # length is sufficient to correlate exchanges during physical testing.
+        raw_body = str(body or "")
+        lines.append(
+            f"[HUAWEI HTTP] body=<omitted:{len(raw_body)} chars>"
+        )
 
     message = "\n".join(lines)
     logger.info(message)
@@ -116,16 +115,7 @@ def _trace_response_exchange(response, *, fallback_url: str) -> None:
     for index, item in enumerate(chain, start=1):
         prepared = getattr(item, "request", None)
         prepared_headers = getattr(prepared, "headers", {}) or {}
-        prepared_body = getattr(prepared, "body", None)
-        if _trace_raw() and prepared is not None:
-            _trace_http(
-                phase=f"wire-request[{index}/{len(chain)}]",
-                method=str(getattr(prepared, "method", "") or "POST"),
-                url=str(getattr(prepared, "url", "") or fallback_url),
-                headers=prepared_headers,
-                body=prepared_body,
-            )
-        elif prepared is not None:
+        if prepared is not None:
             _trace_http(
                 phase=f"wire-request[{index}/{len(chain)}]",
                 method=str(getattr(prepared, "method", "") or "POST"),
