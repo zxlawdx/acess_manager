@@ -15,6 +15,8 @@ class HuaweiProtocolFamily(StrEnum):
 
     AMP_BBSP = "amp_bbsp"
     ASP_CONFIG = "asp_config"
+    API_SESTOKEN = "api_sestoken"
+    MOBILE_CPE = "mobile_cpe"
     UNKNOWN = "unknown"
 
 
@@ -23,7 +25,9 @@ class HuaweiAuthFlow(StrEnum):
 
     RAND_COUNT = "rand_count"
     RAND_STRING_SESSION_TOKEN = "rand_string_session_token"
+    API_SES_TOKEN = "api_ses_token"
     RAND_COOKIE_HASH = "rand_cookie_hash"
+    SCRAM_CPE = "scram_cpe"
     UNKNOWN = "unknown"
 
 
@@ -85,6 +89,8 @@ def auth_flow_from_login_page(source: object) -> HuaweiAuthFlow:
     """
 
     text = str(source or "").casefold()
+    if "/api/webserver/sestokeninfo" in text or "/api/system/user_login" in text:
+        return HuaweiAuthFlow.API_SES_TOKEN
     if "getrandstring.asp" in text:
         return HuaweiAuthFlow.RAND_STRING_SESSION_TOKEN
 
@@ -117,12 +123,30 @@ def protocol_family_from_observations(
 
     GetConfig/SetConfig wins only when that ASP configuration surface was
     actually observed. AMP/BBSP/SSMP pages otherwise establish the common
-    Huawei generated-WebUI family. Documentation alone must not call this.
+    Huawei generated-WebUI family. API SesTokenInfo is a distinct family and
+    is never selected merely from a model hint.
     """
 
     normalized_paths = tuple(str(path or "") for path in paths if path)
     lowered = tuple(path.casefold() for path in normalized_paths)
     evidence: list[str] = []
+
+    if any(
+        path.startswith("/api/webserver/sestokeninfo")
+        or path.startswith("/api/system/user_login")
+        or path.startswith("/api/system/deviceinfo")
+        for path in lowered
+    ):
+        evidence.extend(
+            path
+            for path in normalized_paths
+            if path.casefold().startswith((
+                "/api/webserver/sestokeninfo",
+                "/api/system/user_login",
+                "/api/system/deviceinfo",
+            ))
+        )
+        return HuaweiProtocolFamily.API_SESTOKEN, tuple(dict.fromkeys(evidence))
 
     if any(
         path.startswith("/asp/getconfig.asp")
@@ -148,6 +172,8 @@ def protocol_family_from_observations(
     # public login pages but never promote ASP_CONFIG without an observed ASP
     # configuration endpoint.
     joined = "\n".join(str(source or "") for source in sources).casefold()
+    if "/api/webserver/sestokeninfo" in joined or "/api/system/user_login" in joined:
+        return HuaweiProtocolFamily.API_SESTOKEN, ("api-sestoken-marker",)
     if any(
         marker in joined
         for marker in ("/html/amp/", "/html/bbsp/", "/html/ssmp/", "/html/status/")
