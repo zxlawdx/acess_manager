@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import http.client
+import socket
+import ssl
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import Protocol
-from urllib.parse import urlsplit
+from http.cookies import SimpleCookie
+from typing import Iterator, Protocol
+from urllib.parse import urlencode, urlsplit
 
 import requests
+from requests.structures import CaseInsensitiveDict
 
 from .errors import (
     HuaweiSameConnectionRequiredError,
@@ -47,8 +53,6 @@ class HuaweiTransportPolicy:
         if int(self.credential_submission_budget) != 1:
             raise ValueError("Huawei credential_submission_budget must remain 1")
         if self.verify_tls and self.allow_self_signed:
-            # A caller may trust a private CA, but verify=True cannot mean
-            # "accept arbitrary self-signed". Keep the policy non-contradictory.
             object.__setattr__(self, "allow_self_signed", False)
 
     def with_endpoint(self, *, scheme: str, port: int | None) -> "HuaweiTransportPolicy":
@@ -96,6 +100,72 @@ class HuaweiTransportPolicy:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class HuaweiEndpointProfile:
+    """Pre-auth transport requirements proven by profile/fingerprint evidence.
+
+    This object deliberately contains no marketing-model matching. Callers may
+    select it explicitly, or a login-page fingerprint may select it. Applying a
+    profile changes only transport guarantees; it never grants a capability or
+    enables a write.
+    """
+
+    key: str
+    challenge_login_connection_affinity: bool = False
+    single_segment_post: bool = False
+    fingerprint_markers: tuple[str, ...] = ()
+    evidence: tuple[str, ...] = ()
+
+    def matches_login_source(self, source: object) -> bool:
+        if not self.fingerprint_markers:
+            return False
+        body = str(source or "").casefold()
+        return all(marker.casefold() in body for marker in self.fingerprint_markers)
+
+    def apply(self, policy: HuaweiTransportPolicy) -> HuaweiTransportPolicy:
+        return replace(
+            policy,
+            challenge_login_connection_affinity=(
+                policy.challenge_login_connection_affinity
+                or self.challenge_login_connection_affinity
+            ),
+            single_segment_post=(
+                policy.single_segment_post or self.single_segment_post
+            ),
+        )
+
+
+# Reference-only fingerprint for the TTNET2 HG8245X6 login page described by
+# Erenn0989/huawei-ont-mcp. It is intentionally strict and does not match by
+# model name. Explicit profile selection remains possible when an operator has
+# stronger local evidence for the same transport requirement.
+HG8245X6_TTNET2_AFFINITY_PROFILE = HuaweiEndpointProfile(
+    key="hg8245x6_ttnet2_same_tcp",
+    challenge_login_connection_affinity=True,
+    fingerprint_markers=(
+        "getrandcount.asp",
+        "base64encode",
+        "errloginlocknum",
+        "locklefttime",
+    ),
+    evidence=(
+        "Erenn0989/huawei-ont-mcp:TTNET2-HG8245X6",
+        "challenge-token-bound-to-tcp-connection",
+    ),
+)
+
+KNOWN_HUAWEI_ENDPOINT_PROFILES: tuple[HuaweiEndpointProfile, ...] = (
+    HG8245X6_TTNET2_AFFINITY_PROFILE,
+)
+
+
+def endpoint_profile_from_login_source(source: object) -> HuaweiEndpointProfile | None:
+    for profile in KNOWN_HUAWEI_ENDPOINT_PROFILES:
+        if profile.matches_login_source(source):
+            return profile
+    return None
+
+
 class HuaweiTransport(Protocol):
     """Minimal HTTP transport contract used by Huawei auth strategies."""
 
@@ -110,8 +180,8 @@ class RequestsSessionTransport:
     """Adapter around requests.Session for ordinary Huawei WebUI firmware.
 
     A requests pool does not guarantee that challenge and login use the exact
-    same TCP socket. Firmware requiring strict socket affinity is rejected
-    explicitly until an affinity transport is selected.
+    same TCP socket. Firmware requiring strict socket affinity must use
+    AffinityHttpTransport instead.
     """
 
     supports_connection_affinity = False
@@ -153,14 +223,201 @@ class RequestsSessionTransport:
         return self.session.post(url, **kwargs)
 
 
-class AffinityHttpTransport(RequestsSessionTransport):
-    """Marker for a future exact-socket transport.
+@dataclass(slots=True)
+class HuaweiAffinityResponse:
+    status_code: int
+    text: str
+    content: bytes
+    headers: CaseInsensitiveDict
+    raw_headers: tuple[tuple[str, str], ...]
+    url: str
+    history: tuple = ()
 
-    Deliberately not advertised as supporting affinity yet. Phase 4 must supply
-    a socket-level implementation and fake-server regression before enabling it.
+
+class _AffinityConnection:
+    """One exact http.client connection used for an auth exchange."""
+
+    def __init__(
+        self,
+        connection: http.client.HTTPConnection,
+        *,
+        base_url: str,
+        base_path: str,
+    ) -> None:
+        self._connection = connection
+        self.base_url = base_url.rstrip("/")
+        self.base_path = base_path.rstrip("/")
+
+    def _path(self, path: str) -> str:
+        raw = str(path or "/")
+        if raw.startswith(("http://", "https://")):
+            parsed = urlsplit(raw)
+            target = parsed.path or "/"
+            if parsed.query:
+                target += "?" + parsed.query
+            return target
+        if not raw.startswith("/"):
+            raw = "/" + raw
+        if self.base_path and self.base_path != "/":
+            raw = self.base_path + raw
+        return raw
+
+    @staticmethod
+    def _body(data: object) -> bytes | None:
+        if data is None:
+            return None
+        if isinstance(data, bytes):
+            return data
+        if isinstance(data, bytearray):
+            return bytes(data)
+        if isinstance(data, str):
+            return data.encode("utf-8")
+        if isinstance(data, dict):
+            return urlencode(data, doseq=True).encode("utf-8")
+        raise TypeError("Unsupported affinity HTTP request body")
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        headers: dict[str, str] | None = None,
+        data: object = None,
+    ) -> HuaweiAffinityResponse:
+        target = self._path(path)
+        body = self._body(data)
+        request_headers = dict(headers or {})
+        request_headers.setdefault("Accept-Encoding", "identity")
+        if body is not None:
+            request_headers.setdefault("Content-Length", str(len(body)))
+
+        url = self.base_url + target
+        try:
+            self._connection.request(
+                str(method or "GET").upper(),
+                target,
+                body=body,
+                headers=request_headers,
+            )
+            response = self._connection.getresponse()
+            raw_headers = tuple((str(k), str(v)) for k, v in response.getheaders())
+            content = response.read()
+        except ssl.SSLError as exc:
+            error = requests.exceptions.SSLError(str(exc))
+            error.request = requests.Request(method, url).prepare()
+            raise error from exc
+        except (socket.timeout, TimeoutError, OSError, http.client.HTTPException) as exc:
+            error = requests.exceptions.ConnectionError(str(exc))
+            error.request = requests.Request(method, url).prepare()
+            raise error from exc
+
+        charset = response.headers.get_content_charset() or "utf-8-sig"
+        try:
+            text = content.decode(charset, errors="replace")
+        except LookupError:
+            text = content.decode("utf-8-sig", errors="replace")
+        return HuaweiAffinityResponse(
+            status_code=int(response.status),
+            text=text,
+            content=content,
+            headers=CaseInsensitiveDict(raw_headers),
+            raw_headers=raw_headers,
+            url=url,
+        )
+
+    def get(self, path: str, *, headers: dict[str, str] | None = None):
+        return self.request("GET", path, headers=headers)
+
+    def post(
+        self,
+        path: str,
+        *,
+        headers: dict[str, str] | None = None,
+        data: object = None,
+    ):
+        return self.request("POST", path, headers=headers, data=data)
+
+
+class AffinityHttpTransport:
+    """Exact-socket HTTP(S) transport for challenge→login affinity.
+
+    The transport opens one http.client connection and keeps it open for the
+    entire context. It does not patch requests, urllib3 pools, or global socket
+    behavior. Only callers whose HuaweiEndpointProfile/TransportPolicy requires
+    affinity should use it.
     """
 
-    supports_connection_affinity = False
+    supports_connection_affinity = True
+    supports_single_segment_post = False
+
+    def __init__(self, base_url: str, policy: HuaweiTransportPolicy) -> None:
+        self.base_url = str(base_url or "").rstrip("/")
+        self.policy = policy
+        parsed = urlsplit(self.base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("Invalid Huawei affinity endpoint")
+        if policy.single_segment_post:
+            raise HuaweiTransportNegotiationError(
+                "Afinidade TCP de autenticação não implica POST de mutação em "
+                "um único segmento; use o transporte específico quando houver "
+                "captura física dessa exigência."
+            )
+        self.scheme = parsed.scheme
+        self.host = parsed.hostname
+        self.port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        self.base_path = parsed.path or ""
+
+    def _new_connection(self) -> http.client.HTTPConnection:
+        timeout = float(self.policy.request_timeout)
+        if self.scheme == "https":
+            context = (
+                ssl.create_default_context()
+                if self.policy.verify_tls
+                else ssl._create_unverified_context()
+            )
+            return http.client.HTTPSConnection(
+                self.host,
+                self.port,
+                timeout=timeout,
+                context=context,
+            )
+        return http.client.HTTPConnection(
+            self.host,
+            self.port,
+            timeout=timeout,
+        )
+
+    @contextmanager
+    def connection(self) -> Iterator[_AffinityConnection]:
+        connection = self._new_connection()
+        try:
+            yield _AffinityConnection(
+                connection,
+                base_url=self.base_url,
+                base_path=self.base_path,
+            )
+        finally:
+            connection.close()
+
+    @staticmethod
+    def adopt_response_cookies(
+        response: HuaweiAffinityResponse,
+        session: requests.Session,
+    ) -> tuple[str, ...]:
+        adopted: list[str] = []
+        for name, value in response.raw_headers:
+            if name.casefold() != "set-cookie":
+                continue
+            parsed = SimpleCookie()
+            try:
+                parsed.load(value)
+            except Exception:
+                continue
+            for morsel in parsed.values():
+                path = morsel["path"] or "/"
+                session.cookies.set(morsel.key, morsel.value, path=path)
+                adopted.append(morsel.key)
+        return tuple(dict.fromkeys(adopted))
 
 
 class SingleWriteSocketTransport(RequestsSessionTransport):
