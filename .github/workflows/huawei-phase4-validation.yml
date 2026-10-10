@@ -1,0 +1,81 @@
+name: Huawei Phase 4 validation
+
+on:
+  pull_request:
+    paths:
+      - "apps/zte_manager/infrastructure/huawei/transport.py"
+      - "apps/zte_manager/infrastructure/huawei/affinity_client.py"
+      - "apps/zte_manager/infrastructure/huawei/__init__.py"
+      - "apps/zte_manager/services/huawei_affinity_provider.py"
+      - "apps/zte_manager/services/device_service.py"
+      - "tests/fixtures/huawei/phase4/**"
+      - "tests/test_huawei_phase4_hg8245x6_affinity.py"
+      - "tests/test_huawei_production_transport.py"
+      - "docs/huawei/phase4_hg8245x6_affinity.md"
+      - ".github/workflows/huawei-phase4-validation.yml"
+  push:
+    branches:
+      - feat/huawei-phase4-hg8245x6-affinity
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+
+      - name: Python syntax
+        run: |
+          python -m py_compile \
+            apps/zte_manager/infrastructure/huawei/transport.py \
+            apps/zte_manager/infrastructure/huawei/affinity_client.py \
+            apps/zte_manager/services/huawei_affinity_provider.py \
+            apps/zte_manager/services/device_service.py \
+            tests/test_huawei_phase4_hg8245x6_affinity.py \
+            tests/test_huawei_production_transport.py
+
+      - name: Phase 4 HG8245X6 affinity regressions
+        run: |
+          python -m unittest \
+            tests.test_huawei_phase4_hg8245x6_affinity \
+            tests.test_huawei_production_transport
+
+      - name: Phase 0 through Phase 3 guard regressions
+        run: |
+          python -m unittest \
+            tests.test_huawei_phase0_architecture \
+            tests.test_huawei_hg8145x6_phase1 \
+            tests.test_huawei_hg8145x6_ontwatch \
+            tests.test_huawei_phase2_eg8145v5_hn8010ts \
+            tests.test_huawei_phase3_hg8245h \
+            tests.test_huawei_provider_architecture \
+            tests.test_huawei_transport_negotiation
+
+      - name: Existing Huawei and multivendor regressions
+        run: |
+          python -m unittest \
+            tests.test_huawei_session_snapshot \
+            tests.test_huawei_captured_features \
+            tests.test_huawei_mapped_surface \
+            tests.test_huawei_response_protocol \
+            tests.test_huawei_multirepo_foundation \
+            tests.test_huawei_hg8010_telemetry \
+            tests.test_huawei_eg8041x7_runtime \
+            tests.test_huawei_eg8041_capture_contract \
+            tests.test_huawei_eg8041_family_runtime \
+            tests.test_huawei_eg8041_family_provider \
+            tests.test_huawei_dns_physical_state \
+            tests.test_huawei_diagnostics \
+            tests.test_huawei_http_trace_redaction \
+            tests.test_huawei_ipv4_filter \
+            tests.test_multivendor_runtime_regressions
