@@ -18,6 +18,7 @@ from apps.zte_manager.services.huawei_affinity_provider import (
 from apps.zte_manager.services.huawei_service import HuaweiService
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
 from apps.zte_manager.vendors.huawei import HuaweiWorkspace
+from apps.zte_manager.vendors.zte import ZTEWorkspace
 
 
 @dataclass(frozen=True)
@@ -30,12 +31,7 @@ class ProviderConnection:
 
 
 class ProviderRouter:
-    """The single runtime boundary allowed to choose a vendor provider.
-
-    DeviceService owns orchestration/session state; ProviderRouter owns vendor
-    detection, provider selection and provider-specific compatibility shapes.
-    Controllers must never choose Huawei vs ZTE themselves.
-    """
+    """The single runtime boundary allowed to choose a vendor provider."""
 
     def __init__(
         self,
@@ -117,8 +113,10 @@ class ProviderRouter:
             service = current_session.service
             workspace = current_session.workspace or HuaweiWorkspace(service)
         else:
-            if current_session is not None and current_session.service is not None:
-                current_session.service.disconnect()
+            if current_session is not None:
+                runtime = current_session.workspace or current_session.service
+                if runtime is not None:
+                    runtime.disconnect()
             elif getattr(self.zte_provider, "connected", False):
                 self.zte_provider.disconnect()
             service = self.huawei_factory()
@@ -142,18 +140,24 @@ class ProviderRouter:
         )
 
     def _connect_zte(self, *, current_session: Any = None, **kwargs) -> ProviderConnection:
-        if current_session is not None and current_session.vendor == "huawei":
-            runtime = current_session.workspace or current_session.service
-            if runtime is not None:
-                runtime.disconnect()
+        if current_session is not None and current_session.vendor == "zte":
+            service = current_session.service or self.zte_provider
+            workspace = current_session.workspace or ZTEWorkspace(service)
+        else:
+            if current_session is not None:
+                runtime = current_session.workspace or current_session.service
+                if runtime is not None:
+                    runtime.disconnect()
+            service = self.zte_provider
+            workspace = ZTEWorkspace(service)
 
-        service = self.zte_provider
-        result = service.connect(**kwargs)
+        result = workspace.connect(**kwargs)
         return ProviderConnection(
             vendor="zte",
             service=service,
             result=result,
             provider_name=type(service).__name__,
+            workspace=workspace,
         )
 
     @staticmethod
@@ -198,14 +202,15 @@ class ProviderRouter:
         if vendor == "huawei":
             return bool(getattr(service, "writes_enabled", False))
         if vendor == "zte":
+            exposed = getattr(service, "writes_enabled", None)
+            if exposed is not None:
+                return bool(exposed)
             backend = getattr(service, "_zte", None)
             return bool(getattr(backend, "writes_enabled", False))
         return False
 
     @staticmethod
     def invoke(service: Any, method_name: str, *args, **kwargs):
-        """Call a provider method while forwarding only supported kwargs."""
-
         method = getattr(service, method_name)
         if not kwargs:
             return method(*args)
@@ -235,8 +240,6 @@ class ProviderRouter:
         }
 
     def discovery_bootstrap(self, status: dict[str, Any], service: Any) -> dict[str, Any]:
-        """Normalize discovery metadata without controller-side vendor branching."""
-
         if status.get("vendor") == "huawei":
             model = status.get("model") or "Huawei"
             return {
