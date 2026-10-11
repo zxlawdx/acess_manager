@@ -56,5 +56,5 @@ def connection_status(context=None):
 
 @api.get("/debug/security")
 def security_status(context=None):
-    """Explicit ZTE-only diagnostic retained until a neutral contract exists."""
-    return _safe_call(zte_service.security_status)
+    """Legacy ZTE diagnostic dispatched through the active workspace."""
+    return _safe_call(_call_device, "security_status")

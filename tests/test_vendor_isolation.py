@@ -14,15 +14,10 @@ SERVICES_ROOT = ROOT / "apps" / "zte_manager" / "services"
 INFRA_ROOT = ROOT / "apps" / "zte_manager" / "infrastructure"
 MODEL_ROOT = ROOT / "apps" / "zte_manager" / "model"
 
-# Transitional, explicitly vendor-specific controllers that still call the ZTE
-# singleton directly. This set is debt, not permission to add more entries.
-# Each workspace migration should reduce it until it is empty or moved behind a
-# ZTE workspace/provider boundary.
-CURRENT_DIRECT_ZTE_CONTROLLER_EXCEPTIONS = {
-    "diagnostics.py",  # legacy /support/diagnostic/f6201b
-    "f6201b.py",       # explicit F6201B-only workbench/write routes
-    "system.py",       # explicit /debug/security ZTE diagnostic
-}
+# Direct ZTE singleton calls from controllers are no longer allowed. Explicit
+# F6201B routes remain vendor-specific but must resolve through the active ZTE
+# workspace rather than the global singleton.
+CURRENT_DIRECT_ZTE_CONTROLLER_EXCEPTIONS: set[str] = set()
 
 
 class SpyZTEProvider:
@@ -242,12 +237,23 @@ class VendorIsolationSourceTests(unittest.TestCase):
         self.assertNotIn('status.get("vendor") == "huawei"', source)
         self.assertNotIn('device_service.vendor == "huawei"', source)
 
+    def test_generic_read_facade_has_no_vendor_dispatch(self):
+        source = (API_ROOT / "common.py").read_text(encoding="utf-8")
+        self.assertNotIn('device_service.vendor == "huawei"', source)
+        self.assertNotIn("services.zte_service", source)
+        self.assertIn("ProviderRouter.invoke", source)
+
     def test_profile_controller_is_provider_neutral(self):
         source = (API_ROOT / "profiles.py").read_text(encoding="utf-8")
         self.assertNotIn("zte_service", source)
         self.assertNotIn("f6201b", source.casefold())
         self.assertIn("device_service.apply_profile", source)
         self.assertIn("device_service.apply_named_preset", source)
+
+    def test_f6201b_controller_does_not_call_global_zte_singleton(self):
+        source = (API_ROOT / "f6201b.py").read_text(encoding="utf-8")
+        self.assertNotIn("zte_service.", source)
+        self.assertIn("_call_f6201b", source)
 
     def test_direct_zte_controller_exception_list_cannot_grow_silently(self):
         actual = set()
