@@ -1,3 +1,5 @@
+from apps.zte_manager.services.named_preset_service import named_preset_service
+
 from .common import *
 
 
@@ -30,13 +32,15 @@ def save_profile(context=None):
     return _safe_call(action)
 
 
-# ZTE named presets remain explicitly provider-specific until DeviceService
-# exposes a neutral persistent-preset contract.
+# Named presets are local technician data, not a ZTE protocol capability.
+# Storage is therefore provider-neutral. Applying the selected preset remains
+# provider-dispatched through DeviceService so ZTE and Huawei use their own
+# mutation/read-back implementations.
 @api.post("/profiles/named/list")
 def list_named_presets(context=None):
     def action():
         data = _validated(AttendantRequest, context)
-        return {"names": zte_service.list_named_presets(data.attendant)}
+        return {"names": named_preset_service.list(data.attendant)}
     return _safe_call(action)
 
 
@@ -44,7 +48,7 @@ def list_named_presets(context=None):
 def get_named_preset(context=None):
     def action():
         data = _validated(NamedPresetRequest, context)
-        return zte_service.get_named_preset(data.attendant, data.name)
+        return named_preset_service.get(data.attendant, data.name)
     return _safe_call(action)
 
 
@@ -52,7 +56,7 @@ def get_named_preset(context=None):
 def save_named_preset(context=None):
     def action():
         data = _validated(NamedPresetSaveRequest, context)
-        return zte_service.save_named_preset(
+        return named_preset_service.save(
             data.attendant,
             data.name,
             {"wifi": data.wifi, "dns": data.dns},
@@ -64,7 +68,7 @@ def save_named_preset(context=None):
 def delete_named_preset(context=None):
     def action():
         data = _validated(NamedPresetRequest, context)
-        return {"success": zte_service.delete_named_preset(data.attendant, data.name)}
+        return {"success": named_preset_service.delete(data.attendant, data.name)}
     return _safe_call(action)
 
 
