@@ -26,10 +26,16 @@
       }
     }
 
+    // A restored desktop session may momentarily dispatch session-changed
+    // before app.js restores currentAttendant. The local create/save controls
+    // depend on the authenticated session, not on that transient assignment
+    // order. Click handlers still require currentAttendant before persistence.
+    const sessionReady = Boolean(ontConnected || currentAttendant);
+
     const create = id("namedPresetCreate");
     if (create) {
-      create.disabled = !currentAttendant;
-      create.title = currentAttendant ? "" : "Informe um atendente conectado.";
+      create.disabled = !sessionReady;
+      create.title = sessionReady ? "" : "Conecte-se antes de criar uma configuração.";
     }
 
     const remove = id("namedPresetDelete");
@@ -40,8 +46,8 @@
 
     const save = id("namedPresetSave");
     if (save) {
-      save.disabled = !currentAttendant;
-      save.title = currentAttendant ? "" : "Informe um atendente conectado.";
+      save.disabled = !sessionReady;
+      save.title = sessionReady ? "" : "Conecte-se antes de salvar uma configuração.";
     }
 
     const apply = id("namedPresetApply");
@@ -287,10 +293,21 @@
       globalThis.activeNamedPreset = PRIMARY;
       if (id("namedPresetSelect")) id("namedPresetSelect").replaceChildren();
       presetControls(false);
+
+      // restoreDesktopSession currently restores currentAttendant immediately
+      // after this event. Re-evaluate controls on the next microtask so the
+      // transient null attendant cannot leave Create/Save permanently disabled.
+      Promise.resolve().then(() => {
+        if (ontConnected || currentAttendant) {
+          presetControls(state.name !== PRIMARY);
+        }
+      });
     });
 
     document.addEventListener("device:page-open", event => {
-      if (event.detail?.pageName !== "profiles" || !currentAttendant) return;
+      if (event.detail?.pageName !== "profiles") return;
+      presetControls(state.name !== PRIMARY);
+      if (!currentAttendant) return;
       void execute(async () => {
         await refreshNames();
         await selectPreset(state.name);
