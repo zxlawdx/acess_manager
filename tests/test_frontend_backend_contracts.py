@@ -9,6 +9,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch, Mock
 from apps.zte_manager import api
+from apps.zte_manager.presentation.api import profiles as profiles_api
 from apps.zte_manager.services.error_policy import (
     SessionExpired, CapabilityUnconfirmed, PartialOperation
 )
@@ -78,6 +79,52 @@ class FrontendBackendContracts(unittest.TestCase):
             self.assertEqual(api.generate_attendance(context({"diagnostic_id":2})),
                              {"report":"Resultado revisado"})
         action.assert_called_once_with(2)
+
+    def test_named_presets_persist_without_zte_dependency_and_apply_through_device(self):
+        saved = {
+            "wifi": {
+                "2.4GHz": {"auto_channel": True},
+                "5GHz": {"auto_channel": True},
+            },
+            "dns": {"ipv4_1": "1.1.1.1"},
+        }
+        with patch.object(
+            profiles_api.named_preset_service,
+            "list",
+            return_value=["Configuração principal", "Huawei bancada"],
+        ) as listed:
+            result = api.list_named_presets(context({"attendant": "qa"}))
+        self.assertEqual(result["names"][-1], "Huawei bancada")
+        listed.assert_called_once_with("qa")
+
+        with patch.object(
+            profiles_api.named_preset_service,
+            "save",
+            return_value=saved,
+        ) as save:
+            result = api.save_named_preset(context({
+                "attendant": "qa",
+                "name": "Huawei bancada",
+                **saved,
+            }))
+        self.assertEqual(result, saved)
+        save.assert_called_once_with(
+            "qa",
+            "Huawei bancada",
+            {"wifi": saved["wifi"], "dns": saved["dns"]},
+        )
+
+        with patch.object(
+            api.device_service,
+            "apply_named_preset",
+            return_value={"success": True, "verified": True},
+        ) as apply:
+            result = api.apply_named_preset(context({
+                "attendant": "qa",
+                "name": "Huawei bancada",
+            }))
+        self.assertTrue(result["verified"])
+        apply.assert_called_once_with("qa", "Huawei bancada")
 
     def test_failed_profile_apply_reports_partial_and_does_not_claim_success(self):
         with patch.object(api.zte_service,"apply_profile",
