@@ -13,7 +13,6 @@ class SingleWriteResult:
     sent: bool
     http_status: int | None
     response_bytes: int
-    response_preview: str
     connection_closed: bool
     timed_out: bool
 
@@ -22,7 +21,6 @@ class SingleWriteResult:
             "sent": self.sent,
             "http_status": self.http_status,
             "response_bytes": self.response_bytes,
-            "response_preview": self.response_preview,
             "connection_closed": self.connection_closed,
             "timed_out": self.timed_out,
         }
@@ -33,7 +31,9 @@ class SingleWriteHttpTransport:
 
     This transport exists for firmware whose GoAhead server binds request
     framing to a single TCP write. It is never selected automatically and must
-    be invoked by an explicit lab operation/profile. It does not retry.
+    be invoked by an explicit lab operation/profile. It does not retry, and it
+    never returns raw response headers/body because they can contain cookies or
+    rotated CSRF tokens.
     """
 
     def __init__(
@@ -102,7 +102,8 @@ class SingleWriteHttpTransport:
             # sendall() invocation. There is intentionally no fallback/retry.
             sock.sendall(request)
             sock.settimeout(min(self.timeout, 5.0))
-            while sum(len(chunk) for chunk in chunks) < 65536:
+            received = 0
+            while received < 65536:
                 try:
                     chunk = sock.recv(4096)
                 except socket.timeout:
@@ -112,6 +113,7 @@ class SingleWriteHttpTransport:
                     connection_closed = True
                     break
                 chunks.append(chunk)
+                received += len(chunk)
         finally:
             try:
                 sock.close()
@@ -125,12 +127,10 @@ class SingleWriteHttpTransport:
             parts = first.split()
             if len(parts) >= 2 and parts[1].isdigit():
                 status = int(parts[1])
-        preview = raw_response[:512].decode("utf-8", "replace")
         return SingleWriteResult(
             sent=True,
             http_status=status,
             response_bytes=len(raw_response),
-            response_preview=preview,
             connection_closed=connection_closed,
             timed_out=timed_out,
         )
