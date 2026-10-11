@@ -251,6 +251,42 @@ class DeviceService:
             refresh=refresh,
         )
 
+    def discovery_bootstrap(self):
+        return self._provider_router.discovery_bootstrap(
+            self.status(),
+            self.active_service,
+        )
+
+    def multimodel_catalog(self):
+        return self._provider_router.multimodel_catalog(
+            self.status(),
+            self.active_service,
+        )
+
+    def multimodel_diagnostic(self, requested=None, section=None):
+        return self._provider_router.multimodel_diagnostic(
+            self.status(),
+            self.active_service,
+            requested,
+            section,
+        )
+
+    def multimodel_mesh(self, model=None):
+        return self._provider_router.multimodel_mesh(
+            self.status(),
+            self.active_service,
+            model,
+        )
+
+    def multimodel_probe(self, model=None, count=4, start=0):
+        return self._provider_router.multimodel_probe(
+            self.status(),
+            self.active_service,
+            model,
+            count,
+            start,
+        )
+
     def _require_huawei(self) -> Any:
         """Compatibility helper for Huawei-only routes during migration.
 

@@ -31,7 +31,8 @@ class ProviderRouter:
     """The single runtime boundary allowed to choose a vendor provider.
 
     DeviceService owns orchestration/session state; ProviderRouter owns vendor
-    detection, provider selection and provider-specific connection arguments.
+    detection, provider selection and provider-specific compatibility shapes.
+    Controllers must never choose Huawei vs ZTE themselves.
     """
 
     def __init__(
@@ -197,11 +198,7 @@ class ProviderRouter:
 
     @staticmethod
     def invoke(service: Any, method_name: str, *args, **kwargs):
-        """Call a provider method while forwarding only supported kwargs.
-
-        This removes vendor conditionals such as the historical Huawei-only
-        ``refresh`` forwarding. Provider signatures remain authoritative.
-        """
+        """Call a provider method while forwarding only supported kwargs."""
 
         method = getattr(service, method_name)
         if not kwargs:
@@ -218,3 +215,134 @@ class ProviderRouter:
             if name in signature.parameters
         }
         return method(*args, **accepted)
+
+    @staticmethod
+    def _huawei_catalog(status: dict[str, Any]) -> dict[str, Any]:
+        capabilities = status.get("capabilities") or {}
+        model = status.get("model") or "Huawei"
+        return {
+            "models": [{
+                "model": model,
+                "family": "huawei_webui",
+                "candidate_features": list(capabilities.keys()),
+            }]
+        }
+
+    def discovery_bootstrap(self, status: dict[str, Any], service: Any) -> dict[str, Any]:
+        """Normalize discovery metadata without controller-side vendor branching."""
+
+        if status.get("vendor") == "huawei":
+            model = status.get("model") or "Huawei"
+            return {
+                **status,
+                "model": model,
+                "detected_model": model,
+                "native_diagnostics_available": True,
+                "catalog": self._huawei_catalog(status),
+                "reason": None,
+            }
+
+        profile = status.get("profile")
+        native_profiles = {
+            "zte-f670l-thinklua",
+            "zte-f6600p-thinklua",
+            "zte-f6201b-thinklua",
+        }
+        return {
+            **status,
+            "detected_model": status.get("model"),
+            "native_diagnostics_available": bool(
+                status.get("connected")
+                and status.get("model_verified")
+                and profile in native_profiles
+            ),
+            "catalog": self.invoke(service, "multimodel_catalog"),
+            "reason": (
+                None if status.get("connected")
+                else "Conecte-se a uma ONT para detectar recursos."
+            ),
+        }
+
+    def multimodel_catalog(self, status: dict[str, Any], service: Any) -> dict[str, Any]:
+        if status.get("vendor") == "huawei":
+            return self._huawei_catalog(status)
+        return self.invoke(service, "multimodel_catalog")
+
+    def multimodel_diagnostic(
+        self,
+        status: dict[str, Any],
+        service: Any,
+        requested: str | None = None,
+        section: str | None = None,
+    ) -> dict[str, Any]:
+        if status.get("vendor") == "huawei":
+            return {
+                "model": status.get("model"),
+                "family": "huawei_webui",
+                "read_only": True,
+                "sections": {},
+                "reason": (
+                    "Use Detectar recursos: Huawei possui probe nativo por capability "
+                    "e não usa o diagnóstico ThinkLua."
+                ),
+            }
+        return self.invoke(service, "multimodel_diagnostic", requested, section)
+
+    def multimodel_mesh(
+        self,
+        status: dict[str, Any],
+        service: Any,
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        if status.get("vendor") == "huawei":
+            return {
+                "available": False,
+                "vendor": "huawei",
+                "model": status.get("model"),
+                "reason": "Resumo Mesh ThinkLua não se aplica à sessão Huawei.",
+            }
+        return self.invoke(service, "multimodel_mesh", model)
+
+    def multimodel_probe(
+        self,
+        status: dict[str, Any],
+        service: Any,
+        model: str | None = None,
+        count: int = 4,
+        start: int = 0,
+    ) -> dict[str, Any]:
+        if status.get("vendor") != "huawei":
+            return self.invoke(service, "multimodel_probe", model, count, start)
+
+        catalog = self.invoke(service, "capability_catalog")
+        features = []
+        for key, spec in (catalog.get("features") or {}).items():
+            operations = spec.get("operations") or {}
+            writable = any(
+                operations.get(name)
+                for name in ("create", "update", "delete", "write")
+            )
+            features.append({
+                "feature": key,
+                "label": spec.get("label") or key,
+                "status": (
+                    "detected"
+                    if operations.get("read") and operations.get("verified")
+                    else "not_tested"
+                ),
+                "available": bool(operations.get("read")),
+                "read": bool(operations.get("read")),
+                "write": bool(writable),
+                "partial": bool(operations.get("partial")),
+                "readback": (
+                    "FULLY_INTEGRATED" in (spec.get("evidence_states") or [])
+                ),
+                "verified": bool(operations.get("verified")),
+            })
+        return {
+            "model": status.get("model"),
+            "family": "huawei_webui",
+            "capabilities": features,
+            "candidate_features": [],
+            "reason": None,
+        }

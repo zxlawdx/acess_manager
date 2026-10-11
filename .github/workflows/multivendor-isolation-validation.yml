@@ -1,0 +1,70 @@
+name: Multivendor isolation validation
+
+on:
+  push:
+    branches:
+      - refactor/vendor-workspaces
+  pull_request:
+    paths:
+      - "apps/zte_manager/model/**"
+      - "apps/zte_manager/services/**"
+      - "apps/zte_manager/infrastructure/huawei/**"
+      - "apps/zte_manager/presentation/api/**"
+      - "apps/zte_manager/static/js/**"
+      - "tests/**"
+      - ".github/workflows/multivendor-isolation-validation.yml"
+
+jobs:
+  isolation-and-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+
+      - name: Multivendor syntax
+        run: |
+          python -m py_compile \
+            apps/zte_manager/model/session.py \
+            apps/zte_manager/model/capabilities.py \
+            apps/zte_manager/model/telemetry.py \
+            apps/zte_manager/services/provider_router.py \
+            apps/zte_manager/services/device_service.py \
+            apps/zte_manager/presentation/api/capabilities.py \
+            tests/test_core_contracts.py \
+            tests/test_vendor_isolation.py
+
+      - name: Isolation gate
+        run: |
+          python -m unittest \
+            tests.test_core_contracts \
+            tests.test_vendor_isolation \
+            tests.test_multivendor_runtime_regressions \
+            tests.test_huawei_provider_architecture \
+            tests.test_huawei_production_transport \
+            tests.test_f6201b_cross_vendor_probe \
+            tests.test_api_modularization
+
+      - name: Full Python regression suite
+        run: python -m unittest discover -s tests -p "test_*.py"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Provider-neutral frontend regressions
+        run: |
+          node --test \
+            tests/test_frontend_core.mjs \
+            tests/test_frontend_capability_policy.mjs \
+            tests/test_frontend_feature_modules.mjs
+          node tests/test_profile_provider_neutral_ui.cjs
