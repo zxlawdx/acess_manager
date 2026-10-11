@@ -12,11 +12,13 @@ from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
 from apps.zte_manager.model.device_adapters.huawei_registry import (
     is_recognized_huawei_model,
 )
+from apps.zte_manager.model.device_adapters.thinklua import ThinkLuaAdapter, select_adapter
 from apps.zte_manager.services.huawei_affinity_provider import (
     HuaweiAffinityUnifiedProvider,
 )
 from apps.zte_manager.services.huawei_service import HuaweiService
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
+from apps.zte_manager.vendors.deployment import DeploymentWorkspace
 from apps.zte_manager.vendors.huawei import HuaweiWorkspace
 from apps.zte_manager.vendors.zte import ZTEWorkspace
 
@@ -111,7 +113,9 @@ class ProviderRouter:
     def _connect_huawei(self, *, current_session: Any = None, **kwargs) -> ProviderConnection:
         if current_session is not None and current_session.vendor == "huawei":
             service = current_session.service
-            workspace = current_session.workspace or HuaweiWorkspace(service)
+            base_workspace = current_session.workspace or HuaweiWorkspace(service)
+            if isinstance(base_workspace, DeploymentWorkspace):
+                base_workspace = base_workspace.provider
         else:
             if current_session is not None:
                 runtime = current_session.workspace or current_session.service
@@ -120,17 +124,24 @@ class ProviderRouter:
             elif getattr(self.zte_provider, "connected", False):
                 self.zte_provider.disconnect()
             service = self.huawei_factory()
-            workspace = HuaweiWorkspace(service)
+            base_workspace = HuaweiWorkspace(service)
 
         if kwargs.get("huawei_cli") is None:
             kwargs.pop("huawei_cli", None)
 
-        result = workspace.connect(**kwargs)
+        result = base_workspace.connect(**kwargs)
+        workspace: Any = base_workspace
         provider_name = (
             "HuaweiService"
             if isinstance(service, HuaweiService)
             else type(service).__name__
         )
+        if self._requires_deployment("huawei", result):
+            workspace = DeploymentWorkspace(base_workspace, vendor_hint="huawei")
+            result = {**result, "mode": "deployment"}
+            result["capabilities"] = workspace.capabilities
+            provider_name = "DeploymentWorkspace"
+
         return ProviderConnection(
             vendor="huawei",
             service=service,
@@ -142,23 +153,48 @@ class ProviderRouter:
     def _connect_zte(self, *, current_session: Any = None, **kwargs) -> ProviderConnection:
         if current_session is not None and current_session.vendor == "zte":
             service = current_session.service or self.zte_provider
-            workspace = current_session.workspace or ZTEWorkspace(service)
+            base_workspace = current_session.workspace or ZTEWorkspace(service)
+            if isinstance(base_workspace, DeploymentWorkspace):
+                base_workspace = base_workspace.provider
         else:
             if current_session is not None:
                 runtime = current_session.workspace or current_session.service
                 if runtime is not None:
                     runtime.disconnect()
             service = self.zte_provider
-            workspace = ZTEWorkspace(service)
+            base_workspace = ZTEWorkspace(service)
 
-        result = workspace.connect(**kwargs)
+        result = base_workspace.connect(**kwargs)
+        workspace: Any = base_workspace
+        provider_name = type(service).__name__
+        if self._requires_deployment("zte", result):
+            workspace = DeploymentWorkspace(base_workspace, vendor_hint="zte")
+            result = {**result, "mode": "deployment"}
+            result["capabilities"] = workspace.capabilities
+            provider_name = "DeploymentWorkspace"
+
         return ProviderConnection(
             vendor="zte",
             service=service,
             result=result,
-            provider_name=type(service).__name__,
+            provider_name=provider_name,
             workspace=workspace,
         )
+
+    @staticmethod
+    def _requires_deployment(vendor: str, result: dict[str, Any]) -> bool:
+        if result.get("mode") == "deployment":
+            return True
+        model = result.get("model")
+        if vendor == "huawei":
+            return not (
+                is_known_huawei_model(model)
+                or is_recognized_huawei_model(model)
+            )
+        if vendor == "zte":
+            adapter = select_adapter(model, result.get("firmware"))
+            return type(adapter) is ThinkLuaAdapter
+        return True
 
     @staticmethod
     def _should_probe_vendor(host: str) -> bool:
@@ -246,9 +282,13 @@ class ProviderRouter:
                 **status,
                 "model": model,
                 "detected_model": model,
-                "native_diagnostics_available": True,
+                "native_diagnostics_available": bool(status.get("mode") != "deployment"),
                 "catalog": self._huawei_catalog(status),
-                "reason": None,
+                "reason": (
+                    "Equipamento em homologação: apenas descoberta e leitura são permitidas."
+                    if status.get("mode") == "deployment"
+                    else None
+                ),
             }
 
         profile = status.get("profile")
@@ -263,12 +303,17 @@ class ProviderRouter:
             "native_diagnostics_available": bool(
                 status.get("connected")
                 and status.get("model_verified")
+                and status.get("mode") != "deployment"
                 and profile in native_profiles
             ),
             "catalog": self.invoke(service, "multimodel_catalog"),
             "reason": (
-                None if status.get("connected")
-                else "Conecte-se a uma ONT para detectar recursos."
+                "Equipamento em homologação: apenas descoberta e leitura são permitidas."
+                if status.get("mode") == "deployment"
+                else (
+                    None if status.get("connected")
+                    else "Conecte-se a uma ONT para detectar recursos."
+                )
             ),
         }
 
