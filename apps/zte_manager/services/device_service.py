@@ -1,62 +1,28 @@
 from __future__ import annotations
 
-import ipaddress
 import logging
-from dataclasses import dataclass, field
 from typing import Any
 
 from apps.zte_manager.infrastructure.huawei.affinity_client import (
     HuaweiAffinityNegotiatingWebClient,
 )
-from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
-from apps.zte_manager.model.device_adapters.huawei_registry import (
-    is_recognized_huawei_model,
-)
-from apps.zte_manager.services.huawei_service import HuaweiService
+from apps.zte_manager.model.session import DeviceSession
+from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.huawei_affinity_provider import (
     HuaweiAffinityUnifiedProvider,
 )
-from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
+from apps.zte_manager.services.provider_router import ProviderRouter
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class DeviceSession:
-    vendor: str
-    model: str | None
-    profile: str | None
-    provider: str
-    service: Any = field(repr=False)
-    capabilities: dict[str, dict] = field(default_factory=dict)
-    model_verified: bool = False
-    host: str | None = None
-    attendant: str | None = None
-    session_revision: str | None = None
-
-    def public(self) -> dict:
-        return {
-            "vendor": self.vendor,
-            "model": self.model,
-            "profile": self.profile,
-            "provider": self.provider,
-            "capabilities": {
-                key: dict(value)
-                for key, value in self.capabilities.items()
-            },
-            "model_verified": self.model_verified,
-            "host": self.host,
-            "attendant": self.attendant,
-            "session_revision": self.session_revision,
-        }
-
-
 class DeviceService:
-    """Vendor-neutral runtime dispatcher.
+    """Provider-neutral runtime dispatcher.
 
-    The active provider is a real ZTEService or HuaweiService instance. Huawei
-    behavior never runs inside ZTEService.
+    Vendor detection and provider selection live in :class:`ProviderRouter`.
+    This class owns only active-session orchestration and the compatibility
+    facade consumed by the current API while workspaces are migrated.
     """
 
     def __init__(
@@ -65,17 +31,25 @@ class DeviceService:
         zte_provider: ZTEService | None = None,
         huawei_factory=HuaweiAffinityUnifiedProvider,
         huawei_client_type=HuaweiAffinityNegotiatingWebClient,
+        provider_router: ProviderRouter | None = None,
     ) -> None:
-        self._zte_service = zte_provider or zte_service
+        # Compatibility aliases are intentionally retained because existing
+        # production-transport regressions assert these defaults explicitly.
         self._huawei_factory = huawei_factory
         self._huawei_client_type = huawei_client_type
+        self._provider_router = provider_router or ProviderRouter(
+            zte_provider=zte_provider or zte_service,
+            huawei_factory=huawei_factory,
+            huawei_client_type=huawei_client_type,
+        )
+        self._zte_service = self._provider_router.zte_provider
         self._session: DeviceSession | None = None
 
     def __getattr__(self, name: str):
         """Delegate public provider surface to the active service.
 
         Missing methods/attributes are an explicit capability gap. An active
-        Huawei session can never fall through to the ZTE provider.
+        non-ZTE session can never fall through to the ZTE provider.
         """
         if name.startswith("_"):
             raise AttributeError(name)
@@ -99,16 +73,16 @@ class DeviceService:
     def connected(self) -> bool:
         return bool(
             self._session is not None
+            and self._session.service is not None
             and self._session.service.connected
         )
 
     @property
     def active_service(self):
-        if self._session is not None:
+        if self._session is not None and self._session.service is not None:
             return self._session.service
         # Before /connect, the historical ZTE provider remains the default
         # object so legacy tests/local callers keep their normal session error.
-        # An active Huawei session always wins and can never fall back to ZTE.
         return self._zte_service
 
     @property
@@ -130,155 +104,58 @@ class DeviceService:
         model_hint: str | None = None,
         huawei_cli: dict | None = None,
     ) -> dict:
-        # Knowledge-registry recognition routes the request to the Huawei
-        # provider, but does not grant an operational profile/capability. The
-        # Huawei runtime still requires auth + real endpoint probes.
-        manual_huawei = (
-            is_known_huawei_model(model_hint)
-            or is_recognized_huawei_model(model_hint)
-        )
-        detected_huawei = False
-
-        if (
-            not manual_huawei
-            and self._should_probe_vendor(ip)
-        ):
-            detected_huawei = (
-                self._huawei_client_type
-                .looks_like_huawei(
-                    ip,
-                    https=https,
-                )
-            )
-
-        if manual_huawei or detected_huawei:
-            return self._connect_huawei(
-                ip=ip,
-                username=username,
-                password=password,
-                https=https,
-                attendant=attendant,
-                model_hint=model_hint,
-                huawei_cli=huawei_cli,
-            )
-
-        # Huawei-only CLI options must never leak into ZTE providers.
-        return self._connect_zte(
+        connection = self._provider_router.connect(
+            current_session=self._session,
             ip=ip,
             username=username,
             password=password,
             https=https,
             attendant=attendant,
             model_hint=model_hint,
+            huawei_cli=huawei_cli,
         )
+
+        result = connection.result
+        result["provider"] = connection.provider_name
+
+        if getattr(connection.service, "connected", False):
+            self._session = DeviceSession.from_connection(
+                vendor=connection.vendor,
+                provider=connection.provider_name,
+                service=connection.service,
+                result=result,
+            )
+        else:
+            self._session = None
+
+        logger.info(
+            "device_provider_selected vendor=%s provider=%s profile=%s mode=%s",
+            connection.vendor,
+            connection.provider_name,
+            (
+                self._session.profile
+                if self._session is not None
+                else None
+            ),
+            (
+                self._session.mode
+                if self._session is not None
+                else None
+            ),
+        )
+        return result
 
     @staticmethod
     def _should_probe_vendor(host: str) -> bool:
-        raw = str(host or "").strip()
-        if "://" in raw:
-            raw = raw.split("://", 1)[1]
-        raw = raw.split("/", 1)[0]
-        if raw.startswith("[") and "]" in raw:
-            raw = raw[1:raw.index("]")]
-        elif raw.count(":") == 1:
-            raw = raw.split(":", 1)[0]
-        try:
-            address = ipaddress.ip_address(raw)
-        except ValueError:
-            return True
+        """Compatibility alias; routing policy itself lives in ProviderRouter."""
 
-        # Includes RFC1918 plus RFC6598 shared address space used by managed
-        # CPE/ONT networks. RFC6598 is deliberately not labelled RFC1918.
-        management_probe_networks = (
-            ipaddress.ip_network("10.0.0.0/8"),
-            ipaddress.ip_network("172.16.0.0/12"),
-            ipaddress.ip_network("192.168.0.0/16"),
-            ipaddress.ip_network("100.64.0.0/10"),
-        )
-        return any(
-            address in network
-            for network in management_probe_networks
-        )
-
-    def _connect_huawei(self, **kwargs) -> dict:
-        if (
-            self._session is not None
-            and self._session.vendor == "huawei"
-        ):
-            service = self._session.service
-        else:
-            if self._session is not None:
-                self.disconnect()
-            elif self._zte_service.connected:
-                self._zte_service.disconnect()
-            service = self._huawei_factory()
-
-        # Legacy/injected HuaweiService providers predate optional CLI support.
-        # Do not change their call contract when the operator did not request
-        # CLI. The default telemetry runtime receives the explicit mapping when
-        # present and remains the only provider that interprets it.
-        if kwargs.get("huawei_cli") is None:
-            kwargs.pop("huawei_cli", None)
-        result = service.connect(**kwargs)
-        provider_name = (
-            "HuaweiService"
-            if isinstance(service, HuaweiService)
-            else type(service).__name__
-        )
-        result["provider"] = provider_name
-        self._session = DeviceSession(
-            vendor="huawei",
-            model=result.get("model"),
-            profile=result.get("profile"),
-            provider=provider_name,
-            service=service,
-            capabilities=result.get("capabilities") or {},
-            model_verified=bool(
-                result.get("model_verified")
-            ),
-            host=result.get("host"),
-            attendant=result.get("attendant"),
-            session_revision=result.get("session_revision"),
-        )
-        logger.info(
-            "device_provider_selected vendor=huawei provider=%s profile=%s",
-            provider_name,
-            result.get("profile") or "huawei_unknown",
-        )
-        return result
-
-    def _connect_zte(self, **kwargs) -> dict:
-        if (
-            self._session is not None
-            and self._session.vendor == "huawei"
-        ):
-            self.disconnect()
-
-        result = self._zte_service.connect(**kwargs)
-        if self._zte_service.connected:
-            self._session = DeviceSession(
-                vendor="zte",
-                model=result.get("model"),
-                profile=result.get("adapter"),
-                provider=type(self._zte_service).__name__,
-                service=self._zte_service,
-                capabilities={},
-                model_verified=bool(
-                    result.get("model_verified")
-                ),
-                host=result.get("host"),
-                attendant=result.get("attendant"),
-                session_revision=result.get("session_revision"),
-            )
-        logger.info(
-            "device_provider_selected vendor=zte provider=%s",
-            type(self._zte_service).__name__,
-        )
-        return result
+        return ProviderRouter._should_probe_vendor(host)
 
     def disconnect(self) -> None:
         if self._session is not None:
-            self._session.service.disconnect()
+            service = self._session.service
+            if service is not None:
+                service.disconnect()
             self._session = None
             return
         if self._zte_service.connected:
@@ -287,10 +164,14 @@ class DeviceService:
     def status(self) -> dict:
         if self._session is None:
             if self._zte_service.connected:
+                verified = bool(self._zte_service._model_verified)
                 return {
                     "connected": True,
                     "vendor": "zte",
                     "model": self._zte_service._selected_model,
+                    "firmware": None,
+                    "hardware": None,
+                    "protocol_family": None,
                     "profile": (
                         self._zte_service._adapter.name
                         if self._zte_service._adapter
@@ -298,25 +179,29 @@ class DeviceService:
                     ),
                     "provider": type(self._zte_service).__name__,
                     "capabilities": {},
-                    "model_verified": self._zte_service._model_verified,
+                    "device_id": None,
+                    "mode": "supported" if verified else "partial",
+                    "model_verified": verified,
                     "host": self._zte_service.current_host,
                     "attendant": self._zte_service.current_attendant,
                     "session_revision": self._zte_service._session_revision,
-                    "writes_enabled": bool(
-                        getattr(
-                            self._zte_service._zte,
-                            "writes_enabled",
-                            False,
-                        )
+                    "writes_enabled": self._provider_router.writes_enabled(
+                        "zte",
+                        self._zte_service,
                     ),
                 }
             return {
                 "connected": False,
                 "vendor": None,
                 "model": None,
+                "firmware": None,
+                "hardware": None,
+                "protocol_family": None,
                 "profile": None,
                 "provider": None,
                 "capabilities": {},
+                "device_id": None,
+                "mode": None,
                 "model_verified": False,
                 "host": None,
                 "attendant": None,
@@ -325,73 +210,81 @@ class DeviceService:
             }
 
         service = self._session.service
-        self._session.capabilities = (
-            service.capabilities
-            if self._session.vendor == "huawei"
-            else self._session.capabilities
+        self._session.capabilities = self._provider_router.capabilities(
+            service,
+            self._session.capabilities,
         )
         data = self._session.public()
-        data["connected"] = bool(service.connected)
-        data["writes_enabled"] = bool(
-            getattr(service, "writes_enabled", False)
-            if self._session.vendor == "huawei"
-            else getattr(
-                self._zte_service._zte,
-                "writes_enabled",
-                False,
-            )
+        data["connected"] = bool(getattr(service, "connected", False))
+        data["writes_enabled"] = self._provider_router.writes_enabled(
+            self._session.vendor,
+            service,
         )
         return data
 
     def capability_catalog(self):
-        return self.active_service.capability_catalog()
+        return self._provider_router.invoke(
+            self.active_service,
+            "capability_catalog",
+        )
 
     def probe_capabilities(self, features=None):
-        return self.active_service.probe_capabilities(features)
+        return self._provider_router.invoke(
+            self.active_service,
+            "probe_capabilities",
+            features,
+        )
 
     def capability_shape(self, feature, *, refresh=False):
-        if self.vendor == "huawei":
-            return self.active_service.capability_shape(
-                feature,
-                refresh=refresh,
-            )
-        return self.active_service.capability_shape(feature)
+        return self._provider_router.invoke(
+            self.active_service,
+            "capability_shape",
+            feature,
+            refresh=refresh,
+        )
 
     def read_capability(self, feature, *, refresh=False):
-        if self.vendor == "huawei":
-            return self.active_service.read_capability(
-                feature,
-                refresh=refresh,
-            )
-        return self.active_service.read_capability(feature)
+        return self._provider_router.invoke(
+            self.active_service,
+            "read_capability",
+            feature,
+            refresh=refresh,
+        )
 
-    def _require_huawei(self) -> HuaweiService:
-        if (
-            self._session is None
-            or self._session.vendor != "huawei"
-            or not isinstance(
-                self._session.service,
-                HuaweiService,
-            )
-        ):
+    def _require_huawei(self) -> Any:
+        """Compatibility helper for Huawei-only routes during migration.
+
+        Selection is capability/surface based rather than another vendor
+        routing decision. These routes will move under the Huawei workspace in
+        the next migration phase.
+        """
+
+        service = self.active_service
+        required = (
+            "list_ipv4_filters",
+            "create_ipv4_filter",
+            "update_ipv4_filter",
+            "delete_ipv4_filter",
+        )
+        if not all(hasattr(service, name) for name in required):
             raise RuntimeError(
-                "A sessão atual não pertence a uma ONT Huawei."
+                "A sessão atual não expõe o gerenciamento IPv4 Filter da Huawei."
             )
-        return self._session.service
+        return service
 
     def list_ipv4_filters(self, *, refresh=False):
         result = self._require_huawei().list_ipv4_filters(
             refresh=refresh
         )
-        # Do not erase DHCP/DNS/Wi-Fi/etc. capabilities merely because the
-        # IPv4 filter panel refreshed. The previous replacement caused the
-        # Huawei sidebar/discovery state to collapse to one feature.
-        self._session.capabilities = {
-            **(self._session.capabilities or {}),
-            "ipv4_filter": dict(
-                result.get("capability") or {}
-            ),
-        }
+        if self._session is not None:
+            # Do not erase DHCP/DNS/Wi-Fi/etc. capabilities merely because the
+            # IPv4 filter panel refreshed.
+            self._session.capabilities = {
+                **(self._session.capabilities or {}),
+                "ipv4_filter": dict(
+                    result.get("capability") or {}
+                ),
+            }
         return result
 
     def create_ipv4_filter(self, config):
@@ -413,11 +306,16 @@ class DeviceService:
         )
 
     def huawei_session_snapshot(self):
-        return self._require_huawei().session_snapshot()
+        return self._provider_router.invoke(
+            self.active_service,
+            "session_snapshot",
+        )
 
     def warm_huawei_session_snapshot(self, *, refresh=False):
-        return self._require_huawei().warm_session_snapshot(
-            refresh=refresh
+        return self._provider_router.invoke(
+            self.active_service,
+            "warm_session_snapshot",
+            refresh=refresh,
         )
 
     def generate_attendance(self, diagnostic_id=None):

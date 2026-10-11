@@ -96,3 +96,32 @@ class DeviceResourceTelemetry:
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class ClientTelemetry:
+    """Normalized client telemetry shared by every vendor workspace.
+
+    Unknown values stay ``None``. In particular, ``0`` is a real counter/rate
+    and must never be used as a substitute for data the equipment did not
+    expose.
+    """
+
+    mac: str | None = None
+    hostname: str | None = None
+    ip: str | None = None
+    interface: str | None = None
+    connection_type: str | None = None
+    ssid: str | None = None
+    band: str | None = None
+    rx_bytes: int | None = None
+    tx_bytes: int | None = None
+    rx_rate_bps: int | None = None
+    tx_rate_bps: int | None = None
+    rssi: int | None = None
+    snr: int | float | None = None
+    online: bool | None = None
+    connected_seconds: int | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
