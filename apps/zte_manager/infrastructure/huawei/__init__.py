@@ -5,6 +5,7 @@ from .auth import (
     RandCountAuth,
     RandStringSessionTokenAuth,
 )
+from .affinity_client import HuaweiAffinityNegotiatingWebClient
 from .client import HuaweiMutationTransport, HuaweiWebClient
 from .codec import decode_huawei_js_string
 from .detector import HuaweiDetection, HuaweiDetector
@@ -35,16 +36,21 @@ from .protocol import (
 from .response import HuaweiResponse, HuaweiResponseParser, decode_huawei_hex_payload
 from .transport import (
     AffinityHttpTransport,
+    HG8245X6_TTNET2_AFFINITY_PROFILE,
+    HuaweiEndpointProfile,
     HuaweiTransport,
     HuaweiTransportPolicy,
     RequestsSessionTransport,
     SingleWriteSocketTransport,
+    endpoint_profile_from_login_source,
 )
 
 __all__ = [
     "AffinityHttpTransport",
     "ApiSesTokenAuth",
     "ApiSesTokenContext",
+    "HG8245X6_TTNET2_AFFINITY_PROFILE",
+    "HuaweiAffinityNegotiatingWebClient",
     "HuaweiArchitectureError",
     "HuaweiAuthFamilyAmbiguousError",
     "HuaweiAuthFlow",
@@ -54,6 +60,7 @@ __all__ = [
     "HuaweiDetection",
     "HuaweiDetector",
     "HuaweiEndpoint",
+    "HuaweiEndpointProfile",
     "HuaweiFamilyAwareWebClient",
     "HuaweiJsConstructorParser",
     "HuaweiMutationTransport",
@@ -77,6 +84,7 @@ __all__ = [
     "SingleWriteSocketTransport",
     "decode_huawei_hex_payload",
     "decode_huawei_js_string",
+    "endpoint_profile_from_login_source",
     "parse_huawei_https_bootstrap",
     "parse_huawei_js_constructors",
 ]

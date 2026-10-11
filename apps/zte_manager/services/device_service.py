@@ -5,16 +5,16 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from apps.zte_manager.infrastructure.huawei.negotiating_client import (
-    HuaweiNegotiatingWebClient,
+from apps.zte_manager.infrastructure.huawei.affinity_client import (
+    HuaweiAffinityNegotiatingWebClient,
 )
 from apps.zte_manager.model.device_adapters.huawei import is_known_huawei_model
 from apps.zte_manager.model.device_adapters.huawei_registry import (
     is_recognized_huawei_model,
 )
 from apps.zte_manager.services.huawei_service import HuaweiService
-from apps.zte_manager.services.huawei_unified_provider import (
-    HuaweiUnifiedProvider,
+from apps.zte_manager.services.huawei_affinity_provider import (
+    HuaweiAffinityUnifiedProvider,
 )
 from apps.zte_manager.services.error_policy import ProviderFeatureUnavailable
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
@@ -63,8 +63,8 @@ class DeviceService:
         self,
         *,
         zte_provider: ZTEService | None = None,
-        huawei_factory=HuaweiUnifiedProvider,
-        huawei_client_type=HuaweiNegotiatingWebClient,
+        huawei_factory=HuaweiAffinityUnifiedProvider,
+        huawei_client_type=HuaweiAffinityNegotiatingWebClient,
     ) -> None:
         self._zte_service = zte_provider or zte_service
         self._huawei_factory = huawei_factory
