@@ -3,13 +3,18 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from apps.zte_manager.infrastructure.huawei.js_parser import (
+    parse_huawei_js_constructors,
+)
 from apps.zte_manager.services.huawei_captured_features import (
     DEVICE_INFO_PAGE,
+    OPTICAL_PAGE,
     WAN_CACHE_PAGE,
     WLAN_LIST_PAGE,
     HuaweiCapturedFeatureService,
     _record_domain,
-    parse_huawei_js_records,
+    _record_value,
+    _source_value,
 )
 
 
@@ -17,25 +22,34 @@ HG8145X6_WLAN_INFO_PAGE = "/html/amp/wlaninfo/wlaninfo.asp"
 HG8145X6_ASSOCIATED_DEVICES_PAGE = (
     "/html/amp/wlaninfo/getassociateddeviceinfo.asp"
 )
+HG8145X6_OPTICAL_CANDIDATE_PAGES = (
+    OPTICAL_PAGE,
+    "/html/amp/common/getSmartDiagnoseResult.asp",
+    "/html/ssmp/common/getOpticTxRx.asp",
+)
 
 
 class HuaweiHG8145X6CapturedFeatureService(HuaweiCapturedFeatureService):
-    """Read-only WebUI adapter derived from the user-supplied ONTWatch client.
+    """Read-only HG8145X6 WebUI adapter based on physically validated evidence.
 
-    ONTWatch documents these endpoints against an HG8145X6-10 V5R022C00
-    firmware build. Access Manager keeps the adapter read-only and promotes a
-    capability only after the authenticated endpoint can be read at runtime.
-    No EG8041 mutation contract is inherited as evidence for this model.
+    ONTWatch documents the WAN/WLAN/client/system endpoints against an
+    HG8145X6-10 V5R022C00 build and the user validated the HTTPS:80 flow on
+    physical hardware. Access Manager keeps writes disabled and promotes a
+    capability only after the authenticated endpoint is readable at runtime.
     """
 
     SOURCE = "ONTWatch/HG8145X6-10"
+    PROTOCOL_FAMILY = "amp_bbsp"
 
     @staticmethod
     def _rows(source: str, constructor: str) -> list[dict[str, Any]]:
         wanted = str(constructor or "").casefold()
         return [
             row
-            for row in parse_huawei_js_records(source or "")
+            for row in parse_huawei_js_constructors(
+                source or "",
+                protocol_family=HuaweiHG8145X6CapturedFeatureService.PROTOCOL_FAMILY,
+            )
             if str(row.get("_constructor") or "").casefold() == wanted
         ]
 
@@ -71,8 +85,12 @@ class HuaweiHG8145X6CapturedFeatureService(HuaweiCapturedFeatureService):
             return "2.4GHz"
         return raw
 
+    @staticmethod
+    def _present(value: object) -> bool:
+        return value not in (None, "", [], {})
+
     def source_signature(self) -> dict[str, Any]:
-        """Read the documented ONTWatch endpoints without mutating the ONT."""
+        """Fingerprint documented endpoints without mutating the ONT."""
         probes = (
             ("wan", WAN_CACHE_PAGE, ("WanPPP",)),
             ("ssids", WLAN_LIST_PAGE, ("stWlanInfo",)),
@@ -90,6 +108,7 @@ class HuaweiHG8145X6CapturedFeatureService(HuaweiCapturedFeatureService):
         )
         endpoints: dict[str, dict[str, Any]] = {}
         evidence: list[str] = []
+        marker_hits = 0
         for key, path, markers in probes:
             try:
                 source = self._page(path)
@@ -109,7 +128,24 @@ class HuaweiHG8145X6CapturedFeatureService(HuaweiCapturedFeatureService):
             }
             evidence.append(f"endpoint:{path}")
             if marker:
+                marker_hits += 1
                 evidence.append(f"marker:{key}")
+
+        try:
+            optical = self.optical_status()
+            endpoints["optical"] = {
+                "path": optical.get("source") or "runtime-detected",
+                "readable": True,
+                "marker": True,
+            }
+            evidence.append(f"endpoint:{endpoints['optical']['path']}")
+        except Exception as exc:
+            endpoints["optical"] = {
+                "paths": list(HG8145X6_OPTICAL_CANDIDATE_PAGES),
+                "readable": False,
+                "marker": False,
+                "error": type(exc).__name__,
+            }
 
         core = ("wan", "ssids", "device")
         compatible = all(
@@ -118,8 +154,18 @@ class HuaweiHG8145X6CapturedFeatureService(HuaweiCapturedFeatureService):
         ) and sum(
             1 for key in core if endpoints.get(key, {}).get("marker")
         ) >= 2
+        # Unknown model strings may still use this protocol profile. Require a
+        # much stronger runtime fingerprint before selecting it without a model
+        # hint, so a sibling AMP/BBSP firmware is not misclassified.
+        strong_fingerprint = bool(
+            marker_hits >= 5
+            and endpoints.get("clients", {}).get("marker")
+            and endpoints.get("traffic", {}).get("marker")
+        )
         return {
             "compatible": bool(compatible),
+            "strong_fingerprint": strong_fingerprint,
+            "marker_hits": marker_hits,
             "source": self.SOURCE,
             "endpoints": endpoints,
             "evidence": evidence,
@@ -273,7 +319,6 @@ class HuaweiHG8145X6CapturedFeatureService(HuaweiCapturedFeatureService):
                 "sent_packets": sent_packets,
                 "recv_bytes": recv_bytes,
                 "recv_packets": recv_packets,
-                # Access Manager aliases: counters are cumulative and LAN-side.
                 "tx_bytes": sent_bytes,
                 "tx_packets": sent_packets,
                 "rx_bytes": recv_bytes,
@@ -350,3 +395,65 @@ class HuaweiHG8145X6CapturedFeatureService(HuaweiCapturedFeatureService):
         result["resource_source"] = DEVICE_INFO_PAGE
         result["source"] = self.SOURCE
         return result
+
+    def optical_status(self) -> dict[str, Any]:
+        """Probe known read-only optical surfaces; never assume one is universal."""
+        last_error: Exception | None = None
+        for path in HG8145X6_OPTICAL_CANDIDATE_PAGES:
+            try:
+                source = self._page(path)
+            except Exception as exc:
+                last_error = exc
+                continue
+
+            records = parse_huawei_js_constructors(
+                source or "",
+                protocol_family=self.PROTOCOL_FAMILY,
+            )
+
+            def value(*names: str, default=""):
+                from_records = _record_value(records, *names, default=None)
+                if self._present(from_records):
+                    return from_records
+                return _source_value(source, *names, default=default)
+
+            result = {
+                "rx_power_dbm": value(
+                    "RxPower", "RXPower", "RxOpticalPower",
+                    "ReceivePower", "RxPowerValue", "rxPower",
+                ),
+                "tx_power_dbm": value(
+                    "TxPower", "TXPower", "TxOpticalPower",
+                    "TransmitPower", "TxPowerValue", "txPower",
+                ),
+                "temperature_c": value(
+                    "Temperature", "TemperatureC", "ChipTemperature",
+                ),
+                "voltage": value("Voltage", "SupplyVoltage"),
+                "current_ma": value("Current", "BiasCurrent", "TxBias"),
+                "registration_status": value(
+                    "Status", "ONTState", "RegisterStatus",
+                ),
+                "onu_id": value("OnuId", "ONUId", "ONTID"),
+                "los": value("LOS", "LosStatus"),
+                "pon_uptime": value("Uptime", "PONUptime"),
+                "source": path,
+                "evidence": "runtime_read_only_probe",
+            }
+            signal_fields = (
+                result["rx_power_dbm"],
+                result["tx_power_dbm"],
+                result["temperature_c"],
+                result["registration_status"],
+                result["los"],
+            )
+            if any(self._present(item) for item in signal_fields):
+                return result
+
+        if last_error is not None:
+            raise RuntimeError(
+                "Nenhum endpoint óptico Huawei conhecido respondeu com dados reconhecíveis."
+            ) from last_error
+        raise RuntimeError(
+            "Óptica indisponível neste firmware Huawei; capability permanece UNKNOWN."
+        )

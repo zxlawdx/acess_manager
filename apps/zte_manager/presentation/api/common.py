@@ -10,6 +10,7 @@ from uuid import uuid4
 from pydantic import ValidationError
 from vela.api import api
 
+from apps.zte_manager.infrastructure.huawei.errors import HuaweiArchitectureError
 from apps.zte_manager.schemas import (
     ACSConfigRequest,
     ACSParameterRequest,
@@ -147,7 +148,18 @@ def _safe_call(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
             "Verifique o campo " + field.replace("_", " ") + ".",
         ).envelope()
     except Exception as error:
-        known = classify(error)
+        if isinstance(error, HuaweiArchitectureError):
+            # Architecture decisions such as ambiguous auth are deliberate
+            # safety outcomes, not generic RuntimeErrors. Preserve their stable
+            # code without exposing the internal exception text or protocol data.
+            known = PublicFailure(
+                error.code,
+                error.category,
+                error.public_message,
+                error.retryable,
+            )
+        else:
+            known = classify(error)
         if known is not None:
             logger.warning(
                 "api_action_failure action=%s code=%s failure_type=%s",

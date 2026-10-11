@@ -1,0 +1,99 @@
+name: Huawei Phase 0 + Phase 1 validation
+
+on:
+  pull_request:
+    paths:
+      - "apps/zte_manager/infrastructure/huawei/**"
+      - "apps/zte_manager/services/huawei_hg8145x6_runtime.py"
+      - "apps/zte_manager/services/huawei_unified_provider.py"
+      - "docs/huawei/**"
+      - "tests/fixtures/huawei/phase0_research/**"
+      - "tests/test_huawei_phase0_architecture.py"
+      - "tests/test_huawei_hg8145x6_phase1.py"
+      - "tests/test_huawei_hg8145x6_ontwatch.py"
+  push:
+    branches:
+      - feat/huawei-phase0-phase1-architecture
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Python syntax
+        run: |
+          python -m py_compile \
+            apps/zte_manager/infrastructure/huawei/errors.py \
+            apps/zte_manager/infrastructure/huawei/transport.py \
+            apps/zte_manager/infrastructure/huawei/auth.py \
+            apps/zte_manager/infrastructure/huawei/js_parser.py \
+            apps/zte_manager/infrastructure/huawei/protocol.py \
+            apps/zte_manager/infrastructure/huawei/family_client.py \
+            apps/zte_manager/infrastructure/huawei/negotiating_client.py \
+            apps/zte_manager/services/huawei_hg8145x6_runtime.py \
+            apps/zte_manager/services/huawei_unified_provider.py \
+            tests/test_huawei_phase0_architecture.py \
+            tests/test_huawei_hg8145x6_phase1.py
+
+      - name: Phase 0 architecture regressions
+        run: |
+          python -m unittest \
+            tests.test_huawei_phase0_architecture \
+            tests.test_huawei_transport_negotiation \
+            tests.test_huawei_transport_error_policy \
+            tests.test_huawei_response_protocol
+
+      - name: HG8145X6 Phase 1 regressions
+        run: |
+          python -m unittest \
+            tests.test_huawei_hg8145x6_phase1 \
+            tests.test_huawei_hg8145x6_ontwatch \
+            tests.test_huawei_provider_architecture \
+            tests.test_huawei_production_transport
+
+      - name: Existing Huawei and multivendor regressions
+        run: |
+          python -m unittest \
+            tests.test_huawei_session_snapshot \
+            tests.test_huawei_captured_features \
+            tests.test_huawei_mapped_surface \
+            tests.test_huawei_eg8041x7_runtime \
+            tests.test_huawei_eg8041_capture_contract \
+            tests.test_huawei_eg8041_family_runtime \
+            tests.test_huawei_eg8041_family_provider \
+            tests.test_huawei_dns_physical_state \
+            tests.test_huawei_diagnostics \
+            tests.test_huawei_http_trace_redaction \
+            tests.test_multivendor_runtime_regressions
+
+      - name: Template and CSS architecture regressions
+        run: |
+          python tools/build_frontend_template.py --check
+          python -m unittest tests.test_template_modularization tests.test_css_architecture
+
+      - name: Frontend regressions
+        run: |
+          node --test \
+            tests/test_design_tokens.cjs \
+            tests/test_frontend_core.mjs \
+            tests/test_frontend_capability_policy.mjs \
+            tests/test_frontend_feature_modules.mjs \
+            tests/test_wifi_schedule_module.mjs \
+            tests/test_huawei_navigation_snapshot.cjs \
+            tests/test_profile_provider_neutral_ui.cjs

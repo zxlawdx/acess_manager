@@ -8,6 +8,7 @@ from apps.zte_manager.services.huawei_eg8041_family_provider import (
     HuaweiEG8041FamilyProvider,
 )
 from apps.zte_manager.services.huawei_hg8145x6_runtime import (
+    HG8145X6_OPTICAL_CANDIDATE_PAGES,
     HuaweiHG8145X6CapturedFeatureService,
 )
 from apps.zte_manager.services.huawei_telemetry_runtime import (
@@ -16,12 +17,12 @@ from apps.zte_manager.services.huawei_telemetry_runtime import (
 
 
 class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
-    """Production Huawei provider with model-specific read strategies.
+    """Production Huawei provider with evidence-driven runtime strategies.
 
     EG8041 keeps the existing family runtime. HG8145X6 uses the read-only
-    ONTWatch-derived endpoint contract instead of inheriting EG8041/X7 WLAN
-    assumptions. This prevents evidence from one Huawei family from being
-    treated as universal while keeping one provider boundary for DeviceService.
+    ONTWatch-derived endpoint contract only after a runtime signature confirms
+    it. Model names are hints, never sufficient permission to select a protocol
+    or promote a capability.
     """
 
     FAMILY_RUNTIME_FEATURES = frozenset({
@@ -42,7 +43,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
 
     @property
     def _hg8145x6_active(self) -> bool:
-        return self._is_hg8145x6_model(self.model)
+        return isinstance(self._captured, HuaweiHG8145X6CapturedFeatureService)
 
     @property
     def capabilities(self) -> dict[str, dict]:
@@ -52,7 +53,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
 
         # The generic EG8041 Wi-Fi descriptor contains radio/write assumptions
         # that ONTWatch never established for HG8145X6. Keep only capabilities
-        # promoted by authenticated read probes for this model.
+        # promoted by authenticated read probes for this runtime signature.
         data.pop("wifi", None)
         data["family"] = self.family_descriptor
         return data
@@ -74,8 +75,8 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
             operations["physical_validation"] = False
             self._capabilities[feature] = operations
 
-        # Explicitly neutralize the dangerous cross-family radio promotion from
-        # the legacy family runtime. HG8145X6 writes need their own capture.
+        # Explicitly neutralize dangerous cross-family write/radio promotions.
+        # HG8145X6 writes need their own physical browser capture.
         for feature in (
             "wifi_radio",
             "wifi_advanced",
@@ -86,7 +87,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
                 update=False,
                 verified=False,
                 physical_validation=False,
-                evidence="ontwatch_no_write_evidence",
+                evidence="hg8145x6_no_write_evidence",
                 state="UNKNOWN",
             )
 
@@ -96,6 +97,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         reader: Callable[[], object],
         *,
         endpoint_evidence: str,
+        physically_validated: bool = False,
     ) -> None:
         try:
             reader()
@@ -105,28 +107,65 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
                 update=False,
                 verified=False,
                 physical_validation=False,
-                evidence=f"ONTWATCH_SOURCE_CODE+probe_failed:{endpoint_evidence}",
+                evidence=f"runtime_probe_failed:{endpoint_evidence}",
                 state="UNKNOWN",
             )
             return
         self._capabilities[feature] = self._ops(
             read=True,
             update=False,
-            verified=False,
-            physical_validation=False,
-            evidence=f"ONTWATCH_SOURCE_CODE+runtime_probe:{endpoint_evidence}",
+            verified=True,
+            physical_validation=physically_validated,
+            evidence=(
+                f"physical+runtime_probe:{endpoint_evidence}"
+                if physically_validated
+                else f"runtime_probe:{endpoint_evidence}"
+            ),
             state="READ_SUPPORTED",
         )
 
-    def _configure_hg8145x6_runtime(self) -> None:
+    @staticmethod
+    def _signature_selects_hg8145x6(
+        signature: dict[str, Any],
+        *,
+        model_hint_matches: bool,
+    ) -> bool:
+        if not bool(signature.get("compatible")):
+            return False
+        # A known/validated model hint still needs endpoint compatibility.
+        if model_hint_matches:
+            return True
+        # Unknown/misreported model strings require a full ONTWatch-like
+        # signature before this adapter is selected.
+        return bool(signature.get("strong_fingerprint"))
+
+    def _probe_hg8145x6_candidate(
+        self,
+    ) -> tuple[HuaweiHG8145X6CapturedFeatureService, dict[str, Any]] | None:
         if self._client is None:
-            return
-        self._captured = HuaweiHG8145X6CapturedFeatureService(
+            return None
+        candidate = HuaweiHG8145X6CapturedFeatureService(
             self._client,
             model=self.model,
         )
+        try:
+            signature = candidate.source_signature()
+        except Exception:
+            return None
+        if not self._signature_selects_hg8145x6(
+            signature,
+            model_hint_matches=self._is_hg8145x6_model(self.model),
+        ):
+            return None
+        return candidate, signature
+
+    def _configure_hg8145x6_runtime(
+        self,
+        captured: HuaweiHG8145X6CapturedFeatureService,
+        signature: dict[str, Any],
+    ) -> None:
+        self._captured = captured
         self._clear_session_snapshot()
-        signature = self._captured.source_signature()
         self._family_compatible = bool(signature.get("compatible"))
         self._family_descriptor = {
             "protocol_family": str((self.protocol or {}).get("family") or "unknown"),
@@ -134,6 +173,8 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
             "cfg_mode": None,
             "compatible": self._family_compatible,
             "model": self.model,
+            "model_hint_match": self._is_hg8145x6_model(self.model),
+            "strong_fingerprint": bool(signature.get("strong_fingerprint")),
             "source": HuaweiHG8145X6CapturedFeatureService.SOURCE,
             "evidence": list(signature.get("evidence") or []),
             "endpoints": deepcopy(signature.get("endpoints") or {}),
@@ -142,47 +183,67 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         if not self._family_compatible:
             return
 
+        # These paths were physically validated by the user's HG8145X6 flow.
         self._promote_hg8145x6_reader(
             "device_info",
             lambda: self.device_status(refresh=True),
             endpoint_evidence="deviceinfo.asp",
+            physically_validated=True,
         )
         self._promote_hg8145x6_reader(
             "wan",
             lambda: self.wan_status(refresh=True),
             endpoint_evidence="wan_list_cache_wan.asp",
+            physically_validated=True,
         )
         self._promote_hg8145x6_reader(
             "wifi_basic",
             lambda: self.wifi_networks(refresh=True),
             endpoint_evidence="wlan_list.asp",
+            physically_validated=True,
         )
         self._promote_hg8145x6_reader(
             "clients",
             lambda: self.clients(refresh=True),
             endpoint_evidence="getassociateddeviceinfo.asp",
+            physically_validated=True,
         )
         self._promote_hg8145x6_reader(
             "wifi_traffic",
             lambda: self.wifi_traffic(refresh=True),
             endpoint_evidence="wlaninfo.asp",
+            physically_validated=True,
         )
         self._promote_hg8145x6_reader(
             "resource_telemetry",
             lambda: self.resource_telemetry(refresh=True),
             endpoint_evidence="deviceinfo.asp:dev_uptime/cpuUsed/memUsed",
+            physically_validated=True,
+        )
+        # Optical surfaces are read-only candidates from research. They become
+        # readable only when the connected firmware returns recognized data;
+        # they are not labeled physically validated until a real response is
+        # observed and recorded for this firmware.
+        self._promote_hg8145x6_reader(
+            "optical_telemetry",
+            lambda: self.optical_status(refresh=True),
+            endpoint_evidence="|".join(HG8145X6_OPTICAL_CANDIDATE_PAGES),
+            physically_validated=False,
         )
 
     def connect(self, *args, **kwargs):
-        # Bypass EG8041FamilyRuntimeService.connect for the initial login. That
-        # method probes EG8041-specific WLAN pages before the model-specific
-        # strategy is selected. Baseline Huawei telemetry remains shared.
+        # Initial authentication/telemetry remains shared. Runtime-specific
+        # endpoint readers are selected only after the authenticated session
+        # exists, so model strings never decide the auth flow by themselves.
         result = HuaweiTelemetryRuntimeService.connect(self, *args, **kwargs)
 
-        if self._hg8145x6_active:
-            self._configure_hg8145x6_runtime()
+        hg_candidate = self._probe_hg8145x6_candidate()
+        if hg_candidate is not None:
+            captured, signature = hg_candidate
+            self._configure_hg8145x6_runtime(captured, signature)
         else:
-            # Preserve the pre-existing production path for EG8041 and other
+            # Preserve the pre-existing EG8041 family characterization. This
+            # path remains authoritative for X6/X7 captures and other existing
             # runtime-compatible candidates.
             self._characterize_family()
             self._promote_family_capabilities()
@@ -198,11 +259,10 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
     def wifi_traffic(self, *, refresh: bool = False) -> list[dict[str, Any]]:
         if not self._hg8145x6_active:
             raise RuntimeError(
-                "Contadores Wi-Fi ONTWatch estão caracterizados apenas para HG8145X6."
+                "Contadores Wi-Fi ONTWatch estão caracterizados apenas para o "
+                "runtime HG8145X6 confirmado por fingerprint."
             )
         captured = self._require_captured()
-        if not isinstance(captured, HuaweiHG8145X6CapturedFeatureService):
-            raise RuntimeError("Reader HG8145X6 não está ativo nesta sessão.")
         return self._snapshot_read(
             "wifi_traffic",
             captured.wifi_traffic,
@@ -215,7 +275,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
             self._promote_read(
                 "resource_telemetry",
                 source="webui_probe",
-                evidence="ONTWATCH_SOURCE_CODE:deviceinfo.asp",
+                evidence="HG8145X6:deviceinfo.asp",
             )
             return data
         return super().resource_telemetry(refresh=refresh)
@@ -259,9 +319,7 @@ class HuaweiUnifiedProvider(HuaweiEG8041FamilyProvider):
         refresh: bool = False,
     ) -> list[dict]:
         if self._hg8145x6_active:
-            # ONTWatch does not establish password-reveal semantics. Do not
-            # reuse the EG8041 PSK reader just because the object names look
-            # similar.
+            # No physical password-reveal evidence for this firmware profile.
             return self._snapshot_read(
                 "wifi_networks",
                 lambda: self._require_captured().wifi_networks(False),

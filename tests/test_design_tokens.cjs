@@ -88,12 +88,17 @@ test("canonical tokens own theme values and legacy names are aliases", () => {
     assert.match(tokensSource, /:root,\s*html\[data-theme="light"\]/);
     assert.match(tokensSource, /html\[data-theme="dark"\]/);
 
+    // Light palette remains the established Tangerine theme.
     assert.match(tokensSource, /--am-color-primary:#FF6C37;/);
-    assert.match(tokensSource, /--am-color-primary:#FF8654;/);
     assert.match(tokensSource, /--am-color-bg:#FFFDF8;/);
-    assert.match(tokensSource, /--am-color-bg:#211C19;/);
     assert.match(tokensSource, /--am-color-text:#29221E;/);
-    assert.match(tokensSource, /--am-color-text:#FFF8F1;/);
+
+    // Dark palette follows the ONTWatch-inspired telemetry theme merged in #93.
+    assert.match(tokensSource, /--am-color-primary:#FFB454;/);
+    assert.match(tokensSource, /--am-color-bg:#07090D;/);
+    assert.match(tokensSource, /--am-color-text:#E8ECEF;/);
+    assert.match(tokensSource, /--am-color-success:#3AD6C2;/);
+    assert.match(tokensSource, /--am-background-image:radial-gradient\(/);
 
     assert.match(tokensSource, /--am-color-neutral:#405548;/);
     assert.match(tokensSource, /--am-color-native-surface:#FFFFFF;/);

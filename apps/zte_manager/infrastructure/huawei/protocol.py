@@ -15,6 +15,8 @@ class HuaweiProtocolFamily(StrEnum):
 
     AMP_BBSP = "amp_bbsp"
     ASP_CONFIG = "asp_config"
+    API_SESTOKEN = "api_sestoken"
+    MOBILE_CPE = "mobile_cpe"
     UNKNOWN = "unknown"
 
 
@@ -23,7 +25,9 @@ class HuaweiAuthFlow(StrEnum):
 
     RAND_COUNT = "rand_count"
     RAND_STRING_SESSION_TOKEN = "rand_string_session_token"
+    API_SES_TOKEN = "api_ses_token"
     RAND_COOKIE_HASH = "rand_cookie_hash"
+    SCRAM_CPE = "scram_cpe"
     UNKNOWN = "unknown"
 
 
@@ -75,16 +79,11 @@ def plausible_huawei_token(value: object) -> bool:
 
 
 def auth_flow_from_login_page(source: object) -> HuaweiAuthFlow:
-    """Resolve only explicit login-page evidence; never guess by model.
-
-    ``RndSecurityFormat.js`` is shared by Huawei WebUIs that still use the
-    ordinary RandCount form. Loading that script therefore says nothing about
-    whether credentials move through a derived authentication cookie. The
-    legacy flow is selected only when the page exposes an explicit derived
-    cookie format.
-    """
+    """Resolve only explicit login-page evidence; never guess by model."""
 
     text = str(source or "").casefold()
+    if "/api/webserver/sestokeninfo" in text or "/api/system/user_login" in text:
+        return HuaweiAuthFlow.API_SES_TOKEN
     if "getrandstring.asp" in text:
         return HuaweiAuthFlow.RAND_STRING_SESSION_TOKEN
 
@@ -102,9 +101,6 @@ def auth_flow_from_login_page(source: object) -> HuaweiAuthFlow:
     if any(marker in text for marker in legacy_cookie_markers):
         return HuaweiAuthFlow.RAND_COOKIE_HASH
 
-    # Standard Huawei login pages may contain UserName, PassWord,
-    # x.X_HW_Token, /login.cgi and RndSecurityFormat.js together. In the
-    # absence of an explicit derived-cookie marker they remain RAND_COUNT.
     return HuaweiAuthFlow.RAND_COUNT
 
 
@@ -113,16 +109,28 @@ def protocol_family_from_observations(
     *,
     sources: Iterable[object] = (),
 ) -> tuple[HuaweiProtocolFamily, tuple[str, ...]]:
-    """Classify a WebUI family from endpoints actually observed at runtime.
-
-    GetConfig/SetConfig wins only when that ASP configuration surface was
-    actually observed. AMP/BBSP/SSMP pages otherwise establish the common
-    Huawei generated-WebUI family. Documentation alone must not call this.
-    """
+    """Classify a WebUI family only from evidence observed at runtime."""
 
     normalized_paths = tuple(str(path or "") for path in paths if path)
     lowered = tuple(path.casefold() for path in normalized_paths)
     evidence: list[str] = []
+
+    if any(
+        path.startswith("/api/webserver/sestokeninfo")
+        or path.startswith("/api/system/user_login")
+        or path.startswith("/api/system/deviceinfo")
+        for path in lowered
+    ):
+        evidence.extend(
+            path
+            for path in normalized_paths
+            if path.casefold().startswith((
+                "/api/webserver/sestokeninfo",
+                "/api/system/user_login",
+                "/api/system/deviceinfo",
+            ))
+        )
+        return HuaweiProtocolFamily.API_SESTOKEN, tuple(dict.fromkeys(evidence))
 
     if any(
         path.startswith("/asp/getconfig.asp")
@@ -144,10 +152,16 @@ def protocol_family_from_observations(
     if amp_paths:
         return HuaweiProtocolFamily.AMP_BBSP, tuple(dict.fromkeys(amp_paths))
 
-    # Source markers are lower-confidence runtime evidence. They are useful for
-    # public login pages but never promote ASP_CONFIG without an observed ASP
-    # configuration endpoint.
+    # Source markers are lower-confidence runtime evidence. They can establish
+    # the API SesToken family only when both session/token fields are present,
+    # matching the read-only SesTokenInfo contract. They never enable login.
     joined = "\n".join(str(source or "") for source in sources).casefold()
+    if (
+        "/api/webserver/sestokeninfo" in joined
+        or "/api/system/user_login" in joined
+        or ("sesinfo" in joined and "tokinfo" in joined)
+    ):
+        return HuaweiProtocolFamily.API_SESTOKEN, ("api-sestoken-marker",)
     if any(
         marker in joined
         for marker in ("/html/amp/", "/html/bbsp/", "/html/ssmp/", "/html/status/")
