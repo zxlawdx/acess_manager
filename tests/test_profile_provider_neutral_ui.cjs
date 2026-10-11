@@ -29,6 +29,25 @@ assert.ok(
   "Huawei must not be forced back to the primary preset"
 );
 assert.ok(
+  body.includes("const sessionReady = Boolean(ontConnected || currentAttendant)") &&
+  body.includes("create.disabled = !sessionReady"),
+  "Create preset must follow the connected session instead of transient restore ordering"
+);
+assert.ok(
+  !body.includes("create.disabled = !currentAttendant"),
+  "A transient null currentAttendant during desktop restore must not lock Create"
+);
+assert.ok(
+  body.includes("Promise.resolve().then(() =>") &&
+  body.includes("presetControls(state.name !== PRIMARY)"),
+  "Session restore must resynchronize preset controls after state assignment"
+);
+assert.ok(
+  body.includes('if (event.detail?.pageName !== "profiles") return;') &&
+  body.includes("presetControls(state.name !== PRIMARY);"),
+  "Opening Profiles must always recompute control state before loading presets"
+);
+assert.ok(
   body.includes('event.target.closest("#applyProfileButton")'),
   "Historical primary Apply listener must still be intercepted"
 );
