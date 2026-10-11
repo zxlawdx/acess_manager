@@ -18,12 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceService:
-    """Provider-neutral runtime dispatcher.
-
-    Vendor detection and provider selection live in :class:`ProviderRouter`.
-    This class owns only active-session orchestration and the compatibility
-    facade consumed by the current API while workspaces are migrated.
-    """
+    """Provider-neutral runtime dispatcher."""
 
     def __init__(
         self,
@@ -33,8 +28,7 @@ class DeviceService:
         huawei_client_type=HuaweiAffinityNegotiatingWebClient,
         provider_router: ProviderRouter | None = None,
     ) -> None:
-        # Compatibility aliases are intentionally retained because existing
-        # production-transport regressions assert these defaults explicitly.
+        # Compatibility aliases are retained while legacy regressions migrate.
         self._huawei_factory = huawei_factory
         self._huawei_client_type = huawei_client_type
         self._provider_router = provider_router or ProviderRouter(
@@ -46,11 +40,6 @@ class DeviceService:
         self._session: DeviceSession | None = None
 
     def __getattr__(self, name: str):
-        """Delegate public provider surface to the active service.
-
-        Missing methods/attributes are an explicit capability gap. An active
-        non-ZTE session can never fall through to the ZTE provider.
-        """
         if name.startswith("_"):
             raise AttributeError(name)
 
@@ -73,14 +62,17 @@ class DeviceService:
     def connected(self) -> bool:
         return bool(
             self._session is not None
-            and self._session.service is not None
-            and self._session.service.connected
+            and self.active_service is not None
+            and getattr(self.active_service, "connected", False)
         )
 
     @property
     def active_service(self):
-        if self._session is not None and self._session.service is not None:
-            return self._session.service
+        if self._session is not None:
+            if self._session.workspace is not None:
+                return self._session.workspace
+            if self._session.service is not None:
+                return self._session.service
         # Before /connect, the historical ZTE provider remains the default
         # object so legacy tests/local callers keep their normal session error.
         return self._zte_service
@@ -117,31 +109,26 @@ class DeviceService:
 
         result = connection.result
         result["provider"] = connection.provider_name
+        runtime = connection.workspace or connection.service
 
-        if getattr(connection.service, "connected", False):
+        if getattr(runtime, "connected", False):
             self._session = DeviceSession.from_connection(
                 vendor=connection.vendor,
                 provider=connection.provider_name,
                 service=connection.service,
+                workspace=connection.workspace,
                 result=result,
             )
         else:
             self._session = None
 
         logger.info(
-            "device_provider_selected vendor=%s provider=%s profile=%s mode=%s",
+            "device_provider_selected vendor=%s provider=%s profile=%s mode=%s workspace=%s",
             connection.vendor,
             connection.provider_name,
-            (
-                self._session.profile
-                if self._session is not None
-                else None
-            ),
-            (
-                self._session.mode
-                if self._session is not None
-                else None
-            ),
+            self._session.profile if self._session is not None else None,
+            self._session.mode if self._session is not None else None,
+            type(connection.workspace).__name__ if connection.workspace else None,
         )
         return result
 
@@ -153,9 +140,9 @@ class DeviceService:
 
     def disconnect(self) -> None:
         if self._session is not None:
-            service = self._session.service
-            if service is not None:
-                service.disconnect()
+            runtime = self._session.workspace or self._session.service
+            if runtime is not None:
+                runtime.disconnect()
             self._session = None
             return
         if self._zte_service.connected:
@@ -209,16 +196,16 @@ class DeviceService:
                 "writes_enabled": False,
             }
 
-        service = self._session.service
+        runtime = self.active_service
         self._session.capabilities = self._provider_router.capabilities(
-            service,
+            runtime,
             self._session.capabilities,
         )
         data = self._session.public()
-        data["connected"] = bool(getattr(service, "connected", False))
+        data["connected"] = bool(getattr(runtime, "connected", False))
         data["writes_enabled"] = self._provider_router.writes_enabled(
             self._session.vendor,
-            service,
+            runtime,
         )
         return data
 
@@ -288,13 +275,6 @@ class DeviceService:
         )
 
     def _require_huawei(self) -> Any:
-        """Compatibility helper for Huawei-only routes during migration.
-
-        Selection is capability/surface based rather than another vendor
-        routing decision. These routes will move under the Huawei workspace in
-        the next migration phase.
-        """
-
         service = self.active_service
         required = (
             "list_ipv4_filters",
@@ -313,8 +293,6 @@ class DeviceService:
             refresh=refresh
         )
         if self._session is not None:
-            # Do not erase DHCP/DNS/Wi-Fi/etc. capabilities merely because the
-            # IPv4 filter panel refreshed.
             self._session.capabilities = {
                 **(self._session.capabilities or {}),
                 "ipv4_filter": dict(

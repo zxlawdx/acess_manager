@@ -11,10 +11,10 @@ VALID_SESSION_MODES = frozenset({"supported", "partial", "deployment"})
 class DeviceSession:
     """Provider-neutral description of the active device session.
 
-    ``service`` is an internal compatibility binding used by the current
-    runtime while the workspace refactor is migrated incrementally. It is
-    deliberately excluded from :meth:`public` and is not part of the API
-    contract consumed by the frontend.
+    ``service`` and ``workspace`` are internal compatibility/runtime bindings.
+    Neither is exposed by :meth:`public`. Keeping the raw service temporarily
+    allows existing validated regressions to coexist with incremental workspace
+    migration while generic orchestration uses the workspace when available.
     """
 
     vendor: str
@@ -34,6 +34,7 @@ class DeviceSession:
     model_verified: bool = False
     session_revision: str | None = None
     service: Any = field(default=None, repr=False, compare=False)
+    workspace: Any = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         vendor = str(self.vendor or "unknown").strip().casefold()
@@ -49,14 +50,9 @@ class DeviceSession:
         provider: str,
         service: Any,
         result: dict[str, Any],
+        workspace: Any = None,
     ) -> "DeviceSession":
-        """Build a session contract from a provider connection result.
-
-        The small vendor-specific profile mapping lives in this factory on
-        purpose. Outside the session factory and ``ProviderRouter``, callers
-        should not branch on vendor to decide which provider implementation to
-        use.
-        """
+        """Build a session contract from a provider connection result."""
 
         normalized_vendor = str(vendor or "unknown").strip().casefold() or "unknown"
         if normalized_vendor == "huawei":
@@ -95,6 +91,7 @@ class DeviceSession:
             model_verified=model_verified,
             session_revision=result.get("session_revision"),
             service=service,
+            workspace=workspace,
         )
 
     def public(self) -> dict[str, Any]:

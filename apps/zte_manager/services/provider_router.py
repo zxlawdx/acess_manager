@@ -17,6 +17,7 @@ from apps.zte_manager.services.huawei_affinity_provider import (
 )
 from apps.zte_manager.services.huawei_service import HuaweiService
 from apps.zte_manager.services.zte_service import ZTEService, zte_service
+from apps.zte_manager.vendors.huawei import HuaweiWorkspace
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class ProviderConnection:
     service: Any
     result: dict[str, Any]
     provider_name: str
+    workspace: Any = None
 
 
 class ProviderRouter:
@@ -113,17 +115,19 @@ class ProviderRouter:
     def _connect_huawei(self, *, current_session: Any = None, **kwargs) -> ProviderConnection:
         if current_session is not None and current_session.vendor == "huawei":
             service = current_session.service
+            workspace = current_session.workspace or HuaweiWorkspace(service)
         else:
             if current_session is not None and current_session.service is not None:
                 current_session.service.disconnect()
             elif getattr(self.zte_provider, "connected", False):
                 self.zte_provider.disconnect()
             service = self.huawei_factory()
+            workspace = HuaweiWorkspace(service)
 
         if kwargs.get("huawei_cli") is None:
             kwargs.pop("huawei_cli", None)
 
-        result = service.connect(**kwargs)
+        result = workspace.connect(**kwargs)
         provider_name = (
             "HuaweiService"
             if isinstance(service, HuaweiService)
@@ -134,12 +138,14 @@ class ProviderRouter:
             service=service,
             result=result,
             provider_name=provider_name,
+            workspace=workspace,
         )
 
     def _connect_zte(self, *, current_session: Any = None, **kwargs) -> ProviderConnection:
         if current_session is not None and current_session.vendor == "huawei":
-            if current_session.service is not None:
-                current_session.service.disconnect()
+            runtime = current_session.workspace or current_session.service
+            if runtime is not None:
+                runtime.disconnect()
 
         service = self.zte_provider
         result = service.connect(**kwargs)
