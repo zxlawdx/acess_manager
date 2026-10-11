@@ -19,6 +19,7 @@ from apps.zte_manager.presentation.api.wifi import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.network import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.diagnostics import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.capabilities import *  # noqa: F401,F403
+from apps.zte_manager.presentation.api.huawei_lab import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.f6201b import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.profiles import *  # noqa: F401,F403
 from apps.zte_manager.presentation.api.management_core import *  # noqa: F401,F403
