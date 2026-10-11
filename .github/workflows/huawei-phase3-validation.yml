@@ -1,0 +1,74 @@
+name: Huawei Phase 3 validation
+
+on:
+  pull_request:
+    paths:
+      - "apps/zte_manager/infrastructure/huawei/auth.py"
+      - "apps/zte_manager/infrastructure/huawei/family_client.py"
+      - "apps/zte_manager/infrastructure/huawei/detector.py"
+      - "apps/zte_manager/infrastructure/huawei/__init__.py"
+      - "apps/zte_manager/services/huawei_hg8245h_runtime.py"
+      - "apps/zte_manager/services/huawei_unified_provider.py"
+      - "apps/zte_manager/model/device_adapters/huawei_registry.py"
+      - "tests/fixtures/huawei/phase3/**"
+      - "tests/test_huawei_phase3_hg8245h.py"
+      - "docs/huawei/**"
+      - ".github/workflows/huawei-phase3-validation.yml"
+  push:
+    branches:
+      - feat/huawei-phase3-hg8245h-dual-protocol
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+
+      - name: Python syntax
+        run: |
+          python -m py_compile \
+            apps/zte_manager/infrastructure/huawei/auth.py \
+            apps/zte_manager/infrastructure/huawei/family_client.py \
+            apps/zte_manager/infrastructure/huawei/detector.py \
+            apps/zte_manager/services/huawei_hg8245h_runtime.py \
+            apps/zte_manager/services/huawei_unified_provider.py \
+            tests/test_huawei_phase3_hg8245h.py
+
+      - name: Phase 3 HG8245H dual-protocol regressions
+        run: |
+          python -m unittest tests.test_huawei_phase3_hg8245h
+
+      - name: Phase 0 through Phase 2 guard regressions
+        run: |
+          python -m unittest \
+            tests.test_huawei_phase0_architecture \
+            tests.test_huawei_hg8145x6_phase1 \
+            tests.test_huawei_hg8145x6_ontwatch \
+            tests.test_huawei_phase2_eg8145v5_hn8010ts \
+            tests.test_huawei_provider_architecture \
+            tests.test_huawei_production_transport
+
+      - name: Existing Huawei and multivendor regressions
+        run: |
+          python -m unittest \
+            tests.test_huawei_session_snapshot \
+            tests.test_huawei_captured_features \
+            tests.test_huawei_eg8041x7_runtime \
+            tests.test_huawei_eg8041_capture_contract \
+            tests.test_huawei_eg8041_family_runtime \
+            tests.test_huawei_eg8041_family_provider \
+            tests.test_huawei_dns_physical_state \
+            tests.test_huawei_diagnostics \
+            tests.test_huawei_http_trace_redaction \
+            tests.test_multivendor_runtime_regressions
