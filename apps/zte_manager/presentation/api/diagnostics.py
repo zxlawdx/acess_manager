@@ -42,7 +42,7 @@ def support_diagnostic(context=None):
 def support_diagnostic_f6201b(context=None):
     def action():
         data = _validated(SupportDiagnosticRequest, context)
-        return zte_service.f6201b_support_diagnostic(data.model_dump())
+        return device_service.f6201b_support_diagnostic(data.model_dump())
     return _safe_call(action)
 
 

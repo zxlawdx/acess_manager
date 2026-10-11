@@ -1,3 +1,5 @@
+from apps.zte_manager.services.client_telemetry_service import client_telemetry_service
+
 from .common import *
 
 
@@ -25,6 +27,15 @@ def wifi_clients(context=None):
 @api.get("/clients/lan")
 def lan_clients(context=None):
     return _safe_call(_call_device_read, "lan_clients", context)
+
+
+@api.get("/clients/telemetry")
+def client_telemetry(context=None):
+    return _safe_call(
+        client_telemetry_service.collect,
+        device_service,
+        refresh=_bool(_query(context).get("refresh")),
+    )
 
 
 @api.get("/lan/ports")

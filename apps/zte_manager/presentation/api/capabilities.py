@@ -135,142 +135,36 @@ def huawei_mapped_write(context=None):
     return _safe_call(action)
 
 
-def _huawei_catalog(status: dict) -> dict:
-    capabilities = status.get("capabilities") or {}
-    model = status.get("model") or "Huawei"
-    return {
-        "models": [{
-            "model": model,
-            "family": "huawei_webui",
-            "candidate_features": list(capabilities.keys()),
-        }]
-    }
-
-
 @api.get("/discovery/bootstrap")
 def discovery_bootstrap(context=None):
-    """Return session metadata without reading private service internals."""
-    try:
-        status = device_service.status()
-        if status.get("vendor") == "huawei":
-            capabilities = status.get("capabilities") or {}
-            model = status.get("model") or "Huawei"
-            return {
-                **status,
-                "model": model,
-                "detected_model": model,
-                "native_diagnostics_available": True,
-                "firmware": None,
-                "catalog": _huawei_catalog(status),
-                "reason": None,
-            }
-
-        profile = status.get("profile")
-        native_profiles = {
-            "zte-f670l-thinklua",
-            "zte-f6600p-thinklua",
-            "zte-f6201b-thinklua",
-        }
-        return {
-            **status,
-            "detected_model": status.get("model"),
-            "firmware": None,
-            "native_diagnostics_available": bool(
-                status.get("connected")
-                and status.get("model_verified")
-                and profile in native_profiles
-            ),
-            "catalog": zte_service.multimodel_catalog(),
-            "reason": (
-                None if status.get("connected")
-                else "Conecte-se a uma ONT para detectar recursos."
-            ),
-        }
-    except Exception as error:
-        return _safe_call(lambda: (_ for _ in ()).throw(error))
+    return _safe_call(device_service.discovery_bootstrap)
 
 
 @api.get("/multimodel/catalog")
 def multimodel_catalog(context=None):
-    status = device_service.status()
-    if status.get("vendor") == "huawei":
-        return _safe_call(lambda: _huawei_catalog(status))
-    return _safe_call(zte_service.multimodel_catalog)
+    return _safe_call(device_service.multimodel_catalog)
 
 
 @api.post("/multimodel/diagnostic")
 def multimodel_diagnostic(context=None):
-    status = device_service.status()
-    if status.get("vendor") == "huawei":
-        return _safe_call(lambda: {
-            "model": status.get("model"),
-            "family": "huawei_webui",
-            "read_only": True,
-            "sections": {},
-            "reason": (
-                "Use Detectar recursos: Huawei possui probe nativo por capability "
-                "e não usa o diagnóstico ThinkLua."
-            ),
-        })
     body = _json(context)
     requested = str(body.get("model") or "")[:50].strip()
     section = str(body.get("section") or "")[:32].strip() or None
-    return _safe_call(zte_service.multimodel_diagnostic, requested or None, section)
+    return _safe_call(
+        device_service.multimodel_diagnostic,
+        requested or None,
+        section,
+    )
 
 
 @api.post("/multimodel/mesh")
 def multimodel_mesh(context=None):
-    status = device_service.status()
-    if status.get("vendor") == "huawei":
-        return _safe_call(lambda: {
-            "available": False,
-            "vendor": "huawei",
-            "model": status.get("model"),
-            "reason": "Resumo Mesh ThinkLua não se aplica à sessão Huawei.",
-        })
     model = str(_json(context).get("model") or "")[:50].strip()
-    return _safe_call(zte_service.multimodel_mesh, model or None)
+    return _safe_call(device_service.multimodel_mesh, model or None)
 
 
 @api.post("/multimodel/probe")
 def multimodel_probe(context=None):
-    status = device_service.status()
-    if status.get("vendor") == "huawei":
-        def huawei_probe():
-            catalog = device_service.capability_catalog()
-            features = []
-            for key, spec in (catalog.get("features") or {}).items():
-                operations = spec.get("operations") or {}
-                writable = any(
-                    operations.get(name)
-                    for name in ("create", "update", "delete", "write")
-                )
-                features.append({
-                    "feature": key,
-                    "label": spec.get("label") or key,
-                    "status": (
-                        "detected"
-                        if operations.get("read") and operations.get("verified")
-                        else "not_tested"
-                    ),
-                    "available": bool(operations.get("read")),
-                    "read": bool(operations.get("read")),
-                    "write": bool(writable),
-                    "partial": bool(operations.get("partial")),
-                    "readback": (
-                        "FULLY_INTEGRATED" in (spec.get("evidence_states") or [])
-                    ),
-                    "verified": bool(operations.get("verified")),
-                })
-            return {
-                "model": status.get("model"),
-                "family": "huawei_webui",
-                "capabilities": features,
-                "candidate_features": [],
-                "reason": None,
-            }
-        return _safe_call(huawei_probe)
-
     body = _json(context)
     model = str(body.get("model") or "")[:50].strip()
     try:
@@ -278,7 +172,12 @@ def multimodel_probe(context=None):
         start = min(1000, max(0, int(body.get("start", 0))))
     except (TypeError, ValueError):
         count, start = 4, 0
-    return _safe_call(zte_service.multimodel_probe, model or None, count, start)
+    return _safe_call(
+        device_service.multimodel_probe,
+        model or None,
+        count,
+        start,
+    )
 
 
 @api.get("/features/shape")
@@ -298,9 +197,5 @@ def read_feature(context=None):
     return _safe_call(
         device_service.read_capability,
         feature,
-        **(
-            {"refresh": _bool(query.get("refresh"))}
-            if device_service.vendor == "huawei"
-            else {}
-        ),
+        refresh=_bool(query.get("refresh")),
     )

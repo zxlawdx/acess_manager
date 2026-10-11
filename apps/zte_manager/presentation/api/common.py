@@ -84,8 +84,8 @@ from apps.zte_manager.services.desktop_capabilities import get_desktop_capabilit
 from apps.zte_manager.services.desktop_clipboard import copy_text as copy_desktop_text
 from apps.zte_manager.services.device_service import device_service
 from apps.zte_manager.services.error_policy import PublicFailure, classify
+from apps.zte_manager.services.provider_router import ProviderRouter
 from apps.zte_manager.services.tr069_profile_service import tr069_provider_profiles
-from apps.zte_manager.services.zte_service import zte_service
 
 
 logger = logging.getLogger(__name__)
@@ -149,9 +149,6 @@ def _safe_call(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         ).envelope()
     except Exception as error:
         if isinstance(error, HuaweiArchitectureError):
-            # Architecture decisions such as ambiguous auth are deliberate
-            # safety outcomes, not generic RuntimeErrors. Preserve their stable
-            # code without exposing the internal exception text or protocol data.
             known = PublicFailure(
                 error.code,
                 error.category,
@@ -196,9 +193,14 @@ def _call_device(method_name: str, *args, **kwargs):
 
 
 def _call_device_read(method_name: str, context=None, *args, **kwargs):
-    if device_service.vendor == "huawei" and _bool(_query(context).get("refresh")):
+    if _bool(_query(context).get("refresh")):
         kwargs["refresh"] = True
-    return _call_device(method_name, *args, **kwargs)
+    return ProviderRouter.invoke(
+        device_service.active_service,
+        method_name,
+        *args,
+        **kwargs,
+    )
 
 
 def _call_active_provider(method_name: str, *args, **kwargs):
