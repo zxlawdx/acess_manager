@@ -1,4 +1,6 @@
 from .auth import (
+    ApiSesTokenAuth,
+    ApiSesTokenContext,
     HuaweiCredentialSubmissionBudget,
     RandCountAuth,
     RandStringSessionTokenAuth,
@@ -41,6 +43,8 @@ from .transport import (
 
 __all__ = [
     "AffinityHttpTransport",
+    "ApiSesTokenAuth",
+    "ApiSesTokenContext",
     "HuaweiArchitectureError",
     "HuaweiAuthFamilyAmbiguousError",
     "HuaweiAuthFlow",

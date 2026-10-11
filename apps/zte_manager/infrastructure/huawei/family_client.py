@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import re
+from urllib.parse import urljoin
+
 import requests
 
 from .auth import (
+    ApiSesTokenAuth,
+    ApiSesTokenContext,
     HuaweiCredentialSubmissionBudget,
     RandCountAuth,
     RandStringSessionTokenAuth,
 )
-from .client import HuaweiWebClient, LOGIN_PATH, MENU_PATH, RAND_PATH
+from .client import HuaweiMutationTransport, HuaweiWebClient, LOGIN_PATH, MENU_PATH, RAND_PATH
 from .errors import (
     HuaweiArchitectureError,
     HuaweiAuthFamilyAmbiguousError,
@@ -29,25 +34,26 @@ from .transport import HuaweiTransportPolicy, RequestsSessionTransport
 RAND_STRING_PATH = "/html/ssmp/common/getRandString.asp"
 SESSION_TOKEN_PATH = "/html/ssmp/common/GetRandToken.asp"
 DEVICE_INFO_PATH = "/html/ssmp/deviceinfo/deviceinfo.asp"
+API_SES_TOKEN_PATH = "/api/webserver/SesTokenInfo"
+API_LOGIN_PATH = "/api/system/user_login"
+API_DEVICE_INFO_PATH = "/api/system/deviceinfo"
 
 
 class HuaweiFamilyAwareWebClient(HuaweiWebClient):
     """Huawei transport with evidence-driven authentication selection.
 
-    The existing Huawei transport remains authoritative for normal reads and
-    writes. This subclass only centralizes the authentication variants that are
-    known to differ across Huawei WebUI firmware families.
-
     Credential-bearing login is submitted at most once per login/reauth call.
-    Auto-detection may probe challenge endpoints because those reads are
-    non-destructive, but it never tries a second auth flow after credentials
-    have been submitted.
+    Read-only fingerprint probes are allowed, but a proven legacy login page is
+    never perturbed with an unrelated API probe. Firmware-family boundaries are
+    enforced after authentication so API sessions cannot fall through into
+    AMP/BBSP readers or writers.
     """
 
     def __init__(
         self,
         *args,
         transport_policy: HuaweiTransportPolicy | None = None,
+        api_password_mode: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -66,6 +72,15 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
         )
         self._rand_count_auth = RandCountAuth(self._credential_budget)
         self._rand_string_auth = RandStringSessionTokenAuth(self._credential_budget)
+        self._api_auth = ApiSesTokenAuth(self._credential_budget)
+        configured_mode = ApiSesTokenAuth.normalize_mode(api_password_mode)
+        if api_password_mode not in (None, "") and configured_mode is None:
+            raise ValueError("Huawei API password mode is not supported")
+        self._configured_api_password_mode = configured_mode
+        self._api_password_mode = configured_mode
+        self._api_context: ApiSesTokenContext | None = None
+        self._api_device_info_source: str | None = None
+        self._login_source: str = ""
 
     def _apply_session_transport_policy(self, session: requests.Session) -> None:
         RequestsSessionTransport.apply_session_policy(session, self.transport_policy)
@@ -98,7 +113,24 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
                 "x_hw_token",
                 "huawei",
             )
-            return response.status_code < 500 and any(marker in body for marker in markers)
+            if response.status_code < 500 and any(marker in body for marker in markers):
+                return True
+
+            # Some modern HG8245H builds expose a generic root page. A valid
+            # SesTokenInfo pair is a stronger vendor/protocol fingerprint and
+            # remains read-only, so it is safe to use for vendor discovery.
+            api = session.get(
+                base + API_SES_TOKEN_PATH,
+                timeout=(2.0, timeout),
+                allow_redirects=False,
+            )
+            if api.status_code >= 400:
+                return False
+            try:
+                ApiSesTokenAuth.parse_session_token_info(api.text)
+            except ValueError:
+                return False
+            return True
         except requests.RequestException:
             return False
         finally:
@@ -110,6 +142,13 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             auth_flow=self.auth_flow,
             evidence=self.protocol_evidence,
         ).as_dict()
+
+    def authenticated_identity_source(self) -> tuple[str, str] | None:
+        if self.auth_flow is not HuaweiAuthFlow.API_SES_TOKEN:
+            return None
+        if not self._api_device_info_source:
+            return None
+        return API_DEVICE_INFO_PATH, self._api_device_info_source
 
     def _record_evidence(self, *values: str) -> None:
         self.protocol_evidence = tuple(
@@ -133,9 +172,6 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             "Origin": self.base_url,
             "Referer": self.base_url + "/",
         }
-        # Preserve the POST-first flow physically captured on the EG8041
-        # family, then accept GET as a read-only firmware variation used by the
-        # HG8145X6 reference. No credentials are present in either request.
         response = self.session.post(
             self.url(RAND_PATH),
             headers=headers,
@@ -166,13 +202,151 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             self._record_evidence("auth:rand-string-get")
         return response
 
+    def _fetch_api_ses_token(self) -> tuple[object, ApiSesTokenContext | None]:
+        response = self.session.get(
+            self.url(API_SES_TOKEN_PATH),
+            headers={
+                "Accept": "application/json,text/xml,application/xml,*/*",
+                "Referer": self.base_url + "/",
+            },
+            timeout=self.timeout,
+            allow_redirects=False,
+        )
+        context = None
+        if response.status_code < 400:
+            try:
+                context = self._api_auth.parse_session_token_info(response.text)
+            except ValueError:
+                context = None
+        if context is not None:
+            self._record_evidence("auth:api-sestoken")
+            self._record_family(API_SES_TOKEN_PATH, sources=(response.text,))
+        return response, context
+
+    @staticmethod
+    def _api_response_invalid(response) -> bool:
+        status = getattr(response, "status_code", None)
+        if status in {401, 403}:
+            return True
+        if status is None or status >= 400:
+            return True
+        text = str(getattr(response, "text", "") or "").strip()
+        if not text:
+            return False
+        lower = text[:4000].casefold()
+        return any(
+            marker in lower
+            for marker in (
+                "<html",
+                "<!doctype",
+                "<error",
+                "<errorcode",
+                '"errorcode"',
+                "/login.cgi",
+            )
+        )
+
+    def _refresh_api_token_from_response(self, response) -> None:
+        headers = getattr(response, "headers", {}) or {}
+        header_token = clean_huawei_token(headers.get("__RequestVerificationToken"))
+        if plausible_huawei_token(header_token):
+            self._session_token = header_token
+            self.session.headers["__RequestVerificationToken"] = header_token
+            return
+        try:
+            context = self._api_auth.parse_session_token_info(
+                getattr(response, "text", "")
+            )
+        except ValueError:
+            return
+        self._api_context = context
+        self._session_token = context.token
+        self.session.headers["Cookie"] = context.session_info
+        self.session.headers["__RequestVerificationToken"] = context.token
+
+    def _api_login_script_sources(self, login_html: str) -> list[str]:
+        sources = [str(login_html or "")]
+        seen: set[str] = set()
+        for src in re.findall(
+            r"<script[^>]+src\s*=\s*['\"]([^'\"]+)['\"]",
+            login_html or "",
+            re.I,
+        ):
+            lowered = src.casefold()
+            if not any(
+                marker in lowered
+                for marker in ("login", "safe", "security", "sha", "base64", "rnd")
+            ):
+                continue
+            url = urljoin(self.base_url + "/", src)
+            if url in seen:
+                continue
+            seen.add(url)
+            try:
+                response = self.session.get(
+                    url,
+                    headers={"Referer": self.base_url + "/"},
+                    timeout=self.timeout,
+                    allow_redirects=True,
+                )
+            except requests.RequestException:
+                continue
+            if response.status_code == 200 and response.text:
+                sources.append(response.text)
+            if len(sources) >= 7:
+                break
+        return sources
+
+    def _resolve_api_password_mode(self, login_html: str) -> str:
+        if self._configured_api_password_mode:
+            self._api_password_mode = self._configured_api_password_mode
+            self._record_evidence(f"api-password-mode:{self._api_password_mode}:profile")
+            return self._api_password_mode
+
+        mode = ApiSesTokenAuth.infer_password_mode(
+            "\n".join(self._api_login_script_sources(login_html))
+        )
+        if mode is None:
+            raise HuaweiAuthFamilyAmbiguousError(
+                "A interface Huawei /api/ foi identificada, mas a variante de "
+                "senha não pôde ser determinada sem ambiguidade; nenhuma "
+                "credencial foi submetida."
+            )
+        self._api_password_mode = mode
+        self._record_evidence(f"api-password-mode:{mode}:frontend")
+        return mode
+
     def _select_auth_flow(self, login_html: str) -> HuaweiAuthFlow:
         explicit = auth_flow_from_login_page(login_html)
+
+        # Preserve already-proven legacy contracts exactly. This prevents a
+        # harmless-but-unnecessary /api/ GET from perturbing strict legacy
+        # firmware/transport sequences and keeps Phase 0/1 behavior stable.
+        if explicit in {
+            HuaweiAuthFlow.RAND_COUNT,
+            HuaweiAuthFlow.RAND_STRING_SESSION_TOKEN,
+            HuaweiAuthFlow.RAND_COOKIE_HASH,
+            HuaweiAuthFlow.SCRAM_CPE,
+        }:
+            return explicit
+
+        # When the login page is API-like or inconclusive, SesTokenInfo is the
+        # decisive Phase-3 fingerprint. A valid pair wins over model hints.
+        try:
+            _api_response, context = self._fetch_api_ses_token()
+        except requests.RequestException:
+            context = None
+        if context is not None:
+            self._api_context = context
+            return HuaweiAuthFlow.API_SES_TOKEN
+
+        if explicit is HuaweiAuthFlow.API_SES_TOKEN:
+            # A string mention is insufficient if the endpoint itself did not
+            # return a valid SesInfo/TokInfo structure.
+            explicit = HuaweiAuthFlow.UNKNOWN
         if explicit is not HuaweiAuthFlow.UNKNOWN:
             return explicit
 
-        # Read-only probes may discover candidates, but ambiguity must never
-        # trigger credential brute-force. Exactly one strategy must be proven.
         candidates: list[HuaweiAuthFlow] = []
         try:
             response = self._fetch_rand_count()
@@ -197,8 +371,6 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
         return unique[0] if unique else HuaweiAuthFlow.UNKNOWN
 
     def _login_payload(self, challenge: str) -> dict[str, str]:
-        # Compatibility helper retained for tests/callers. Submission itself is
-        # performed through the budgeted auth strategy below.
         return RandCountAuth.build_payload(
             username=self.username,
             password=self.password,
@@ -219,7 +391,6 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             "Upgrade-Insecure-Requests": "1",
         }
         if legacy_cookie:
-            # Preserves the physically validated EG8041X7 RandCount flow.
             headers["Cookie"] = "Cookie=body:Language:english:id=-1"
 
         def submit(payload: dict[str, str]):
@@ -320,15 +491,149 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
         self._record_family(RAND_STRING_PATH, SESSION_TOKEN_PATH)
         return True
 
+    def _authenticate_api_ses_token(self) -> bool:
+        _response, context = self._fetch_api_ses_token()
+        if context is None:
+            raise HuaweiSessionValidationError(
+                "A interface Huawei /api/ foi selecionada, mas SesTokenInfo não "
+                "retornou sessão/token válidos."
+            )
+
+        mode = self._resolve_api_password_mode(self._login_source)
+        self._api_context = context
+        self._session_token = context.token
+        self.session.headers["Cookie"] = context.session_info
+        self.session.headers["__RequestVerificationToken"] = context.token
+
+        def submit(payload: dict[str, str]):
+            return self.session.post(
+                self.url(API_LOGIN_PATH),
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Origin": self.base_url,
+                    "Referer": self.url("/html/index.html"),
+                    "__RequestVerificationToken": context.token,
+                },
+                data=payload,
+                timeout=self.timeout,
+                allow_redirects=False,
+            )
+
+        login_response = self._api_auth.submit(
+            submit,
+            username=self.username,
+            password=self.password,
+            context=context,
+            mode=mode,
+        )
+        if self._api_response_invalid(login_response):
+            return False
+        self._refresh_api_token_from_response(login_response)
+
+        device = self.session.get(
+            self.url(API_DEVICE_INFO_PATH),
+            headers={
+                "Accept": "application/json,text/xml,application/xml,*/*",
+                "Referer": self.url("/html/index.html"),
+            },
+            timeout=self.timeout,
+            allow_redirects=False,
+        )
+        if self._api_response_invalid(device) or not str(device.text or "").strip():
+            raise HuaweiSessionValidationError(
+                "O login Huawei /api/ foi enviado, mas /api/system/deviceinfo "
+                "não confirmou a sessão."
+            )
+
+        self._api_device_info_source = str(device.text or "")
+        self._refresh_api_token_from_response(device)
+        self._record_family(
+            API_SES_TOKEN_PATH,
+            API_LOGIN_PATH,
+            API_DEVICE_INFO_PATH,
+            sources=(device.text,),
+        )
+        self._record_evidence("session-proof:/api/system/deviceinfo")
+        return True
+
+    def get_api_page(self, path: str) -> str:
+        """Read a characterized /api/ endpoint with one auth recovery."""
+
+        if not str(path or "").startswith("/api/"):
+            raise HuaweiUnsupportedFirmwareError(
+                "Uma sessão Huawei /api/ só pode usar endpoints /api/ caracterizados."
+            )
+
+        def request():
+            return self.session.get(
+                self.url(path),
+                headers={
+                    "Accept": "application/json,text/xml,application/xml,*/*",
+                    "Referer": self.url("/html/index.html"),
+                },
+                timeout=self.timeout,
+                allow_redirects=False,
+            )
+
+        response = request()
+        if self._api_response_invalid(response):
+            self.reauthenticate()
+            response = request()
+        if self._api_response_invalid(response):
+            raise RuntimeError("Endpoint Huawei /api/ indisponível ou sessão expirada.")
+        self._refresh_api_token_from_response(response)
+        return str(response.text or "")
+
+    def _guard_api_family_path(self, path: str, *, mutation: bool = False) -> None:
+        if self.auth_flow is not HuaweiAuthFlow.API_SES_TOKEN:
+            return
+        if str(path or "").startswith("/api/"):
+            if mutation:
+                raise HuaweiUnsupportedFirmwareError(
+                    "Writes Huawei /api/ ainda não foram fisicamente validados."
+                )
+            return
+        raise HuaweiUnsupportedFirmwareError(
+            "A sessão Huawei /api/ não pode cair em endpoints AMP/BBSP/CGI legados."
+        )
+
+    def get_page(self, path: str) -> str:
+        self._guard_api_family_path(path)
+        if self.auth_flow is HuaweiAuthFlow.API_SES_TOKEN:
+            return self.get_api_page(path)
+        return super().get_page(path)
+
+    def post_read(
+        self,
+        path: str,
+        payload: dict[str, str] | None = None,
+        *,
+        referer: str = "/index.asp",
+    ) -> str:
+        self._guard_api_family_path(path)
+        if self.auth_flow is HuaweiAuthFlow.API_SES_TOKEN:
+            raise HuaweiUnsupportedFirmwareError(
+                "POST read Huawei /api/ ainda não foi caracterizado nesta fase."
+            )
+        return super().post_read(path, payload, referer=referer)
+
+    def post_form(
+        self,
+        path: str,
+        payload: dict[str, str],
+        *,
+        referer: str,
+    ) -> HuaweiMutationTransport:
+        self._guard_api_family_path(path, mutation=True)
+        return super().post_form(path, payload, referer=referer)
+
     def _authenticate_flow(self, flow: HuaweiAuthFlow) -> bool:
         if flow is HuaweiAuthFlow.RAND_STRING_SESSION_TOKEN:
             return self._authenticate_rand_string()
         if flow is HuaweiAuthFlow.RAND_COUNT:
             return self._authenticate_rand_count()
         if flow is HuaweiAuthFlow.API_SES_TOKEN:
-            raise HuaweiUnsupportedFirmwareError(
-                "Fluxo Huawei API SesTokenInfo reconhecido, mas ainda está em fase posterior."
-            )
+            return self._authenticate_api_ses_token()
         if flow is HuaweiAuthFlow.RAND_COOKIE_HASH:
             raise HuaweiUnsupportedFirmwareError(
                 "Fluxo Huawei RandCount com cookie derivado reconhecido, "
@@ -352,6 +657,9 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
         self.session = self._new_session()
         self._apply_session_transport_policy(self.session)
         self._session_token = None
+        self._api_context = None
+        self._api_device_info_source = None
+        self._api_password_mode = self._configured_api_password_mode
         self._credential_budget.reset()
 
         try:
@@ -360,7 +668,8 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
                 timeout=self.timeout,
                 allow_redirects=True,
             )
-            flow = self._select_auth_flow(root.text or "")
+            self._login_source = str(root.text or "")
+            flow = self._select_auth_flow(self._login_source)
             if flow is HuaweiAuthFlow.UNKNOWN:
                 raise HuaweiAuthFamilyAmbiguousError(
                     "Nenhuma família de autenticação Huawei foi determinada; "
@@ -385,7 +694,11 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
             self.session.cookies.clear()
         except Exception:
             pass
+        self.session.headers.pop("Cookie", None)
+        self.session.headers.pop("__RequestVerificationToken", None)
         self._session_token = None
+        self._api_context = None
+        self._api_device_info_source = None
         self._credential_budget.reset()
 
         flow = self.auth_flow
@@ -396,7 +709,8 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
                     timeout=self.timeout,
                     allow_redirects=True,
                 )
-                flow = self._select_auth_flow(root.text or "")
+                self._login_source = str(root.text or "")
+                flow = self._select_auth_flow(self._login_source)
             except HuaweiArchitectureError:
                 raise
             except requests.RequestException as exc:
@@ -421,4 +735,6 @@ class HuaweiFamilyAwareWebClient(HuaweiWebClient):
 
     def close(self) -> None:
         self._session_token = None
+        self._api_context = None
+        self._api_device_info_source = None
         super().close()

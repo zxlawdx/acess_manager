@@ -60,7 +60,7 @@ class HuaweiDetector:
         re.compile(r"(?i)\bEG8041X710\b"),
     )
     _GENERIC_MODEL = re.compile(
-        r"(?i)\b((?:EG|HG|HS)\d{4}[A-Z0-9]*(?:[-_][A-Z0-9]+)*)\b"
+        r"(?i)\b((?:EG|HG|HS|HN)\d{4}[A-Z0-9]*(?:[-_][A-Z0-9]+)*)\b"
     )
     _FIRMWARE = re.compile(
         r"(?i)\b(V\d{3,4}R\d{3}[A-Z0-9._-]*)\b"
@@ -90,6 +90,27 @@ class HuaweiDetector:
         firmware_observations: list[tuple[str, str]] = []
         observed_paths: list[str] = []
         observed_sources: list[str] = []
+
+        # API SesToken firmware proves its session with /api/system/deviceinfo
+        # during login. Consume that already-validated body first instead of
+        # forcing an AMP/BBSP page request or a second authentication cycle.
+        identity_source = getattr(client, "authenticated_identity_source", None)
+        if callable(identity_source):
+            try:
+                snapshot = identity_source()
+            except Exception:
+                snapshot = None
+            if snapshot:
+                page, body = snapshot
+                decoded = decode_huawei_js_string(body or "")
+                observed_paths.append(str(page))
+                observed_sources.append(decoded)
+                raw_model = cls._extract_model(decoded)
+                if raw_model:
+                    model_observations.append((str(page), raw_model))
+                raw_firmware = cls._extract_firmware(decoded)
+                if raw_firmware:
+                    firmware_observations.append((str(page), raw_firmware))
 
         for page in cls.AUTHENTICATED_PAGES:
             try:
@@ -181,7 +202,7 @@ class HuaweiDetector:
                 return match.group(0).strip()
 
         assignments = re.finditer(
-            r"(?i)(?:ProductName|ProductClass|ModelName|DeviceType|Model)"
+            r"(?i)(?:ProductName|ProductClass|ModelName|DeviceType|Model|DeviceName)"
             r"\s*(?:=|:)\s*['\"]([^'\"]+)['\"]",
             text,
         )
