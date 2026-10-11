@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 import requests
 
 from apps.zte_manager import api as api_module
+from apps.zte_manager.presentation.api import f6201b as f6201b_api
 from apps.zte_manager.infrastructure.huawei.client import HuaweiWebClient
 from apps.zte_manager.services.device_service import DeviceService, DeviceSession
 from apps.zte_manager.services.huawei_ipv4_filter_service import (
@@ -139,6 +140,27 @@ class MultivendorApiRoutingTests(unittest.TestCase):
             result = api_module.tr069_setup()
         self.assertEqual(result["code"], "PROVIDER_FEATURE_UNAVAILABLE")
         self.assertEqual(zte.calls, [])
+
+    def test_huawei_profile_page_f6201b_probe_is_side_effect_free(self):
+        manager, _zte = self.make_huawei_manager()
+        with patch.object(
+            f6201b_api,
+            "device_service",
+            manager,
+        ), patch.object(
+            f6201b_api.zte_service,
+            "f6201b_write_status",
+        ) as zte_probe:
+            result = f6201b_api.f6201b_write_status()
+
+        zte_probe.assert_not_called()
+        self.assertFalse(result["supported_firmware"])
+        self.assertFalse(result["writes_enabled"])
+        self.assertTrue(result["connected"])
+        self.assertEqual(result["vendor"], "huawei")
+        self.assertEqual(result["model"], "EG8041X7-10")
+        self.assertEqual(result["reason"], "active_session_is_not_f6201b")
+        self.assertNotIn("error", result)
 
     def test_zte_common_route_still_uses_zte_provider(self):
         zte = FakeZTEProvider()

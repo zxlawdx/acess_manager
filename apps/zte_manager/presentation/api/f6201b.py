@@ -1,11 +1,41 @@
 from .common import *
 
 
+def _active_f6201b_session() -> tuple[dict, bool]:
+    """Return public session metadata and whether F6201B routes are applicable.
+
+    The profile page historically probes the F6201B write-status endpoint while
+    its local write state is still being restored. That probe must be harmless
+    for Huawei (and any other provider): a provider mismatch is not an error and
+    must never call into the ZTE singleton.
+    """
+    status = device_service.status()
+    applicable = bool(
+        status.get("connected") is True
+        and str(status.get("vendor") or "").casefold() == "zte"
+        and str(status.get("model") or "").strip().upper() == "F6201B"
+    )
+    return status, applicable
+
+
 # These routes are intentionally ZTE/F6201B-specific. They do not pretend to
 # be vendor-neutral: the captured protocol and nonce workflow belong to this
 # firmware family.
 @api.get("/f6201b/write/status")
 def f6201b_write_status(context=None):
+    status, applicable = _active_f6201b_session()
+    if not applicable:
+        # This endpoint is also used as a UI capability probe. Returning a
+        # negative capability result keeps that probe side-effect free and,
+        # crucially, prevents a Huawei session from ever entering ZTEService.
+        return {
+            "supported_firmware": False,
+            "writes_enabled": False,
+            "connected": bool(status.get("connected")),
+            "vendor": status.get("vendor"),
+            "model": status.get("model"),
+            "reason": "active_session_is_not_f6201b",
+        }
     return _safe_call(zte_service.f6201b_write_status)
 
 
